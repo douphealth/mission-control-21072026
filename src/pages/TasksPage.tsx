@@ -962,6 +962,20 @@ export default function TasksPage() {
     cd.confirm({ title: "Delete Task", description: "This task and its subtasks will be permanently removed.", onConfirm: async () => { await deleteItem("tasks", id); toast.success("Task deleted"); } });
   }, [deleteItem, cd]);
 
+  const handleBulkDelete = useCallback(() => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    cd.confirm({
+      title: `Delete ${ids.length} task${ids.length > 1 ? "s" : ""}?`,
+      description: "These tasks will be permanently removed.",
+      onConfirm: async () => {
+        for (const id of ids) await deleteItem("tasks", id);
+        toast.success(`Deleted ${ids.length} task${ids.length > 1 ? "s" : ""}`);
+        exitBulk();
+      },
+    });
+  }, [selectedIds, cd, deleteItem, exitBulk]);
+
   const handleDuplicate = useCallback(async (id: string) => {
     const newId = await duplicateItem("tasks", id, { status: "todo", completedAt: undefined });
     if (newId) toast.success("Task duplicated ✓");
