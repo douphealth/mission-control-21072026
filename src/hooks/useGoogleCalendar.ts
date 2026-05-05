@@ -150,6 +150,9 @@ export function useGoogleCalendar(opts?: {
             );
 
             const externalEvents = rawEvents.filter(ev => {
+                // Hide old task mirror events created by this app even if the source task was deleted locally.
+                if ((ev.summary || '').startsWith('📋 ') && /^mc[a-v0-9]+$/i.test(ev.id)) return false;
+
                 // Skip if ID matches a pushed task
                 if (pushedGCalIds.has(ev.id)) return false;
 
