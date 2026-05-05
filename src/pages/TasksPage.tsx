@@ -847,6 +847,16 @@ export default function TasksPage() {
   const [quickAdd, setQuickAdd] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"priority" | "dueDate" | "created">("priority");
+  const [bulkMode, setBulkMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+  const exitBulk = useCallback(() => { setBulkMode(false); setSelectedIds(new Set()); }, []);
 
   // ── Phase/Urgent normalization (dry-run preview, then apply) ───────────────
   const didNormalizeRef = useRef(false);
