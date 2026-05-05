@@ -1,5 +1,5 @@
 import { useDashboard } from "@/contexts/DashboardContext";
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Search, CheckCircle2, Circle, AlertTriangle, Edit2, Trash2,
