@@ -1,3 +1,4 @@
+import { forwardRef, useState, useCallback } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,7 +21,7 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
 }
 
-export default function ConfirmDialog({
+const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(function ConfirmDialog({
   open,
   onOpenChange,
   title = "Are you sure?",
@@ -29,10 +30,10 @@ export default function ConfirmDialog({
   cancelLabel = "Cancel",
   variant = "destructive",
   onConfirm,
-}: ConfirmDialogProps) {
+}, ref) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="rounded-2xl border-border/50 bg-card shadow-2xl max-w-[400px]">
+      <AlertDialogContent ref={ref} className="rounded-2xl border-border/50 bg-card shadow-2xl max-w-[400px]">
         <AlertDialogHeader>
           <AlertDialogTitle className="text-base font-bold text-card-foreground">{title}</AlertDialogTitle>
           <AlertDialogDescription className="text-sm text-muted-foreground">{description}</AlertDialogDescription>
@@ -53,10 +54,11 @@ export default function ConfirmDialog({
       </AlertDialogContent>
     </AlertDialog>
   );
-}
+});
+
+export default ConfirmDialog;
 
 // Hook for easy confirm dialog state management
-import { useState, useCallback } from "react";
 
 export function useConfirmDialog() {
   const [state, setState] = useState<{
