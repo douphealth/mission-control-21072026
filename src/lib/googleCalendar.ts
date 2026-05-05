@@ -472,6 +472,19 @@ export async function createGCalEvent(
   return resp.json();
 }
 
+export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): Promise<boolean> {
+  if (!isGCalConnected() || !eventId) return false;
+
+  const resp = await gcalFetch(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+    {
+      method: 'DELETE',
+    }
+  );
+
+  return resp.ok || resp.status === 404;
+}
+
 /**
  * Push a local task as an event to Google Calendar
  */
