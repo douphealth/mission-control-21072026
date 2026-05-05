@@ -59,6 +59,7 @@ export interface SupabaseConnectionHealth {
     schemaReady: boolean;
     missingTables: string[];
     error?: string;
+    diagnostics?: SyncSchemaError[];
 }
 
 export function getDefaultSupabaseUrl(): string {
@@ -118,6 +119,18 @@ async function getAvailableRemoteTables(client: SupabaseClient, options?: { forc
     const checks = await Promise.all(
         REQUIRED_REMOTE_TABLES.map(async (table) => {
             const { error } = await client.from(table).select('id').limit(1);
+            if (error && !error.code) {
+                schemaErrors.push({
+                    table,
+                    code: error.code,
+                    message: error.message,
+                    details: error.details,
+                    hint: error.hint,
+                    checkedAt: new Date().toISOString(),
+                    status: (error as any).status,
+                });
+                return [table, false] as const;
+            }
             if (error && (error.code === '42P01' || error.code === 'PGRST205')) {
                 schemaErrors.push({
                     table,
@@ -235,6 +248,9 @@ export async function testSupabaseConnection(url: string, anonKey: string): Prom
         const availability = await Promise.all(
             REQUIRED_REMOTE_TABLES.map(async (table) => {
                 const { error } = await client.from(table).select('id').limit(1);
+                if (error && !error.code) {
+                    throw error;
+                }
                 if (error && error.code !== 'PGRST116' && error.code !== '42P01' && error.code !== 'PGRST205') {
                     throw error;
                 }
@@ -261,6 +277,15 @@ export async function testSupabaseConnection(url: string, anonKey: string): Prom
             schemaReady: false,
             missingTables: [],
             error: e?.message || 'Connection failed',
+            diagnostics: [{
+                table: 'connection',
+                code: e?.code,
+                message: e?.message || 'Connection failed',
+                details: e?.details,
+                hint: e?.hint,
+                status: e?.status,
+                checkedAt: new Date().toISOString(),
+            }],
         };
     }
 }

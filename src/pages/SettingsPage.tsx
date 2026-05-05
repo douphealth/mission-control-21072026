@@ -76,6 +76,7 @@ export default function SettingsPage() {
   const [sbLastSync, setSbLastSync] = useState<string | null>(null);
   const [showSchema, setShowSchema] = useState(false);
   const [sbSchemaReady, setSbSchemaReady] = useState(false);
+  const [sbConnectionOk, setSbConnectionOk] = useState(false);
 
   // Security state
   const [encKey, setEncKey] = useState("");
@@ -85,6 +86,7 @@ export default function SettingsPage() {
   const refreshSchemaStatus = async () => {
     refreshSupabaseSchemaState();
     const result = await testSupabaseConnection(sbUrl, sbKey);
+    setSbConnectionOk(result.connectionOk);
     setSbSchemaReady(result.schemaReady);
     return result;
   };
@@ -176,6 +178,7 @@ export default function SettingsPage() {
     if (!sbUrl || !sbKey) { toast.error("Both URL and anon key are required"); return; }
     setSupabaseConfig(sbUrl, sbKey);
     setSbConnected(true);
+    setSbConnectionOk(false);
     setSbSchemaReady(false);
     toast.success("Supabase connection saved — testing schema now");
     refreshSchemaStatus().catch(() => setSbSchemaReady(false));
@@ -184,6 +187,7 @@ export default function SettingsPage() {
   const handleDisconnectSupabase = () => {
     clearSupabaseConfig();
     setSbConnected(false);
+    setSbConnectionOk(false);
     setSbSchemaReady(false);
     setSbLastSync(null);
     setSbTestResult(null);
@@ -565,23 +569,25 @@ export default function SettingsPage() {
             {activeTab === "supabase" && (
               <motion.div key="supabase" {...fadeIn} className="space-y-4">
                 {/* Status Banner */}
-                <div className={`rounded-2xl border p-4 flex items-center gap-3 ${sbConnected ? (sbSchemaReady ? "bg-emerald-500/5 border-emerald-500/20" : "bg-destructive/5 border-destructive/20") : "bg-amber-500/5 border-amber-500/20"
+                <div className={`rounded-2xl border p-4 flex items-center gap-3 ${sbConnected ? (sbConnectionOk ? (sbSchemaReady ? "bg-emerald-500/5 border-emerald-500/20" : "bg-destructive/5 border-destructive/20") : "bg-destructive/5 border-destructive/20") : "bg-amber-500/5 border-amber-500/20"
                   }`}>
-                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${sbConnected ? (sbSchemaReady ? "bg-emerald-500/15" : "bg-destructive/15") : "bg-amber-500/15"
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${sbConnected ? (sbConnectionOk ? (sbSchemaReady ? "bg-emerald-500/15" : "bg-destructive/15") : "bg-destructive/15") : "bg-amber-500/15"
                     }`}>
-                    <Cloud size={17} className={sbConnected ? (sbSchemaReady ? "text-emerald-500" : "text-destructive") : "text-amber-500"} />
+                    <Cloud size={17} className={sbConnected ? (sbConnectionOk ? (sbSchemaReady ? "text-emerald-500" : "text-destructive") : "text-destructive") : "text-amber-500"} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-semibold ${sbConnected ? (sbSchemaReady ? "text-emerald-600 dark:text-emerald-400" : "text-destructive") : "text-amber-600 dark:text-amber-400"}`}>
-                      {sbConnected ? (sbSchemaReady ? "🟢 Supabase Sync Ready" : "🛑 Supabase Schema Missing") : "⚡ Supabase Not Connected"}
+                    <div className={`text-sm font-semibold ${sbConnected ? (sbConnectionOk ? (sbSchemaReady ? "text-emerald-600 dark:text-emerald-400" : "text-destructive") : "text-destructive") : "text-amber-600 dark:text-amber-400"}`}>
+                      {sbConnected ? (sbConnectionOk ? (sbSchemaReady ? "🟢 Supabase Sync Ready" : "🛑 Supabase Schema Missing") : "🛑 Supabase Connection Error") : "⚡ Supabase Not Connected"}
                     </div>
                     <div className="text-xs text-muted-foreground mt-0.5">
                       {sbConnected
-                        ? sbSchemaReady
-                          ? sbLastSync
-                            ? `Last sync: ${new Date(sbLastSync).toLocaleString()}`
-                            : "Schema is ready — no sync has run yet"
-                          : "Your Supabase project is reachable, but the Mission Control tables have not been created yet"
+                        ? sbConnectionOk
+                          ? sbSchemaReady
+                            ? sbLastSync
+                              ? `Last sync: ${new Date(sbLastSync).toLocaleString()}`
+                              : "Schema is ready — no sync has run yet"
+                            : "Your Supabase project is reachable, but the Mission Control tables have not been created yet"
+                          : "The project cannot be reached from this browser right now. Verify the URL/key or disconnect cloud sync."
                         : "Connect your Supabase project for multi-device sync & backup"
                       }
                     </div>
@@ -652,16 +658,18 @@ export default function SettingsPage() {
                   <div className="card-elevated p-6 space-y-4">
                     <div className="flex items-center justify-between">
                       <h2 className="font-semibold text-lg">Live Cloud Sync</h2>
-                      <span className={`text-[10px] font-medium px-2 py-1 rounded-lg flex items-center gap-1 ${sbSchemaReady ? "text-emerald-600 bg-emerald-500/10" : "text-destructive bg-destructive/10"}`}>
-                        {sbSchemaReady ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />} {sbSchemaReady ? 'Auto-Save Active' : 'Blocked'}
+                      <span className={`text-[10px] font-medium px-2 py-1 rounded-lg flex items-center gap-1 ${sbConnectionOk && sbSchemaReady ? "text-emerald-600 bg-emerald-500/10" : "text-destructive bg-destructive/10"}`}>
+                        {sbConnectionOk && sbSchemaReady ? <CheckCircle2 size={10} /> : <AlertTriangle size={10} />} {sbConnectionOk && sbSchemaReady ? 'Auto-Save Active' : 'Blocked'}
                       </span>
                     </div>
 
-                    <div className={`flex items-start gap-2 p-3 rounded-xl border ${sbSchemaReady ? "bg-emerald-500/8 border-emerald-500/15" : "bg-destructive/5 border-destructive/20"}`}>
-                      {sbSchemaReady ? <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="text-destructive shrink-0 mt-0.5" />}
+                    <div className={`flex items-start gap-2 p-3 rounded-xl border ${sbConnectionOk && sbSchemaReady ? "bg-emerald-500/8 border-emerald-500/15" : "bg-destructive/5 border-destructive/20"}`}>
+                      {sbConnectionOk && sbSchemaReady ? <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" /> : <AlertTriangle size={14} className="text-destructive shrink-0 mt-0.5" />}
                       <div className="text-xs text-muted-foreground leading-relaxed">
-                        {sbSchemaReady ? (
+                        {sbConnectionOk && sbSchemaReady ? (
                           <><strong className="text-foreground">Always-on live sync.</strong> Changes are auto-saved to cloud and auto-refreshed on every device. Use Export/Import below only for version snapshots.</>
+                        ) : !sbConnectionOk ? (
+                          <><strong className="text-foreground">Sync is currently blocked.</strong> The saved cloud connection is failing at the network/auth level, so the schema checks are not reliable. Test the connection again, update the URL/key, or disconnect cloud sync to keep this device local-only.</>
                         ) : (
                           <><strong className="text-foreground">Sync is currently blocked.</strong> The console above is showing real Supabase errors because the required tables do not exist yet. Run the SQL schema below, then test again.</>
                         )}
@@ -669,7 +677,7 @@ export default function SettingsPage() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <button onClick={handleSyncNow} disabled={!!sbSyncing || !sbSchemaReady}
+                      <button onClick={handleSyncNow} disabled={!!sbSyncing || !sbConnectionOk || !sbSchemaReady}
                         className="flex items-center gap-3 p-4 rounded-2xl bg-primary/5 border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/10 transition-all text-left group">
                         <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0 transition-transform group-hover:scale-105">
                           {sbSyncing === 'sync' ? <Loader2 size={18} className="text-primary-foreground animate-spin" /> : <ArrowUpDown size={18} className="text-primary-foreground" />}
@@ -680,7 +688,7 @@ export default function SettingsPage() {
                         </div>
                       </button>
 
-                      <button onClick={handleRefreshFromCloud} disabled={!!sbSyncing || !sbSchemaReady}
+                      <button onClick={handleRefreshFromCloud} disabled={!!sbSyncing || !sbConnectionOk || !sbSchemaReady}
                         className="flex items-center gap-3 p-4 rounded-2xl bg-secondary/30 border-2 border-border/30 hover:border-border/60 hover:bg-secondary/50 transition-all text-left group">
                         <div className="w-11 h-11 rounded-xl bg-secondary flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
                           {sbSyncing === 'refresh' ? <Loader2 size={18} className="text-foreground animate-spin" /> : <ArrowDown size={18} className="text-muted-foreground" />}
