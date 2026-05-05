@@ -30,7 +30,7 @@ const PRIORITIES = [
   { id: "low", label: "Low", color: "#10b981", bg: "bg-emerald-500/15 text-emerald-400", dot: "bg-emerald-500" },
 ] as const;
 
-const CATEGORIES = ["General", "Development", "Design", "Marketing", "Client Work", "Content", "Bug Fix", "Research", "Finance", "Personal"];
+const CATEGORIES = ["Private", "Business"];
 const today = new Date().toISOString().split("T")[0];
 
 function getPriority(id: string) { return PRIORITIES.find(p => p.id === id) || PRIORITIES[2]; }
