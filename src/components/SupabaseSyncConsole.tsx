@@ -80,11 +80,15 @@ const SupabaseSyncConsole = forwardRef<HTMLElement>(function SupabaseSyncConsole
       {diagnostics && !diagnostics.schemaReady && (
         <div className="border border-destructive/30 bg-destructive/5 p-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-2 font-medium text-destructive">
-            <AlertTriangle size={14} /> Sync is blocked until the Supabase schema is created.
+            <AlertTriangle size={14} /> {diagnostics.schemaErrors.some((error) => error.table === 'connection') ? 'Sync is blocked because the cloud connection is failing.' : 'Sync is blocked until the Supabase schema is created.'}
           </div>
-          <div className="mt-2">
-            Missing tables: <span className="font-mono text-foreground">{diagnostics.missingTables.join(', ')}</span>
-          </div>
+          {diagnostics.schemaErrors.some((error) => error.table === 'connection') ? (
+            <div className="mt-2">Reconnect with a valid project URL + anon key, or disconnect cloud sync to keep this device local-only.</div>
+          ) : (
+            <div className="mt-2">
+              Missing tables: <span className="font-mono text-foreground">{diagnostics.missingTables.join(', ')}</span>
+            </div>
+          )}
         </div>
       )}
 
