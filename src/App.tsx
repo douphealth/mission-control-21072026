@@ -48,10 +48,12 @@ const queryClient = new QueryClient({
 
 import { useEffect } from "react";
 import { startNotificationLoop, stopNotificationLoop } from "@/lib/notifications";
+import { runPhasePriorityMigration } from "@/lib/taskBulkMigrate";
 
 function NotificationStarter() {
   useEffect(() => {
     startNotificationLoop();
+    runPhasePriorityMigration();
     return () => stopNotificationLoop();
   }, []);
   return null;
