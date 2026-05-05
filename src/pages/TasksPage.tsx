@@ -840,6 +840,55 @@ export default function TasksPage() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"priority" | "dueDate" | "created">("priority");
 
+  // ── Phase/Urgent normalization (dry-run preview, then apply) ───────────────
+  const didNormalizeRef = useRef(false);
+  useEffect(() => {
+    if (didNormalizeRef.current) return;
+    if (!tasks || tasks.length === 0) return;
+    didNormalizeRef.current = true;
+
+    const matchPriority = (title: string): Task["priority"] | null => {
+      const t = title || "";
+      if (t.includes("[URGENT") || t.includes("[Phase 1]")) return "critical";
+      if (t.includes("[Phase 2]")) return "high";
+      if (t.includes("[Phase 3]")) return "medium";
+      return null;
+    };
+
+    const candidates = tasks
+      .map(t => ({ task: t, nextPriority: matchPriority(t.title) }))
+      .filter(x => x.nextPriority !== null);
+
+    const toUpdate = candidates.filter(
+      ({ task, nextPriority }) => task.category !== "Business" || task.priority !== nextPriority
+    );
+
+    console.log(
+      `[Phase normalize] DRY RUN — ${candidates.length} matching, ${toUpdate.length} need update.`,
+      toUpdate.map(({ task, nextPriority }) => ({
+        id: task.id, title: task.title,
+        from: { category: task.category, priority: task.priority },
+        to: { category: "Business", priority: nextPriority },
+      }))
+    );
+    toast.message("Phase normalize (dry run)", {
+      description: `${candidates.length} match • ${toUpdate.length} would update`,
+    });
+
+    if (toUpdate.length === 0) return;
+
+    (async () => {
+      for (const { task, nextPriority } of toUpdate) {
+        await updateItem<Task>("tasks", task.id, {
+          category: "Business",
+          priority: nextPriority!,
+        });
+      }
+      toast.success(`Updated ${toUpdate.length} Phase/Urgent task(s) → Business`);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]);
+
   // ── Stats ────────────────────────────────────────────────────────────────────
   const stats = useMemo(() => ({
     total: tasks.length,
