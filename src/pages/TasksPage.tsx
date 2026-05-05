@@ -1176,6 +1176,38 @@ export default function TasksPage() {
       {/* ── List View ── */}
       {view === "list" && (
         <div className="space-y-1.5">
+          {/* Bulk action toolbar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => bulkMode ? exitBulk() : setBulkMode(true)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${bulkMode ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+              <CheckSquare size={13} />
+              {bulkMode ? "Cancel" : "Select"}
+            </button>
+            {bulkMode && (
+              <>
+                <button
+                  onClick={() => {
+                    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+                    else setSelectedIds(new Set(filtered.map(t => t.id)));
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-secondary/80 transition-all touch-manipulation">
+                  {selectedIds.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
+                </button>
+                <span className="text-xs text-muted-foreground font-medium">
+                  {selectedIds.size} selected
+                </span>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={selectedIds.size === 0}
+                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation">
+                  <Trash2 size={12} />
+                  Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                </button>
+              </>
+            )}
+          </div>
+
           <AnimatePresence mode="popLayout">
             {filtered.map((task, i) => (
               <ListRow
@@ -1187,6 +1219,9 @@ export default function TasksPage() {
                 onDuplicate={() => handleDuplicate(task.id)}
                 onToggle={() => handleToggle(task.id)}
                 onToggleSub={(subId) => handleToggleSub(task.id, subId)}
+                bulkMode={bulkMode}
+                selected={selectedIds.has(task.id)}
+                onToggleSelect={() => toggleSelect(task.id)}
               />
             ))}
           </AnimatePresence>
