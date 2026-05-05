@@ -151,14 +151,25 @@ export function useGoogleCalendar(opts?: {
 
             const externalEvents = rawEvents.filter(ev => {
                 // Hide old task mirror events created by this app even if the source task was deleted locally.
-                if ((ev.summary || '').startsWith('📋 ') && /^mc[a-v0-9]+$/i.test(ev.id)) return false;
+                const rawSummary = ev.summary || '';
+                const normalizedSummary = rawSummary.replace(/^📋\s*/, '').trim().toLowerCase();
+                const evDate = ev.start.date || (ev.start.dateTime ? new Date(ev.start.dateTime).toISOString().split('T')[0] : '');
+
+                if (rawSummary.startsWith('📋 ')) {
+                    if (/^mc[a-v0-9]+$/i.test(ev.id)) return false;
+
+                    const hasExactLocalTask = updatedTasks.some(t =>
+                        (t.title || '').trim().toLowerCase() === normalizedSummary && t.dueDate === evDate
+                    );
+
+                    if (!hasExactLocalTask) return false;
+                }
 
                 // Skip if ID matches a pushed task
                 if (pushedGCalIds.has(ev.id)) return false;
 
                 // Content-based dedup: strip the 📋 prefix we add when pushing
-                const rawTitle = (ev.summary || '').replace(/^📋\s*/, '').trim().toLowerCase();
-                const evDate = ev.start.date || (ev.start.dateTime ? new Date(ev.start.dateTime).toISOString().split('T')[0] : '');
+                const rawTitle = normalizedSummary;
                 const fp = `${rawTitle}|${evDate}`;
 
                 if (localTaskFingerprints.has(fp)) {
