@@ -51,7 +51,7 @@ function daysUntil(date: string) {
 
 const EMPTY: Omit<Task, "id"> = {
   title: "", priority: "medium", status: "todo",
-  startDate: today, dueDate: today, category: "General",
+  startDate: today, dueDate: today, category: "Private",
   description: "", linkedProject: "",
   subtasks: [], createdAt: today,
   reminder: 'none', reminderFired: false,
