@@ -705,9 +705,10 @@ function KanbanColumn({
 
 // ─── List Row ─────────────────────────────────────────────────────────────────
 
-function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, index }: {
+function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, index, bulkMode, selected, onToggleSelect }: {
   task: Task; onEdit: () => void; onDelete: () => void; onDuplicate: () => void; onToggle: () => void;
   onToggleSub: (sub: string) => void; index: number;
+  bulkMode?: boolean; selected?: boolean; onToggleSelect?: () => void;
 }) {
   const pr = getPriority(task.priority);
   const st = getStatus(task.status);
