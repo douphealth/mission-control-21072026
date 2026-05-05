@@ -12,6 +12,7 @@ import type {
 } from '@/lib/db';
 import { isSupabaseConnected, pushToSupabase } from '@/lib/supabase';
 import { isDuplicate, deduplicateItems } from '@/lib/dedup';
+import { markDirty as markVersionsDirty } from '@/lib/versions';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -82,6 +83,7 @@ function notifySaveStatus(status: 'saving' | 'saved' | 'error') {
 function schedulePush() {
     // Always mark local save as done immediately (IndexedDB write already happened)
     notifySaveStatus('saving');
+    try { markVersionsDirty(); } catch {}
     if (!isSupabaseConnected()) {
         // No cloud — still "saved" locally
         notifySaveStatus('saved');
