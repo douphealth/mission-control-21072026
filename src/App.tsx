@@ -48,11 +48,13 @@ const queryClient = new QueryClient({
 
 import { useEffect } from "react";
 import { startNotificationLoop, stopNotificationLoop } from "@/lib/notifications";
+import { startAutoSnapshots, stopAutoSnapshots } from "@/lib/versions";
 
 function NotificationStarter() {
   useEffect(() => {
     startNotificationLoop();
-    return () => stopNotificationLoop();
+    startAutoSnapshots();
+    return () => { stopNotificationLoop(); stopAutoSnapshots(); };
   }, []);
   return null;
 }

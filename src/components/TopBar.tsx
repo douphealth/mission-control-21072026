@@ -1,12 +1,13 @@
 import { useDashboard } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { Search, Bell, Plus, Menu, Download, Mail } from 'lucide-react';
+import { Search, Bell, Plus, Menu, Download, Mail, History } from 'lucide-react';
 import { forwardRef, lazy, Suspense, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const CommandPalette = lazy(() => import('./CommandPalette'));
 const BulkImportModal = lazy(() => import('./BulkImportModal'));
+const VersionsModal = lazy(() => import('./VersionsModal'));
 
 function formatDate() {
   return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
@@ -34,6 +35,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const { userName } = useSettingsStore();
   const { setSidebarOpen, setActiveSection, commandPaletteOpen, setCommandPaletteOpen, importModalOpen, setImportModalOpen } = useNavigationStore();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
   const overdueCount = tasks.filter(t => t.status !== 'done' && t.dueDate < today).length;
@@ -100,6 +102,15 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
             title="Import"
           >
             <Mail size={16} />
+          </motion.button>
+
+          <motion.button
+            onClick={() => setVersionsOpen(true)}
+            whileTap={{ scale: 0.9 }}
+            className="flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
+            title="Versions — save & restore"
+          >
+            <History size={16} />
           </motion.button>
 
           <motion.button
@@ -203,6 +214,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <CommandPalette open={commandPaletteOpen} onClose={() => setCommandPaletteOpen(false)} onImport={() => setImportModalOpen(true)} />
         )}
         {importModalOpen && <BulkImportModal open={importModalOpen} onClose={() => setImportModalOpen(false)} />}
+        {versionsOpen && <VersionsModal open={versionsOpen} onClose={() => setVersionsOpen(false)} />}
       </Suspense>
     </>
   );
