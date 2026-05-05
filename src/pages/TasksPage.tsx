@@ -733,6 +733,13 @@ function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, i
 
         {/* Main row */}
         <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 sm:py-3.5">
+          {/* Bulk select checkbox */}
+          {bulkMode && (
+            <button onClick={onToggleSelect}
+              className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all touch-manipulation ${selected ? "bg-primary border-primary" : "border-border hover:border-primary/50"}`}>
+              {selected && <CheckCircle2 size={12} className="text-primary-foreground" />}
+            </button>
+          )}
           {/* Toggle */}
           <button onClick={onToggle}
             className="shrink-0 transition-all hover:scale-110 touch-manipulation p-1"
