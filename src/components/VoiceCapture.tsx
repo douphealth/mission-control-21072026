@@ -1,54 +1,23 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, X, CheckCircle2, ListChecks, StickyNote, Lightbulb, Link as LinkIcon, Loader2, type LucideIcon } from 'lucide-react';
+import {
+  Mic,
+  MicOff,
+  X,
+  CheckCircle2,
+  ListChecks,
+  StickyNote,
+  Lightbulb,
+  Link as LinkIcon,
+  Loader2,
+  Sparkles,
+  type LucideIcon,
+} from 'lucide-react';
 import { useDashboard, type Task, type Note, type Idea, type LinkItem } from '@/contexts/DashboardContext';
-import { appendSpeechSegment, buildRecognitionSnapshot } from '@/lib/speechTranscript';
+import { transcribeAndClassify, type VoiceCaptureResult } from '@/server/voice.functions';
 import { toast } from 'sonner';
 
 type CaptureType = 'tasks' | 'notes' | 'ideas' | 'links';
-
-interface SpeechRecognitionAlternativeLike {
-  transcript: string;
-}
-
-interface SpeechRecognitionResultLike {
-  isFinal: boolean;
-  0: SpeechRecognitionAlternativeLike;
-}
-
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: ArrayLike<SpeechRecognitionResultLike>;
-}
-
-interface SpeechRecognitionErrorEventLike {
-  error: string;
-}
-
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  maxAlternatives: number;
-  start: () => void;
-  stop?: () => void;
-  abort?: () => void;
-  onstart?: () => void;
-  onaudiostart?: () => void;
-  onsoundstart?: () => void;
-  onspeechstart?: () => void;
-  onspeechend?: () => void;
-  onsoundend?: () => void;
-  onaudioend?: () => void;
-  onresult?: (event: SpeechRecognitionEventLike) => void;
-  onerror?: (event: SpeechRecognitionErrorEventLike) => void;
-  onend?: () => void;
-}
-
-interface SRWindow extends Window {
-  SpeechRecognition?: new () => SpeechRecognitionLike;
-  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
-}
 
 const TYPE_OPTIONS: { id: CaptureType; label: string; icon: LucideIcon; emoji: string; color: string }[] = [
   { id: 'tasks', label: 'Task', icon: ListChecks, emoji: '✅', color: 'from-blue-500 to-indigo-500' },
@@ -57,87 +26,77 @@ const TYPE_OPTIONS: { id: CaptureType; label: string; icon: LucideIcon; emoji: s
   { id: 'links', label: 'Link', icon: LinkIcon, emoji: '🔗', color: 'from-emerald-500 to-teal-500' },
 ];
 
-function detectType(text: string): CaptureType {
-  const t = text.toLowerCase();
-  if (/\b(https?:\/\/|www\.|\.com|\.io|\.dev|\.org|bookmark|link to)\b/.test(t)) return 'links';
-  if (/\b(idea|what if|maybe we|concept|brainstorm|imagine|could be|product idea)\b/.test(t)) return 'ideas';
-  if (/\b(remind me|todo|to do|task|need to|must|should|don'?t forget|tomorrow|today|by friday|deadline|due)\b/.test(t)) return 'tasks';
-  if (/\b(note|remember|fyi|reference|wrote down|jot|log)\b/.test(t)) return 'notes';
-  return 'tasks';
+// Voice activity detection constants
+const SILENCE_RMS_THRESHOLD = 0.012; // below this = silence
+const SPEECH_RMS_THRESHOLD = 0.025;  // above this = clearly speaking
+const SILENCE_HANG_MS = 1400;        // auto-stop after this much continuous silence (post-speech)
+const MAX_RECORD_MS = 60_000;        // hard cap
+const MIN_RECORD_MS = 600;           // ignore taps shorter than this
+
+type Phase = 'idle' | 'starting' | 'listening' | 'hearing' | 'processing' | 'ready' | 'error';
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onloadend = () => {
+      const result = String(r.result || '');
+      const idx = result.indexOf(',');
+      resolve(idx >= 0 ? result.slice(idx + 1) : result);
+    };
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
 }
 
-function detectPriority(text: string): 'critical' | 'high' | 'medium' | 'low' {
-  const t = text.toLowerCase();
-  if (/\b(urgent|asap|critical|emergency|right now|immediately)\b/.test(t)) return 'critical';
-  if (/\b(important|high priority|soon|today)\b/.test(t)) return 'high';
-  if (/\b(low priority|whenever|someday|eventually)\b/.test(t)) return 'low';
-  return 'medium';
-}
-
-function detectIdeaPriority(text: string): Idea['priority'] {
-  const priority = detectPriority(text);
-  return priority === 'critical' ? 'high' : priority;
-}
-
-function detectDueDate(text: string): string {
-  const t = text.toLowerCase();
-  const now = new Date();
-  const fmt = (d: Date) => d.toISOString().split('T')[0];
-  if (/\btoday\b/.test(t)) return fmt(now);
-  if (/\btomorrow\b/.test(t)) { const d = new Date(now); d.setDate(d.getDate() + 1); return fmt(d); }
-  if (/\bnext week\b/.test(t)) { const d = new Date(now); d.setDate(d.getDate() + 7); return fmt(d); }
-  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  for (let i = 0; i < days.length; i++) {
-    if (new RegExp(`\\b${days[i]}\\b`).test(t)) {
-      const d = new Date(now);
-      const diff = (i - d.getDay() + 7) % 7 || 7;
-      d.setDate(d.getDate() + diff);
-      return fmt(d);
-    }
+function pickMimeType(): string {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ];
+  if (typeof MediaRecorder === 'undefined') return 'audio/webm';
+  for (const c of candidates) {
+    try {
+      if (MediaRecorder.isTypeSupported(c)) return c;
+    } catch { /* ignore */ }
   }
-  return fmt(now);
-}
-
-function extractUrl(text: string): string {
-  const m = text.match(/https?:\/\/\S+|www\.\S+/i);
-  if (m) return m[0].startsWith('http') ? m[0] : `https://${m[0]}`;
-  const dom = text.match(/\b[\w-]+\.(com|io|dev|org|net|app|co)\b\S*/i);
-  return dom ? `https://${dom[0]}` : '';
-}
-
-function smartTitle(text: string): string {
-  const cleaned = text.trim().replace(/^(remind me to|i need to|todo|task|note|idea|remember to|don'?t forget to)\s+/i, '');
-  const firstSentence = cleaned.split(/[.!?\n]/)[0].trim();
-  return firstSentence.length > 80 ? firstSentence.slice(0, 77) + '…' : firstSentence || cleaned.slice(0, 80);
+  return '';
 }
 
 export default function VoiceCapture() {
   const { addItem } = useDashboard();
   const [open, setOpen] = useState(false);
   const [supported, setSupported] = useState(true);
-  const [listening, setListening] = useState(false);
-  const [micStatus, setMicStatus] = useState<'idle' | 'starting' | 'listening' | 'hearing'>('idle');
-  const [micError, setMicError] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
-  const [interim, setInterim] = useState('');
   const [type, setType] = useState<CaptureType>('tasks');
   const [typeAuto, setTypeAuto] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [aiResult, setAiResult] = useState<VoiceCaptureResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
-  const restartTimeoutRef = useRef<number | null>(null);
-  const finalResultIndexRef = useRef(0);
+  const [saving, setSaving] = useState(false);
 
-  // Check browser support
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const startedAtRef = useRef<number>(0);
+  const lastVoiceAtRef = useRef<number>(0);
+  const hasSpokenRef = useRef<boolean>(false);
+  const stopReasonRef = useRef<'manual' | 'silence' | 'maxlen' | null>(null);
+
+  // Browser support check (MediaRecorder + getUserMedia)
   useEffect(() => {
-    const w = window as SRWindow;
-    setSupported(!!(w.SpeechRecognition || w.webkitSpeechRecognition));
+    const ok =
+      typeof window !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      typeof MediaRecorder !== 'undefined';
+    setSupported(ok);
   }, []);
-
-  // Auto-detect type as user speaks
-  useEffect(() => {
-    if (typeAuto && transcript) setType(detectType(transcript));
-  }, [transcript, typeAuto]);
 
   // Global hotkey: Cmd/Ctrl + Shift + V
   useEffect(() => {
@@ -151,171 +110,233 @@ export default function VoiceCapture() {
     return () => document.removeEventListener('keydown', h);
   }, []);
 
-  const shouldListenRef = useRef(false);
-
-  const stopListening = useCallback(() => {
-    shouldListenRef.current = false;
-    if (restartTimeoutRef.current) window.clearTimeout(restartTimeoutRef.current);
-    const recognition = recognitionRef.current;
-    recognitionRef.current = null;
-    try { recognition?.abort?.(); } catch (error) { console.debug('Voice abort ignored', error); }
-    try { recognition?.stop?.(); } catch (error) { console.debug('Voice stop ignored', error); }
-    setListening(false);
-    setMicStatus('idle');
-    setAudioLevel(0);
-    setInterim('');
-    finalResultIndexRef.current = 0;
+  const cleanupAudio = useCallback(() => {
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    try { sourceRef.current?.disconnect(); } catch { /* */ }
+    try { analyserRef.current?.disconnect(); } catch { /* */ }
+    try { audioCtxRef.current?.close(); } catch { /* */ }
+    sourceRef.current = null;
+    analyserRef.current = null;
+    audioCtxRef.current = null;
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => { try { t.stop(); } catch { /* */ } });
+    }
+    streamRef.current = null;
   }, []);
 
-  useEffect(() => () => stopListening(), [stopListening]);
+  const stopRecording = useCallback((reason: 'manual' | 'silence' | 'maxlen') => {
+    const mr = mediaRecorderRef.current;
+    if (!mr) return;
+    stopReasonRef.current = reason;
+    if (mr.state !== 'inactive') {
+      try { mr.stop(); } catch { /* */ }
+    }
+  }, []);
 
-  const startListening = useCallback(() => {
-    const w = window as SRWindow;
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!SR) {
-      setMicError('Voice recognition is not supported in this browser.');
-      toast.error('Voice recognition is not supported in this browser. Try Chrome, Edge or Safari.');
+  const startRecording = useCallback(async () => {
+    if (mediaRecorderRef.current) return;
+    setErrorMsg(null);
+    setTranscript('');
+    setAiResult(null);
+    setPhase('starting');
+    setAudioLevel(0.2);
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
+    } catch (err) {
+      const e = err as DOMException;
+      console.warn('mic permission denied', e);
+      const msg =
+        e?.name === 'NotAllowedError'
+          ? 'Microphone access denied. Allow it in your browser, then try again.'
+          : e?.name === 'NotFoundError'
+            ? 'No microphone detected on this device.'
+            : 'Could not access the microphone.';
+      setErrorMsg(msg);
+      setPhase('error');
+      setAudioLevel(0);
+      toast.error(msg);
       return;
     }
-    if (recognitionRef.current || listening) return;
 
-    // Keep recognition start inside the direct click handler and avoid grabbing a
-    // second microphone stream for visualization — some browsers fail when both
-    // SpeechRecognition and getUserMedia try to own the mic at the same time.
-    setMicError(null);
-    setMicStatus('starting');
-    setAudioLevel(0.2);
-    const recognition = new SR();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = navigator.language || 'en-US';
-    recognition.maxAlternatives = 1;
+    streamRef.current = stream;
 
-    recognition.onstart = () => {
-      setListening(true);
-      setMicStatus('listening');
-      setAudioLevel(0.28);
-    };
-    recognition.onaudiostart = () => setAudioLevel(0.38);
-    recognition.onsoundstart = () => setAudioLevel(0.58);
-    recognition.onspeechstart = () => {
-      setMicStatus('hearing');
-      setAudioLevel(1);
-    };
-    recognition.onspeechend = () => {
-      setMicStatus('listening');
-      setAudioLevel(0.3);
-    };
-    recognition.onsoundend = () => setAudioLevel(0.18);
-    recognition.onaudioend = () => setAudioLevel(0.12);
+    const mimeType = pickMimeType();
+    let mr: MediaRecorder;
+    try {
+      mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    } catch (err) {
+      console.error('MediaRecorder init failed', err);
+      cleanupAudio();
+      setErrorMsg('Recording is not supported in this browser.');
+      setPhase('error');
+      return;
+    }
 
-    recognition.onresult = (e: SpeechRecognitionEventLike) => {
-      setTranscript(prev => {
-        const snapshot = buildRecognitionSnapshot(
-          e.results,
-          finalResultIndexRef.current,
-          prev,
-        );
-        finalResultIndexRef.current = snapshot.nextFinalResultIndex;
-        setInterim(snapshot.interim);
-        setMicStatus((snapshot.transcript || snapshot.interim) ? 'hearing' : 'listening');
-        setAudioLevel((snapshot.transcript || snapshot.interim) ? 1 : 0.28);
-        return snapshot.transcript;
-      });
+    chunksRef.current = [];
+    mr.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data);
     };
-    recognition.onerror = (e: SpeechRecognitionErrorEventLike) => {
-      console.warn('Speech recognition error:', e.error);
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-        setMicError('Microphone blocked. Allow mic access in the browser, then tap again.');
-        toast.error('Microphone access denied. Enable it in your browser settings and tap the mic again.');
-        shouldListenRef.current = false;
-        stopListening();
-      } else if (e.error === 'no-speech' || e.error === 'aborted') {
-        setMicError(null);
-        setMicStatus('listening');
-        setAudioLevel(0.18);
-      } else if (e.error === 'audio-capture') {
-        setMicError('No microphone was found on this device.');
-        toast.error('No microphone detected.');
-        shouldListenRef.current = false;
-        stopListening();
-      } else if (e.error === 'network') {
-        setMicError('Speech service unavailable right now. Try again in a moment.');
-        toast.error('Speech recognition service is temporarily unavailable.');
-        shouldListenRef.current = false;
-        stopListening();
-      } else {
-        setMicError(`Voice error: ${e.error}`);
-        console.warn(`Voice error: ${e.error}`);
-      }
-    };
-    recognition.onend = () => {
-      if (recognitionRef.current !== recognition) return;
-      setListening(false);
 
-      // Auto-restart if user hasn't stopped manually.
-      if (shouldListenRef.current) {
-        setMicStatus('starting');
-        restartTimeoutRef.current = window.setTimeout(() => {
-          if (!shouldListenRef.current || recognitionRef.current !== recognition) return;
-          try {
-            recognition.start();
-          } catch (err) {
-            console.warn('restart failed', err);
-            shouldListenRef.current = false;
-            stopListening();
-            toast.error('Voice capture paused. Tap the mic again to continue.');
-          }
-        }, 160);
+    mr.onstop = async () => {
+      cleanupAudio();
+      const blob = new Blob(chunksRef.current, { type: mr.mimeType || mimeType || 'audio/webm' });
+      mediaRecorderRef.current = null;
+
+      const elapsed = Date.now() - startedAtRef.current;
+      const reason = stopReasonRef.current;
+      stopReasonRef.current = null;
+
+      if (!hasSpokenRef.current || elapsed < MIN_RECORD_MS || blob.size < 1500) {
+        setPhase('idle');
+        setAudioLevel(0);
+        if (reason === 'silence') {
+          // silently reset; nothing was said
+          return;
+        }
+        toast.error("I didn't catch any speech. Try again.");
         return;
       }
 
-      recognitionRef.current = null;
-      setMicStatus('idle');
+      setPhase('processing');
       setAudioLevel(0);
+      try {
+        const base64 = await blobToBase64(blob);
+        const result = await transcribeAndClassify({
+          data: { audio: base64, mime: blob.type || 'audio/webm' },
+        });
+        setTranscript(result.transcript);
+        setAiResult(result);
+        if (typeAuto) setType(result.type);
+        setPhase('ready');
+      } catch (err) {
+        console.error('transcribe failed', err);
+        const message = err instanceof Error ? err.message : 'Transcription failed';
+        setErrorMsg(message);
+        toast.error('Transcription failed. ' + message);
+        setPhase('error');
+      }
     };
 
-    recognitionRef.current = recognition;
-    shouldListenRef.current = true;
+    // Audio level + VAD via WebAudio
     try {
-      recognition.start();
-    } catch (err) {
-      console.error('Failed to start recognition:', err);
-      setMicError('Could not start voice recognition. Tap the mic to retry.');
-      toast.error('Could not start voice recognition. Try again.');
-      recognitionRef.current = null;
-      shouldListenRef.current = false;
-      setListening(false);
-      setMicStatus('idle');
-      setAudioLevel(0);
-      return;
-    }
-  }, [listening, stopListening]);
+      const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const ctx = new Ctx();
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.6;
+      source.connect(analyser);
+      audioCtxRef.current = ctx;
+      sourceRef.current = source;
+      analyserRef.current = analyser;
 
-  const handleClose = () => {
-    stopListening();
+      const buffer = new Float32Array(analyser.fftSize);
+      const tick = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getFloatTimeDomainData(buffer);
+        let sumSq = 0;
+        for (let i = 0; i < buffer.length; i++) {
+          const v = buffer[i];
+          sumSq += v * v;
+        }
+        const rms = Math.sqrt(sumSq / buffer.length);
+        const normalized = Math.min(1, rms * 8);
+        setAudioLevel(prev => prev * 0.6 + normalized * 0.4);
+
+        const now = Date.now();
+        if (rms > SPEECH_RMS_THRESHOLD) {
+          hasSpokenRef.current = true;
+          lastVoiceAtRef.current = now;
+          setPhase(p => (p === 'starting' || p === 'listening' ? 'hearing' : p));
+        } else if (rms > SILENCE_RMS_THRESHOLD) {
+          // ambient/marginal — keep timer, no state change
+          lastVoiceAtRef.current = Math.max(lastVoiceAtRef.current, now - 200);
+        }
+
+        // Auto-stop on sustained silence (after at least one detected speech segment)
+        if (
+          hasSpokenRef.current &&
+          now - lastVoiceAtRef.current > SILENCE_HANG_MS
+        ) {
+          stopRecording('silence');
+          return;
+        }
+        if (now - startedAtRef.current > MAX_RECORD_MS) {
+          stopRecording('maxlen');
+          return;
+        }
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    } catch (err) {
+      console.warn('audio meter init failed', err);
+    }
+
+    mediaRecorderRef.current = mr;
+    startedAtRef.current = Date.now();
+    lastVoiceAtRef.current = Date.now();
+    hasSpokenRef.current = false;
+    try {
+      mr.start(250);
+      setPhase('listening');
+    } catch (err) {
+      console.error('mr.start failed', err);
+      cleanupAudio();
+      mediaRecorderRef.current = null;
+      setErrorMsg('Could not start recording. Try again.');
+      setPhase('error');
+    }
+  }, [cleanupAudio, stopRecording, typeAuto]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      try { mediaRecorderRef.current?.stop(); } catch { /* */ }
+      cleanupAudio();
+    };
+  }, [cleanupAudio]);
+
+  const handleClose = useCallback(() => {
+    try { mediaRecorderRef.current?.stop(); } catch { /* */ }
+    cleanupAudio();
+    mediaRecorderRef.current = null;
     setOpen(false);
-    setMicError(null);
+    setPhase('idle');
+    setErrorMsg(null);
     setTranscript('');
-    setInterim('');
+    setAiResult(null);
     setTypeAuto(true);
-  };
+    setAudioLevel(0);
+  }, [cleanupAudio]);
 
   const handleSave = async () => {
-    const text = appendSpeechSegment(transcript, interim);
-    if (!text) { toast.error('Nothing to save — try speaking first'); return; }
+    if (!transcript) {
+      toast.error('Nothing to save — try speaking first');
+      return;
+    }
     setSaving(true);
-    stopListening();
     try {
       const now = new Date().toISOString().split('T')[0];
-      const title = smartTitle(text);
+      const title = aiResult?.title || transcript.slice(0, 80);
+      const text = transcript;
+
       if (type === 'tasks') {
         const taskPayload: Omit<Task, 'id'> = {
           title,
           description: text,
-          priority: detectPriority(text),
+          priority: aiResult?.priority || 'medium',
           status: 'todo',
-          dueDate: detectDueDate(text),
+          dueDate: aiResult?.dueDate || now,
           category: 'Voice',
           linkedProject: '',
           subtasks: [],
@@ -338,7 +359,7 @@ export default function VoiceCapture() {
           title,
           description: text,
           category: 'Voice',
-          priority: detectIdeaPriority(text),
+          priority: (aiResult?.priority === 'critical' ? 'high' : aiResult?.priority) || 'medium',
           status: 'spark',
           tags: ['voice'],
           linkedProject: '',
@@ -348,10 +369,9 @@ export default function VoiceCapture() {
         };
         await addItem<Idea>('ideas', ideaPayload);
       } else if (type === 'links') {
-        const url = extractUrl(text);
         const linkPayload: Omit<LinkItem, 'id'> = {
           title,
-          url: url || 'https://',
+          url: aiResult?.url || 'https://',
           category: 'Voice',
           status: 'active',
           description: text,
@@ -371,31 +391,31 @@ export default function VoiceCapture() {
     }
   };
 
-  // NOTE: We do NOT auto-start in a useEffect/setTimeout because that
-  // breaks the user-gesture context required by the SpeechRecognition API.
-  // Recognition must be started synchronously from the click handler below.
-
-  const fullText = (transcript + ' ' + interim).trim();
+  const isRecording = phase === 'listening' || phase === 'hearing' || phase === 'starting';
   const activeOpt = TYPE_OPTIONS.find(o => o.id === type)!;
-  const statusText = !supported
-    ? 'Not supported in this browser'
-    : micError
-      ? micError
-    : micStatus === 'starting'
-      ? 'Starting microphone…'
-      : micStatus === 'hearing'
-        ? 'Hearing your speech…'
-        : listening
-          ? 'Listening… speak naturally'
-          : 'Tap mic to start';
+  const statusText =
+    !supported
+      ? 'Voice capture not supported in this browser'
+      : errorMsg
+        ? errorMsg
+        : phase === 'starting'
+          ? 'Starting microphone…'
+          : phase === 'listening'
+            ? 'Listening… speak naturally (auto-stops on silence)'
+            : phase === 'hearing'
+              ? 'Hearing your speech…'
+              : phase === 'processing'
+                ? 'Transcribing with AI…'
+                : phase === 'ready'
+                  ? '✨ Transcribed — review and save'
+                  : 'Tap mic to start';
 
   return (
     <>
-      {/* Floating mic button — opens modal AND starts listening synchronously (gesture-bound) */}
       <motion.button
         onClick={() => {
           setOpen(true);
-          if (supported && !listening) startListening();
+          if (supported && phase === 'idle') void startRecording();
         }}
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -435,9 +455,7 @@ export default function VoiceCapture() {
                   </div>
                   <div>
                     <div className="text-sm font-bold text-foreground">Voice Capture</div>
-                    <div className="text-[11px] text-muted-foreground">
-                      {statusText}
-                    </div>
+                    <div className="text-[11px] text-muted-foreground">{statusText}</div>
                   </div>
                 </div>
                 <button onClick={handleClose} className="w-9 h-9 rounded-2xl hover:bg-secondary/70 flex items-center justify-center text-muted-foreground transition">
@@ -448,17 +466,26 @@ export default function VoiceCapture() {
               {/* Mic + waveform */}
               <div className="px-5 sm:px-6 py-6 flex flex-col items-center gap-4 bg-gradient-to-b from-secondary/20 to-transparent">
                 <motion.button
-                  onClick={listening ? stopListening : startListening}
-                  disabled={!supported}
+                  onClick={() => {
+                    if (isRecording) stopRecording('manual');
+                    else if (phase !== 'processing') void startRecording();
+                  }}
+                  disabled={!supported || phase === 'processing'}
                   whileTap={{ scale: 0.92 }}
                   className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all ${
-                    listening
+                    isRecording
                       ? 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-[0_10px_40px_-8px_rgb(244,63,94,0.6)]'
-                      : 'gradient-primary text-primary-foreground shadow-[var(--shadow-primary)]'
-                  } disabled:opacity-40`}
+                      : phase === 'processing'
+                        ? 'bg-secondary text-muted-foreground'
+                        : 'gradient-primary text-primary-foreground shadow-[var(--shadow-primary)]'
+                  } disabled:opacity-60`}
                 >
-                  {listening ? <MicOff size={32} /> : <Mic size={32} />}
-                  {listening && (
+                  {phase === 'processing'
+                    ? <Loader2 size={32} className="animate-spin" />
+                    : isRecording
+                      ? <MicOff size={32} />
+                      : <Mic size={32} />}
+                  {isRecording && (
                     <motion.span
                       className="absolute inset-0 rounded-full border-2 border-rose-400/60"
                       animate={{ scale: [1, 1 + audioLevel * 0.4, 1], opacity: [0.6, 0.2, 0.6] }}
@@ -467,18 +494,17 @@ export default function VoiceCapture() {
                   )}
                 </motion.button>
 
-                {micError && (
+                {errorMsg && (
                   <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-background/80 px-4 py-3 text-center text-xs text-muted-foreground">
-                    {micError}
+                    {errorMsg}
                   </div>
                 )}
 
-                {/* Audio level bars */}
-                {listening && (
+                {isRecording && (
                   <div className="flex items-center gap-1 h-8">
                     {[...Array(24)].map((_, i) => {
                       const distance = Math.abs(i - 12) / 12;
-                      const h = Math.max(4, audioLevel * 32 * (1 - distance * 0.6) * (0.5 + Math.random() * 0.5));
+                      const h = Math.max(4, audioLevel * 40 * (1 - distance * 0.5) * (0.6 + Math.random() * 0.4));
                       return (
                         <motion.div
                           key={i}
@@ -495,24 +521,33 @@ export default function VoiceCapture() {
               {/* Transcript */}
               <div className="px-5 sm:px-6 pb-4">
                 <div className="min-h-[100px] max-h-[180px] overflow-y-auto bg-secondary/40 rounded-2xl p-4 text-[14px] leading-relaxed text-foreground border border-border/30">
-                  {fullText ? (
-                    <>
-                      <span>{transcript}</span>
-                      {interim && <span className="text-muted-foreground italic"> {interim}</span>}
-                    </>
+                  {transcript ? (
+                    <span>{transcript}</span>
+                  ) : phase === 'processing' ? (
+                    <span className="text-muted-foreground italic flex items-center gap-2">
+                      <Sparkles size={14} className="animate-pulse" />
+                      AI is transcribing your voice…
+                    </span>
                   ) : (
                     <span className="text-muted-foreground/60 italic">
                       Try saying: "Remind me to call the client tomorrow", "Idea: AI tool for invoices", "Note: meeting at 3pm went well"…
                     </span>
                   )}
                 </div>
-                {fullText && (
-                  <button
-                    onClick={() => { setTranscript(''); setInterim(''); }}
-                    className="mt-2 text-[11px] text-muted-foreground hover:text-foreground transition"
-                  >
-                    Clear transcript
-                  </button>
+                {transcript && (
+                  <div className="mt-2 flex items-center justify-between">
+                    <button
+                      onClick={() => { setTranscript(''); setAiResult(null); setPhase('idle'); }}
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition"
+                    >
+                      Clear & re-record
+                    </button>
+                    {aiResult && (
+                      <span className="text-[10px] text-primary/80 font-medium flex items-center gap-1">
+                        <Sparkles size={10} /> AI-classified as {aiResult.type}
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -520,7 +555,7 @@ export default function VoiceCapture() {
               <div className="px-5 sm:px-6 pb-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Save as</span>
-                  {typeAuto && fullText && (
+                  {typeAuto && transcript && (
                     <span className="text-[10px] text-primary/80 font-medium">✨ Auto-detected</span>
                   )}
                 </div>
@@ -546,7 +581,7 @@ export default function VoiceCapture() {
                 </div>
               </div>
 
-              {/* Footer actions */}
+              {/* Footer */}
               <div className="px-5 sm:px-6 py-4 border-t border-border/30 bg-secondary/20 flex items-center justify-between gap-3">
                 <span className="hidden sm:block text-[11px] text-muted-foreground">
                   Shortcut: <kbd className="px-1.5 py-0.5 rounded bg-card border border-border/40 font-mono text-[10px]">⌘⇧V</kbd>
@@ -561,7 +596,7 @@ export default function VoiceCapture() {
                   <motion.button
                     whileTap={{ scale: 0.95 }}
                     onClick={handleSave}
-                    disabled={!fullText || saving}
+                    disabled={!transcript || saving || phase === 'processing'}
                     className="px-5 py-2.5 rounded-2xl text-sm font-semibold gradient-primary text-primary-foreground shadow-[var(--shadow-primary)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
