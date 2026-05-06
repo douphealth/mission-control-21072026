@@ -8,6 +8,7 @@ import { useNavigationStore } from '@/stores/navigationStore';
 import { motion, AnimatePresence } from 'framer-motion';
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
+import VoiceCapture from '@/components/VoiceCapture';
 
 const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
 const TasksPage = lazy(() => import('@/pages/TasksPage'));
