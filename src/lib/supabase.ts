@@ -651,6 +651,11 @@ export async function replaceLocalWithSupabaseSnapshot(): Promise<{ success: boo
             remoteSettings = data?.data ?? null;
         }
 
+        const populated = remoteSnapshots.some(({ items }) => items.length > 0) || Boolean(remoteSettings);
+        if (!populated) {
+            return { success: true, populated: false };
+        }
+
         await db.transaction('rw', [...TABLE_MAP.map(({ local }) => local), db.settings], async () => {
             for (const { local, remote } of TABLE_MAP) {
                 const snapshot = remoteSnapshots.find((entry) => entry.remote === remote);
@@ -665,7 +670,6 @@ export async function replaceLocalWithSupabaseSnapshot(): Promise<{ success: boo
             }
         });
 
-        const populated = remoteSnapshots.some(({ items }) => items.length > 0) || Boolean(remoteSettings);
         markCloudBaselineReady();
         markLastSyncNow();
         syncCallbacks.forEach(cb => cb());
