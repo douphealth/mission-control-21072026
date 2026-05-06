@@ -69,8 +69,10 @@ export function getGCalColor(colorId?: string): string {
 
 const STORAGE_KEY = 'mc_gcal_config';
 
+const DEFAULT_CLIENT_ID = '541642493011-k41ng5vo7ihfn7su05g85u47ef727a9l.apps.googleusercontent.com';
+
 const DEFAULT_CONFIG: GCalConfig = {
-  clientId: '',
+  clientId: DEFAULT_CLIENT_ID,
   accessToken: null,
   tokenExpiry: null,
   connectedEmail: null,
@@ -84,7 +86,10 @@ export function getGCalConfig(): GCalConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_CONFIG };
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    // Always fall back to default client ID if empty so the app is preconnected
+    if (!parsed.clientId) parsed.clientId = DEFAULT_CLIENT_ID;
+    return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
