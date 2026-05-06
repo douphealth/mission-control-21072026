@@ -651,8 +651,11 @@ export async function replaceLocalWithSupabaseSnapshot(): Promise<{ success: boo
             remoteSettings = data?.data ?? null;
         }
 
-        const populated = remoteSnapshots.some(({ items }) => items.length > 0) || Boolean(remoteSettings);
-        if (!populated) {
+        const hasRemoteRows = remoteSnapshots.some(({ items }) => items.length > 0);
+        if (!hasRemoteRows) {
+            if (remoteSettings) {
+                await db.settings.put({ ...remoteSettings, id: 'default' });
+            }
             return { success: true, populated: false };
         }
 
@@ -673,7 +676,7 @@ export async function replaceLocalWithSupabaseSnapshot(): Promise<{ success: boo
         markCloudBaselineReady();
         markLastSyncNow();
         syncCallbacks.forEach(cb => cb());
-        return { success: true, populated };
+        return { success: true, populated: true };
     } catch (e: any) {
         return { success: false, populated: false, error: e?.message };
     }
