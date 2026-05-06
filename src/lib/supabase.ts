@@ -12,8 +12,9 @@ let schemaAvailability: Record<string, boolean> | null = null;
 let schemaErrors: SyncSchemaError[] = [];
 let schemaAvailabilityCheckedAt = 0;
 
-const DEFAULT_SUPABASE_URL = 'https://dszpokkqhrtjutmvcxnh.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://npdfzpaglqgnhfphmpwo.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_DR3JoohreA2S4Z3akVmICQ_ZZp2DSnW';
+const DISCONNECTED_KEY = 'mc-supabase-disconnected';
 const CLOUD_BASELINE_KEY = 'mc-cloud-baseline-ready';
 const LAST_SYNC_FALLBACK_KEY = 'mc-last-sync-at';
 const REQUIRED_REMOTE_TABLES = [
@@ -170,16 +171,20 @@ function markLastSyncNow(): void {
 
 export function getSupabaseConfig(): { url: string; anonKey: string } | null {
     try {
+        const disconnected = localStorage.getItem(DISCONNECTED_KEY) === '1';
+        if (disconnected) return null;
         const url = localStorage.getItem('mc-supabase-url');
         const anonKey = localStorage.getItem('mc-supabase-anon-key');
         if (url && anonKey && url.startsWith('https://')) return { url, anonKey };
     } catch { }
-    return null;
+    // Default: always connected to the bundled Supabase project
+    return { url: DEFAULT_SUPABASE_URL, anonKey: DEFAULT_SUPABASE_ANON_KEY };
 }
 
 export function setSupabaseConfig(url: string, anonKey: string): void {
     localStorage.setItem('mc-supabase-url', url.trim());
     localStorage.setItem('mc-supabase-anon-key', anonKey.trim());
+    try { localStorage.removeItem(DISCONNECTED_KEY); } catch { }
     clearCloudBaseline();
     if (realtimeChannel) {
         realtimeChannel.unsubscribe();
@@ -192,6 +197,7 @@ export function setSupabaseConfig(url: string, anonKey: string): void {
 export function clearSupabaseConfig(): void {
     localStorage.removeItem('mc-supabase-url');
     localStorage.removeItem('mc-supabase-anon-key');
+    try { localStorage.setItem(DISCONNECTED_KEY, '1'); } catch { }
     clearCloudBaseline();
     if (realtimeChannel) {
         realtimeChannel.unsubscribe();
