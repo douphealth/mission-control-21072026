@@ -117,15 +117,11 @@ export default function VoiceCapture() {
     setAudioLevel(0);
   }, []);
 
-  const startListening = useCallback(async () => {
-    const w = window as SRWindow;
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!SR) {
-      toast.error('Voice recognition is not supported in this browser. Try Chrome, Edge or Safari.');
-      return;
-    }
+  const shouldListenRef = useRef(false);
+
+  const setupAudioMeter = useCallback(async () => {
     try {
-      // Set up audio level meter
+      if (streamRef.current) return;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -142,50 +138,75 @@ export default function VoiceCapture() {
         rafRef.current = requestAnimationFrame(tick);
       };
       tick();
+    } catch (err) {
+      console.warn('Audio meter unavailable:', err);
+    }
+  }, []);
 
-      const recognition = new SR();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = navigator.language || 'en-US';
+  const startListening = useCallback(() => {
+    const w = window as SRWindow;
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SR) {
+      toast.error('Voice recognition is not supported in this browser. Try Chrome, Edge or Safari.');
+      return;
+    }
 
-      recognition.onresult = (e: any) => {
-        let final = '';
-        let interimText = '';
-        for (let i = e.resultIndex; i < e.results.length; i++) {
-          const r = e.results[i];
-          if (r.isFinal) final += r[0].transcript + ' ';
-          else interimText += r[0].transcript;
-        }
-        if (final) setTranscript(prev => (prev + ' ' + final).trim());
-        setInterim(interimText);
-      };
-      recognition.onerror = (e: any) => {
-        console.warn('Speech recognition error:', e.error);
-        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
-          toast.error('Microphone access denied. Please enable it in your browser.');
-        } else if (e.error === 'no-speech') {
-          // ignore
-        } else {
-          toast.error(`Voice error: ${e.error}`);
-        }
+    // CRITICAL: create + start recognition SYNCHRONOUSLY inside the user gesture.
+    // Any await before .start() breaks the gesture context and the API fails silently.
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+
+    recognition.onresult = (e: any) => {
+      let final = '';
+      let interimText = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) final += r[0].transcript + ' ';
+        else interimText += r[0].transcript;
+      }
+      if (final) setTranscript(prev => (prev + ' ' + final).trim());
+      setInterim(interimText);
+    };
+    recognition.onerror = (e: any) => {
+      console.warn('Speech recognition error:', e.error);
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        toast.error('Microphone access denied. Enable it in your browser settings and tap the mic again.');
+        shouldListenRef.current = false;
         stopListening();
-      };
-      recognition.onend = () => {
-        // If user didn't manually stop, restart for continuous mode
-        if (recognitionRef.current === recognition && listening) {
-          try { recognition.start(); } catch {}
-        }
-      };
+      } else if (e.error === 'no-speech' || e.error === 'aborted') {
+        // ignore — onend will auto-restart if still listening
+      } else if (e.error === 'audio-capture') {
+        toast.error('No microphone detected.');
+        shouldListenRef.current = false;
+        stopListening();
+      } else {
+        console.warn(`Voice error: ${e.error}`);
+      }
+    };
+    recognition.onend = () => {
+      // Auto-restart if user hasn't stopped manually
+      if (shouldListenRef.current && recognitionRef.current === recognition) {
+        try { recognition.start(); } catch (err) { console.warn('restart failed', err); }
+      }
+    };
 
-      recognitionRef.current = recognition;
+    recognitionRef.current = recognition;
+    shouldListenRef.current = true;
+    try {
       recognition.start();
       setListening(true);
     } catch (err) {
-      console.error(err);
-      toast.error('Could not access microphone');
-      stopListening();
+      console.error('Failed to start recognition:', err);
+      toast.error('Could not start voice recognition. Try again.');
+      shouldListenRef.current = false;
+      return;
     }
-  }, [listening, stopListening]);
+
+    // Set up audio meter AFTER starting recognition (async is fine here)
+    setupAudioMeter();
+  }, [stopListening, setupAudioMeter]);
 
   const handleClose = () => {
     stopListening();
