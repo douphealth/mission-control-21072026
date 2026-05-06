@@ -14,6 +14,7 @@ import {
 } from "@/lib/supabase";
 import { generateStrongKey, setEncryptionKey, hasCustomEncryptionKey } from "@/lib/encryption";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
+import { getDefaultGCalRedirectUri, normalizeGCalRedirectUri, setGCalConfig } from "@/lib/googleCalendar";
 import SupabaseSyncConsole from "@/components/SupabaseSyncConsole";
 
 import { toast } from "sonner";
@@ -59,12 +60,26 @@ export default function SettingsPage() {
   // Google Calendar
   const gcal = useGoogleCalendar({ autoFetch: false });
   const [gcalClientIdInput, setGcalClientIdInput] = useState(gcal.clientId);
-  const [gcalRedirectOverride, setGcalRedirectOverride] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('mc_gcal_config') || '{}').redirectUri || ''; } catch { return ''; }
-  });
+  const [gcalRedirectOverride, setGcalRedirectOverride] = useState('');
   const isInIframe = window.self !== window.top;
-  const computedRedirectUri = gcalRedirectOverride || (window.location.origin + '/oauth-callback.html');
-  const computedOrigin = gcalRedirectOverride ? new URL(gcalRedirectOverride).origin : window.location.origin;
+  const suggestedRedirectUri = getDefaultGCalRedirectUri();
+  const effectiveRedirectOverride = gcalRedirectOverride || suggestedRedirectUri;
+  const computedRedirectUri = effectiveRedirectOverride || (window.location.origin + '/oauth-callback.html');
+  const computedOrigin = effectiveRedirectOverride ? new URL(effectiveRedirectOverride).origin : window.location.origin;
+
+  useEffect(() => {
+    let stored = '';
+    try {
+      stored = normalizeGCalRedirectUri(JSON.parse(localStorage.getItem('mc_gcal_config') || '{}').redirectUri) || '';
+    } catch {
+      stored = '';
+    }
+    const next = stored || suggestedRedirectUri;
+    setGcalRedirectOverride(next);
+    if (next !== stored) {
+      setGCalConfig({ redirectUri: next });
+    }
+  }, [isInIframe, suggestedRedirectUri]);
 
   // Supabase state
   const [sbUrl, setSbUrl] = useState(getSupabaseConfig()?.url || "");
@@ -386,16 +401,16 @@ export default function SettingsPage() {
                     )}
                   </div>
 
-                  {isInIframe && !gcalRedirectOverride && (
+                  {isInIframe && !effectiveRedirectOverride && (
                     <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-destructive/10 text-destructive border border-destructive/20">
                       <AlertTriangle size={15} />
                       <span>⚠️ Set your <strong>Published URL Override</strong> below before connecting — Google OAuth cannot work from the Lovable preview origin.</span>
                     </div>
                   )}
-                  {isInIframe && gcalRedirectOverride && (
+                  {isInIframe && effectiveRedirectOverride && (
                     <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                       <Info size={15} />
-                      <span>Override set — the OAuth popup will open on <strong>{new URL(gcalRedirectOverride).origin}</strong>. Make sure this domain is whitelisted in Google Cloud Console.</span>
+                      <span>Override set — the OAuth popup will open on <strong>{new URL(effectiveRedirectOverride).origin}</strong>. Make sure this domain is whitelisted in Google Cloud Console.</span>
                     </div>
                   )}
 
@@ -417,15 +432,12 @@ export default function SettingsPage() {
                       <input
                         value={gcalRedirectOverride}
                         onChange={e => {
-                          setGcalRedirectOverride(e.target.value);
-                          // Save to config
-                          const uri = e.target.value.trim();
-                          const raw = JSON.parse(localStorage.getItem('mc_gcal_config') || '{}');
-                          raw.redirectUri = uri || undefined;
-                          localStorage.setItem('mc_gcal_config', JSON.stringify(raw));
+                          const uri = normalizeGCalRedirectUri(e.target.value) || '';
+                          setGcalRedirectOverride(uri);
+                          setGCalConfig({ redirectUri: uri || undefined });
                         }}
                         className="input-base font-mono text-xs"
-                        placeholder="https://your-app.pages.dev/oauth-callback.html"
+                        placeholder={suggestedRedirectUri}
                       />
                       <p className="text-[10px] text-muted-foreground mt-1">
                         Set this to your deployed URL's callback if testing from Lovable preview
@@ -469,7 +481,7 @@ export default function SettingsPage() {
                             toast.error(result.error || "Connection failed");
                           }
                         }}
-                        disabled={gcal.connecting || !gcalClientIdInput.trim() || (isInIframe && !gcalRedirectOverride)}
+                        disabled={gcal.connecting || !gcalClientIdInput.trim() || (isInIframe && !effectiveRedirectOverride)}
                         className="btn-primary text-sm gap-2"
                       >
                         {gcal.connecting ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}

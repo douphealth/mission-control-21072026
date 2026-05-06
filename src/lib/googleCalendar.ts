@@ -70,6 +70,11 @@ export function getGCalColor(colorId?: string): string {
 const STORAGE_KEY = 'mc_gcal_config';
 
 const DEFAULT_CLIENT_ID = '541642493011-k41ng5vo7ihfn7su05g85u47ef727a9l.apps.googleusercontent.com';
+const DEFAULT_PUBLISHED_ORIGIN = 'https://my-new-mission-control-center.pages.dev';
+const OAUTH_CALLBACK_PATH = '/oauth-callback.html';
+const LEGACY_REDIRECT_ORIGINS = new Set([
+  'https://mission-control-center-2d32d572.pages.dev',
+]);
 
 const DEFAULT_CONFIG: GCalConfig = {
   clientId: DEFAULT_CLIENT_ID,
@@ -82,6 +87,25 @@ const DEFAULT_CONFIG: GCalConfig = {
   lastSync: null,
 };
 
+export function getDefaultGCalRedirectUri(): string {
+  return new URL(OAUTH_CALLBACK_PATH, DEFAULT_PUBLISHED_ORIGIN).toString();
+}
+
+export function normalizeGCalRedirectUri(input?: string | null): string | undefined {
+  const value = input?.trim();
+  if (!value) return undefined;
+
+  try {
+    const parsed = new URL(value);
+    const normalizedOrigin = LEGACY_REDIRECT_ORIGINS.has(parsed.origin)
+      ? DEFAULT_PUBLISHED_ORIGIN
+      : parsed.origin;
+    return new URL(OAUTH_CALLBACK_PATH, normalizedOrigin).toString();
+  } catch {
+    return undefined;
+  }
+}
+
 export function getGCalConfig(): GCalConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -89,6 +113,7 @@ export function getGCalConfig(): GCalConfig {
     const parsed = JSON.parse(raw);
     // Always fall back to default client ID if empty so the app is preconnected
     if (!parsed.clientId) parsed.clientId = DEFAULT_CLIENT_ID;
+    parsed.redirectUri = normalizeGCalRedirectUri(parsed.redirectUri);
     return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
     return { ...DEFAULT_CONFIG };
@@ -97,7 +122,11 @@ export function getGCalConfig(): GCalConfig {
 
 export function setGCalConfig(partial: Partial<GCalConfig>): GCalConfig {
   const current = getGCalConfig();
-  const updated = { ...current, ...partial };
+  const nextPartial = { ...partial };
+  if ('redirectUri' in nextPartial) {
+    nextPartial.redirectUri = normalizeGCalRedirectUri(nextPartial.redirectUri);
+  }
+  const updated = { ...current, ...nextPartial };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   return updated;
 }
@@ -171,7 +200,7 @@ export async function signInWithGoogle(clientId: string): Promise<{
 }> {
   const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email';
   const cfg = getGCalConfig();
-  const REDIRECT_URI = cfg.redirectUri || (window.location.origin + '/oauth-callback.html');
+  const REDIRECT_URI = cfg.redirectUri || (window.location.origin + OAUTH_CALLBACK_PATH);
 
   const state = crypto.randomUUID();
 
