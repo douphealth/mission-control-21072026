@@ -116,6 +116,7 @@ export default function VoiceCapture() {
   const [supported, setSupported] = useState(true);
   const [listening, setListening] = useState(false);
   const [micStatus, setMicStatus] = useState<'idle' | 'starting' | 'listening' | 'hearing'>('idle');
+  const [micError, setMicError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [type, setType] = useState<CaptureType>('tasks');
@@ -169,6 +170,7 @@ export default function VoiceCapture() {
     const w = window as SRWindow;
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) {
+      setMicError('Voice recognition is not supported in this browser.');
       toast.error('Voice recognition is not supported in this browser. Try Chrome, Edge or Safari.');
       return;
     }
@@ -177,6 +179,7 @@ export default function VoiceCapture() {
     // Keep recognition start inside the direct click handler and avoid grabbing a
     // second microphone stream for visualization — some browsers fail when both
     // SpeechRecognition and getUserMedia try to own the mic at the same time.
+    setMicError(null);
     setMicStatus('starting');
     setAudioLevel(0.2);
     const recognition = new SR();
@@ -219,21 +222,26 @@ export default function VoiceCapture() {
     recognition.onerror = (e: SpeechRecognitionErrorEventLike) => {
       console.warn('Speech recognition error:', e.error);
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setMicError('Microphone blocked. Allow mic access in the browser, then tap again.');
         toast.error('Microphone access denied. Enable it in your browser settings and tap the mic again.');
         shouldListenRef.current = false;
         stopListening();
       } else if (e.error === 'no-speech' || e.error === 'aborted') {
+        setMicError(null);
         setMicStatus('listening');
         setAudioLevel(0.18);
       } else if (e.error === 'audio-capture') {
+        setMicError('No microphone was found on this device.');
         toast.error('No microphone detected.');
         shouldListenRef.current = false;
         stopListening();
       } else if (e.error === 'network') {
+        setMicError('Speech service unavailable right now. Try again in a moment.');
         toast.error('Speech recognition service is temporarily unavailable.');
         shouldListenRef.current = false;
         stopListening();
       } else {
+        setMicError(`Voice error: ${e.error}`);
         console.warn(`Voice error: ${e.error}`);
       }
     };
@@ -269,6 +277,7 @@ export default function VoiceCapture() {
       recognition.start();
     } catch (err) {
       console.error('Failed to start recognition:', err);
+      setMicError('Could not start voice recognition. Tap the mic to retry.');
       toast.error('Could not start voice recognition. Try again.');
       recognitionRef.current = null;
       shouldListenRef.current = false;
@@ -282,6 +291,7 @@ export default function VoiceCapture() {
   const handleClose = () => {
     stopListening();
     setOpen(false);
+    setMicError(null);
     setTranscript('');
     setInterim('');
     setTypeAuto(true);
@@ -365,6 +375,8 @@ export default function VoiceCapture() {
   const activeOpt = TYPE_OPTIONS.find(o => o.id === type)!;
   const statusText = !supported
     ? 'Not supported in this browser'
+    : micError
+      ? micError
     : micStatus === 'starting'
       ? 'Starting microphone…'
       : micStatus === 'hearing'
@@ -450,6 +462,12 @@ export default function VoiceCapture() {
                     />
                   )}
                 </motion.button>
+
+                {micError && (
+                  <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-background/80 px-4 py-3 text-center text-xs text-muted-foreground">
+                    {micError}
+                  </div>
+                )}
 
                 {/* Audio level bars */}
                 {listening && (
