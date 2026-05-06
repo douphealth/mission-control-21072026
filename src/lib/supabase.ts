@@ -12,8 +12,9 @@ let schemaAvailability: Record<string, boolean> | null = null;
 let schemaErrors: SyncSchemaError[] = [];
 let schemaAvailabilityCheckedAt = 0;
 
-const DEFAULT_SUPABASE_URL = 'https://dszpokkqhrtjutmvcxnh.supabase.co';
+const DEFAULT_SUPABASE_URL = 'https://npdfzpaglqgnhfphmpwo.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'sb_publishable_DR3JoohreA2S4Z3akVmICQ_ZZp2DSnW';
+const DISCONNECTED_KEY = 'mc-supabase-disconnected';
 const CLOUD_BASELINE_KEY = 'mc-cloud-baseline-ready';
 const LAST_SYNC_FALLBACK_KEY = 'mc-last-sync-at';
 const REQUIRED_REMOTE_TABLES = [
