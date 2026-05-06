@@ -121,7 +121,6 @@ export default function VoiceCapture() {
     setAudioLevel(0);
   }, []);
 
-  const shouldListenRef = useRef(false);
 
   const setupAudioMeter = useCallback(async () => {
     try {
