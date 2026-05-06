@@ -106,8 +106,12 @@ export default function VoiceCapture() {
     return () => document.removeEventListener('keydown', h);
   }, []);
 
+  const shouldListenRef = useRef(false);
+
   const stopListening = useCallback(() => {
+    shouldListenRef.current = false;
     try { recognitionRef.current?.stop(); } catch {}
+    recognitionRef.current = null;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     streamRef.current?.getTracks().forEach(t => t.stop());
     audioCtxRef.current?.close().catch(() => {});
