@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, X, CheckCircle2, ListChecks, StickyNote, Lightbulb, Link as LinkIcon, Loader2, type LucideIcon } from 'lucide-react';
 import { useDashboard, type Task, type Note, type Idea, type LinkItem } from '@/contexts/DashboardContext';
+import { appendSpeechSegment, buildRecognitionSnapshot } from '@/lib/speechTranscript';
 import { toast } from 'sonner';
 
 type CaptureType = 'tasks' | 'notes' | 'ideas' | 'links';
@@ -125,6 +126,7 @@ export default function VoiceCapture() {
   const [audioLevel, setAudioLevel] = useState(0);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const restartTimeoutRef = useRef<number | null>(null);
+  const finalResultIndexRef = useRef(0);
 
   // Check browser support
   useEffect(() => {
@@ -162,6 +164,7 @@ export default function VoiceCapture() {
     setMicStatus('idle');
     setAudioLevel(0);
     setInterim('');
+    finalResultIndexRef.current = 0;
   }, []);
 
   useEffect(() => () => stopListening(), [stopListening]);
@@ -207,17 +210,18 @@ export default function VoiceCapture() {
     recognition.onaudioend = () => setAudioLevel(0.12);
 
     recognition.onresult = (e: SpeechRecognitionEventLike) => {
-      let final = '';
-      let interimText = '';
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i];
-        if (r.isFinal) final += r[0].transcript + ' ';
-        else interimText += r[0].transcript;
-      }
-      if (final) setTranscript(prev => (prev + ' ' + final).trim());
-      setInterim(interimText);
-      setMicStatus((final || interimText) ? 'hearing' : 'listening');
-      setAudioLevel((final || interimText) ? 1 : 0.28);
+      setTranscript(prev => {
+        const snapshot = buildRecognitionSnapshot(
+          e.results,
+          finalResultIndexRef.current,
+          prev,
+        );
+        finalResultIndexRef.current = snapshot.nextFinalResultIndex;
+        setInterim(snapshot.interim);
+        setMicStatus((snapshot.transcript || snapshot.interim) ? 'hearing' : 'listening');
+        setAudioLevel((snapshot.transcript || snapshot.interim) ? 1 : 0.28);
+        return snapshot.transcript;
+      });
     };
     recognition.onerror = (e: SpeechRecognitionErrorEventLike) => {
       console.warn('Speech recognition error:', e.error);
@@ -298,7 +302,7 @@ export default function VoiceCapture() {
   };
 
   const handleSave = async () => {
-    const text = (transcript + ' ' + interim).trim();
+    const text = appendSpeechSegment(transcript, interim);
     if (!text) { toast.error('Nothing to save — try speaking first'); return; }
     setSaving(true);
     stopListening();
