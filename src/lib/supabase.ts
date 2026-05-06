@@ -33,6 +33,57 @@ const REQUIRED_REMOTE_TABLES = [
     'mc_sync_log',
 ] as const;
 
+const DEMO_TASK_SIGNATURES = [
+    {
+        title: 'Fix checkout bug on fashion store',
+        linkedProject: 'E-Commerce Fashion Store',
+        category: 'Bug Fix',
+        description: 'Payment gateway timeout on mobile',
+    },
+    {
+        title: 'Write blog post: AI in 2026',
+        linkedProject: 'Tech Blog',
+        category: 'Content',
+        description: 'Draft 2000-word article',
+    },
+    {
+        title: 'Deploy portfolio redesign',
+        linkedProject: 'Personal Portfolio',
+        category: 'Deployment',
+        description: 'Waiting for assets',
+    },
+    {
+        title: 'Update WooCommerce plugins',
+        linkedProject: 'E-Commerce Fashion Store',
+        category: 'Maintenance',
+        description: 'Security update',
+    },
+    {
+        title: 'Set up email automation',
+        linkedProject: 'E-Commerce Fashion Store',
+        category: 'Marketing',
+        description: 'Mailchimp welcome series',
+    },
+    {
+        title: 'Review client feedback',
+        linkedProject: 'Digital Marketing Agency',
+        category: 'Client',
+        description: 'Round 2 revisions',
+    },
+    {
+        title: 'Optimize images site-wide',
+        linkedProject: 'Tech Blog',
+        category: 'Performance',
+        description: 'Convert to WebP, lazy load',
+    },
+    {
+        title: 'Update SSL certificates',
+        linkedProject: '',
+        category: 'Security',
+        description: 'Renew certs',
+    },
+] as const;
+
 export interface SyncSchemaError {
     table: string;
     code?: string;
@@ -97,6 +148,15 @@ function clearCloudBaseline(): void {
     try {
         localStorage.removeItem(CLOUD_BASELINE_KEY);
     } catch { }
+}
+
+function isBundledDemoTask(task: any): boolean {
+    return DEMO_TASK_SIGNATURES.some((signature) =>
+        task?.title === signature.title &&
+        (task?.linkedProject || '') === signature.linkedProject &&
+        task?.category === signature.category &&
+        task?.description === signature.description
+    );
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {
