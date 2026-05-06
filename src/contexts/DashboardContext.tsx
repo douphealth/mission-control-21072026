@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useDataStore } from '@/stores/dataStore';
 import { deduplicateAll } from '@/lib/dedup';
 import { isSupabaseConnected, removeBundledDemoTasksFromSupabase, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
+import { restoreLatestNonEmptyVersion } from '@/lib/versions';
 
 // Re-export types for convenience
 export type { Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment, Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout };
@@ -188,7 +189,18 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
           await removeBundledDemoTasksFromSupabase();
           const cloudSnapshot = await replaceLocalWithSupabaseSnapshot();
           if (!cloudSnapshot.success || !cloudSnapshot.populated) {
-            await seedDefaults();
+            const localTaskCount = await db.tasks.count();
+            const localWebsiteCount = await db.websites.count();
+            const localRepoCount = await db.repos.count();
+            const localBuildCount = await db.buildProjects.count();
+            const localHasData = localTaskCount + localWebsiteCount + localRepoCount + localBuildCount > 0;
+
+            if (!localHasData) {
+              const restored = await restoreLatestNonEmptyVersion();
+              if (!restored.restored) {
+                await seedDefaults();
+              }
+            }
           }
         } else {
           await seedDefaults();
