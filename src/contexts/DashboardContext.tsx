@@ -6,7 +6,7 @@ import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDataStore } from '@/stores/dataStore';
 import { deduplicateAll } from '@/lib/dedup';
-import { isSupabaseConnected, removeBundledDemoTasksFromSupabase, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
+import { isSupabaseConnected, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
 import { restoreLatestNonEmptyVersion } from '@/lib/versions';
 
 // Re-export types for convenience
@@ -186,7 +186,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
         const shouldHydrateFromCloud = isSupabaseConnected();
         if (shouldHydrateFromCloud) {
-          await removeBundledDemoTasksFromSupabase();
           const cloudSnapshot = await replaceLocalWithSupabaseSnapshot();
           if (!cloudSnapshot.success || !cloudSnapshot.populated) {
             const localTaskCount = await db.tasks.count();
