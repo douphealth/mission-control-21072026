@@ -557,6 +557,64 @@ export async function pullFromSupabase(): Promise<{ success: boolean; synced: nu
     }
 }
 
+export async function replaceLocalWithSupabaseSnapshot(): Promise<{ success: boolean; populated: boolean; error?: string }> {
+    const client = getSupabase();
+    if (!client) return { success: false, populated: false, error: 'Not connected' };
+
+    try {
+        const available = await getAvailableRemoteTables(client, { force: true });
+        const remoteSnapshots = await Promise.all(
+            TABLE_MAP.map(async ({ remote }) => {
+                if (!available[remote]) return { remote, items: [] as any[] };
+
+                const { data, error } = await client.from(remote).select('id, data');
+                if (error) throw new Error(`${remote}: ${error.message}`);
+
+                return {
+                    remote,
+                    items: (data ?? [])
+                        .map((row: any) => row.data)
+                        .filter((item: any) => item?.id),
+                };
+            })
+        );
+
+        let remoteSettings: any = null;
+        if (available.mc_settings) {
+            const { data, error } = await client
+                .from('mc_settings')
+                .select('data')
+                .eq('id', 'default')
+                .maybeSingle();
+
+            if (error) throw new Error(`mc_settings: ${error.message}`);
+            remoteSettings = data?.data ?? null;
+        }
+
+        await db.transaction('rw', [...TABLE_MAP.map(({ local }) => local), db.settings], async () => {
+            for (const { local, remote } of TABLE_MAP) {
+                const snapshot = remoteSnapshots.find((entry) => entry.remote === remote);
+                await local.clear();
+                if (snapshot?.items.length) {
+                    await local.bulkPut(snapshot.items);
+                }
+            }
+
+            if (remoteSettings) {
+                await db.settings.put({ ...remoteSettings, id: 'default' });
+            }
+        });
+
+        const populated = remoteSnapshots.some(({ items }) => items.length > 0) || Boolean(remoteSettings);
+        markCloudBaselineReady();
+        markLastSyncNow();
+        syncCallbacks.forEach(cb => cb());
+        return { success: true, populated };
+    } catch (e: any) {
+        return { success: false, populated: false, error: e?.message };
+    }
+}
+
 // ─── Full two-way sync (merge both directions) ───────────────────────────────
 
 export async function fullSync(): Promise<{ success: boolean; pushed: number; pulled: number; error?: string }> {
