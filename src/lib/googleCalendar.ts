@@ -86,7 +86,10 @@ export function getGCalConfig(): GCalConfig {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_CONFIG };
-    return { ...DEFAULT_CONFIG, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    // Always fall back to default client ID if empty so the app is preconnected
+    if (!parsed.clientId) parsed.clientId = DEFAULT_CLIENT_ID;
+    return { ...DEFAULT_CONFIG, ...parsed };
   } catch {
     return { ...DEFAULT_CONFIG };
   }
