@@ -290,9 +290,12 @@ export default function VoiceCapture() {
 
   return (
     <>
-      {/* Floating mic button */}
+      {/* Floating mic button — opens modal AND starts listening synchronously (gesture-bound) */}
       <motion.button
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+          if (supported && !listening) startListening();
+        }}
         initial={{ scale: 0, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: 0.4, type: 'spring', stiffness: 200 }}
