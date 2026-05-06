@@ -6,6 +6,7 @@ import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDataStore } from '@/stores/dataStore';
 import { deduplicateAll } from '@/lib/dedup';
+import { isSupabaseConnected, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
 
 // Re-export types for convenience
 export type { Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment, Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout };
@@ -182,10 +183,23 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       try {
         await migrateFromLocalStorage();
 
-        await seedDefaults();
+        const shouldHydrateFromCloud = isSupabaseConnected();
+        if (shouldHydrateFromCloud) {
+          const cloudSnapshot = await replaceLocalWithSupabaseSnapshot();
+          if (!cloudSnapshot.success || !cloudSnapshot.populated) {
+            await seedDefaults();
+          }
+        } else {
+          await seedDefaults();
+        }
         // ─── Deduplicate all tables after migration/seeding ──────────────────────
         await deduplicateAll();
         await loadSettings();
+        if (shouldHydrateFromCloud) {
+          startRealtimeSync(() => {
+            void replaceLocalWithSupabaseSnapshot();
+          });
+        }
 
         // Load dashboard layout into Zustand
         const settings = await db.settings.get('default');
