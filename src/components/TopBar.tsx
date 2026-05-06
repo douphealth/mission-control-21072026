@@ -126,21 +126,93 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           </motion.button>
 
           {/* Notifications */}
-          <motion.button
-            whileTap={{ scale: 0.9 }}
-            className="relative flex items-center justify-center w-10 h-10 rounded-2xl text-muted-foreground/60 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
-          >
-            <Bell size={16} className="sm:w-[18px] sm:h-[18px]" />
-            {notifCount > 0 && (
-              <motion.span
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-destructive text-white text-[9px] font-bold flex items-center justify-center shadow-md"
-              >
-                {notifCount > 9 ? '9+' : notifCount}
-              </motion.span>
-            )}
-          </motion.button>
+          <div className="relative">
+            <motion.button
+              onClick={() => setNotifOpen(o => !o)}
+              whileTap={{ scale: 0.9 }}
+              className="relative flex items-center justify-center w-10 h-10 rounded-2xl text-muted-foreground/60 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
+              title="Notifications"
+            >
+              <Bell size={16} className="sm:w-[18px] sm:h-[18px]" />
+              {notifCount > 0 && (
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-destructive text-white text-[9px] font-bold flex items-center justify-center shadow-md"
+                >
+                  {notifCount > 9 ? '9+' : notifCount}
+                </motion.span>
+              )}
+            </motion.button>
+
+            <AnimatePresence>
+              {notifOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-3 z-50 w-80 max-h-[70vh] overflow-y-auto mobile-sheet-luxe rounded-[24px] p-2"
+                  >
+                    <div className="px-4 py-2.5 flex items-center justify-between">
+                      <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">Notifications</span>
+                      <span className="text-[10px] text-muted-foreground/50">{notifCount} pending</span>
+                    </div>
+                    {notifCount === 0 ? (
+                      <div className="px-4 py-8 text-center text-sm text-muted-foreground/60">
+                        🎉 You're all caught up!
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {overdueCount > 0 && (
+                          <div className="px-4 py-1.5 text-[10px] font-semibold text-destructive uppercase tracking-wider">Overdue ({overdueCount})</div>
+                        )}
+                        {overdueTasks.slice(0, 8).map(t => (
+                          <button
+                            key={t.id}
+                            onClick={() => { setNotifOpen(false); setActiveSection('tasks'); }}
+                            className="w-full flex items-start gap-3 px-4 py-2.5 rounded-2xl text-left hover:bg-secondary/60 transition-all"
+                          >
+                            <span className="text-base">⚠️</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-medium text-foreground truncate">{t.title}</div>
+                              <div className="text-[10px] text-destructive">Due {t.dueDate}</div>
+                            </div>
+                          </button>
+                        ))}
+                        {dueTodayCount > 0 && (
+                          <div className="px-4 py-1.5 mt-2 text-[10px] font-semibold text-primary uppercase tracking-wider">Due Today ({dueTodayCount})</div>
+                        )}
+                        {dueTodayTasks.slice(0, 8).map(t => (
+                          <button
+                            key={t.id}
+                            onClick={() => { setNotifOpen(false); setActiveSection('tasks'); }}
+                            className="w-full flex items-start gap-3 px-4 py-2.5 rounded-2xl text-left hover:bg-secondary/60 transition-all"
+                          >
+                            <span className="text-base">📌</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[13px] font-medium text-foreground truncate">{t.title}</div>
+                              <div className="text-[10px] text-muted-foreground">Due today</div>
+                            </div>
+                          </button>
+                        ))}
+                        <div className="border-t border-border/20 mt-1 pt-1">
+                          <button
+                            onClick={() => { setNotifOpen(false); setActiveSection('tasks'); }}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-[12px] font-medium text-primary hover:bg-secondary/60 transition-all"
+                          >
+                            View all tasks →
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
 
           <div className="h-8 w-px bg-border/30 mx-1 hidden sm:block" />
 
