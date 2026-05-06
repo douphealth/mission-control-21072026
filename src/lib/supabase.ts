@@ -675,6 +675,35 @@ export async function replaceLocalWithSupabaseSnapshot(): Promise<{ success: boo
     }
 }
 
+export async function removeBundledDemoTasksFromSupabase(): Promise<{ success: boolean; removed: number; error?: string }> {
+    const client = getSupabase();
+    if (!client) return { success: false, removed: 0, error: 'Not connected' };
+
+    try {
+        const available = await getAvailableRemoteTables(client, { force: true });
+        if (!available.mc_tasks) return { success: true, removed: 0 };
+
+        const { data, error } = await client.from('mc_tasks').select('id, data');
+        if (error) throw new Error(`mc_tasks: ${error.message}`);
+
+        const demoIds = (data ?? [])
+            .filter((row: any) => isBundledDemoTask(row.data))
+            .map((row: any) => row.id as string);
+
+        if (!demoIds.length) return { success: true, removed: 0 };
+
+        for (const batch of chunkArray(demoIds, 500)) {
+            const { error: deleteError } = await client.from('mc_tasks').delete().in('id', batch);
+            if (deleteError) throw new Error(`mc_tasks: ${deleteError.message}`);
+        }
+
+        refreshSupabaseSchemaState();
+        return { success: true, removed: demoIds.length };
+    } catch (e: any) {
+        return { success: false, removed: 0, error: e?.message };
+    }
+}
+
 // ─── Full two-way sync (merge both directions) ───────────────────────────────
 
 export async function fullSync(): Promise<{ success: boolean; pushed: number; pulled: number; error?: string }> {
