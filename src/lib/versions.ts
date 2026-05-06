@@ -227,6 +227,18 @@ export async function restoreVersion(id: string, opts: { safety?: boolean } = {}
     return { restored };
 }
 
+export async function restoreLatestNonEmptyVersion(): Promise<{ restored: number; versionId?: string }> {
+    const versions = await listVersions();
+    const candidate = versions.find((version) =>
+        Object.values(version.counts || {}).some((count) => Number(count) > 0)
+    );
+
+    if (!candidate) return { restored: 0 };
+
+    const result = await restoreVersion(candidate.id, { safety: false });
+    return { restored: result.restored, versionId: candidate.id };
+}
+
 export function downloadVersionFile(meta: SnapshotMeta) {
     return fetchFullSnapshot(meta.id).then(snap => {
         if (!snap) return;
