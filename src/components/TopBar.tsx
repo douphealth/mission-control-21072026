@@ -36,10 +36,13 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const { setSidebarOpen, setActiveSection, commandPaletteOpen, setCommandPaletteOpen, importModalOpen, setImportModalOpen } = useNavigationStore();
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
-  const overdueCount = tasks.filter(t => t.status !== 'done' && t.dueDate < today).length;
-  const dueTodayCount = tasks.filter(t => t.status !== 'done' && t.dueDate === today).length;
+  const overdueTasks = tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today);
+  const dueTodayTasks = tasks.filter(t => t.status !== 'done' && t.dueDate === today);
+  const overdueCount = overdueTasks.length;
+  const dueTodayCount = dueTodayTasks.length;
   const notifCount = overdueCount + dueTodayCount;
 
   useEffect(() => {
