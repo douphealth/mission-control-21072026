@@ -63,7 +63,7 @@ export default function SettingsPage() {
   const [gcalRedirectOverride, setGcalRedirectOverride] = useState('');
   const isInIframe = window.self !== window.top;
   const suggestedRedirectUri = getDefaultGCalRedirectUri();
-  const effectiveRedirectOverride = gcalRedirectOverride || (isInIframe ? suggestedRedirectUri : '');
+  const effectiveRedirectOverride = gcalRedirectOverride || suggestedRedirectUri;
   const computedRedirectUri = effectiveRedirectOverride || (window.location.origin + '/oauth-callback.html');
   const computedOrigin = effectiveRedirectOverride ? new URL(effectiveRedirectOverride).origin : window.location.origin;
 
@@ -74,7 +74,7 @@ export default function SettingsPage() {
     } catch {
       stored = '';
     }
-    const next = stored || (isInIframe ? suggestedRedirectUri : '');
+    const next = stored || suggestedRedirectUri;
     setGcalRedirectOverride(next);
     if (next !== stored) {
       setGCalConfig({ redirectUri: next });
