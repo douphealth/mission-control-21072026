@@ -1,17 +1,55 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, X, CheckCircle2, ListChecks, StickyNote, Lightbulb, Link as LinkIcon, Loader2 } from 'lucide-react';
-import { useDashboard } from '@/contexts/DashboardContext';
+import { Mic, MicOff, X, CheckCircle2, ListChecks, StickyNote, Lightbulb, Link as LinkIcon, Loader2, type LucideIcon } from 'lucide-react';
+import { useDashboard, type Task, type Note, type Idea, type LinkItem } from '@/contexts/DashboardContext';
 import { toast } from 'sonner';
 
 type CaptureType = 'tasks' | 'notes' | 'ideas' | 'links';
 
-interface SRWindow extends Window {
-  SpeechRecognition?: any;
-  webkitSpeechRecognition?: any;
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
 }
 
-const TYPE_OPTIONS: { id: CaptureType; label: string; icon: any; emoji: string; color: string }[] = [
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  0: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start: () => void;
+  stop?: () => void;
+  abort?: () => void;
+  onstart?: () => void;
+  onaudiostart?: () => void;
+  onsoundstart?: () => void;
+  onspeechstart?: () => void;
+  onspeechend?: () => void;
+  onsoundend?: () => void;
+  onaudioend?: () => void;
+  onresult?: (event: SpeechRecognitionEventLike) => void;
+  onerror?: (event: SpeechRecognitionErrorEventLike) => void;
+  onend?: () => void;
+}
+
+interface SRWindow extends Window {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+}
+
+const TYPE_OPTIONS: { id: CaptureType; label: string; icon: LucideIcon; emoji: string; color: string }[] = [
   { id: 'tasks', label: 'Task', icon: ListChecks, emoji: '✅', color: 'from-blue-500 to-indigo-500' },
   { id: 'notes', label: 'Note', icon: StickyNote, emoji: '📝', color: 'from-amber-500 to-orange-500' },
   { id: 'ideas', label: 'Idea', icon: Lightbulb, emoji: '💡', color: 'from-violet-500 to-fuchsia-500' },
@@ -33,6 +71,11 @@ function detectPriority(text: string): 'critical' | 'high' | 'medium' | 'low' {
   if (/\b(important|high priority|soon|today)\b/.test(t)) return 'high';
   if (/\b(low priority|whenever|someday|eventually)\b/.test(t)) return 'low';
   return 'medium';
+}
+
+function detectIdeaPriority(text: string): Idea['priority'] {
+  const priority = detectPriority(text);
+  return priority === 'critical' ? 'high' : priority;
 }
 
 function detectDueDate(text: string): string {
@@ -72,16 +115,16 @@ export default function VoiceCapture() {
   const [open, setOpen] = useState(false);
   const [supported, setSupported] = useState(true);
   const [listening, setListening] = useState(false);
+  const [micStatus, setMicStatus] = useState<'idle' | 'starting' | 'listening' | 'hearing'>('idle');
+  const [micError, setMicError] = useState<string | null>(null);
   const [transcript, setTranscript] = useState('');
   const [interim, setInterim] = useState('');
   const [type, setType] = useState<CaptureType>('tasks');
   const [typeAuto, setTypeAuto] = useState(true);
   const [saving, setSaving] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
-  const recognitionRef = useRef<any>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const rafRef = useRef<number | null>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+  const restartTimeoutRef = useRef<number | null>(null);
 
   // Check browser support
   useEffect(() => {
@@ -110,58 +153,60 @@ export default function VoiceCapture() {
 
   const stopListening = useCallback(() => {
     shouldListenRef.current = false;
-    try { recognitionRef.current?.stop(); } catch {}
+    if (restartTimeoutRef.current) window.clearTimeout(restartTimeoutRef.current);
+    const recognition = recognitionRef.current;
     recognitionRef.current = null;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    streamRef.current?.getTracks().forEach(t => t.stop());
-    audioCtxRef.current?.close().catch(() => {});
-    streamRef.current = null;
-    audioCtxRef.current = null;
+    try { recognition?.abort?.(); } catch (error) { console.debug('Voice abort ignored', error); }
+    try { recognition?.stop?.(); } catch (error) { console.debug('Voice stop ignored', error); }
     setListening(false);
+    setMicStatus('idle');
     setAudioLevel(0);
+    setInterim('');
   }, []);
 
-
-  const setupAudioMeter = useCallback(async () => {
-    try {
-      if (streamRef.current) return;
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      audioCtxRef.current = ctx;
-      const src = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      src.connect(analyser);
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        analyser.getByteFrequencyData(data);
-        const avg = data.reduce((a, b) => a + b, 0) / data.length;
-        setAudioLevel(Math.min(1, avg / 80));
-        rafRef.current = requestAnimationFrame(tick);
-      };
-      tick();
-    } catch (err) {
-      console.warn('Audio meter unavailable:', err);
-    }
-  }, []);
+  useEffect(() => () => stopListening(), [stopListening]);
 
   const startListening = useCallback(() => {
     const w = window as SRWindow;
     const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
     if (!SR) {
+      setMicError('Voice recognition is not supported in this browser.');
       toast.error('Voice recognition is not supported in this browser. Try Chrome, Edge or Safari.');
       return;
     }
+    if (recognitionRef.current || listening) return;
 
-    // CRITICAL: create + start recognition SYNCHRONOUSLY inside the user gesture.
-    // Any await before .start() breaks the gesture context and the API fails silently.
+    // Keep recognition start inside the direct click handler and avoid grabbing a
+    // second microphone stream for visualization — some browsers fail when both
+    // SpeechRecognition and getUserMedia try to own the mic at the same time.
+    setMicError(null);
+    setMicStatus('starting');
+    setAudioLevel(0.2);
     const recognition = new SR();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = navigator.language || 'en-US';
+    recognition.maxAlternatives = 1;
 
-    recognition.onresult = (e: any) => {
+    recognition.onstart = () => {
+      setListening(true);
+      setMicStatus('listening');
+      setAudioLevel(0.28);
+    };
+    recognition.onaudiostart = () => setAudioLevel(0.38);
+    recognition.onsoundstart = () => setAudioLevel(0.58);
+    recognition.onspeechstart = () => {
+      setMicStatus('hearing');
+      setAudioLevel(1);
+    };
+    recognition.onspeechend = () => {
+      setMicStatus('listening');
+      setAudioLevel(0.3);
+    };
+    recognition.onsoundend = () => setAudioLevel(0.18);
+    recognition.onaudioend = () => setAudioLevel(0.12);
+
+    recognition.onresult = (e: SpeechRecognitionEventLike) => {
       let final = '';
       let interimText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -171,49 +216,82 @@ export default function VoiceCapture() {
       }
       if (final) setTranscript(prev => (prev + ' ' + final).trim());
       setInterim(interimText);
+      setMicStatus((final || interimText) ? 'hearing' : 'listening');
+      setAudioLevel((final || interimText) ? 1 : 0.28);
     };
-    recognition.onerror = (e: any) => {
+    recognition.onerror = (e: SpeechRecognitionErrorEventLike) => {
       console.warn('Speech recognition error:', e.error);
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+        setMicError('Microphone blocked. Allow mic access in the browser, then tap again.');
         toast.error('Microphone access denied. Enable it in your browser settings and tap the mic again.');
         shouldListenRef.current = false;
         stopListening();
       } else if (e.error === 'no-speech' || e.error === 'aborted') {
-        // ignore — onend will auto-restart if still listening
+        setMicError(null);
+        setMicStatus('listening');
+        setAudioLevel(0.18);
       } else if (e.error === 'audio-capture') {
+        setMicError('No microphone was found on this device.');
         toast.error('No microphone detected.');
         shouldListenRef.current = false;
         stopListening();
+      } else if (e.error === 'network') {
+        setMicError('Speech service unavailable right now. Try again in a moment.');
+        toast.error('Speech recognition service is temporarily unavailable.');
+        shouldListenRef.current = false;
+        stopListening();
       } else {
+        setMicError(`Voice error: ${e.error}`);
         console.warn(`Voice error: ${e.error}`);
       }
     };
     recognition.onend = () => {
-      // Auto-restart if user hasn't stopped manually
-      if (shouldListenRef.current && recognitionRef.current === recognition) {
-        try { recognition.start(); } catch (err) { console.warn('restart failed', err); }
+      if (recognitionRef.current !== recognition) return;
+      setListening(false);
+
+      // Auto-restart if user hasn't stopped manually.
+      if (shouldListenRef.current) {
+        setMicStatus('starting');
+        restartTimeoutRef.current = window.setTimeout(() => {
+          if (!shouldListenRef.current || recognitionRef.current !== recognition) return;
+          try {
+            recognition.start();
+          } catch (err) {
+            console.warn('restart failed', err);
+            shouldListenRef.current = false;
+            stopListening();
+            toast.error('Voice capture paused. Tap the mic again to continue.');
+          }
+        }, 160);
+        return;
       }
+
+      recognitionRef.current = null;
+      setMicStatus('idle');
+      setAudioLevel(0);
     };
 
     recognitionRef.current = recognition;
     shouldListenRef.current = true;
     try {
       recognition.start();
-      setListening(true);
     } catch (err) {
       console.error('Failed to start recognition:', err);
+      setMicError('Could not start voice recognition. Tap the mic to retry.');
       toast.error('Could not start voice recognition. Try again.');
+      recognitionRef.current = null;
       shouldListenRef.current = false;
+      setListening(false);
+      setMicStatus('idle');
+      setAudioLevel(0);
       return;
     }
-
-    // Set up audio meter AFTER starting recognition (async is fine here)
-    setupAudioMeter();
-  }, [stopListening, setupAudioMeter]);
+  }, [listening, stopListening]);
 
   const handleClose = () => {
     stopListening();
     setOpen(false);
+    setMicError(null);
     setTranscript('');
     setInterim('');
     setTypeAuto(true);
@@ -228,7 +306,7 @@ export default function VoiceCapture() {
       const now = new Date().toISOString().split('T')[0];
       const title = smartTitle(text);
       if (type === 'tasks') {
-        await addItem('tasks', {
+        const taskPayload: Omit<Task, 'id'> = {
           title,
           description: text,
           priority: detectPriority(text),
@@ -238,9 +316,10 @@ export default function VoiceCapture() {
           linkedProject: '',
           subtasks: [],
           createdAt: now,
-        } as any);
+        };
+        await addItem<Task>('tasks', taskPayload);
       } else if (type === 'notes') {
-        await addItem('notes', {
+        const notePayload: Omit<Note, 'id'> = {
           title,
           content: text,
           color: 'blue',
@@ -248,23 +327,25 @@ export default function VoiceCapture() {
           tags: ['voice'],
           createdAt: now,
           updatedAt: now,
-        } as any);
+        };
+        await addItem<Note>('notes', notePayload);
       } else if (type === 'ideas') {
-        await addItem('ideas', {
+        const ideaPayload: Omit<Idea, 'id'> = {
           title,
           description: text,
           category: 'Voice',
-          priority: detectPriority(text) === 'critical' ? 'high' : (detectPriority(text) as any),
+          priority: detectIdeaPriority(text),
           status: 'spark',
           tags: ['voice'],
           linkedProject: '',
           votes: 0,
           createdAt: now,
           updatedAt: now,
-        } as any);
+        };
+        await addItem<Idea>('ideas', ideaPayload);
       } else if (type === 'links') {
         const url = extractUrl(text);
-        await addItem('links', {
+        const linkPayload: Omit<LinkItem, 'id'> = {
           title,
           url: url || 'https://',
           category: 'Voice',
@@ -272,13 +353,15 @@ export default function VoiceCapture() {
           description: text,
           dateAdded: now,
           pinned: false,
-        } as any);
+        };
+        await addItem<LinkItem>('links', linkPayload);
       }
       toast.success(`🎤 ${TYPE_OPTIONS.find(o => o.id === type)?.label} saved!`);
       handleClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'unknown';
       console.error(e);
-      toast.error('Failed to save: ' + (e?.message || 'unknown'));
+      toast.error('Failed to save: ' + message);
     } finally {
       setSaving(false);
     }
@@ -290,6 +373,17 @@ export default function VoiceCapture() {
 
   const fullText = (transcript + ' ' + interim).trim();
   const activeOpt = TYPE_OPTIONS.find(o => o.id === type)!;
+  const statusText = !supported
+    ? 'Not supported in this browser'
+    : micError
+      ? micError
+    : micStatus === 'starting'
+      ? 'Starting microphone…'
+      : micStatus === 'hearing'
+        ? 'Hearing your speech…'
+        : listening
+          ? 'Listening… speak naturally'
+          : 'Tap mic to start';
 
   return (
     <>
@@ -338,7 +432,7 @@ export default function VoiceCapture() {
                   <div>
                     <div className="text-sm font-bold text-foreground">Voice Capture</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {listening ? 'Listening… speak naturally' : supported ? 'Tap mic to start' : 'Not supported in this browser'}
+                      {statusText}
                     </div>
                   </div>
                 </div>
@@ -368,6 +462,12 @@ export default function VoiceCapture() {
                     />
                   )}
                 </motion.button>
+
+                {micError && (
+                  <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-background/80 px-4 py-3 text-center text-xs text-muted-foreground">
+                    {micError}
+                  </div>
+                )}
 
                 {/* Audio level bars */}
                 {listening && (
