@@ -143,6 +143,8 @@ export default function DashboardLayout() {
       </div>
       {/* Mobile bottom navigation */}
       <MobileBottomNav />
+      {/* Voice capture — floating mic, works app-wide */}
+      <VoiceCapture />
     </div>
   );
 }
