@@ -281,13 +281,9 @@ export default function VoiceCapture() {
     }
   };
 
-  // Auto-start listening when opening
-  useEffect(() => {
-    if (open && supported && !listening) {
-      const t = setTimeout(() => startListening(), 200);
-      return () => clearTimeout(t);
-    }
-  }, [open]); // eslint-disable-line
+  // NOTE: We do NOT auto-start in a useEffect/setTimeout because that
+  // breaks the user-gesture context required by the SpeechRecognition API.
+  // Recognition must be started synchronously from the click handler below.
 
   const fullText = (transcript + ' ' + interim).trim();
   const activeOpt = TYPE_OPTIONS.find(o => o.id === type)!;
