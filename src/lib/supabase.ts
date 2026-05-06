@@ -33,6 +33,57 @@ const REQUIRED_REMOTE_TABLES = [
     'mc_sync_log',
 ] as const;
 
+const DEMO_TASK_SIGNATURES = [
+    {
+        title: 'Fix checkout bug on fashion store',
+        linkedProject: 'E-Commerce Fashion Store',
+        category: 'Bug Fix',
+        description: 'Payment gateway timeout on mobile',
+    },
+    {
+        title: 'Write blog post: AI in 2026',
+        linkedProject: 'Tech Blog',
+        category: 'Content',
+        description: 'Draft 2000-word article',
+    },
+    {
+        title: 'Deploy portfolio redesign',
+        linkedProject: 'Personal Portfolio',
+        category: 'Deployment',
+        description: 'Waiting for assets',
+    },
+    {
+        title: 'Update WooCommerce plugins',
+        linkedProject: 'E-Commerce Fashion Store',
+        category: 'Maintenance',
+        description: 'Security update',
+    },
+    {
+        title: 'Set up email automation',
+        linkedProject: 'E-Commerce Fashion Store',
+        category: 'Marketing',
+        description: 'Mailchimp welcome series',
+    },
+    {
+        title: 'Review client feedback',
+        linkedProject: 'Digital Marketing Agency',
+        category: 'Client',
+        description: 'Round 2 revisions',
+    },
+    {
+        title: 'Optimize images site-wide',
+        linkedProject: 'Tech Blog',
+        category: 'Performance',
+        description: 'Convert to WebP, lazy load',
+    },
+    {
+        title: 'Update SSL certificates',
+        linkedProject: '',
+        category: 'Security',
+        description: 'Renew certs',
+    },
+] as const;
+
 export interface SyncSchemaError {
     table: string;
     code?: string;
@@ -97,6 +148,15 @@ function clearCloudBaseline(): void {
     try {
         localStorage.removeItem(CLOUD_BASELINE_KEY);
     } catch { }
+}
+
+function isBundledDemoTask(task: any): boolean {
+    return DEMO_TASK_SIGNATURES.some((signature) =>
+        task?.title === signature.title &&
+        (task?.linkedProject || '') === signature.linkedProject &&
+        task?.category === signature.category &&
+        task?.description === signature.description
+    );
 }
 
 function chunkArray<T>(items: T[], size: number): T[][] {
@@ -554,6 +614,93 @@ export async function pullFromSupabase(): Promise<{ success: boolean; synced: nu
         return { success: true, synced: totalAdded + totalUpdated + removedDuplicates, added: totalAdded, updated: totalUpdated };
     } catch (e: any) {
         return { success: false, synced: 0, added: 0, updated: 0, error: e?.message };
+    }
+}
+
+export async function replaceLocalWithSupabaseSnapshot(): Promise<{ success: boolean; populated: boolean; error?: string }> {
+    const client = getSupabase();
+    if (!client) return { success: false, populated: false, error: 'Not connected' };
+
+    try {
+        const available = await getAvailableRemoteTables(client, { force: true });
+        const remoteSnapshots = await Promise.all(
+            TABLE_MAP.map(async ({ remote }) => {
+                if (!available[remote]) return { remote, items: [] as any[] };
+
+                const { data, error } = await client.from(remote).select('id, data');
+                if (error) throw new Error(`${remote}: ${error.message}`);
+
+                return {
+                    remote,
+                    items: (data ?? [])
+                        .map((row: any) => row.data)
+                        .filter((item: any) => item?.id),
+                };
+            })
+        );
+
+        let remoteSettings: any = null;
+        if (available.mc_settings) {
+            const { data, error } = await client
+                .from('mc_settings')
+                .select('data')
+                .eq('id', 'default')
+                .maybeSingle();
+
+            if (error) throw new Error(`mc_settings: ${error.message}`);
+            remoteSettings = data?.data ?? null;
+        }
+
+        await db.transaction('rw', [...TABLE_MAP.map(({ local }) => local), db.settings], async () => {
+            for (const { local, remote } of TABLE_MAP) {
+                const snapshot = remoteSnapshots.find((entry) => entry.remote === remote);
+                await local.clear();
+                if (snapshot?.items.length) {
+                    await local.bulkPut(snapshot.items);
+                }
+            }
+
+            if (remoteSettings) {
+                await db.settings.put({ ...remoteSettings, id: 'default' });
+            }
+        });
+
+        const populated = remoteSnapshots.some(({ items }) => items.length > 0) || Boolean(remoteSettings);
+        markCloudBaselineReady();
+        markLastSyncNow();
+        syncCallbacks.forEach(cb => cb());
+        return { success: true, populated };
+    } catch (e: any) {
+        return { success: false, populated: false, error: e?.message };
+    }
+}
+
+export async function removeBundledDemoTasksFromSupabase(): Promise<{ success: boolean; removed: number; error?: string }> {
+    const client = getSupabase();
+    if (!client) return { success: false, removed: 0, error: 'Not connected' };
+
+    try {
+        const available = await getAvailableRemoteTables(client, { force: true });
+        if (!available.mc_tasks) return { success: true, removed: 0 };
+
+        const { data, error } = await client.from('mc_tasks').select('id, data');
+        if (error) throw new Error(`mc_tasks: ${error.message}`);
+
+        const demoIds = (data ?? [])
+            .filter((row: any) => isBundledDemoTask(row.data))
+            .map((row: any) => row.id as string);
+
+        if (!demoIds.length) return { success: true, removed: 0 };
+
+        for (const batch of chunkArray(demoIds, 500)) {
+            const { error: deleteError } = await client.from('mc_tasks').delete().in('id', batch);
+            if (deleteError) throw new Error(`mc_tasks: ${deleteError.message}`);
+        }
+
+        refreshSupabaseSchemaState();
+        return { success: true, removed: demoIds.length };
+    } catch (e: any) {
+        return { success: false, removed: 0, error: e?.message };
     }
 }
 
