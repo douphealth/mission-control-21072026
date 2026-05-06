@@ -1,17 +1,55 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, X, CheckCircle2, ListChecks, StickyNote, Lightbulb, Link as LinkIcon, Loader2 } from 'lucide-react';
-import { useDashboard } from '@/contexts/DashboardContext';
+import { Mic, MicOff, X, CheckCircle2, ListChecks, StickyNote, Lightbulb, Link as LinkIcon, Loader2, type LucideIcon } from 'lucide-react';
+import { useDashboard, type Task, type Note, type Idea, type LinkItem } from '@/contexts/DashboardContext';
 import { toast } from 'sonner';
 
 type CaptureType = 'tasks' | 'notes' | 'ideas' | 'links';
 
-interface SRWindow extends Window {
-  SpeechRecognition?: any;
-  webkitSpeechRecognition?: any;
+interface SpeechRecognitionAlternativeLike {
+  transcript: string;
 }
 
-const TYPE_OPTIONS: { id: CaptureType; label: string; icon: any; emoji: string; color: string }[] = [
+interface SpeechRecognitionResultLike {
+  isFinal: boolean;
+  0: SpeechRecognitionAlternativeLike;
+}
+
+interface SpeechRecognitionEventLike {
+  resultIndex: number;
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionErrorEventLike {
+  error: string;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  start: () => void;
+  stop?: () => void;
+  abort?: () => void;
+  onstart?: () => void;
+  onaudiostart?: () => void;
+  onsoundstart?: () => void;
+  onspeechstart?: () => void;
+  onspeechend?: () => void;
+  onsoundend?: () => void;
+  onaudioend?: () => void;
+  onresult?: (event: SpeechRecognitionEventLike) => void;
+  onerror?: (event: SpeechRecognitionErrorEventLike) => void;
+  onend?: () => void;
+}
+
+interface SRWindow extends Window {
+  SpeechRecognition?: new () => SpeechRecognitionLike;
+  webkitSpeechRecognition?: new () => SpeechRecognitionLike;
+}
+
+const TYPE_OPTIONS: { id: CaptureType; label: string; icon: LucideIcon; emoji: string; color: string }[] = [
   { id: 'tasks', label: 'Task', icon: ListChecks, emoji: '✅', color: 'from-blue-500 to-indigo-500' },
   { id: 'notes', label: 'Note', icon: StickyNote, emoji: '📝', color: 'from-amber-500 to-orange-500' },
   { id: 'ideas', label: 'Idea', icon: Lightbulb, emoji: '💡', color: 'from-violet-500 to-fuchsia-500' },
@@ -79,7 +117,7 @@ export default function VoiceCapture() {
   const [typeAuto, setTypeAuto] = useState(true);
   const [saving, setSaving] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const restartTimeoutRef = useRef<number | null>(null);
 
   // Check browser support
@@ -112,8 +150,8 @@ export default function VoiceCapture() {
     if (restartTimeoutRef.current) window.clearTimeout(restartTimeoutRef.current);
     const recognition = recognitionRef.current;
     recognitionRef.current = null;
-    try { recognition?.abort?.(); } catch {}
-    try { recognition?.stop?.(); } catch {}
+    try { recognition?.abort?.(); } catch (error) { console.debug('Voice abort ignored', error); }
+    try { recognition?.stop?.(); } catch (error) { console.debug('Voice stop ignored', error); }
     setListening(false);
     setMicStatus('idle');
     setAudioLevel(0);
@@ -158,7 +196,7 @@ export default function VoiceCapture() {
     recognition.onsoundend = () => setAudioLevel(0.18);
     recognition.onaudioend = () => setAudioLevel(0.12);
 
-    recognition.onresult = (e: any) => {
+    recognition.onresult = (e: SpeechRecognitionEventLike) => {
       let final = '';
       let interimText = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
@@ -171,7 +209,7 @@ export default function VoiceCapture() {
       setMicStatus((final || interimText) ? 'hearing' : 'listening');
       setAudioLevel((final || interimText) ? 1 : 0.28);
     };
-    recognition.onerror = (e: any) => {
+    recognition.onerror = (e: SpeechRecognitionErrorEventLike) => {
       console.warn('Speech recognition error:', e.error);
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
         toast.error('Microphone access denied. Enable it in your browser settings and tap the mic again.');
