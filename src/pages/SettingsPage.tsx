@@ -60,7 +60,7 @@ export default function SettingsPage() {
   // Google Calendar
   const gcal = useGoogleCalendar({ autoFetch: false });
   const [gcalClientIdInput, setGcalClientIdInput] = useState(gcal.clientId);
-  const [gcalRedirectOverride, setGcalRedirectOverride] = useState(() => normalizeGCalRedirectUri(gcal.clientId ? undefined : undefined) || '');
+  const [gcalRedirectOverride, setGcalRedirectOverride] = useState('');
   const isInIframe = window.self !== window.top;
   const suggestedRedirectUri = getDefaultGCalRedirectUri();
   const effectiveRedirectOverride = gcalRedirectOverride || (isInIframe ? suggestedRedirectUri : '');
@@ -68,7 +68,12 @@ export default function SettingsPage() {
   const computedOrigin = effectiveRedirectOverride ? new URL(effectiveRedirectOverride).origin : window.location.origin;
 
   useEffect(() => {
-    const stored = normalizeGCalRedirectUri(gcal.clientId ? JSON.parse(localStorage.getItem('mc_gcal_config') || '{}').redirectUri : undefined) || '';
+    let stored = '';
+    try {
+      stored = normalizeGCalRedirectUri(JSON.parse(localStorage.getItem('mc_gcal_config') || '{}').redirectUri) || '';
+    } catch {
+      stored = '';
+    }
     const next = stored || (isInIframe ? suggestedRedirectUri : '');
     setGcalRedirectOverride(next);
     if (next !== stored) {
