@@ -69,8 +69,10 @@ export function getGCalColor(colorId?: string): string {
 
 const STORAGE_KEY = 'mc_gcal_config';
 
+const DEFAULT_CLIENT_ID = '541642493011-k41ng5vo7ihfn7su05g85u47ef727a9l.apps.googleusercontent.com';
+
 const DEFAULT_CONFIG: GCalConfig = {
-  clientId: '',
+  clientId: DEFAULT_CLIENT_ID,
   accessToken: null,
   tokenExpiry: null,
   connectedEmail: null,
