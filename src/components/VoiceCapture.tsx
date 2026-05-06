@@ -143,6 +143,8 @@ export default function VoiceCapture() {
     return () => document.removeEventListener('keydown', h);
   }, []);
 
+  useEffect(() => () => stopListening(), [stopListening]);
+
   const shouldListenRef = useRef(false);
 
   const stopListening = useCallback(() => {
@@ -289,7 +291,7 @@ export default function VoiceCapture() {
       const now = new Date().toISOString().split('T')[0];
       const title = smartTitle(text);
       if (type === 'tasks') {
-        await addItem('tasks', {
+        const taskPayload: Omit<Task, 'id'> = {
           title,
           description: text,
           priority: detectPriority(text),
@@ -299,9 +301,10 @@ export default function VoiceCapture() {
           linkedProject: '',
           subtasks: [],
           createdAt: now,
-        } as any);
+        };
+        await addItem<Task>('tasks', taskPayload);
       } else if (type === 'notes') {
-        await addItem('notes', {
+        const notePayload: Omit<Note, 'id'> = {
           title,
           content: text,
           color: 'blue',
@@ -309,23 +312,25 @@ export default function VoiceCapture() {
           tags: ['voice'],
           createdAt: now,
           updatedAt: now,
-        } as any);
+        };
+        await addItem<Note>('notes', notePayload);
       } else if (type === 'ideas') {
-        await addItem('ideas', {
+        const ideaPayload: Omit<Idea, 'id'> = {
           title,
           description: text,
           category: 'Voice',
-          priority: detectPriority(text) === 'critical' ? 'high' : (detectPriority(text) as any),
+          priority: detectPriority(text) === 'critical' ? 'high' : detectPriority(text),
           status: 'spark',
           tags: ['voice'],
           linkedProject: '',
           votes: 0,
           createdAt: now,
           updatedAt: now,
-        } as any);
+        };
+        await addItem<Idea>('ideas', ideaPayload);
       } else if (type === 'links') {
         const url = extractUrl(text);
-        await addItem('links', {
+        const linkPayload: Omit<LinkItem, 'id'> = {
           title,
           url: url || 'https://',
           category: 'Voice',
@@ -333,13 +338,15 @@ export default function VoiceCapture() {
           description: text,
           dateAdded: now,
           pinned: false,
-        } as any);
+        };
+        await addItem<LinkItem>('links', linkPayload);
       }
       toast.success(`🎤 ${TYPE_OPTIONS.find(o => o.id === type)?.label} saved!`);
       handleClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : 'unknown';
       console.error(e);
-      toast.error('Failed to save: ' + (e?.message || 'unknown'));
+      toast.error('Failed to save: ' + message);
     } finally {
       setSaving(false);
     }
@@ -351,6 +358,15 @@ export default function VoiceCapture() {
 
   const fullText = (transcript + ' ' + interim).trim();
   const activeOpt = TYPE_OPTIONS.find(o => o.id === type)!;
+  const statusText = !supported
+    ? 'Not supported in this browser'
+    : micStatus === 'starting'
+      ? 'Starting microphone…'
+      : micStatus === 'hearing'
+        ? 'Hearing your speech…'
+        : listening
+          ? 'Listening… speak naturally'
+          : 'Tap mic to start';
 
   return (
     <>
