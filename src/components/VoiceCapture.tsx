@@ -73,6 +73,11 @@ function detectPriority(text: string): 'critical' | 'high' | 'medium' | 'low' {
   return 'medium';
 }
 
+function detectIdeaPriority(text: string): Idea['priority'] {
+  const priority = detectPriority(text);
+  return priority === 'critical' ? 'high' : priority;
+}
+
 function detectDueDate(text: string): string {
   const t = text.toLowerCase();
   const now = new Date();
@@ -143,8 +148,6 @@ export default function VoiceCapture() {
     return () => document.removeEventListener('keydown', h);
   }, []);
 
-  useEffect(() => () => stopListening(), [stopListening]);
-
   const shouldListenRef = useRef(false);
 
   const stopListening = useCallback(() => {
@@ -159,6 +162,8 @@ export default function VoiceCapture() {
     setAudioLevel(0);
     setInterim('');
   }, []);
+
+  useEffect(() => () => stopListening(), [stopListening]);
 
   const startListening = useCallback(() => {
     const w = window as SRWindow;
@@ -319,7 +324,7 @@ export default function VoiceCapture() {
           title,
           description: text,
           category: 'Voice',
-          priority: detectPriority(text) === 'critical' ? 'high' : detectPriority(text),
+          priority: detectIdeaPriority(text),
           status: 'spark',
           tags: ['voice'],
           linkedProject: '',
@@ -415,7 +420,7 @@ export default function VoiceCapture() {
                   <div>
                     <div className="text-sm font-bold text-foreground">Voice Capture</div>
                     <div className="text-[11px] text-muted-foreground">
-                      {listening ? 'Listening… speak naturally' : supported ? 'Tap mic to start' : 'Not supported in this browser'}
+                      {statusText}
                     </div>
                   </div>
                 </div>
