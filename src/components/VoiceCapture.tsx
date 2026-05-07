@@ -161,6 +161,10 @@ export default function VoiceCapture() {
     const mr = mediaRecorderRef.current;
     if (!mr) return;
     stopReasonRef.current = reason;
+    const recognition = recognitionRef.current;
+    if (recognition) {
+      try { recognition.stop(); } catch { /* */ }
+    }
     if (mr.state !== 'inactive') {
       try { mr.stop(); } catch { /* */ }
     }
@@ -173,6 +177,9 @@ export default function VoiceCapture() {
     setAiResult(null);
     setPhase('starting');
     setAudioLevel(0.2);
+    committedTranscriptRef.current = '';
+    liveTranscriptRef.current = '';
+    lastFinalResultIndexRef.current = 0;
 
     let stream: MediaStream;
     try {
@@ -202,6 +209,43 @@ export default function VoiceCapture() {
 
     streamRef.current = stream;
 
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      cleanupAudio();
+      setErrorMsg('Speech recognition is not supported in this browser.');
+      setPhase('error');
+      setAudioLevel(0);
+      return;
+    }
+
+    const recognition = new Recognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = navigator.language || 'en-US';
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (event) => {
+      const snapshot = buildRecognitionSnapshot(
+        event.results,
+        lastFinalResultIndexRef.current,
+        committedTranscriptRef.current,
+      );
+      committedTranscriptRef.current = snapshot.transcript;
+      lastFinalResultIndexRef.current = snapshot.nextFinalResultIndex;
+      liveTranscriptRef.current = [snapshot.transcript, snapshot.interim].filter(Boolean).join(' ').trim();
+      setTranscript(liveTranscriptRef.current);
+    };
+    recognition.onerror = (event) => {
+      const message = event.error || 'speech recognition failed';
+      if (message === 'aborted' || message === 'no-speech') return;
+      console.warn('speech recognition error', message);
+    };
+    recognition.onend = () => {
+      if (recognitionRef.current === recognition) {
+        recognitionRef.current = null;
+      }
+    };
+    recognitionRef.current = recognition;
+
     const mimeType = pickMimeType();
     let mr: MediaRecorder;
     try {
@@ -220,6 +264,7 @@ export default function VoiceCapture() {
     };
 
     mr.onstop = async () => {
+      cleanupRecognition();
       cleanupAudio();
       const blob = new Blob(chunksRef.current, { type: mr.mimeType || mimeType || 'audio/webm' });
       mediaRecorderRef.current = null;
@@ -242,9 +287,8 @@ export default function VoiceCapture() {
       setPhase('processing');
       setAudioLevel(0);
       try {
-        const base64 = await blobToBase64(blob);
         const result = await transcribeAndClassify({
-          data: { audio: base64, mime: blob.type || 'audio/webm' },
+          data: { transcript: liveTranscriptRef.current || committedTranscriptRef.current },
         });
         setTranscript(result.transcript);
         setAiResult(result);
@@ -320,15 +364,17 @@ export default function VoiceCapture() {
     hasSpokenRef.current = false;
     try {
       mr.start(250);
+      recognition.start();
       setPhase('listening');
     } catch (err) {
       console.error('mr.start failed', err);
+      cleanupRecognition();
       cleanupAudio();
       mediaRecorderRef.current = null;
       setErrorMsg('Could not start recording. Try again.');
       setPhase('error');
     }
-  }, [cleanupAudio, stopRecording, typeAuto]);
+  }, [cleanupAudio, cleanupRecognition, stopRecording, typeAuto]);
 
   // Cleanup on unmount
   useEffect(() => {
