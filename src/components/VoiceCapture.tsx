@@ -380,12 +380,14 @@ export default function VoiceCapture() {
   useEffect(() => {
     return () => {
       try { mediaRecorderRef.current?.stop(); } catch { /* */ }
+      cleanupRecognition();
       cleanupAudio();
     };
-  }, [cleanupAudio]);
+  }, [cleanupAudio, cleanupRecognition]);
 
   const handleClose = useCallback(() => {
     try { mediaRecorderRef.current?.stop(); } catch { /* */ }
+    cleanupRecognition();
     cleanupAudio();
     mediaRecorderRef.current = null;
     setOpen(false);
@@ -395,7 +397,10 @@ export default function VoiceCapture() {
     setAiResult(null);
     setTypeAuto(true);
     setAudioLevel(0);
-  }, [cleanupAudio]);
+    committedTranscriptRef.current = '';
+    liveTranscriptRef.current = '';
+    lastFinalResultIndexRef.current = 0;
+  }, [cleanupAudio, cleanupRecognition]);
 
   const handleSave = async () => {
     if (!transcript) {
