@@ -1,0 +1,2 @@
+[functions.voice-transcribe]
+verify_jwt = false
