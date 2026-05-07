@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { useDashboard, type Task, type Note, type Idea, type LinkItem } from '@/contexts/DashboardContext';
 import { transcribeAndClassify, type VoiceCaptureResult } from '@/server/voice.functions';
+import { buildRecognitionSnapshot, type RecognitionResultLike } from '@/lib/speechTranscript';
 import { toast } from 'sonner';
 
 type CaptureType = 'tasks' | 'notes' | 'ideas' | 'links';
@@ -35,17 +36,33 @@ const MIN_RECORD_MS = 600;           // ignore taps shorter than this
 
 type Phase = 'idle' | 'starting' | 'listening' | 'hearing' | 'processing' | 'ready' | 'error';
 
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onloadend = () => {
-      const result = String(r.result || '');
-      const idx = result.indexOf(',');
-      resolve(idx >= 0 ? result.slice(idx + 1) : result);
-    };
-    r.onerror = () => reject(r.error);
-    r.readAsDataURL(blob);
-  });
+type BrowserSpeechRecognitionEvent = Event & {
+  results: ArrayLike<RecognitionResultLike>;
+};
+
+interface BrowserSpeechRecognition {
+  continuous: boolean;
+  interimResults: boolean;
+  lang: string;
+  maxAlternatives: number;
+  onresult: ((this: BrowserSpeechRecognition, ev: BrowserSpeechRecognitionEvent) => void) | null;
+  onerror: ((this: BrowserSpeechRecognition, ev: Event & { error?: string }) => void) | null;
+  onend: ((this: BrowserSpeechRecognition, ev: Event) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+}
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
+function getSpeechRecognition(): BrowserSpeechRecognitionConstructor | null {
+  if (typeof window === 'undefined') return null;
+  return (window as Window & {
+    SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+  }).SpeechRecognition
+    ?? (window as Window & { webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor }).webkitSpeechRecognition
+    ?? null;
 }
 
 function pickMimeType(): string {
@@ -78,6 +95,7 @@ export default function VoiceCapture() {
   const [saving, setSaving] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -88,13 +106,17 @@ export default function VoiceCapture() {
   const lastVoiceAtRef = useRef<number>(0);
   const hasSpokenRef = useRef<boolean>(false);
   const stopReasonRef = useRef<'manual' | 'silence' | 'maxlen' | null>(null);
+  const committedTranscriptRef = useRef('');
+  const liveTranscriptRef = useRef('');
+  const lastFinalResultIndexRef = useRef(0);
 
   // Browser support check (MediaRecorder + getUserMedia)
   useEffect(() => {
     const ok =
       typeof window !== 'undefined' &&
       !!navigator.mediaDevices?.getUserMedia &&
-      typeof MediaRecorder !== 'undefined';
+      typeof MediaRecorder !== 'undefined' &&
+      !!getSpeechRecognition();
     setSupported(ok);
   }, []);
 
@@ -108,6 +130,16 @@ export default function VoiceCapture() {
     };
     document.addEventListener('keydown', h);
     return () => document.removeEventListener('keydown', h);
+  }, []);
+
+  const cleanupRecognition = useCallback(() => {
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    if (!recognition) return;
+    recognition.onresult = null;
+    recognition.onerror = null;
+    recognition.onend = null;
+    try { recognition.abort(); } catch { /* */ }
   }, []);
 
   const cleanupAudio = useCallback(() => {
