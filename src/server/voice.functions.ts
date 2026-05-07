@@ -20,7 +20,21 @@ export async function transcribeAndClassify(args: {
   const { data, error } = await supabase.functions.invoke('voice-transcribe', {
     body: { audio: args.data.audio, mime: args.data.mime },
   });
-  if (error) throw new Error(error.message || 'Voice transcription failed');
+  if (error) {
+    // Try to surface the function's JSON error body, which supabase-js hides by default.
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.text === 'function') {
+      try {
+        const text = await ctx.text();
+        const parsed = text ? JSON.parse(text) : null;
+        const msg = parsed?.error || text || error.message;
+        throw new Error(msg || 'Voice transcription failed');
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message) throw parseErr;
+      }
+    }
+    throw new Error(error.message || 'Voice transcription failed');
+  }
   if (!data || typeof data !== 'object') throw new Error('Empty response from voice service');
   if ((data as { error?: string }).error) {
     throw new Error((data as { error: string }).error);
