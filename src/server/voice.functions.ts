@@ -1,4 +1,5 @@
-// Client wrapper that calls the /api/voice-transcribe TanStack server route.
+// Client wrapper that invokes the voice-transcribe Supabase Edge Function.
+import { getSupabase } from '@/lib/supabase';
 
 export interface VoiceCaptureResult {
   transcript: string;
@@ -12,27 +13,30 @@ export interface VoiceCaptureResult {
 export async function transcribeAndClassify(args: {
   data: { audio: string; mime: string };
 }): Promise<VoiceCaptureResult> {
-  const resp = await fetch('/api/voice-transcribe', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ audio: args.data.audio, mime: args.data.mime }),
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Cloud is not connected. Connect Lovable Cloud to enable voice capture.');
+  }
+  const { data, error } = await supabase.functions.invoke('voice-transcribe', {
+    body: { audio: args.data.audio, mime: args.data.mime },
   });
-  const text = await resp.text();
-  let body: unknown = null;
-  try {
-    body = text ? JSON.parse(text) : null;
-  } catch {
-    // non-JSON response
+  if (error) {
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.text === 'function') {
+      try {
+        const text = await ctx.text();
+        const parsed = text ? JSON.parse(text) : null;
+        const msg = parsed?.error || text || error.message;
+        throw new Error(msg || 'Voice transcription failed');
+      } catch (parseErr) {
+        if (parseErr instanceof Error && parseErr.message) throw parseErr;
+      }
+    }
+    throw new Error(error.message || 'Voice transcription failed');
   }
-  if (!resp.ok) {
-    const msg =
-      (body && typeof body === 'object' && 'error' in body && (body as { error?: string }).error) ||
-      text ||
-      `Voice transcription failed (${resp.status})`;
-    throw new Error(String(msg));
+  if (!data || typeof data !== 'object') throw new Error('Empty response from voice service');
+  if ((data as { error?: string }).error) {
+    throw new Error((data as { error: string }).error);
   }
-  if (!body || typeof body !== 'object') {
-    throw new Error('Empty response from voice service');
-  }
-  return body as VoiceCaptureResult;
+  return data as VoiceCaptureResult;
 }
