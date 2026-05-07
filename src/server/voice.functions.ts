@@ -21,7 +21,6 @@ export async function transcribeAndClassify(args: {
     body: { audio: args.data.audio, mime: args.data.mime },
   });
   if (error) {
-    // Try to surface the function's JSON error body, which supabase-js hides by default.
     const ctx = (error as { context?: Response }).context;
     if (ctx && typeof ctx.text === 'function') {
       try {
