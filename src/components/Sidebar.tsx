@@ -9,7 +9,7 @@ import {
   Search as SearchIcon, Cloud, Rocket, Bug,
   Settings, Sun, Moon, X, Sparkles,
   DollarSign, Lightbulb, KeyRound, Flame,
-  ChevronLeft, ChevronRight, Plus, Check, Download
+  ChevronLeft, ChevronRight, Plus, Check, Download, Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,6 +29,7 @@ const navGroups = [
     label: 'TOOLS',
     items: [
       { id: 'websites', label: 'My Websites', icon: Globe },
+      { id: 'wp-manage', label: 'WP Management', icon: Zap, indent: true },
       { id: 'github', label: 'GitHub', icon: Github },
       { id: 'builds', label: 'Build Projects', icon: Hammer },
       { id: 'links', label: 'Links Hub', icon: Link2 },
