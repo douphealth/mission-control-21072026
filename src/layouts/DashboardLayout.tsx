@@ -13,6 +13,7 @@ import VoiceCapture from '@/components/VoiceCapture';
 const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
 const TasksPage = lazy(() => import('@/pages/TasksPage'));
 const WebsitesPage = lazy(() => import('@/pages/WebsitesPage'));
+const WordPressManagementPage = lazy(() => import('@/pages/WordPressManagementPage'));
 const GitHubPage = lazy(() => import('@/pages/GitHubPage'));
 const BuildsPage = lazy(() => import('@/pages/BuildsPage'));
 const LinksPage = lazy(() => import('@/pages/LinksPage'));
@@ -35,6 +36,7 @@ const sectionMap: Record<string, React.LazyExoticComponent<any>> = {
   dashboard: DashboardHome,
   tasks: TasksPage,
   websites: WebsitesPage,
+  'wp-manage': WordPressManagementPage,
   github: GitHubPage,
   builds: BuildsPage,
   links: LinksPage,

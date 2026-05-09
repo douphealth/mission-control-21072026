@@ -9,7 +9,7 @@ import {
   Search as SearchIcon, Cloud, Rocket, Bug,
   Settings, Sun, Moon, X, Sparkles,
   DollarSign, Lightbulb, KeyRound, Flame,
-  ChevronLeft, ChevronRight, Plus, Check, Download
+  ChevronLeft, ChevronRight, Plus, Check, Download, Zap
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,6 +29,7 @@ const navGroups = [
     label: 'TOOLS',
     items: [
       { id: 'websites', label: 'My Websites', icon: Globe },
+      { id: 'wp-manage', label: 'WP Management', icon: Zap, indent: true },
       { id: 'github', label: 'GitHub', icon: Github },
       { id: 'builds', label: 'Build Projects', icon: Hammer },
       { id: 'links', label: 'Links Hub', icon: Link2 },
@@ -187,6 +188,7 @@ export default function Sidebar() {
                       whileTap={{ scale: 0.97 }}
                       className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200 group relative
                         ${isCollapsed ? 'justify-center px-0 rounded-xl' : 'rounded-xl'}
+                        ${(item as any).indent && !isCollapsed ? 'ml-5 border-l border-sidebar-border/40 pl-4' : ''}
                         ${active
                           ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35'
                           : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground'
