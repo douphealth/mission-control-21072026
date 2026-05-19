@@ -273,4 +273,3 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
 });
 
 export default TopBar;
-}
