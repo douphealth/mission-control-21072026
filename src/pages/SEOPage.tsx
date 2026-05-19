@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useWebsites } from '@/hooks/useTableData';
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -65,7 +65,7 @@ function MetricCard({ label, value, sub, icon: Icon, color }: { label: string; v
 }
 
 export default function SEOPage() {
-  const { websites } = useDashboard();
+  const websites = useWebsites();
   const [seoData] = useState<SEOEntry[]>(sampleSEO);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");

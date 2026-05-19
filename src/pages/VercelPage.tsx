@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useCredentials, useBuildProjects } from '@/hooks/useTableData';
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -53,7 +53,8 @@ function DeployBadge({ status }: { status: VercelProject["status"] }) {
 }
 
 export default function VercelPage() {
-  const { credentials, buildProjects } = useDashboard();
+  const credentials = useCredentials();
+  const buildProjects = useBuildProjects();
   const [projects] = useState<VercelProject[]>(sampleProjects);
   const vercelCreds = credentials.filter(c => c.service.toLowerCase().includes("vercel") || c.label.toLowerCase().includes("vercel"));
 

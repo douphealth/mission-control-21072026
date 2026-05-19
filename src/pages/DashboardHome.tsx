@@ -1,4 +1,4 @@
-import { useDashboard } from '@/contexts/DashboardContext';
+import { useWebsites, useBuildProjects, useTasks, useNotes, usePayments, useIdeas, useHabits } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { forwardRef, useState, useEffect } from 'react';
@@ -83,7 +83,13 @@ WH.displayName = 'WidgetHeader';
 
 /* ─── Main Dashboard ─── */
 const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) {
-  const { websites, buildProjects, tasks, notes, payments, ideas, habits } = useDashboard();
+  const websites = useWebsites();
+  const buildProjects = useBuildProjects();
+  const tasks = useTasks();
+  const notes = useNotes();
+  const payments = usePayments();
+  const ideas = useIdeas();
+  const habits = useHabits();
   const { setActiveSection } = useNavigationStore();
   const { userName } = useSettingsStore();
   const [clock, setClock] = useState(new Date());

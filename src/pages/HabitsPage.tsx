@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useHabits, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,7 +22,11 @@ const emptyForm = {
 };
 
 export default function HabitsPage() {
-    const { habits, addItem, updateItem, deleteItem, duplicateItem } = useDashboard();
+    const habits = useHabits();
+    const addItem = useAddItem();
+    const updateItem = useUpdateItem();
+    const deleteItem = useDeleteItem();
+    const duplicateItem = useDuplicateItem();
     const [modalOpen, setModalOpen] = useState(false);
     const [editId, setEditId] = useState<string | null>(null);
     const [form, setForm] = useState<Omit<HabitTracker, "id">>(emptyForm);
