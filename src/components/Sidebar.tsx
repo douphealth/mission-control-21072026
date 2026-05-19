@@ -113,13 +113,12 @@ export default function Sidebar() {
 
   return (
     <>
-              {sidebarOpen && (
-          <div
-            } } }
-            className="fixed inset-0 z-40 bg-foreground/10 backdrop-blur-sm lg:hidden"
-            onClick={() => setSidebarOpen(false)}
-          />
-        )}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-foreground/10 backdrop-blur-sm lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
       <aside
         className={`fixed top-0 left-0 z-50 h-full flex flex-col bg-sidebar/95 text-sidebar-foreground backdrop-blur-2xl border-r border-sidebar-border/70 shadow-[18px_0_60px_-44px_hsl(var(--foreground)/0.7)]
