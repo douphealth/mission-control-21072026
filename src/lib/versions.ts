@@ -285,7 +285,8 @@ export function markDirty() {
     }, AUTO_DEBOUNCE_MS);
 }
 
-export function startAutoSnapshots() {
+let visHandler: (() => void) | null = null;
+function startTick() {
     if (intervalTimer) return;
     intervalTimer = setInterval(() => {
         if (!dirty) return;
@@ -293,10 +294,25 @@ export function startAutoSnapshots() {
         saveVersion({ type: 'auto' }).catch(e => console.warn('Auto snapshot failed', e));
     }, AUTO_INTERVAL_MS);
 }
+function stopTick() {
+    if (intervalTimer) { clearInterval(intervalTimer); intervalTimer = null; }
+}
+
+export function startAutoSnapshots() {
+    if (typeof document === 'undefined' || !document.hidden) startTick();
+    if (!visHandler && typeof document !== 'undefined') {
+        visHandler = () => { if (document.hidden) stopTick(); else startTick(); };
+        document.addEventListener('visibilitychange', visHandler);
+    }
+}
 
 export function stopAutoSnapshots() {
-    if (intervalTimer) { clearInterval(intervalTimer); intervalTimer = null; }
+    stopTick();
     if (debounceTimer) { clearTimeout(debounceTimer); debounceTimer = null; }
+    if (visHandler && typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', visHandler);
+        visHandler = null;
+    }
 }
 
 export const SNAPSHOTS_SCHEMA_SQL = `
