@@ -134,8 +134,6 @@ export default function Sidebar() {
         {/* Logo / Brand */}
         <div className={`h-[72px] flex items-center border-b border-sidebar-border/70 ${isCollapsed ? 'justify-center px-3' : 'px-5 gap-3'}`}>
           <div
-            }
-            }
              className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center text-primary-foreground font-extrabold text-base flex-shrink-0 ring-1 ring-sidebar-primary/30"
             style={{ boxShadow: 'var(--shadow-primary)' }}
           >
@@ -185,7 +183,6 @@ export default function Sidebar() {
                     <button
                       key={item.id}
                       onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
-                      }
                       className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200 group relative
                         ${isCollapsed ? 'justify-center px-0 rounded-xl' : 'rounded-xl'}
                         ${(item as any).indent && !isCollapsed ? 'ml-5 border-l border-sidebar-border/40 pl-4' : ''}
@@ -213,7 +210,7 @@ export default function Sidebar() {
 
               {/* Inline Add Form */}
                               {addingTo === group.label && !isCollapsed && (
-                  <div } } } className="overflow-hidden">
+                  <div className="overflow-hidden">
                     <div className="mt-2 mx-1 p-3 rounded-xl bg-secondary/30 border border-border/20 space-y-2">
                       <div className="flex gap-1.5">
                         <select value={newModEmoji} onChange={e => setNewModEmoji(e.target.value)}
@@ -246,7 +243,6 @@ export default function Sidebar() {
                 {customModules.filter(m => m.visible).sort((a, b) => a.order - b.order).map(mod => (
                   <button key={mod.id}
                     onClick={() => { setActiveSection(`custom-${mod.id}`); setSidebarOpen(false); }}
-                    }
                     className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200
                       ${isCollapsed ? 'justify-center px-0 rounded-xl' : 'rounded-xl'}
                       ${activeSection === `custom-${mod.id}` ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground'}`}
@@ -265,13 +261,12 @@ export default function Sidebar() {
             <div>
               {addingTo !== 'NEW_CUSTOM' ? (
                 <button onClick={() => setAddingTo('NEW_CUSTOM')}
-                  }
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-medium text-sidebar-foreground/35 hover:text-sidebar-primary hover:bg-sidebar-accent/60 transition-all border border-dashed border-sidebar-border/70 hover:border-sidebar-primary/30">
                   <Plus size={15} />
                   <span>Add Custom Module</span>
                 </button>
               ) : (
-                <div } } } className="overflow-hidden">
+                <div className="overflow-hidden">
                   <div className="p-3 rounded-xl bg-secondary/30 border border-border/20 space-y-2">
                     <div className="flex gap-1.5">
                       <select value={newModEmoji} onChange={e => setNewModEmoji(e.target.value)}
@@ -317,7 +312,6 @@ export default function Sidebar() {
           {isCollapsed && (
             <button
               onClick={toggleTheme}
-              }
               className="w-full flex items-center justify-center py-2.5 rounded-xl text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
               title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             >
@@ -328,4 +322,3 @@ export default function Sidebar() {
       </aside>
     </>
   );
-}

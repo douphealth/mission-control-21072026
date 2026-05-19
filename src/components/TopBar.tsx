@@ -10,11 +10,9 @@ const VersionsModal = lazy(() => import('./VersionsModal'));
 
 function formatDate() {
   return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-}
 
 function DeferredOverlayFallback() {
   return null;
-}
 
 const quickAddItems = [
   { id: 'websites', label: 'Website', emoji: '🌐' },
@@ -86,7 +84,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
         {/* Search — Dribbble style with shortcut indicator */}
         <button
           onClick={() => setCommandPaletteOpen(true)}
-          }
           className="flex items-center gap-2 sm:gap-2.5 flex-1 max-w-xl h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
         >
           <Search size={14} className="text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0 sm:w-4 sm:h-4" />
@@ -100,7 +97,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           {/* Action buttons — hidden on mobile for cleaner bar */}
           <button
             onClick={() => setImportModalOpen(true)}
-            }
             className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Import"
           >
@@ -109,7 +105,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
 
           <button
             onClick={() => setVersionsOpen(true)}
-            }
             className="flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Versions — save & restore"
           >
@@ -118,7 +113,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
 
           <button
             onClick={handleExport}
-            }
             className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Export"
           >
@@ -129,15 +123,12 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <div className="relative">
             <button
               onClick={() => setNotifOpen(o => !o)}
-              }
               className="relative flex items-center justify-center w-10 h-10 rounded-2xl text-muted-foreground/60 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
               title="Notifications"
             >
               <Bell size={16} className="sm:w-[18px] sm:h-[18px]" />
               {notifCount > 0 && (
                 <span
-                  }
-                  }
                   className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-destructive text-white text-[9px] font-bold flex items-center justify-center shadow-md"
                 >
                   {notifCount > 9 ? '9+' : notifCount}
@@ -149,10 +140,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
                   <div
-                    }
-                    }
-                    }
-                    }
                     className="absolute right-0 top-full mt-3 z-50 w-80 max-h-[70vh] overflow-y-auto mobile-sheet-luxe rounded-[24px] p-2"
                   >
                     <div className="px-4 py-2.5 flex items-center justify-between">
@@ -217,7 +204,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           {/* User avatar — larger, with details */}
           <div className="hidden sm:flex items-center gap-3 pl-2">
             <div
-              }
               className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center text-[13px] font-bold text-primary-foreground shadow-[var(--shadow-primary)] cursor-pointer"
             >
               {userName.charAt(0)}
@@ -232,7 +218,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <div className="relative">
             <button
               onClick={() => setQuickAddOpen(!quickAddOpen)}
-              }
               className="w-10 h-10 rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-primary)] hover:shadow-[0_8px_30px_-6px_hsl(var(--primary)/0.5)] transition-shadow touch-manipulation"
             >
               <Plus size={16} className={`transition-transform duration-200 ${quickAddOpen ? 'rotate-45' : ''}`} />
@@ -242,10 +227,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
                 <>
                   <div className="fixed inset-0 z-40 bg-foreground/10 sm:bg-transparent" onClick={() => setQuickAddOpen(false)} />
                   <div
-                    }
-                    }
-                    }
-                    }
                     className="fixed sm:absolute inset-x-3 sm:inset-x-auto bottom-[92px] sm:bottom-auto sm:right-0 sm:top-full sm:mt-3 z-50 sm:w-60 mobile-sheet-luxe rounded-[28px] p-2 overflow-hidden"
                   >
                     <div className="px-4 py-2.5 text-[10px] font-semibold text-muted-foreground/35 uppercase tracking-widest">Quick Add</div>
@@ -254,9 +235,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
                         <button
                           key={item.id}
                           onClick={() => handleQuickAdd(item.id)}
-                          }
-                          }
-                          }
                           className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 rounded-2xl text-[13px] text-foreground hover:bg-secondary/60 active:bg-secondary transition-all touch-manipulation"
                         >
                           <span className="text-base sm:text-sm">{item.emoji}</span>
