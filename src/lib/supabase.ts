@@ -730,16 +730,44 @@ export function startRealtimeSync(onRemoteChange?: () => void): boolean {
     if (!client) return false;
     if (realtimeChannel) return true;
 
-    const remoteTables = [...TABLE_MAP.map(t => t.remote), 'mc_settings'];
+    const remoteToLocal = new Map<string, any>(TABLE_MAP.map(t => [t.remote, t.local] as const));
     let channel = client.channel('mission-control-realtime-sync');
 
+    const applyDelta = async (table: string, eventType: string, newRow: any, oldRow: any) => {
+        try {
+            if (table === 'mc_settings') {
+                if (eventType === 'DELETE') {
+                    await db.settings.delete('default');
+                } else if (newRow?.data) {
+                    await db.settings.put({ ...newRow.data, id: 'default' });
+                }
+                return;
+            }
+            const local = remoteToLocal.get(table);
+            if (!local) return;
+            if (eventType === 'DELETE') {
+                const id = oldRow?.id ?? oldRow?.data?.id;
+                if (id) await local.delete(id);
+            } else {
+                const item = newRow?.data;
+                if (item?.id) await local.put(item);
+            }
+        } catch (e) {
+            console.error(`Realtime delta apply failed for ${table}:`, e);
+        }
+    };
+
+    const remoteTables = [...TABLE_MAP.map(t => t.remote), 'mc_settings'];
     for (const table of remoteTables) {
         channel = channel.on(
             'postgres_changes',
             { event: '*', schema: 'public', table },
-            () => {
-                onRemoteChange?.();
-                syncCallbacks.forEach(cb => cb());
+            (payload: any) => {
+                // Apply per-row delta to Dexie — no full snapshot replace
+                void applyDelta(table, payload.eventType, payload.new, payload.old).then(() => {
+                    onRemoteChange?.();
+                    syncCallbacks.forEach(cb => cb());
+                });
             }
         );
     }
