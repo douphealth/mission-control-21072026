@@ -25,6 +25,24 @@ export const useCredentials   = () => (useLiveQuery(() => db.credentials.toArray
 export const useCustomModules = () => (useLiveQuery(() => db.customModules.toArray(), []) ?? (EMPTY as CustomModule[]));
 export const useHabits        = () => (useLiveQuery(() => db.habits.toArray(), []) ?? (EMPTY as HabitTracker[]));
 
+// ─── Indexed / paginated query hooks (use these for >500-row tables) ──────────
+export const useTasksByStatus = (status: Task['status']) =>
+  useLiveQuery(() => db.tasks.where('status').equals(status).toArray(), [status]) ?? (EMPTY as Task[]);
+
+export const useTasksByDateRange = (fromISO: string, toISO: string) =>
+  useLiveQuery(
+    () => db.tasks.where('dueDate').between(fromISO, toISO, true, true).toArray(),
+    [fromISO, toISO],
+  ) ?? (EMPTY as Task[]);
+
+export const useTasksCount = () => useLiveQuery(() => db.tasks.count(), []) ?? 0;
+
+export const useTasksPage = (offset: number, limit: number) =>
+  useLiveQuery(
+    () => db.tasks.orderBy('createdAt').reverse().offset(offset).limit(limit).toArray(),
+    [offset, limit],
+  ) ?? (EMPTY as Task[]);
+
 // ─── Stable action selectors (Zustand actions never change identity) ──────────
 export const useAddItem       = () => useDataStore(s => s.addItem);
 export const useUpdateItem    = () => useDataStore(s => s.updateItem);
