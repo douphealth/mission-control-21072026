@@ -5,10 +5,11 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
-import VoiceCapture from '@/components/VoiceCapture';
+
+const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
 
 const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
 const TasksPage = lazy(() => import('@/pages/TasksPage'));
@@ -126,17 +127,9 @@ export default function DashboardLayout() {
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
             <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
               <Suspense fallback={<LoadingSkeleton />}>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeSection}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                  >
-                    <Section sectionId={activeSection} key={activeSection} {...({ sectionId: activeSection } as any)} />
-                  </motion.div>
-                </AnimatePresence>
+                <div key={activeSection} className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
+                  <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />
+                </div>
               </Suspense>
             </RouteErrorBoundary>
           </div>
@@ -145,8 +138,10 @@ export default function DashboardLayout() {
       </div>
       {/* Mobile bottom navigation */}
       <MobileBottomNav />
-      {/* Voice capture — floating mic, works app-wide */}
-      <VoiceCapture />
+      {/* Voice capture — lazy-loaded floating mic */}
+      <Suspense fallback={null}>
+        <VoiceCapture />
+      </Suspense>
     </div>
   );
 }

@@ -208,8 +208,13 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         await deduplicateAll();
         await loadSettings();
         if (shouldHydrateFromCloud) {
+          // Debounced full-snapshot replace to avoid render storms on realtime bursts
+          let syncTimer: ReturnType<typeof setTimeout> | null = null;
           startRealtimeSync(() => {
-            void replaceLocalWithSupabaseSnapshot();
+            if (syncTimer) clearTimeout(syncTimer);
+            syncTimer = setTimeout(() => {
+              void replaceLocalWithSupabaseSnapshot();
+            }, 1500);
           });
         }
 
