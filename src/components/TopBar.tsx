@@ -10,9 +10,12 @@ const VersionsModal = lazy(() => import('./VersionsModal'));
 
 function formatDate() {
   return new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
 
 function DeferredOverlayFallback() {
   return null;
+}
+
 
 const quickAddItems = [
   { id: 'websites', label: 'Website', emoji: '🌐' },
