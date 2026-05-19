@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useCredentials, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -59,7 +59,11 @@ function MaskedField({ value, label, isVisible, onReveal, onCopy, isMasterLocked
 }
 
 export default function CredentialsPage() {
-  const { credentials, addItem, updateItem, deleteItem, duplicateItem } = useDashboard();
+  const credentials = useCredentials();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
+  const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [revealed, setRevealed] = useState<Set<string>>(new Set());

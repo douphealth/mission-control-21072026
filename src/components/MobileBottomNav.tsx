@@ -1,5 +1,5 @@
 import { useNavigationStore } from '@/stores/navigationStore';
-import { useDashboard } from '@/contexts/DashboardContext';
+import { useTasks } from '@/hooks/useTableData';
 import { Home, CheckSquare, FileText, Globe, Grip, DollarSign, Calendar, Timer, Lightbulb, KeyRound, Settings, Search, Flame, Github, Hammer, Link2, PanelsTopLeft } from 'lucide-react';
 import { useState, useCallback } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
@@ -29,7 +29,7 @@ const moreItems = [
 
 export default function MobileBottomNav() {
   const { activeSection, setActiveSection } = useNavigationStore();
-  const { tasks } = useDashboard();
+  const tasks = useTasks();
   const [moreOpen, setMoreOpen] = useState(false);
   const dragY = useMotionValue(0);
   const sheetOpacity = useTransform(dragY, [0, 200], [1, 0]);

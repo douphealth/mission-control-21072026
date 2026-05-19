@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useCredentials } from '@/hooks/useTableData';
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -45,7 +45,7 @@ function StatusDot({ status }: { status: CloudflareZone["status"] }) {
 }
 
 export default function CloudflarePage() {
-  const { credentials } = useDashboard();
+  const credentials = useCredentials();
   const [zones] = useState<CloudflareZone[]>(sampleZones);
   const cfCreds = credentials.filter(c => c.service.toLowerCase().includes("cloudflare") || c.label.toLowerCase().includes("cloudflare"));
 

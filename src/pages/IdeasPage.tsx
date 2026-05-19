@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useIdeas, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Plus, Search, Edit2, Trash2, ThumbsUp, Lightbulb, Rocket, FlaskConical, ParkingCircle, Sparkles, CheckSquare, Copy } from "lucide-react";
@@ -22,7 +22,9 @@ const priorityDot: Record<string, string> = { high: "bg-destructive", medium: "b
 const emptyIdea: Omit<Idea, "id"> = { title: "", description: "", category: "General", priority: "medium", status: "spark", tags: [], linkedProject: "", votes: 0, createdAt: new Date().toISOString().split("T")[0], updatedAt: new Date().toISOString().split("T")[0] };
 
 export default function IdeasPage() {
-  const { ideas, updateData, duplicateItem } = useDashboard();
+  const ideas = useIdeas();
+  const updateData = useUpdateData();
+  const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);

@@ -1,4 +1,4 @@
-import { useDashboard } from '@/contexts/DashboardContext';
+import { useWebsites } from '@/hooks/useTableData';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -59,7 +59,7 @@ const StatusPill = ({ ok, label }: { ok: boolean | null | undefined; label: stri
 // ─── Component ──────────────────────────────────────────────────────────────
 
 export default function WordPressManagementPage() {
-  const { websites } = useDashboard();
+  const websites = useWebsites();
   const { setActiveSection } = useNavigationStore();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('overview');

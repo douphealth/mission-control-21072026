@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useRepos, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ExternalLink, Star, GitFork, Trash2, Plus, Edit2, Search, Rocket, Code2, CheckSquare, Copy, Database } from "lucide-react";
@@ -27,7 +27,9 @@ const DB_TYPES = [
 const emptyRepo: Omit<GitHubRepo, "id"> = { name: "", url: "", description: "", language: "TypeScript", stars: 0, forks: 0, status: "active", demoUrl: "", progress: 0, topics: [], lastUpdated: new Date().toISOString().split("T")[0], devPlatformUrl: "", deploymentUrl: "", dbType: undefined, dbUrl: "", dbDashboardUrl: "", dbName: "", dbNotes: "" };
 
 export default function GitHubPage() {
-  const { repos, updateData, duplicateItem } = useDashboard();
+  const repos = useRepos();
+  const updateData = useUpdateData();
+  const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);

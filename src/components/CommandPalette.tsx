@@ -6,7 +6,8 @@ import {
   ArrowRight, Clock, Zap, Hash, Flame, Moon, Upload, Download,
   ExternalLink, Star, TrendingUp
 } from 'lucide-react';
-import { useDashboard } from '@/contexts/DashboardContext';
+import { useWebsites, useTasks, useRepos, useBuildProjects, useLinks, useNotes, usePayments, useExportAllData } from '@/hooks/useTableData';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useNavigationStore } from '@/stores/navigationStore';
 import Fuse from 'fuse.js';
 
@@ -102,7 +103,15 @@ const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = 
 ];
 
 export default function CommandPalette({ open, onClose, onImport }: CommandPaletteProps) {
-  const { websites, tasks, repos, buildProjects, links, notes, payments, exportAllData, toggleTheme } = useDashboard();
+  const websites = useWebsites();
+  const tasks = useTasks();
+  const repos = useRepos();
+  const buildProjects = useBuildProjects();
+  const links = useLinks();
+  const notes = useNotes();
+  const payments = usePayments();
+  const exportAllData = useExportAllData();
+  const toggleTheme = useSettingsStore(s => s.toggleTheme);
   const { setActiveSection, recentSections } = useNavigationStore();
   const [query, setQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);

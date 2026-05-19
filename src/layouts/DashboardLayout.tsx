@@ -5,7 +5,7 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
-import { motion } from 'framer-motion';
+
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 
@@ -93,22 +93,12 @@ export default function DashboardLayout() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center space-y-4">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="w-12 h-12 mx-auto rounded-xl gradient-primary flex items-center justify-center shadow-[var(--shadow-primary)]"
-          >
+          <div className="w-12 h-12 mx-auto rounded-xl gradient-primary flex items-center justify-center shadow-[var(--shadow-primary)] animate-in zoom-in-75 fade-in duration-400">
             <span className="text-primary-foreground font-bold text-lg">N</span>
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-sm text-muted-foreground"
-          >
+          </div>
+          <div className="text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-1 duration-300 delay-200 fill-mode-both">
             Loading Mission Control...
-          </motion.div>
+          </div>
         </div>
       </div>
     );

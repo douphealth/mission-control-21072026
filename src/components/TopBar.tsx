@@ -1,4 +1,4 @@
-import { useDashboard } from '@/contexts/DashboardContext';
+import { useTasks, useExportAllData } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Search, Bell, Plus, Menu, Download, Mail, History } from 'lucide-react';
@@ -31,7 +31,8 @@ const quickAddItems = [
 ];
 
 const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
-  const { tasks, exportAllData } = useDashboard();
+  const tasks = useTasks();
+  const exportAllData = useExportAllData();
   const { userName } = useSettingsStore();
   const { setSidebarOpen, setActiveSection, commandPaletteOpen, setCommandPaletteOpen, importModalOpen, setImportModalOpen } = useNavigationStore();
   const [quickAddOpen, setQuickAddOpen] = useState(false);

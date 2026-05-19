@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useCredentials } from '@/hooks/useTableData';
 import { useState } from "react";
 import { motion } from "framer-motion";
 import {
@@ -42,7 +42,7 @@ function StatusBadge({ status }: { status: ServiceEntry["status"] }) {
 }
 
 export default function OpenClawPage() {
-  const { credentials } = useDashboard();
+  const credentials = useCredentials();
   const [services, setServices] = useState<ServiceEntry[]>(defaultServices);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);

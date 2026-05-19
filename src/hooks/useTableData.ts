@@ -32,3 +32,8 @@ export const useDeleteItem    = () => useDataStore(s => s.deleteItem);
 export const useDuplicateItem = () => useDataStore(s => s.duplicateItem);
 export const useBulkAddItems  = () => useDataStore(s => s.bulkAddItems);
 export const useUpdateData    = () => useDataStore(s => s.updateData);
+export const useExportAllData = () => useDataStore(s => s.exportAllData);
+export const useImportAllData = () => useDataStore(s => s.importAllData);
+
+// Re-export genId so consumers don't need to touch DashboardContext
+export { genId } from '@/lib/db';

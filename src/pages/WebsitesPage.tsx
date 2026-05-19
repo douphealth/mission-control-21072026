@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useWebsites, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,7 +51,9 @@ const fadeUp = (i: number) => ({
 // ─── Component ──────────────────────────────────────────────────────────────────
 
 export default function WebsitesPage() {
-  const { websites, updateData, duplicateItem } = useDashboard();
+  const websites = useWebsites();
+  const updateData = useUpdateData();
+  const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");

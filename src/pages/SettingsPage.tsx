@@ -1,4 +1,5 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useUpdateData, useExportAllData, useImportAllData } from '@/hooks/useTableData';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useState, useRef, useEffect, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -50,7 +51,10 @@ const CopyButton = forwardRef<HTMLButtonElement, { text: string }>(function Copy
 });
 
 export default function SettingsPage() {
-  const { userName, userRole, theme, setTheme, toggleTheme, updateData, exportAllData, importAllData } = useDashboard();
+  const { userName, userRole, theme, setTheme, toggleTheme } = useSettingsStore();
+  const updateData = useUpdateData();
+  const exportAllData = useExportAllData();
+  const importAllData = useImportAllData();
   const [activeTab, setActiveTab] = useState("profile");
   const [name, setName] = useState(userName);
   const [role, setRole] = useState(userRole);

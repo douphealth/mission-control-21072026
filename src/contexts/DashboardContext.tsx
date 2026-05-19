@@ -1,71 +1,30 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+// ─── Thin app-bootstrap provider ─────────────────────────────────────────────
+// This used to be the "God Context" with 11 live queries + every CRUD action
+// exposed to every consumer. All data access has been migrated to per-table
+// hooks in `src/hooks/useTableData.ts` and Zustand stores in `src/stores/*`.
+//
+// This file now only handles one-time app bootstrap: DB migration, cloud
+// hydration, default seeding, dedup, settings hydration, and realtime sync.
+// It exposes `isLoading` through context for the layout's loading splash and
+// nothing else. No subscriptions = no cross-table re-render storms.
+
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { db, genId, migrateFromLocalStorage } from '@/lib/db';
-import type { Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment, Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout } from '@/lib/db';
-import { useLiveQuery } from 'dexie-react-hooks';
-import { useNavigationStore } from '@/stores/navigationStore';
+import type {
+  Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment,
+  Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout,
+} from '@/lib/db';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDataStore } from '@/stores/dataStore';
 import { deduplicateAll } from '@/lib/dedup';
 import { isSupabaseConnected, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
 import { restoreLatestNonEmptyVersion } from '@/lib/versions';
 
-// Re-export types for convenience
+// Re-export types for backward compat with old imports
 export type { Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment, Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout };
 
 interface DashboardContextValue {
-  // Data (from Dexie live queries — reactive)
-  websites: Website[];
-  tasks: Task[];
-  repos: GitHubRepo[];
-  buildProjects: BuildProject[];
-  links: LinkItem[];
-  notes: Note[];
-  payments: Payment[];
-  ideas: Idea[];
-  credentials: CredentialVault[];
-  customModules: CustomModule[];
-  habits: HabitTracker[];
-
-  // Settings (from Zustand stores — backward compat)
-  userName: string;
-  userRole: string;
-  theme: 'light' | 'dark' | 'system';
-  sidebarCollapsed: boolean;
-  dashboardLayout: WidgetLayout[];
-
-  // Navigation (from Zustand — backward compat)
-  activeSection: string;
-  setActiveSection: (s: string) => void;
-  sidebarOpen: boolean;
-  setSidebarOpen: (b: boolean) => void;
-
-  // Theme
-  toggleTheme: () => void;
-  setTheme: (t: 'light' | 'dark' | 'system') => void;
-
-  // CRUD — delegated to dataStore
-  addItem: <T extends { id: string }>(table: string, item: Omit<T, 'id'>) => Promise<string>;
-  updateItem: <T extends { id: string }>(table: string, id: string, changes: Partial<T>) => Promise<void>;
-  deleteItem: (table: string, id: string) => Promise<void>;
-  duplicateItem: (table: string, id: string, overrides?: Record<string, any>) => Promise<string>;
-  bulkAddItems: <T extends { id: string }>(table: string, items: Omit<T, 'id'>[]) => Promise<void>;
-
-  // Settings
-  updateSettings: (changes: Partial<UserSettings>) => Promise<void>;
-  saveDashboardLayout: (layout: WidgetLayout[]) => Promise<void>;
-
-  // Data loading state
   isLoading: boolean;
-
-  // Export / Import
-  exportAllData: () => Promise<string>;
-  importAllData: (json: string) => Promise<void>;
-
-  // Utility
-  genId: () => string;
-
-  // Backward-compat
-  updateData: (partial: Record<string, any>) => Promise<void>;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -162,20 +121,16 @@ async function seedDefaults() {
   });
 }
 
-// ─── Provider ─────────────────────────────────────────────────────────────────
-// This is now a thin compatibility layer. All CRUD and state management is
-// delegated to Zustand stores (dataStore, settingsStore, navigationStore).
-// Live queries stay here because they require React hooks context.
+// ─── Provider (bootstrap-only) ───────────────────────────────────────────────
 
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
-  // Zustand stores
-  const { activeSection, setActiveSection, sidebarOpen, setSidebarOpen, sidebarCollapsed } = useNavigationStore();
-  const { userName, userRole, theme, toggleTheme, setTheme, loadSettings } = useSettingsStore();
-  const { isLoading, setIsLoading, dashboardLayout, setDashboardLayout, addItem, updateItem, deleteItem, duplicateItem, bulkAddItems, updateSettings, saveDashboardLayout, exportAllData, importAllData, updateData } = useDataStore();
+  const loadSettings = useSettingsStore(s => s.loadSettings);
+  const setIsLoadingStore = useDataStore(s => s.setIsLoading);
+  const setDashboardLayout = useDataStore(s => s.setDashboardLayout);
+  const [isLoading, setIsLoading] = useState(true);
 
   const initialized = useRef(false);
 
-  // Initialize DB and load settings
   useEffect(() => {
     if (initialized.current) return;
     initialized.current = true;
@@ -188,84 +143,42 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         if (shouldHydrateFromCloud) {
           const cloudSnapshot = await replaceLocalWithSupabaseSnapshot();
           if (!cloudSnapshot.success || !cloudSnapshot.populated) {
-            const localTaskCount = await db.tasks.count();
-            const localWebsiteCount = await db.websites.count();
-            const localRepoCount = await db.repos.count();
-            const localBuildCount = await db.buildProjects.count();
-            const localHasData = localTaskCount + localWebsiteCount + localRepoCount + localBuildCount > 0;
-
-            if (!localHasData) {
+            const [t, w, r, b] = await Promise.all([
+              db.tasks.count(), db.websites.count(), db.repos.count(), db.buildProjects.count(),
+            ]);
+            if (t + w + r + b === 0) {
               const restored = await restoreLatestNonEmptyVersion();
-              if (!restored.restored) {
-                await seedDefaults();
-              }
+              if (!restored.restored) await seedDefaults();
             }
           }
         } else {
           await seedDefaults();
         }
-        // ─── Deduplicate all tables after migration/seeding ──────────────────────
+
         await deduplicateAll();
         await loadSettings();
+
         if (shouldHydrateFromCloud) {
-          // Debounced full-snapshot replace to avoid render storms on realtime bursts
           let syncTimer: ReturnType<typeof setTimeout> | null = null;
           startRealtimeSync(() => {
             if (syncTimer) clearTimeout(syncTimer);
-            syncTimer = setTimeout(() => {
-              void replaceLocalWithSupabaseSnapshot();
-            }, 1500);
+            syncTimer = setTimeout(() => { void replaceLocalWithSupabaseSnapshot(); }, 1500);
           });
         }
 
-        // Load dashboard layout into Zustand
         const settings = await db.settings.get('default');
-        if (settings?.dashboardLayout) {
-          setDashboardLayout(settings.dashboardLayout);
-        }
+        if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
       } catch (e) {
         console.error('DB init error:', e);
       } finally {
         setIsLoading(false);
+        setIsLoadingStore(false);
       }
     })();
-  }, [loadSettings, setIsLoading, setDashboardLayout]);
+  }, [loadSettings, setIsLoadingStore, setDashboardLayout]);
 
-  // Live queries — reactive to DB changes (must be in React component)
-  const websites = useLiveQuery(() => db.websites.toArray(), []) ?? [];
-  const tasks = useLiveQuery(() => db.tasks.toArray(), []) ?? [];
-  const repos = useLiveQuery(() => db.repos.toArray(), []) ?? [];
-  const buildProjects = useLiveQuery(() => db.buildProjects.toArray(), []) ?? [];
-  const links = useLiveQuery(() => db.links.toArray(), []) ?? [];
-  const notes = useLiveQuery(() => db.notes.toArray(), []) ?? [];
-  const payments = useLiveQuery(() => db.payments.toArray(), []) ?? [];
-  const ideas = useLiveQuery(() => db.ideas.toArray(), []) ?? [];
-  const credentials = useLiveQuery(() => db.credentials.toArray(), []) ?? [];
-  const customModules = useLiveQuery(() => db.customModules.toArray(), []) ?? [];
-  const habits = useLiveQuery(() => db.habits.toArray(), []) ?? [];
-
-  const value: DashboardContextValue = useMemo(() => ({
-    websites, tasks, repos, buildProjects, links, notes, payments, ideas, credentials, customModules, habits,
-    userName, userRole, theme, sidebarCollapsed, dashboardLayout,
-    activeSection, setActiveSection, sidebarOpen, setSidebarOpen,
-    toggleTheme, setTheme,
-    addItem, updateItem, deleteItem, duplicateItem, bulkAddItems,
-    updateSettings, saveDashboardLayout,
-    isLoading,
-    exportAllData, importAllData,
-    genId,
-    updateData,
-  }), [
-    websites, tasks, repos, buildProjects, links, notes, payments, ideas, credentials, customModules, habits,
-    userName, userRole, theme, sidebarCollapsed, dashboardLayout,
-    activeSection, setActiveSection, sidebarOpen, setSidebarOpen,
-    toggleTheme, setTheme,
-    addItem, updateItem, deleteItem, duplicateItem, bulkAddItems,
-    updateSettings, saveDashboardLayout,
-    isLoading,
-    exportAllData, importAllData,
-    updateData,
-  ]);
+  // Stable context value — only changes when bootstrap finishes
+  const value = React.useMemo<DashboardContextValue>(() => ({ isLoading }), [isLoading]);
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
 }
