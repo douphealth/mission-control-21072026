@@ -1,4 +1,5 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useTasks, useUpdateItem } from "@/hooks/useTableData";
+import { useNavigationStore } from "@/stores/navigationStore";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -408,7 +409,9 @@ function saveEvents(evs: CalEvent[]) {
 }
 
 export default function CalendarPage() {
-  const { tasks, updateItem, setActiveSection } = useDashboard();
+  const tasks = useTasks();
+  const updateItem = useUpdateItem();
+  const setActiveSection = useNavigationStore(s => s.setActiveSection);
   const isMobile = useIsMobile();
   const [view, setView] = useState<ViewMode>("month");
   const [cursor, setCursor] = useState(new Date());

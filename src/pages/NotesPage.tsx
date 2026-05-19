@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useNotes, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Pin, PinOff, Trash2, Search, Tag, ChevronRight, CheckSquare, Copy, ChevronLeft, X } from "lucide-react";
@@ -19,7 +19,9 @@ const colorMap: Record<string, { border: string; dot: string }> = {
 };
 
 export default function NotesPage() {
-  const { notes, updateData, duplicateItem } = useDashboard();
+  const notes = useNotes();
+  const updateData = useUpdateData();
+  const duplicateItem = useDuplicateItem();
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState<string | null>(notes[0]?.id ?? null);
   const [search, setSearch] = useState("");

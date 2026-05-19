@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useTasks, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -836,7 +836,11 @@ function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, i
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
-  const { tasks, addItem, updateItem, deleteItem, duplicateItem } = useDashboard();
+  const tasks = useTasks();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
+  const duplicateItem = useDuplicateItem();
 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const [view, setView] = useState<"kanban" | "list">(isMobile ? "list" : "kanban");
