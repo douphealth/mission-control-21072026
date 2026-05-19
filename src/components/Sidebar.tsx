@@ -1,4 +1,4 @@
-import { useDashboard } from '@/contexts/DashboardContext';
+import { useTasks, usePayments, useIdeas, useCustomModules, useAddItem, genId } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -62,7 +62,11 @@ const navGroups = [
 ];
 
 export default function Sidebar() {
-  const { tasks, payments, ideas, customModules, addItem, genId } = useDashboard();
+  const tasks = useTasks();
+  const payments = usePayments();
+  const ideas = useIdeas();
+  const customModules = useCustomModules();
+  const addItem = useAddItem();
   const { activeSection, setActiveSection, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed } = useNavigationStore();
   const { userName, userRole, theme, toggleTheme } = useSettingsStore();
   const [addingTo, setAddingTo] = useState<string | null>(null);

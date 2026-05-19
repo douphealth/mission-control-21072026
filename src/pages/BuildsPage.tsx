@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useBuildProjects, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ExternalLink, Trash2, Plus, Edit2, Search, CheckSquare, Copy } from "lucide-react";
@@ -19,7 +19,9 @@ const statusOrder: Record<string, number> = { ideation: 0, building: 1, testing:
 const emptyBuild: Omit<BuildProject, "id"> = { name: "", platform: "bolt", projectUrl: "", deployedUrl: "", description: "", techStack: [], status: "ideation", startedDate: new Date().toISOString().split("T")[0], lastWorkedOn: new Date().toISOString().split("T")[0], nextSteps: "", githubRepo: "" };
 
 export default function BuildsPage() {
-  const { buildProjects, updateData, duplicateItem } = useDashboard();
+  const buildProjects = useBuildProjects();
+  const updateData = useUpdateData();
+  const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterPlatform, setFilterPlatform] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useCustomModules, useUpdateItem, useDeleteItem, genId } from '@/hooks/useTableData';
 import type { CustomModule } from "@/lib/db";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Edit2, Trash2, Search, X, Settings2, Table2, Download, Upload } from "lucide-react";
@@ -24,7 +24,9 @@ interface Props {
 
 export default function CustomModulePage({ sectionId }: Props) {
   const moduleId = sectionId.replace("custom-", "");
-  const { customModules, updateItem, deleteItem, genId } = useDashboard();
+  const customModules = useCustomModules();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
   const mod = customModules.find(m => m.id === moduleId);
 
   const [search, setSearch] = useState("");

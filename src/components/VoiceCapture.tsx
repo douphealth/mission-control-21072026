@@ -13,7 +13,8 @@ import {
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
-import { useDashboard, type Task, type Note, type Idea, type LinkItem } from '@/contexts/DashboardContext';
+import { useAddItem } from '@/hooks/useTableData';
+import type { Task, Note, Idea, LinkItem } from '@/lib/db';
 import { transcribeAndClassify, type VoiceCaptureResult } from '@/server/voice.functions';
 import { buildRecognitionSnapshot, type RecognitionResultLike } from '@/lib/speechTranscript';
 import { toast } from 'sonner';
@@ -82,7 +83,7 @@ function pickMimeType(): string {
 }
 
 export default function VoiceCapture() {
-  const { addItem } = useDashboard();
+  const addItem = useAddItem();
   const [open, setOpen] = useState(false);
   const [supported, setSupported] = useState(true);
   const [phase, setPhase] = useState<Phase>('idle');

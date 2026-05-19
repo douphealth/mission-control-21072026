@@ -6,7 +6,7 @@ import {
   Shield, Lightbulb, Zap, ArrowRight, Download, RefreshCw, Edit3, Check, Layers,
   Brain, Target, TrendingUp, Hash, Clock, Rocket, Split, Trash2
 } from 'lucide-react';
-import { useDashboard } from '@/contexts/DashboardContext';
+import { useBulkAddItems } from '@/hooks/useTableData';
 import { toast } from 'sonner';
 import {
   autonomousImport,
@@ -55,7 +55,7 @@ function extractDomain(url: string): string {
 type Phase = 'input' | 'analyzing' | 'review' | 'importing' | 'done';
 
 export default function BulkImportModal({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { bulkAddItems } = useDashboard();
+  const bulkAddItems = useBulkAddItems();
   const isMobile = useIsMobile();
   const [phase, setPhase] = useState<Phase>('input');
   const [rawText, setRawText] = useState('');

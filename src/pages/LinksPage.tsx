@@ -1,4 +1,4 @@
-import { useDashboard } from "@/contexts/DashboardContext";
+import { useLinks, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { ExternalLink, Copy, Pin, PinOff, Trash2, Search, Plus, Edit2, CheckSquare } from "lucide-react";
@@ -12,7 +12,9 @@ import { toast } from "sonner";
 const emptyLink: Omit<LinkItem, "id"> = { title: "", url: "", category: "Tools", status: "active", description: "", dateAdded: new Date().toISOString().split("T")[0], pinned: false };
 
 export default function LinksPage() {
-  const { links, updateData, duplicateItem } = useDashboard();
+  const links = useLinks();
+  const updateData = useUpdateData();
+  const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterCat, setFilterCat] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
