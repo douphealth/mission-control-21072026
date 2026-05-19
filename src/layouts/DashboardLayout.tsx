@@ -5,7 +5,7 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
-import { motion } from 'framer-motion';
+
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 
