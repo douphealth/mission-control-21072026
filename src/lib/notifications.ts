@@ -100,73 +100,96 @@ function fireNotification(task: Task, label: string) {
 }
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
+let visibilityHandler: (() => void) | null = null;
+
+const check = async () => {
+  try {
+    const now = Date.now();
+    const tasks = await db.tasks.toArray();
+
+    for (const task of tasks) {
+      if (task.status === 'done') continue;
+
+      // ── New multi-reminder system ──
+      const reminders = task.reminders;
+      if (reminders && reminders.length > 0) {
+        const dueMs = getDueMs(task);
+        if (!dueMs) continue;
+
+        const fired = new Set(task.remindersFired || []);
+        let newFired = false;
+
+        for (const key of reminders) {
+          if (key === 'none' || fired.has(key)) continue;
+          const offset = getOffsetMs(key);
+          const triggerAt = dueMs - offset;
+
+          if (now >= triggerAt) {
+            fireNotification(task, getReminderLabel(key));
+            fired.add(key);
+            newFired = true;
+          }
+        }
+
+        if (newFired) {
+          await db.tasks.update(task.id, { remindersFired: Array.from(fired) });
+        }
+        continue;
+      }
+
+      // ── Legacy single-reminder fallback ──
+      if (!task.reminder || task.reminder === 'none') continue;
+      if (task.reminderFired) continue;
+
+      const dueMs = getDueMs(task);
+      if (!dueMs) continue;
+      const offset = REMINDER_OFFSETS[task.reminder] ?? 0;
+      const triggerAt = dueMs - offset;
+
+      if (now >= triggerAt) {
+        fireNotification(task, REMINDER_LABELS[task.reminder] || task.reminder);
+        await db.tasks.update(task.id, { reminderFired: true });
+      }
+    }
+  } catch (e) {
+    console.error('Notification check error:', e);
+  }
+};
+
+function startTimer() {
+  if (intervalId) return;
+  intervalId = setInterval(check, 30_000);
+}
+
+function stopTimer() {
+  if (intervalId) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+}
 
 /** Start the notification checker loop (call once from a top-level component) */
 export function startNotificationLoop() {
-  if (intervalId) return;
-
-  const check = async () => {
-    try {
-      const now = Date.now();
-      const tasks = await db.tasks.toArray();
-
-      for (const task of tasks) {
-        if (task.status === 'done') continue;
-
-        // ── New multi-reminder system ──
-        const reminders = task.reminders;
-        if (reminders && reminders.length > 0) {
-          const dueMs = getDueMs(task);
-          if (!dueMs) continue;
-
-          const fired = new Set(task.remindersFired || []);
-          let newFired = false;
-
-          for (const key of reminders) {
-            if (key === 'none' || fired.has(key)) continue;
-            const offset = getOffsetMs(key);
-            const triggerAt = dueMs - offset;
-
-            if (now >= triggerAt) {
-              fireNotification(task, getReminderLabel(key));
-              fired.add(key);
-              newFired = true;
-            }
-          }
-
-          if (newFired) {
-            await db.tasks.update(task.id, { remindersFired: Array.from(fired) });
-          }
-          continue;
-        }
-
-        // ── Legacy single-reminder fallback ──
-        if (!task.reminder || task.reminder === 'none') continue;
-        if (task.reminderFired) continue;
-
-        const dueMs = getDueMs(task);
-        if (!dueMs) continue;
-        const offset = REMINDER_OFFSETS[task.reminder] ?? 0;
-        const triggerAt = dueMs - offset;
-
-        if (now >= triggerAt) {
-          fireNotification(task, REMINDER_LABELS[task.reminder] || task.reminder);
-          await db.tasks.update(task.id, { reminderFired: true });
-        }
-      }
-    } catch (e) {
-      console.error('Notification check error:', e);
-    }
-  };
-
   check();
-  intervalId = setInterval(check, 30_000);
+  if (typeof document !== 'undefined' && document.hidden) {
+    // Don't poll while hidden — wakes up on visibility change
+  } else {
+    startTimer();
+  }
+  if (!visibilityHandler && typeof document !== 'undefined') {
+    visibilityHandler = () => {
+      if (document.hidden) stopTimer();
+      else { check(); startTimer(); }
+    };
+    document.addEventListener('visibilitychange', visibilityHandler);
+  }
 }
 
 /** Stop the notification loop */
 export function stopNotificationLoop() {
-  if (intervalId) {
-    clearInterval(intervalId);
-    intervalId = null;
+  stopTimer();
+  if (visibilityHandler && typeof document !== 'undefined') {
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    visibilityHandler = null;
   }
 }
