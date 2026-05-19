@@ -1,7 +1,6 @@
 import { useTasks, usePayments, useIdeas, useCustomModules, useAddItem, genId } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useState } from 'react';
 import {
   Home, CheckSquare, Calendar, FileText, Timer,
@@ -114,17 +113,15 @@ export default function Sidebar() {
 
   return (
     <>
-      <AnimatePresence>
-        {sidebarOpen && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              {sidebarOpen && (
+          <div
+            } } }
             className="fixed inset-0 z-40 bg-foreground/10 backdrop-blur-sm lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
-      </AnimatePresence>
 
-      <motion.aside
+      <aside
         className={`fixed top-0 left-0 z-50 h-full flex flex-col bg-sidebar/95 text-sidebar-foreground backdrop-blur-2xl border-r border-sidebar-border/70 shadow-[18px_0_60px_-44px_hsl(var(--foreground)/0.7)]
           lg:relative lg:translate-x-0 transition-all duration-300
           ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
@@ -137,14 +134,14 @@ export default function Sidebar() {
 
         {/* Logo / Brand */}
         <div className={`h-[72px] flex items-center border-b border-sidebar-border/70 ${isCollapsed ? 'justify-center px-3' : 'px-5 gap-3'}`}>
-          <motion.div
-            whileHover={{ rotate: [0, -8, 8, 0] }}
-            transition={{ duration: 0.5 }}
+          <div
+            }
+            }
              className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center text-primary-foreground font-extrabold text-base flex-shrink-0 ring-1 ring-sidebar-primary/30"
             style={{ boxShadow: 'var(--shadow-primary)' }}
           >
             N
-          </motion.div>
+          </div>
           {!isCollapsed && (
             <div className="min-w-0">
               <div className="font-bold text-[15px] text-sidebar-foreground tracking-tight">Nexus</div>
@@ -186,10 +183,10 @@ export default function Sidebar() {
                   const active = activeSection === item.id;
                   const badge = getBadge(item.id);
                   return (
-                    <motion.button
+                    <button
                       key={item.id}
                       onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
-                      whileTap={{ scale: 0.97 }}
+                      }
                       className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200 group relative
                         ${isCollapsed ? 'justify-center px-0 rounded-xl' : 'rounded-xl'}
                         ${(item as any).indent && !isCollapsed ? 'ml-5 border-l border-sidebar-border/40 pl-4' : ''}
@@ -210,15 +207,14 @@ export default function Sidebar() {
                       {badge !== null && isCollapsed && (
                         <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full flex items-center justify-center">{badge}</span>
                       )}
-                    </motion.button>
+                    </button>
                   );
                 })}
               </div>
 
               {/* Inline Add Form */}
-              <AnimatePresence>
-                {addingTo === group.label && !isCollapsed && (
-                  <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                              {addingTo === group.label && !isCollapsed && (
+                  <div } } } className="overflow-hidden">
                     <div className="mt-2 mx-1 p-3 rounded-xl bg-secondary/30 border border-border/20 space-y-2">
                       <div className="flex gap-1.5">
                         <select value={newModEmoji} onChange={e => setNewModEmoji(e.target.value)}
@@ -234,9 +230,8 @@ export default function Sidebar() {
                         </button>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
             </div>
           ))}
 
@@ -250,9 +245,9 @@ export default function Sidebar() {
               )}
               <div className="space-y-0.5">
                 {customModules.filter(m => m.visible).sort((a, b) => a.order - b.order).map(mod => (
-                  <motion.button key={mod.id}
+                  <button key={mod.id}
                     onClick={() => { setActiveSection(`custom-${mod.id}`); setSidebarOpen(false); }}
-                    whileTap={{ scale: 0.97 }}
+                    }
                     className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200
                       ${isCollapsed ? 'justify-center px-0 rounded-xl' : 'rounded-xl'}
                       ${activeSection === `custom-${mod.id}` ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground'}`}
@@ -260,7 +255,7 @@ export default function Sidebar() {
                     title={isCollapsed ? mod.name : undefined}>
                     <span className="text-sm">{mod.icon}</span>
                     {!isCollapsed && <span className="flex-1 text-left truncate">{mod.name}</span>}
-                  </motion.button>
+                  </button>
                 ))}
               </div>
             </div>
@@ -270,14 +265,14 @@ export default function Sidebar() {
           {customModules.filter(m => m.visible).length === 0 && !isCollapsed && (
             <div>
               {addingTo !== 'NEW_CUSTOM' ? (
-                <motion.button onClick={() => setAddingTo('NEW_CUSTOM')}
-                  whileHover={{ scale: 1.01 }}
+                <button onClick={() => setAddingTo('NEW_CUSTOM')}
+                  }
                   className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-medium text-sidebar-foreground/35 hover:text-sidebar-primary hover:bg-sidebar-accent/60 transition-all border border-dashed border-sidebar-border/70 hover:border-sidebar-primary/30">
                   <Plus size={15} />
                   <span>Add Custom Module</span>
-                </motion.button>
+                </button>
               ) : (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+                <div } } } className="overflow-hidden">
                   <div className="p-3 rounded-xl bg-secondary/30 border border-border/20 space-y-2">
                     <div className="flex gap-1.5">
                       <select value={newModEmoji} onChange={e => setNewModEmoji(e.target.value)}
@@ -293,7 +288,7 @@ export default function Sidebar() {
                       </button>
                     </div>
                   </div>
-                </motion.div>
+                </div>
               )}
             </div>
           )}
@@ -321,17 +316,17 @@ export default function Sidebar() {
             </div>
           )}
           {isCollapsed && (
-            <motion.button
+            <button
               onClick={toggleTheme}
-              whileTap={{ scale: 0.95 }}
+              }
               className="w-full flex items-center justify-center py-2.5 rounded-xl text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
               title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
             >
               {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-            </motion.button>
+            </button>
           )}
         </div>
-      </motion.aside>
+      </aside>
     </>
   );
 }

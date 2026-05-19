@@ -3,7 +3,6 @@ import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { Search, Bell, Plus, Menu, Download, Mail, History } from 'lucide-react';
 import { forwardRef, lazy, Suspense, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 
 const CommandPalette = lazy(() => import('./CommandPalette'));
 const BulkImportModal = lazy(() => import('./BulkImportModal'));
@@ -85,9 +84,9 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
         </button>
 
         {/* Search — Dribbble style with shortcut indicator */}
-        <motion.button
+        <button
           onClick={() => setCommandPaletteOpen(true)}
-          whileTap={{ scale: 0.98 }}
+          }
           className="flex items-center gap-2 sm:gap-2.5 flex-1 max-w-xl h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
         >
           <Search size={14} className="text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0 sm:w-4 sm:h-4" />
@@ -95,66 +94,65 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <div className="hidden md:flex items-center gap-1">
             <kbd className="text-[10px] text-muted-foreground/30 bg-card px-2 py-1 rounded-lg font-mono border border-border/30 shadow-sm">⌘ F</kbd>
           </div>
-        </motion.button>
+        </button>
 
         <div className="flex items-center gap-1 sm:gap-1.5 ml-auto">
           {/* Action buttons — hidden on mobile for cleaner bar */}
-          <motion.button
+          <button
             onClick={() => setImportModalOpen(true)}
-            whileTap={{ scale: 0.9 }}
+            }
             className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Import"
           >
             <Mail size={16} />
-          </motion.button>
+          </button>
 
-          <motion.button
+          <button
             onClick={() => setVersionsOpen(true)}
-            whileTap={{ scale: 0.9 }}
+            }
             className="flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Versions — save & restore"
           >
             <History size={16} />
-          </motion.button>
+          </button>
 
-          <motion.button
+          <button
             onClick={handleExport}
-            whileTap={{ scale: 0.9 }}
+            }
             className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Export"
           >
             <Download size={16} />
-          </motion.button>
+          </button>
 
           {/* Notifications */}
           <div className="relative">
-            <motion.button
+            <button
               onClick={() => setNotifOpen(o => !o)}
-              whileTap={{ scale: 0.9 }}
+              }
               className="relative flex items-center justify-center w-10 h-10 rounded-2xl text-muted-foreground/60 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
               title="Notifications"
             >
               <Bell size={16} className="sm:w-[18px] sm:h-[18px]" />
               {notifCount > 0 && (
-                <motion.span
-                  initial={{ scale: 0 }}
-                  animate={{ scale: 1 }}
+                <span
+                  }
+                  }
                   className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-destructive text-white text-[9px] font-bold flex items-center justify-center shadow-md"
                 >
                   {notifCount > 9 ? '9+' : notifCount}
-                </motion.span>
+                </span>
               )}
-            </motion.button>
+            </button>
 
-            <AnimatePresence>
-              {notifOpen && (
+                          {notifOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                    transition={{ duration: 0.15 }}
+                  <div
+                    }
+                    }
+                    }
+                    }
                     className="absolute right-0 top-full mt-3 z-50 w-80 max-h-[70vh] overflow-y-auto mobile-sheet-luxe rounded-[24px] p-2"
                   >
                     <div className="px-4 py-2.5 flex items-center justify-between">
@@ -209,22 +207,21 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
                         </div>
                       </div>
                     )}
-                  </motion.div>
+                  </div>
                 </>
               )}
-            </AnimatePresence>
           </div>
 
           <div className="h-8 w-px bg-border/30 mx-1 hidden sm:block" />
 
           {/* User avatar — larger, with details */}
           <div className="hidden sm:flex items-center gap-3 pl-2">
-            <motion.div
-              whileTap={{ scale: 0.9 }}
+            <div
+              }
               className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center text-[13px] font-bold text-primary-foreground shadow-[var(--shadow-primary)] cursor-pointer"
             >
               {userName.charAt(0)}
-            </motion.div>
+            </div>
             <div className="hidden lg:block min-w-0 mr-2">
               <div className="text-sm font-semibold text-foreground truncate">{userName}</div>
               <div className="text-[10px] text-muted-foreground/50 truncate">{userName.toLowerCase().replace(/\s/g, '')}@email.com</div>
@@ -233,54 +230,52 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
 
           {/* Quick Add — floating action button */}
           <div className="relative">
-            <motion.button
+            <button
               onClick={() => setQuickAddOpen(!quickAddOpen)}
-              whileTap={{ scale: 0.88 }}
+              }
               className="w-10 h-10 rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-primary)] hover:shadow-[0_8px_30px_-6px_hsl(var(--primary)/0.5)] transition-shadow touch-manipulation"
             >
               <Plus size={16} className={`transition-transform duration-200 ${quickAddOpen ? 'rotate-45' : ''}`} />
-            </motion.button>
+            </button>
 
-            <AnimatePresence>
-              {quickAddOpen && (
+                          {quickAddOpen && (
                 <>
                   <div className="fixed inset-0 z-40 bg-foreground/10 sm:bg-transparent" onClick={() => setQuickAddOpen(false)} />
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.95, y: -4 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                    transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+                  <div
+                    }
+                    }
+                    }
+                    }
                     className="fixed sm:absolute inset-x-3 sm:inset-x-auto bottom-[92px] sm:bottom-auto sm:right-0 sm:top-full sm:mt-3 z-50 sm:w-60 mobile-sheet-luxe rounded-[28px] p-2 overflow-hidden"
                   >
                     <div className="px-4 py-2.5 text-[10px] font-semibold text-muted-foreground/35 uppercase tracking-widest">Quick Add</div>
                     <div className="grid grid-cols-2 sm:grid-cols-1 gap-0.5">
                       {quickAddItems.map((item, i) => (
-                        <motion.button
+                        <button
                           key={item.id}
                           onClick={() => handleQuickAdd(item.id)}
-                          initial={{ opacity: 0, y: 4 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.02 }}
+                          }
+                          }
+                          }
                           className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 rounded-2xl text-[13px] text-foreground hover:bg-secondary/60 active:bg-secondary transition-all touch-manipulation"
                         >
                           <span className="text-base sm:text-sm">{item.emoji}</span>
                           <span className="font-medium">{item.label}</span>
-                        </motion.button>
+                        </button>
                       ))}
                     </div>
                     <div className="border-t border-border/20 mt-1 pt-1">
-                      <motion.button
+                      <button
                         onClick={() => { setQuickAddOpen(false); setImportModalOpen(true); }}
                         className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 rounded-2xl text-[13px] text-foreground hover:bg-secondary/60 active:bg-secondary transition-all touch-manipulation"
                       >
                         <span className="text-base sm:text-sm">📥</span>
                         <span className="font-medium">Bulk Import</span>
-                      </motion.button>
+                      </button>
                     </div>
-                  </motion.div>
+                  </div>
                 </>
               )}
-            </AnimatePresence>
           </div>
         </div>
       </header>
