@@ -159,11 +159,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         await loadSettings();
 
         if (shouldHydrateFromCloud) {
-          let syncTimer: ReturnType<typeof setTimeout> | null = null;
-          startRealtimeSync(() => {
-            if (syncTimer) clearTimeout(syncTimer);
-            syncTimer = setTimeout(() => { void replaceLocalWithSupabaseSnapshot(); }, 1500);
-          });
+          // Per-row deltas applied inside startRealtimeSync — no snapshot replace needed.
+          startRealtimeSync();
         }
 
         const settings = await db.settings.get('default');
