@@ -1,11 +1,11 @@
 /**
- * React hook for Google Calendar integration.
- * Auth is handled server-side via the Lovable Google Calendar connector,
- * so there is no connect/disconnect flow — the calendar is always available.
+ * React hook for per-user Google Calendar integration.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
+    connectGCal,
+    disconnectGCal,
     getGCalConfig,
     setGCalConfig,
     isGCalConnected,
@@ -193,14 +193,14 @@ export function useGoogleCalendar(opts?: {
         }
     }, [getTimeRange, state.calendars, storeUpdateItem]);
 
-    // Connect / disconnect kept as no-ops for compatibility with old callers.
     const connect = useCallback(async (_clientId?: string): Promise<{ success: boolean; email?: string; error?: string }> => {
         setState(s => ({ ...s, connecting: true, error: null }));
         try {
+            const auth = await connectGCal();
             await fetchCalendars();
             await syncEvents(true);
             syncStateFromConfig();
-            return { success: true, email: getGCalConfig().connectedEmail || undefined };
+            return { success: true, email: auth.email || getGCalConfig().connectedEmail || undefined };
         } catch (e: any) {
             setState(s => ({ ...s, connected: false, connecting: false, error: e?.message || 'Google Calendar sync failed' }));
             return { success: false, error: e?.message || 'Google Calendar sync failed' };
@@ -210,6 +210,7 @@ export function useGoogleCalendar(opts?: {
     }, [fetchCalendars, syncEvents, syncStateFromConfig]);
 
     const disconnect = useCallback(() => {
+        disconnectGCal();
         setGCalConfig({ enabledCalendarIds: [], lastSync: null, connectedEmail: null });
         setState(s => ({
             ...s,
@@ -242,7 +243,7 @@ export function useGoogleCalendar(opts?: {
 
     useEffect(() => {
         syncStateFromConfig();
-        if (autoFetch) {
+        if (autoFetch && isGCalConnected()) {
             fetchCalendars().then(() => syncEvents()).catch(() => {});
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps

@@ -1,13 +1,83 @@
 /**
- * Google Calendar Integration — proxied through the existing `google-calendar`
- * Supabase Edge Function for this project.
+ * Google Calendar — per-user OAuth via Google Identity Services (token flow).
+ * Uses each app user's own Google account, matching the Google Tasks setup.
  */
 
-import { getSupabase } from '@/lib/supabase';
+const CLIENT_ID = '444136985265-oehu4tfpce7b0kadq5vvn14kn6gk5tor.apps.googleusercontent.com';
+const OAUTH_SCOPES = 'https://www.googleapis.com/auth/calendar';
+const TOKEN_STORAGE_KEY = 'mc_gcal_token_v1';
+const CONFIG_STORAGE_KEY = 'mc_gcal_config';
 
+type StoredToken = { access_token: string; expires_at: number };
 
+let gisLoaded: Promise<void> | null = null;
 
-// ─── Types ──────────────────────────────────────────────────────────────────────
+function loadGis(): Promise<void> {
+  if (gisLoaded) return gisLoaded;
+  gisLoaded = new Promise((resolve, reject) => {
+    if ((window as any).google?.accounts?.oauth2) return resolve();
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+    document.head.appendChild(script);
+  });
+  return gisLoaded;
+}
+
+function readToken(): StoredToken | null {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const token = JSON.parse(raw) as StoredToken;
+    if (token.expires_at - 30_000 < Date.now()) return null;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+function saveToken(access_token: string, expires_in: number) {
+  const token: StoredToken = {
+    access_token,
+    expires_at: Date.now() + expires_in * 1000,
+  };
+  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(token));
+}
+
+async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = readToken();
+  if (!token) throw new Error('Not signed in to Google Calendar');
+
+  const response = await fetch(`https://www.googleapis.com/calendar/v3/${path.replace(/^\/+/, '')}`, {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      Authorization: `Bearer ${token.access_token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (response.status === 401) {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    throw new Error('Google Calendar session expired — please sign in again');
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Google Calendar ${response.status}: ${text.slice(0, 300)}`);
+  }
+
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
+async function ensureCalendarToken(): Promise<void> {
+  if (readToken()) return;
+  await connectGCal();
+}
 
 export interface GoogleCalendarEvent {
   id: string;
@@ -43,7 +113,6 @@ export interface GCalConfig {
   connectedEmail: string | null;
 }
 
-
 const GCAL_COLORS: Record<string, string> = {
   '1': '#7986CB', '2': '#33B679', '3': '#8E24AA', '4': '#E67C73',
   '5': '#F6BF26', '6': '#F4511E', '7': '#039BE5', '8': '#616161',
@@ -53,10 +122,6 @@ const GCAL_COLORS: Record<string, string> = {
 export function getGCalColor(colorId?: string): string {
   return colorId && GCAL_COLORS[colorId] ? GCAL_COLORS[colorId] : '#039BE5';
 }
-
-// ─── Storage (local settings only — no tokens) ─────────────────────────────────
-
-const STORAGE_KEY = 'mc_gcal_config';
 
 const DEFAULT_CONFIG: GCalConfig = {
   enabledCalendarIds: [],
@@ -68,7 +133,7 @@ const DEFAULT_CONFIG: GCalConfig = {
 
 export function getGCalConfig(): GCalConfig {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
     if (!raw) return { ...DEFAULT_CONFIG };
     const parsed = JSON.parse(raw);
     return { ...DEFAULT_CONFIG, ...parsed };
@@ -79,117 +144,75 @@ export function getGCalConfig(): GCalConfig {
 
 export function setGCalConfig(partial: Partial<GCalConfig>): GCalConfig {
   const updated = { ...getGCalConfig(), ...partial };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(updated));
   return updated;
 }
 
 export function clearGCalConfig(): void {
-  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(CONFIG_STORAGE_KEY);
 }
 
-/** Always connected — auth is server-side via the Lovable connector. */
 export function isGCalConnected(): boolean {
-  const cfg = getGCalConfig();
-  return Boolean(cfg.connectedEmail || cfg.lastSync || cfg.enabledCalendarIds.length);
+  return readToken() !== null;
 }
 
-// ─── Backend proxy ─────────────────────────────────────────────────────────────
+export async function connectGCal(): Promise<{ email?: string }> {
+  await loadGis();
 
-async function callLocalProxy<T = any>(
-  path: string,
-  init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
-): Promise<T> {
-  const resp = await fetch('/api/google-calendar', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      path,
-      method: init.method || 'GET',
-      query: init.query,
-      body: init.body,
-    }),
+  await new Promise<void>((resolve, reject) => {
+    const client = (window as any).google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: OAUTH_SCOPES,
+      prompt: '',
+      callback: (resp: any) => {
+        if (resp.error) return reject(new Error(resp.error_description || resp.error));
+        saveToken(resp.access_token, Number(resp.expires_in || 3600));
+        resolve();
+      },
+      error_callback: (err: any) => reject(new Error(err?.message || 'Google Calendar sign-in cancelled')),
+    });
+    client.requestAccessToken({ prompt: 'consent' });
   });
 
-  const raw = await resp.text();
-  const routeMissing = resp.status === 404 && /^not found$/i.test(String(raw).trim());
-  if (routeMissing) {
-    throw new Error('__LOCAL_GCAL_PROXY_MISSING__');
-  }
-
-  const data = raw ? JSON.parse(raw) : {};
-
-  if (!resp.ok) {
-    const message = (data as any)?.error || (data as any)?.message || raw || `Google Calendar request failed (${resp.status})`;
-    throw new Error(message);
-  }
-
-  return data as T;
+  const calendars = await listCalendars();
+  const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
+  if (primary) setGCalConfig({ connectedEmail: primary.id });
+  return { email: primary?.id };
 }
 
-async function callEdgeFunction<T = any>(
-  path: string,
-  init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
-): Promise<T> {
-  const supabase = getSupabase();
-  if (!supabase) {
-    throw new Error('Google Calendar backend is unavailable because cloud sync is disconnected.');
+export function disconnectGCal(): void {
+  const token = readToken();
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  if (token?.access_token && (window as any).google?.accounts?.oauth2) {
+    try { (window as any).google.accounts.oauth2.revoke(token.access_token, () => {}); } catch { /* noop */ }
   }
-
-  const response = await supabase.functions.invoke('google-calendar', {
-    body: {
-      path,
-      method: init.method || 'GET',
-      query: init.query,
-      body: init.body,
-    },
-  });
-
-  if (response.error) {
-    const message = response.error?.message || response.error?.context?.message || 'Google Calendar request failed';
-    throw new Error(message);
-  }
-
-  return response.data as T;
+  clearGCalConfig();
 }
-
-async function gcalCall<T = any>(
-  path: string,
-  init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
-): Promise<T> {
-  try {
-    return await callEdgeFunction<T>(path, init);
-  } catch (error) {
-    if (error instanceof SyntaxError) {
-      throw new Error('Google Calendar backend returned an invalid response.');
-    }
-    if (error instanceof Error && !/Failed to fetch/i.test(error.message)) {
-      throw error;
-    }
-  }
-
-  try {
-    return await callLocalProxy<T>(path, init);
-  } catch (error) {
-    if (error instanceof Error && error.message !== '__LOCAL_GCAL_PROXY_MISSING__') throw error;
-    throw new Error('Google Calendar backend is unreachable from this app right now.');
-  }
-}
-
-
-
-
-// ─── API surface (preserved signatures so existing callers keep working) ───────
 
 export async function listCalendars(): Promise<GoogleCalendarList[]> {
-  const data = await gcalCall<{ items?: any[] }>('users/me/calendarList');
-  return (data.items || []).map((cal) => ({
-    id: cal.id,
-    summary: cal.summary || cal.id,
-    backgroundColor: cal.backgroundColor,
-    foregroundColor: cal.foregroundColor,
-    primary: cal.primary || false,
-    selected: cal.selected !== false,
-  }));
+  await ensureCalendarToken();
+
+  const calendars: GoogleCalendarList[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const qs = new URLSearchParams({ maxResults: '250', showHidden: 'true' });
+    if (pageToken) qs.set('pageToken', pageToken);
+    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(`users/me/calendarList?${qs.toString()}`);
+
+    calendars.push(...(data.items || []).map((cal) => ({
+      id: cal.id,
+      summary: cal.summary || cal.id,
+      backgroundColor: cal.backgroundColor,
+      foregroundColor: cal.foregroundColor,
+      primary: cal.primary || false,
+      selected: cal.selected !== false,
+    })));
+
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return calendars;
 }
 
 export async function fetchCalendarEvents(
@@ -198,41 +221,50 @@ export async function fetchCalendarEvents(
   timeMax: string,
   maxResults = 250,
 ): Promise<GoogleCalendarEvent[]> {
-  const data = await gcalCall<{ items?: any[] }>(
-    `calendars/${encodeURIComponent(calendarId)}/events`,
-    {
-      query: {
-        timeMin,
-        timeMax,
-        maxResults: String(maxResults),
-        singleEvents: 'true',
-        orderBy: 'startTime',
-      },
-    },
-  );
-  return (data.items || []).map((ev) => ({ ...ev, calendarId }));
+  await ensureCalendarToken();
+
+  const events: GoogleCalendarEvent[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const qs = new URLSearchParams({
+      timeMin,
+      timeMax,
+      maxResults: String(maxResults),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+    });
+    if (pageToken) qs.set('pageToken', pageToken);
+
+    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(
+      `calendars/${encodeURIComponent(calendarId)}/events?${qs.toString()}`,
+    );
+
+    events.push(...(data.items || []).map((ev) => ({ ...ev, calendarId })));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return events;
 }
 
 export async function fetchAllEvents(timeMin: string, timeMax: string): Promise<GoogleCalendarEvent[]> {
   const cfg = getGCalConfig();
   let calendarIds = cfg.enabledCalendarIds;
 
-  // If the user hasn't picked specific calendars, pull from EVERY calendar
-  // they have access to (primary, birthdays, holidays, subscribed, etc.).
   if (!calendarIds || calendarIds.length === 0) {
-    try {
-      const all = await listCalendars();
-      calendarIds = all.map((c) => c.id);
-    } catch {
-      calendarIds = ['primary'];
-    }
+    const all = await listCalendars();
+    calendarIds = all.map((c) => c.id);
   }
 
   const results = await Promise.allSettled(
     calendarIds.map((id) => fetchCalendarEvents(id, timeMin, timeMax)),
   );
+
   const events: GoogleCalendarEvent[] = [];
-  for (const r of results) if (r.status === 'fulfilled') events.push(...r.value);
+  for (const result of results) {
+    if (result.status === 'fulfilled') events.push(...result.value);
+  }
+
   setGCalConfig({ lastSync: new Date().toISOString() });
   return events;
 }
@@ -253,21 +285,21 @@ export async function createGCalEvent(
   },
   deterministicId?: string,
 ): Promise<GoogleCalendarEvent> {
+  await ensureCalendarToken();
   const body: any = { ...event };
   if (deterministicId) body.id = deterministicId;
 
   try {
-    return await gcalCall<GoogleCalendarEvent>(
+    return await gcalApi<GoogleCalendarEvent>(
       `calendars/${encodeURIComponent(calendarId)}/events`,
-      { method: 'POST', body },
+      { method: 'POST', body: JSON.stringify(body) },
     );
   } catch (e: any) {
-    // 409 conflict → update existing
     if (deterministicId && /\b409\b/.test(e?.message || '')) {
       try {
-        return await gcalCall<GoogleCalendarEvent>(
+        return await gcalApi<GoogleCalendarEvent>(
           `calendars/${encodeURIComponent(calendarId)}/events/${deterministicId}`,
-          { method: 'PUT', body: { ...event } },
+          { method: 'PUT', body: JSON.stringify({ ...event }) },
         );
       } catch {
         return { id: deterministicId, summary: event.summary, start: event.start, end: event.end } as GoogleCalendarEvent;
@@ -280,7 +312,8 @@ export async function createGCalEvent(
 export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): Promise<boolean> {
   if (!eventId) return false;
   try {
-    await gcalCall(
+    await ensureCalendarToken();
+    await gcalApi(
       `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
       { method: 'DELETE' },
     );
@@ -329,14 +362,10 @@ export async function pushTasksToGCal(tasks: {
   const { toRRule } = await import('@/lib/recurrence');
   const results = new Map<string, string>();
 
-  const isFatalBackendError = (error: unknown) => {
-    const message = error instanceof Error ? error.message : String(error || '');
-    return /backend is not deployed|backend is unreachable/i.test(message);
-  };
-
   for (const task of tasks) {
     if (task.gcalEventId && !task.gcalEventId.startsWith('mc')) continue;
     if (!task.dueDate) continue;
+
     try {
       const isAllDay = task.allDay !== false && !task.startTime;
       const eventBody: any = {
@@ -360,14 +389,12 @@ export async function pushTasksToGCal(tasks: {
       const created = await createGCalEvent('primary', eventBody, deterministicId);
       if (created?.id) results.set(task.id, created.id);
     } catch (e) {
-      console.error(`Failed to push task "${task.title}" to GCal:`, e);
-      if (isFatalBackendError(e)) throw e;
+      console.error(`Failed to push task "${task.title}" to Google Calendar:`, e);
     }
   }
+
   return results;
 }
-
-// ─── Cached events ─────────────────────────────────────────────────────────────
 
 let cachedEvents: GoogleCalendarEvent[] = [];
 let cacheTimestamp = 0;
@@ -385,6 +412,7 @@ export async function syncGCalEvents(
   if (!forceRefresh && cachedEvents.length > 0 && Date.now() - cacheTimestamp < CACHE_TTL) {
     return cachedEvents;
   }
+
   try {
     cachedEvents = await fetchAllEvents(timeMin, timeMax);
     cacheTimestamp = Date.now();
@@ -394,8 +422,6 @@ export async function syncGCalEvents(
     return cachedEvents;
   }
 }
-
-// ─── Helpers ───────────────────────────────────────────────────────────────────
 
 export function gCalEventToCalEvent(gev: GoogleCalendarEvent, calColor?: string): {
   id: string;
