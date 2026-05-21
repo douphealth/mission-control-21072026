@@ -18,6 +18,7 @@ const navGroups = [
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: Home },
       { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+      { id: 'google-tasks', label: 'Google Tasks', icon: CheckSquare },
       { id: 'calendar', label: 'Calendar', icon: Calendar },
       { id: 'notes', label: 'Notes', icon: FileText },
       { id: 'habits', label: 'Habit Tracker', icon: Flame },
