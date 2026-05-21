@@ -108,6 +108,7 @@ export function useGoogleCalendar(opts?: {
                 connected: false,
                 error: e?.message || 'Failed to fetch calendars',
             }));
+            throw e;
         }
     }, []);
 
@@ -186,6 +187,7 @@ export function useGoogleCalendar(opts?: {
                 rawEvents: [],
                 error: e.message,
             }));
+            throw e;
         } finally {
             syncLockRef.current = false;
         }
