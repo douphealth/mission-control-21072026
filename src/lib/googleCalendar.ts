@@ -1,11 +1,9 @@
 /**
- * Google Calendar Integration — proxied through the Lovable Connector Gateway
- * via the `google-calendar` Supabase Edge Function.
- *
- * The browser NEVER talks to Google directly anymore. No OAuth popup, no
- * Client ID, no Google Cloud Console setup. Authentication is handled
- * server-side using the project's managed Google Calendar connector.
+ * Google Calendar Integration — proxied through the existing `google-calendar`
+ * Supabase Edge Function for this project.
  */
+
+import { getSupabase } from '@/lib/supabase';
 
 
 
@@ -95,31 +93,39 @@ export function isGCalConnected(): boolean {
   return Boolean(cfg.connectedEmail || cfg.lastSync || cfg.enabledCalendarIds.length);
 }
 
-// ─── Server route proxy (TanStack Start → Lovable Connector Gateway) ──────────
+// ─── Supabase Edge Function proxy ──────────────────────────────────────────────
 
 async function gcalCall<T = any>(
   path: string,
   init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
 ): Promise<T> {
-  let resp: Response;
+  const supabase = getSupabase();
+  if (!supabase) {
+    throw new Error('Google Calendar backend is unavailable because cloud sync is disconnected.');
+  }
+
+  let data: any;
+  let error: any;
   try {
-    resp = await fetch('/api/google-calendar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    const response = await supabase.functions.invoke('google-calendar', {
+      body: {
         path,
         method: init.method || 'GET',
         query: init.query,
         body: init.body,
-      }),
+      },
     });
+    data = response.data;
+    error = response.error;
   } catch {
     throw new Error('Google Calendar backend is unreachable from this app right now.');
   }
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error((data as any)?.error || (data as any)?.message || `Google Calendar request failed (${resp.status})`);
+
+  if (error) {
+    const message = error?.message || error?.context?.message || 'Google Calendar request failed';
+    throw new Error(message);
   }
+
   return data as T;
 }
 
