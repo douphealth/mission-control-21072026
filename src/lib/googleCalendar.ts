@@ -111,14 +111,15 @@ async function callLocalProxy<T = any>(
   });
 
   const raw = await resp.text();
+  const routeMissing = resp.status === 404 && /^not found$/i.test(String(raw).trim());
+  if (routeMissing) {
+    throw new Error('__LOCAL_GCAL_PROXY_MISSING__');
+  }
+
   const data = raw ? JSON.parse(raw) : {};
 
   if (!resp.ok) {
     const message = (data as any)?.error || (data as any)?.message || raw || `Google Calendar request failed (${resp.status})`;
-    const routeMissing = resp.status === 404 && /^not found$/i.test(String(raw).trim());
-    if (routeMissing) {
-      throw new Error('__LOCAL_GCAL_PROXY_MISSING__');
-    }
     throw new Error(message);
   }
 
