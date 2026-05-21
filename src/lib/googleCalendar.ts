@@ -95,34 +95,17 @@ export function isGCalConnected(): boolean {
   return Boolean(cfg.connectedEmail || cfg.lastSync || cfg.enabledCalendarIds.length);
 }
 
-// ─── Edge function proxy ───────────────────────────────────────────────────────
-
-import { getSupabaseConfig } from './supabase';
-
-function getFunctionUrl(): string {
-  const cfg = getSupabaseConfig();
-  const base = (cfg?.url || 'https://dszpokkqhrtjutmvcxnh.supabase.co').replace(/\/$/, '');
-  return `${base}/functions/v1/google-calendar`;
-}
-
-function getAnonKey(): string {
-  return getSupabaseConfig()?.anonKey || 'sb_publishable_DR3JoohreA2S4Z3akVmICQ_ZZp2DSnW';
-}
+// ─── Server route proxy (TanStack Start → Lovable Connector Gateway) ──────────
 
 async function gcalCall<T = any>(
   path: string,
   init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
 ): Promise<T> {
-  const anon = getAnonKey();
   let resp: Response;
   try {
-    resp = await fetch(getFunctionUrl(), {
+    resp = await fetch('/api/google-calendar', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: anon,
-        Authorization: `Bearer ${anon}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         path,
         method: init.method || 'GET',
@@ -135,13 +118,11 @@ async function gcalCall<T = any>(
   }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    if (resp.status === 404 && (data as any)?.code === 'NOT_FOUND') {
-      throw new Error('Edge function "google-calendar" is not deployed to Supabase yet. Run: supabase functions deploy google-calendar');
-    }
     throw new Error((data as any)?.error || (data as any)?.message || `Google Calendar request failed (${resp.status})`);
   }
   return data as T;
 }
+
 
 
 
