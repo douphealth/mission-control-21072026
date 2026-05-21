@@ -95,32 +95,54 @@ export function isGCalConnected(): boolean {
   return Boolean(cfg.connectedEmail || cfg.lastSync || cfg.enabledCalendarIds.length);
 }
 
-// ─── Server function proxy (TanStack Start) ────────────────────────────────────
+// ─── Edge function proxy ───────────────────────────────────────────────────────
 
-import { callGoogleCalendar } from './googleCalendar.functions';
+import { getSupabaseConfig } from './supabase';
+
+function getFunctionUrl(): string {
+  const cfg = getSupabaseConfig();
+  const base = (cfg?.url || 'https://dszpokkqhrtjutmvcxnh.supabase.co').replace(/\/$/, '');
+  return `${base}/functions/v1/google-calendar`;
+}
+
+function getAnonKey(): string {
+  return getSupabaseConfig()?.anonKey || 'sb_publishable_DR3JoohreA2S4Z3akVmICQ_ZZp2DSnW';
+}
 
 async function gcalCall<T = any>(
   path: string,
   init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
 ): Promise<T> {
-  let result: Awaited<ReturnType<typeof callGoogleCalendar>>;
+  const anon = getAnonKey();
+  let resp: Response;
   try {
-    result = await callGoogleCalendar({
-      data: {
+    resp = await fetch(getFunctionUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
+      },
+      body: JSON.stringify({
         path,
-        method: (init.method || 'GET') as any,
+        method: init.method || 'GET',
         query: init.query,
         body: init.body,
-      },
+      }),
     });
-  } catch (err) {
-    throw new Error(`Google Calendar backend is unreachable: ${(err as Error).message}`);
+  } catch {
+    throw new Error('Google Calendar backend is unreachable from this app right now.');
   }
-  if (!result.ok) {
-    throw new Error(result.error || `Google Calendar request failed (${result.status})`);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok) {
+    if (resp.status === 404 && (data as any)?.code === 'NOT_FOUND') {
+      throw new Error('Edge function "google-calendar" is not deployed to Supabase yet. Run: supabase functions deploy google-calendar');
+    }
+    throw new Error((data as any)?.error || (data as any)?.message || `Google Calendar request failed (${resp.status})`);
   }
-  return result.data as T;
+  return data as T;
 }
+
 
 
 // ─── API surface (preserved signatures so existing callers keep working) ───────
