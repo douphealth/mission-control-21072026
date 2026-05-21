@@ -178,6 +178,20 @@ export function loadGisScript(): Promise<void> {
   return gisLoadPromise;
 }
 
+function getGoogleAuthErrorMessage(error?: string): string {
+  switch (error) {
+    case 'popup_failed_to_open':
+      return 'Popup blocked — please allow popups for this site and try again.';
+    case 'popup_closed':
+    case 'access_denied':
+      return 'Sign-in cancelled';
+    case 'immediate_failed':
+      return 'Google session check failed — please try again.';
+    default:
+      return error ? `Google sign-in failed: ${error}` : 'Google sign-in failed';
+  }
+}
+
 // ─── OAuth Token ────────────────────────────────────────────────────────────────
 
 declare global {
@@ -194,8 +208,8 @@ declare global {
 }
 
 /**
- * Initiates OAuth 2.0 sign-in using a popup window.
- * Uses the implicit grant flow via window.open to avoid iframe blocking.
+ * Initiates Google OAuth using GIS's popup token flow.
+ * This avoids custom redirect URIs and the redirect_uri_mismatch failure.
  */
 export async function signInWithGoogle(clientId: string): Promise<{
   success: boolean;
@@ -205,87 +219,68 @@ export async function signInWithGoogle(clientId: string): Promise<{
   error?: string;
 }> {
   const SCOPES = 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/userinfo.email';
-  const cfg = getGCalConfig();
-  const REDIRECT_URI = cfg.redirectUri || (window.location.origin + OAUTH_CALLBACK_PATH);
+  try {
+    await loadGisScript();
+    if (!window.google?.accounts?.oauth2) {
+      return { success: false, error: 'Google sign-in failed to initialize' };
+    }
 
-  const state = crypto.randomUUID();
+    return new Promise((resolve) => {
+      let resolved = false;
+      const finalize = (result: {
+        success: boolean;
+        accessToken?: string;
+        expiresIn?: number;
+        email?: string;
+        error?: string;
+      }) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(result);
+      };
 
-  const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-  authUrl.searchParams.set('client_id', clientId);
-  authUrl.searchParams.set('redirect_uri', REDIRECT_URI);
-  authUrl.searchParams.set('response_type', 'token');
-  authUrl.searchParams.set('scope', SCOPES);
-  authUrl.searchParams.set('state', state);
-  authUrl.searchParams.set('prompt', 'consent');
-  authUrl.searchParams.set('include_granted_scopes', 'true');
+      const tokenClient = window.google!.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: SCOPES,
+        prompt: 'consent',
+        callback: async (response: any) => {
+          if (response.error || !response.access_token) {
+            finalize({ success: false, error: getGoogleAuthErrorMessage(response.error) });
+            return;
+          }
 
-  const popup = window.open(authUrl.toString(), 'google-oauth', 'width=500,height=650,popup=yes');
+          let email = '';
+          try {
+            const userInfo = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+              headers: { Authorization: `Bearer ${response.access_token}` },
+            });
+            const data = await userInfo.json();
+            email = data.email || '';
+          } catch {
+            // ignore email lookup failures — token itself is the important part
+          }
 
-  if (!popup) {
-    return { success: false, error: 'Popup blocked — please allow popups for this site and try again.' };
-  }
+          finalize({
+            success: true,
+            accessToken: response.access_token,
+            expiresIn: Number(response.expires_in) || 3600,
+            email,
+          });
+        },
+        error_callback: (error: any) => {
+          finalize({ success: false, error: getGoogleAuthErrorMessage(error?.type || error?.message) });
+        },
+      });
 
-  return new Promise((resolve) => {
-    let resolved = false;
-
-    const handleMessage = async (event: MessageEvent) => {
-      // Accept messages from the redirect override origin (cross-domain) or same origin
-      const expectedOrigin = cfg.redirectUri
-        ? new URL(cfg.redirectUri).origin
-        : window.location.origin;
-      if (event.origin !== expectedOrigin) return;
-      if (event.data?.type !== 'google-oauth-callback') return;
-      if (event.data?.state !== state) return;
-      if (resolved) return;
-      resolved = true;
-
-      window.removeEventListener('message', handleMessage);
-      clearInterval(pollTimer);
-      popup.close();
-
-      const { access_token, expires_in, error } = event.data;
-
-      if (error || !access_token) {
-        resolve({ success: false, error: error || 'No access token received' });
-        return;
-      }
-
-      // Get user email
-      let email = '';
       try {
-        const userInfo = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-          headers: { Authorization: `Bearer ${access_token}` },
-        });
-        const data = await userInfo.json();
-        email = data.email || '';
-      } catch { /* ignore */ }
-
-      resolve({ success: true, accessToken: access_token, expiresIn: Number(expires_in), email });
-    };
-
-    window.addEventListener('message', handleMessage);
-
-    // Poll in case popup is closed without completing
-    const pollTimer = setInterval(() => {
-      if (popup.closed && !resolved) {
-        resolved = true;
-        window.removeEventListener('message', handleMessage);
-        clearInterval(pollTimer);
-        resolve({ success: false, error: 'Sign-in cancelled' });
+        tokenClient.requestAccessToken();
+      } catch (error: any) {
+        finalize({ success: false, error: error?.message || 'Failed to open Google sign-in' });
       }
-    }, 500);
-
-    // Timeout after 5 minutes
-    setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        window.removeEventListener('message', handleMessage);
-        clearInterval(pollTimer);
-        popup.close();
-        resolve({ success: false, error: 'Sign-in timed out' });
-      }
-    }, 300_000);
-  });
+    });
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Google sign-in failed to initialize' };
+  }
 }
 
 /**
