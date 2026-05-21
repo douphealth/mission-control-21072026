@@ -169,7 +169,19 @@ export async function fetchCalendarEvents(
 
 export async function fetchAllEvents(timeMin: string, timeMax: string): Promise<GoogleCalendarEvent[]> {
   const cfg = getGCalConfig();
-  const calendarIds = cfg.enabledCalendarIds.length > 0 ? cfg.enabledCalendarIds : ['primary'];
+  let calendarIds = cfg.enabledCalendarIds;
+
+  // If the user hasn't picked specific calendars, pull from EVERY calendar
+  // they have access to (primary, birthdays, holidays, subscribed, etc.).
+  if (!calendarIds || calendarIds.length === 0) {
+    try {
+      const all = await listCalendars();
+      calendarIds = all.map((c) => c.id);
+    } catch {
+      calendarIds = ['primary'];
+    }
+  }
+
   const results = await Promise.allSettled(
     calendarIds.map((id) => fetchCalendarEvents(id, timeMin, timeMax)),
   );
