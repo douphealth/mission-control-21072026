@@ -7,7 +7,7 @@
  * server-side using the project's managed Google Calendar connector.
  */
 
-import { getSupabaseConfig } from './supabase';
+
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
