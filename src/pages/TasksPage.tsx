@@ -1,5 +1,6 @@
 import { useTasks, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from "@/hooks/useTableData";
-import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Plus, Search, CheckCircle2, Circle, AlertTriangle, Edit2, Trash2,
   GripVertical, ChevronDown, LayoutGrid, List, Flag, Tag, Calendar,
