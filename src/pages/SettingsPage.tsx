@@ -436,7 +436,6 @@ export default function SettingsPage() {
                       <input
                         value={gcalRedirectOverride}
                         onChange={e => {
-                          const uri = normalizeGCalRedirectUri(e.target.value) || '';
                           const normalized = normalizeGCalRedirectUri(e.target.value, window.location.origin) || '';
                           const next = normalized === currentOriginRedirectUri ? '' : normalized;
                           setGcalRedirectOverride(next);
