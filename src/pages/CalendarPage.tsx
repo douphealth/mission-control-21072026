@@ -419,6 +419,8 @@ export default function CalendarPage() {
 
   // ── Google Calendar integration ────────────────────────────────────────────
   const gcal = useGoogleCalendar({ autoFetch: true });
+  const gtasks = useGoogleTasksCalendar();
+  const [gtPickerOpen, setGtPickerOpen] = useState(false);
 
   const googleEvents: CalEvent[] = useMemo(() =>
     gcal.events.map(gev => ({
@@ -438,6 +440,21 @@ export default function CalendarPage() {
       googleEventId: gev.googleEventId,
     })),
     [gcal.events]);
+
+  const googleTaskEvents: CalEvent[] = useMemo(() =>
+    gtasks.events.map(gt => ({
+      id: gt.id,
+      title: gt.title,
+      date: gt.date,
+      color: gt.done ? "#10b981" : "#f59e0b",
+      category: "Google Tasks",
+      description: gt.notes ? `${gt.notes}\n\n— ${gt.listTitle}` : `— ${gt.listTitle}`,
+      isTask: true,
+      isGoogleEvent: true,
+      status: gt.done ? "done" : "todo",
+      allDay: true,
+    })),
+    [gtasks.events]);
 
   const taskEvents: CalEvent[] = useMemo(() => {
     // Compute a ±6 month range for recurring expansion
@@ -463,7 +480,6 @@ export default function CalendarPage() {
       };
 
       if (t.recurring && t.recurringInterval) {
-        // Expand recurring task into multiple calendar instances
         const instances = expandRecurringTask(t, rangeStart, rangeEnd);
         instances.forEach((inst) => {
           result.push({
@@ -474,7 +490,6 @@ export default function CalendarPage() {
           });
         });
       } else {
-        // Single occurrence task
         result.push({
           ...baseEvent,
           id: `task-${t.id}`,
@@ -489,8 +504,8 @@ export default function CalendarPage() {
   const allEvents = useMemo(() => {
     const taskIds = new Set(taskEvents.map(te => te.id));
     const cleanEvents = events.filter(e => !taskIds.has(e.id));
-    return [...cleanEvents, ...taskEvents, ...googleEvents];
-  }, [events, taskEvents, googleEvents]);
+    return [...cleanEvents, ...taskEvents, ...googleEvents, ...googleTaskEvents];
+  }, [events, taskEvents, googleEvents, googleTaskEvents]);
 
   const filteredEvents = useMemo(() =>
     allEvents.filter(e => filter === "all" || e.category === filter || (filter === "Google Calendar" && e.isGoogleEvent)),
