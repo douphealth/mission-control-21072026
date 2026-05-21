@@ -60,43 +60,8 @@ export default function SettingsPage() {
   const [confirmDelete, setConfirmDelete] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
-  // Google Calendar
+  // Google Calendar — auth is handled server-side via the Lovable connector.
   const gcal = useGoogleCalendar({ autoFetch: false });
-  const [gcalClientIdInput, setGcalClientIdInput] = useState(gcal.clientId);
-  const [gcalRedirectOverride, setGcalRedirectOverride] = useState('');
-  const isInIframe = window.self !== window.top;
-  const currentOriginRedirectUri = getDefaultGCalRedirectUri(window.location.origin);
-  // The published domain whitelisted in Google Cloud Console.
-  const PUBLISHED_REDIRECT_URI = 'https://alexios-mission-control.lovable.app/oauth-callback.html';
-  // Any non-published origin (preview iframe, lovableproject.com sandbox, localhost)
-  // must redirect to the published domain — that's the only origin Google will accept.
-  const isPreviewOrigin = window.location.hostname !== 'alexios-mission-control.lovable.app';
-  const suggestedRedirectUri = isPreviewOrigin ? PUBLISHED_REDIRECT_URI : currentOriginRedirectUri;
-  const effectiveRedirectOverride = gcalRedirectOverride || (isPreviewOrigin ? PUBLISHED_REDIRECT_URI : '');
-  const computedRedirectUri = effectiveRedirectOverride || currentOriginRedirectUri;
-  const computedOrigin = computedRedirectUri ? new URL(computedRedirectUri).origin : window.location.origin;
-
-  useEffect(() => {
-    let stored = '';
-    try {
-      stored = normalizeGCalRedirectUri(JSON.parse(localStorage.getItem('mc_gcal_config') || '{}').redirectUri, window.location.origin) || '';
-    } catch {
-      stored = '';
-    }
-    // Auto-pin to published domain whenever we're not actually on it.
-    if (isPreviewOrigin) {
-      if (stored !== PUBLISHED_REDIRECT_URI) {
-        setGCalConfig({ redirectUri: PUBLISHED_REDIRECT_URI });
-      }
-      setGcalRedirectOverride(PUBLISHED_REDIRECT_URI);
-      return;
-    }
-    const next = stored === currentOriginRedirectUri ? '' : stored;
-    setGcalRedirectOverride(next);
-    if (stored && next !== stored) {
-      setGCalConfig({ redirectUri: next || undefined });
-    }
-  }, [currentOriginRedirectUri, isPreviewOrigin]);
 
   // Supabase state
   const [sbUrl, setSbUrl] = useState(getSupabaseConfig()?.url || "");
