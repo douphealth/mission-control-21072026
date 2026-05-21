@@ -658,13 +658,90 @@ export default function CalendarPage() {
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
-              <button onClick={() => gcal.syncEvents(true)} disabled={gcal.syncing}
+              <button onClick={() => { gcal.syncEvents(true); if (gtasks.signed) gtasks.refresh(); }} disabled={gcal.syncing}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation">
                 {gcal.syncing ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
                 <span className="hidden sm:inline">Sync</span>
               </button>
             </div>
           </div>
+        ) : (
+          <div className="flex items-center gap-3 px-3 sm:px-4 py-3 rounded-2xl bg-destructive/5 border border-destructive/20">
+            <img src="https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png" alt="" className="w-5 h-5 shrink-0 opacity-60" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-foreground">Google Calendar sync is offline</div>
+              <div className="text-[11px] text-muted-foreground">{gcal.error || 'The app cannot reach the Google Calendar backend yet.'}</div>
+            </div>
+            <button onClick={() => void gcal.connect()} disabled={gcal.connecting || gcal.syncing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50">
+              {gcal.connecting || gcal.syncing ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Google Tasks Sync Bar */}
+        {gtasks.signed ? (
+          <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-amber-500/5 border border-amber-500/15 relative">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <ListTodo size={14} className="text-amber-500 shrink-0" />
+              <span className="text-xs font-semibold text-foreground truncate">Google Tasks</span>
+              <span className="text-[10px] text-muted-foreground hidden sm:inline">
+                · {gtasks.events.length} on calendar
+                {gtasks.lastSync && ` · ${new Date(gtasks.lastSync).toLocaleTimeString()}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => setGtPickerOpen(o => !o)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary text-foreground text-[11px] font-semibold hover:bg-secondary/70 transition-colors">
+                Lists ({gtasks.selected.length}/{gtasks.lists.length}) <ChevronDown size={10} />
+              </button>
+              <button onClick={() => gtasks.refresh()} disabled={gtasks.loading}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] font-semibold hover:bg-amber-500/20 transition-colors">
+                {gtasks.loading ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+                <span className="hidden sm:inline">Sync</span>
+              </button>
+            </div>
+            {gtPickerOpen && (
+              <div className="absolute right-3 top-full mt-2 z-50 w-64 rounded-xl border border-border bg-card shadow-xl p-2 space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-2 py-1">Include lists on calendar</div>
+                {gtasks.lists.length === 0 && (
+                  <div className="text-xs text-muted-foreground px-2 py-2">No task lists found.</div>
+                )}
+                {gtasks.lists.map(l => (
+                  <label key={l.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary cursor-pointer">
+                    <input type="checkbox" checked={gtasks.selected.includes(l.id)}
+                      onChange={() => { gtasks.toggleList(l.id); setTimeout(() => gtasks.refresh(), 0); }} />
+                    <span className="text-xs text-foreground truncate">{l.title}</span>
+                  </label>
+                ))}
+                <div className="border-t border-border pt-1 mt-1">
+                  <label className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary cursor-pointer">
+                    <input type="checkbox" checked={gtasks.showCompleted}
+                      onChange={e => { gtasks.setShowCompleted(e.target.checked); setTimeout(() => gtasks.refresh(), 0); }} />
+                    <span className="text-xs text-muted-foreground">Show completed</span>
+                  </label>
+                  <button onClick={() => { gtasks.signOut(); setGtPickerOpen(false); }}
+                    className="w-full text-left text-xs text-destructive px-2 py-1.5 rounded-lg hover:bg-destructive/10">
+                    Disconnect Google Tasks
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 px-3 sm:px-4 py-2.5 rounded-2xl bg-secondary/40 border border-border">
+            <ListTodo size={14} className="text-muted-foreground shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="text-xs font-semibold text-foreground">Show Google Tasks on calendar</div>
+              <div className="text-[11px] text-muted-foreground">Connect to display your Google Tasks with due dates.</div>
+            </div>
+            <button onClick={() => void gtasks.signIn()}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors">
+              <LogIn size={10} /> Connect
+            </button>
+          </div>
+        )}
         ) : (
           <div className="flex items-center gap-3 px-3 sm:px-4 py-3 rounded-2xl bg-destructive/5 border border-destructive/20">
             <img src="https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png" alt="" className="w-5 h-5 shrink-0 opacity-60" />
