@@ -68,8 +68,8 @@ export const callGoogleCalendar = createServerFn({ method: 'POST' })
         (parsed && typeof parsed === 'object' && 'error' in parsed
           ? (parsed as { error?: { message?: string } }).error?.message
           : null) || `Google Calendar API ${upstream.status}`;
-      return { ok: false as const, status: upstream.status, error: errMsg, detail: parsed };
+      return { ok: false as const, status: upstream.status, error: errMsg };
     }
 
-    return { ok: true as const, status: 200, data: parsed };
+    return { ok: true as const, status: 200, data: parsed as Record<string, unknown> | null };
   });
