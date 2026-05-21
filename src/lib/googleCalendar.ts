@@ -70,10 +70,10 @@ export function getGCalColor(colorId?: string): string {
 const STORAGE_KEY = 'mc_gcal_config';
 
 const DEFAULT_CLIENT_ID = '541642493011-k41ng5vo7ihfn7su05g85u47ef727a9l.apps.googleusercontent.com';
-const DEFAULT_PUBLISHED_ORIGIN = 'https://my-new-mission-control-center.pages.dev';
 const OAUTH_CALLBACK_PATH = '/oauth-callback.html';
 const LEGACY_REDIRECT_ORIGINS = new Set([
   'https://mission-control-center-2d32d572.pages.dev',
+  'https://my-new-mission-control-center.pages.dev',
 ]);
 
 const DEFAULT_CONFIG: GCalConfig = {
@@ -87,19 +87,25 @@ const DEFAULT_CONFIG: GCalConfig = {
   lastSync: null,
 };
 
-export function getDefaultGCalRedirectUri(): string {
-  return new URL(OAUTH_CALLBACK_PATH, DEFAULT_PUBLISHED_ORIGIN).toString();
+function getRuntimeOrigin(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return window.location.origin;
 }
 
-export function normalizeGCalRedirectUri(input?: string | null): string | undefined {
+export function getDefaultGCalRedirectUri(preferredOrigin?: string): string {
+  return new URL(OAUTH_CALLBACK_PATH, preferredOrigin || getRuntimeOrigin() || 'http://localhost').toString();
+}
+
+export function normalizeGCalRedirectUri(input?: string | null, preferredOrigin?: string): string | undefined {
   const value = input?.trim();
   if (!value) return undefined;
 
   try {
     const parsed = new URL(value);
     const normalizedOrigin = LEGACY_REDIRECT_ORIGINS.has(parsed.origin)
-      ? DEFAULT_PUBLISHED_ORIGIN
+      ? (preferredOrigin || getRuntimeOrigin())
       : parsed.origin;
+    if (!normalizedOrigin) return undefined;
     return new URL(OAUTH_CALLBACK_PATH, normalizedOrigin).toString();
   } catch {
     return undefined;
