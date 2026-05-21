@@ -413,7 +413,7 @@ export default function CalendarPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const [showGCalSetup, setShowGCalSetup] = useState(false);
-  const [gcalClientId, setGcalClientId] = useState(getGCalConfig().clientId);
+  const [gcalClientId, setGcalClientId] = useState('');
 
   const today = fmtDate(new Date());
 

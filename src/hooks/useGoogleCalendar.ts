@@ -1,6 +1,7 @@
 /**
  * React hook for Google Calendar integration.
- * Provides reactive state, auto-sync, and easy connect/disconnect.
+ * Auth is handled server-side via the Lovable Google Calendar connector,
+ * so there is no connect/disconnect flow — the calendar is always available.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -8,17 +9,13 @@ import {
     getGCalConfig,
     setGCalConfig,
     isGCalConnected,
-    signInWithGoogle,
-    signOutGoogle,
     listCalendars,
     syncGCalEvents,
     gCalEventToCalEvent,
-    loadGisScript,
     pushTasksToGCal,
     taskIdToGCalId,
     type GoogleCalendarList,
     type GoogleCalendarEvent,
-    type GCalConfig,
 } from '@/lib/googleCalendar';
 import { db, type Task } from '@/lib/db';
 import { useDataStore } from '@/stores/dataStore';
@@ -28,7 +25,6 @@ export interface GCalSyncState {
     connecting: boolean;
     syncing: boolean;
     email: string | null;
-    clientId: string;
     calendars: GoogleCalendarList[];
     enabledCalendarIds: string[];
     events: ReturnType<typeof gCalEventToCalEvent>[];
@@ -55,7 +51,6 @@ export function useGoogleCalendar(opts?: {
             connecting: false,
             syncing: false,
             email: cfg.connectedEmail,
-            clientId: cfg.clientId,
             calendars: [],
             enabledCalendarIds: cfg.enabledCalendarIds,
             events: [],
@@ -66,7 +61,6 @@ export function useGoogleCalendar(opts?: {
         };
     });
 
-    // Compute time range (default: ±60 days)
     const getTimeRange = useCallback(() => {
         const now = new Date();
         const min = opts?.timeMin || new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
@@ -74,14 +68,10 @@ export function useGoogleCalendar(opts?: {
         return { min, max };
     }, [opts?.timeMin, opts?.timeMax]);
 
-    // Fetch calendars list
     const fetchCalendars = useCallback(async () => {
-        if (!isGCalConnected()) return;
         try {
             const cals = await listCalendars();
             setState(s => ({ ...s, calendars: cals }));
-
-            // Auto-enable primary calendar if none enabled
             const cfg = getGCalConfig();
             if (cfg.enabledCalendarIds.length === 0) {
                 const primaryCal = cals.find(c => c.primary);
@@ -91,109 +81,72 @@ export function useGoogleCalendar(opts?: {
                     setState(s => ({ ...s, enabledCalendarIds: ids }));
                 }
             }
+            // Capture primary email as identity (best-effort)
+            const primary = cals.find(c => c.primary);
+            if (primary && /@/.test(primary.id)) {
+                setGCalConfig({ connectedEmail: primary.id });
+                setState(s => ({ ...s, email: primary.id }));
+            }
         } catch (e: any) {
             console.error('Failed to fetch calendars:', e);
+            setState(s => ({ ...s, error: e?.message || 'Failed to fetch calendars' }));
         }
     }, []);
 
-    // Sync events (bidirectional: push local tasks + pull GCal events)
     const syncEvents = useCallback(async (force = false) => {
-        if (!isGCalConnected()) return;
-        // Mutex: prevent concurrent syncs from creating duplicates
-        if (syncLockRef.current) {
-            console.log('⏳ Sync already in progress, skipping');
-            return;
-        }
+        if (syncLockRef.current) return;
         syncLockRef.current = true;
-
         setState(s => ({ ...s, syncing: true, error: null }));
         try {
-            // ── Push local tasks to Google Calendar ──
             const allTasks = await db.tasks.toArray();
-            // Push tasks that either have no gcalEventId, or have a deterministic mc-prefixed ID
-            // (which means it was assigned locally but may not exist in GCal yet)
             const tasksToPush = allTasks.filter(t => t.dueDate && (!t.gcalEventId || t.gcalEventId.startsWith('mc')));
             if (tasksToPush.length > 0) {
                 const pushed = await pushTasksToGCal(tasksToPush);
                 for (const [taskId, gcalId] of pushed) {
                     await storeUpdateItem<Task>('tasks', taskId, { gcalEventId: gcalId } as Partial<Task>);
                 }
-                if (pushed.size > 0) {
-                    console.log(`📤 Pushed ${pushed.size} tasks to Google Calendar`);
-                }
+                if (pushed.size > 0) console.log(`📤 Pushed ${pushed.size} tasks to Google Calendar`);
             }
 
-            // ── Pull events from Google Calendar ──
             const { min, max } = getTimeRange();
             const rawEvents = await syncGCalEvents(min, max, force);
 
-            // ── Enterprise-grade dedup: filter out events that originated from this app ──
             const updatedTasks = await db.tasks.toArray();
-
-            // 1. Direct ID match: gcalEventId stored on local tasks
-            const pushedGCalIds = new Set(
-                updatedTasks.map(t => t.gcalEventId).filter(Boolean)
-            );
-
-            // 1b. Deterministic ID match: events we created have IDs derived from task IDs
-            for (const t of updatedTasks) {
-                pushedGCalIds.add(taskIdToGCalId(t.id));
-            }
-
-            // 2. Content-based match: match by normalized title + date
-            //    Handles edge cases where gcalEventId wasn't stored (race conditions, etc.)
+            const pushedGCalIds = new Set(updatedTasks.map(t => t.gcalEventId).filter(Boolean));
+            for (const t of updatedTasks) pushedGCalIds.add(taskIdToGCalId(t.id));
             const localTaskFingerprints = new Set(
-                updatedTasks.map(t => {
-                    const title = (t.title || '').trim().toLowerCase();
-                    return `${title}|${t.dueDate || ''}`;
-                })
+                updatedTasks.map(t => `${(t.title || '').trim().toLowerCase()}|${t.dueDate || ''}`),
             );
 
             const externalEvents = rawEvents.filter(ev => {
-                // Hide old task mirror events created by this app even if the source task was deleted locally.
                 const rawSummary = ev.summary || '';
                 const normalizedSummary = rawSummary.replace(/^📋\s*/, '').trim().toLowerCase();
                 const evDate = ev.start.date || (ev.start.dateTime ? new Date(ev.start.dateTime).toISOString().split('T')[0] : '');
 
                 if (rawSummary.startsWith('📋 ')) {
                     if (/^mc[a-v0-9]+$/i.test(ev.id)) return false;
-
                     const hasExactLocalTask = updatedTasks.some(t =>
                         (t.title || '').trim().toLowerCase() === normalizedSummary && t.dueDate === evDate
                     );
-
                     if (!hasExactLocalTask) return false;
                 }
-
-                // Skip if ID matches a pushed task
                 if (pushedGCalIds.has(ev.id)) return false;
-
-                // Content-based dedup: strip the 📋 prefix we add when pushing
-                const rawTitle = normalizedSummary;
-                const fp = `${rawTitle}|${evDate}`;
-
+                const fp = `${normalizedSummary}|${evDate}`;
                 if (localTaskFingerprints.has(fp)) {
-                    // This GCal event matches a local task by content — it's a mirror, skip it
-                    // Also backfill the gcalEventId if missing
                     const matchingTask = updatedTasks.find(t =>
-                        (t.title || '').trim().toLowerCase() === rawTitle && t.dueDate === evDate && !t.gcalEventId
+                        (t.title || '').trim().toLowerCase() === normalizedSummary && t.dueDate === evDate && !t.gcalEventId
                     );
                     if (matchingTask) {
                         storeUpdateItem<Task>('tasks', matchingTask.id, { gcalEventId: ev.id } as Partial<Task>).catch(() => {});
-                        pushedGCalIds.add(ev.id); // prevent future re-checks
+                        pushedGCalIds.add(ev.id);
                     }
                     return false;
                 }
-
                 return true;
             });
 
-            // Get calendar colors for mapping
             const calMap = new Map<string, string>();
-            state.calendars.forEach(c => {
-                if (c.backgroundColor) calMap.set(c.id, c.backgroundColor);
-            });
-
+            state.calendars.forEach(c => { if (c.backgroundColor) calMap.set(c.id, c.backgroundColor); });
             const events = externalEvents.map(ev =>
                 gCalEventToCalEvent(ev, ev.calendarId ? calMap.get(ev.calendarId) : undefined)
             );
@@ -212,111 +165,58 @@ export function useGoogleCalendar(opts?: {
         }
     }, [getTimeRange, state.calendars, storeUpdateItem]);
 
-    // Connect to Google
-    const connect = useCallback(async (clientId: string) => {
-        if (!clientId) return { success: false, error: 'Client ID is required' };
-
-        setState(s => ({ ...s, connecting: true, error: null }));
-
-        try {
-            // Save client ID
-            setGCalConfig({ clientId });
-
-            const result = await signInWithGoogle(clientId);
-            if (!result.success) {
-                setState(s => ({ ...s, connecting: false, error: result.error || 'Auth failed' }));
-                return { success: false, error: result.error };
-            }
-
-            // Save token
-            setGCalConfig({
-                accessToken: result.accessToken!,
-                tokenExpiry: Date.now() + (result.expiresIn || 3600) * 1000,
-                connectedEmail: result.email || null,
-            });
-
-            setState(s => ({
-                ...s,
-                connected: true,
-                connecting: false,
-                email: result.email || null,
-                clientId,
-            }));
-
-            // Auto-fetch calendars and events
-            setTimeout(() => {
-                fetchCalendars();
-                syncEvents(true);
-            }, 500);
-
-            return { success: true, email: result.email };
-        } catch (e: any) {
-            setState(s => ({ ...s, connecting: false, error: e.message }));
-            return { success: false, error: e.message };
-        }
+    // Connect / disconnect kept as no-ops for compatibility with old callers.
+    const connect = useCallback(async (_clientId?: string): Promise<{ success: boolean; email?: string; error?: string }> => {
+        setState(s => ({ ...s, connected: true, connecting: false }));
+        await fetchCalendars();
+        await syncEvents(true);
+        return { success: true, email: getGCalConfig().connectedEmail || undefined };
     }, [fetchCalendars, syncEvents]);
 
-    // Disconnect
     const disconnect = useCallback(() => {
-        signOutGoogle();
+        setGCalConfig({ enabledCalendarIds: [], lastSync: null, connectedEmail: null });
         setState(s => ({
             ...s,
-            connected: false,
-            email: null,
             calendars: [],
             enabledCalendarIds: [],
             events: [],
             rawEvents: [],
             lastSync: null,
+            email: null,
             error: null,
         }));
     }, []);
 
-    // Toggle calendar
     const toggleCalendar = useCallback((calId: string) => {
         const cfg = getGCalConfig();
         const current = cfg.enabledCalendarIds;
-        const next = current.includes(calId)
-            ? current.filter(id => id !== calId)
-            : [...current, calId];
+        const next = current.includes(calId) ? current.filter(id => id !== calId) : [...current, calId];
         setGCalConfig({ enabledCalendarIds: next });
         setState(s => ({ ...s, enabledCalendarIds: next }));
-        // Re-sync after toggling
         setTimeout(() => syncEvents(true), 200);
     }, [syncEvents]);
 
-    // Set auto-sync
     const setAutoSync = useCallback((enabled: boolean) => {
         setGCalConfig({ autoSync: enabled });
         setState(s => ({ ...s, autoSync: enabled }));
     }, []);
 
-    // Update client ID
-    const setClientId = useCallback((id: string) => {
-        setGCalConfig({ clientId: id });
-        setState(s => ({ ...s, clientId: id }));
-    }, []);
+    // setClientId is now a no-op (kept so SettingsPage doesn't break if it lingers)
+    const setClientId = useCallback((_id: string) => { /* no-op */ }, []);
 
-    // Auto-fetch on mount
     useEffect(() => {
-        if (autoFetch && isGCalConnected()) {
-            // Pre-load GIS script
-            loadGisScript().catch(() => { });
+        if (autoFetch) {
             fetchCalendars();
             syncEvents();
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Auto-sync interval
     useEffect(() => {
         if (state.connected && state.autoSync) {
             const cfg = getGCalConfig();
             const ms = (cfg.syncIntervalMinutes || 5) * 60 * 1000;
-            intervalRef.current = setInterval(() => {
-                syncEvents(true);
-            }, ms);
+            intervalRef.current = setInterval(() => { syncEvents(true); }, ms);
         }
-
         return () => {
             if (intervalRef.current) {
                 clearInterval(intervalRef.current);
@@ -327,6 +227,7 @@ export function useGoogleCalendar(opts?: {
 
     return {
         ...state,
+        clientId: '', // legacy compat
         connect,
         disconnect,
         syncEvents,
