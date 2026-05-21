@@ -1,4 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
+import '@tanstack/start-client-core';
 
 const GATEWAY_BASE = 'https://connector-gateway.lovable.dev/google_calendar/calendar/v3';
 
