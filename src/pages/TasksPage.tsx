@@ -1225,23 +1225,18 @@ export default function TasksPage() {
             )}
           </div>
 
-          <>
-            {filtered.map((task, i) => (
-              <ListRow
-                key={task.id}
-                task={task}
-                index={i}
-                onEdit={() => setModal({ open: true, task })}
-                onDelete={() => handleDelete(task.id)}
-                onDuplicate={() => handleDuplicate(task.id)}
-                onToggle={() => handleToggle(task.id)}
-                onToggleSub={(subId) => handleToggleSub(task.id, subId)}
-                bulkMode={bulkMode}
-                selected={selectedIds.has(task.id)}
-                onToggleSelect={() => toggleSelect(task.id)}
-              />
-            ))}
-          </>
+          <VirtualizedList
+            tasks={filtered}
+            bulkMode={bulkMode}
+            selectedIds={selectedIds}
+            onEdit={(t) => setModal({ open: true, task: t })}
+            onDelete={handleDelete}
+            onDuplicate={handleDuplicate}
+            onToggle={handleToggle}
+            onToggleSub={handleToggleSub}
+            onToggleSelect={toggleSelect}
+          />
+
           {filtered.length === 0 && (
             <div className="text-center py-20 text-muted-foreground">
               <CheckSquare size={42} className="mx-auto mb-3 opacity-20" />
