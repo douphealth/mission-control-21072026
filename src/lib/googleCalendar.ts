@@ -7,7 +7,7 @@
  * server-side using the project's managed Google Calendar connector.
  */
 
-import { getSupabaseConfig } from './supabase';
+
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -45,15 +45,6 @@ export interface GCalConfig {
   connectedEmail: string | null;
 }
 
-function normalizeGCalError(status: number, data: any): string {
-  if (status === 404 && data?.code === 'NOT_FOUND') {
-    return 'Google Calendar backend is not deployed in Supabase yet.';
-  }
-
-  if (typeof data?.error === 'string') return data.error;
-  if (typeof data?.message === 'string') return data.message;
-  return `Google Calendar request failed (${status})`;
-}
 
 const GCAL_COLORS: Record<string, string> = {
   '1': '#7986CB', '2': '#33B679', '3': '#8E24AA', '4': '#E67C73',
@@ -104,48 +95,33 @@ export function isGCalConnected(): boolean {
   return Boolean(cfg.connectedEmail || cfg.lastSync || cfg.enabledCalendarIds.length);
 }
 
-// ─── Edge function proxy ───────────────────────────────────────────────────────
+// ─── Server function proxy (TanStack Start) ────────────────────────────────────
 
-function getFunctionUrl(): string {
-  const cfg = getSupabaseConfig();
-  const base = (cfg?.url || 'https://dszpokkqhrtjutmvcxnh.supabase.co').replace(/\/$/, '');
-  return `${base}/functions/v1/google-calendar`;
-}
-
-function getAnonKey(): string {
-  return getSupabaseConfig()?.anonKey || 'sb_publishable_DR3JoohreA2S4Z3akVmICQ_ZZp2DSnW';
-}
+import { callGoogleCalendar } from './googleCalendar.functions';
 
 async function gcalCall<T = any>(
   path: string,
   init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
 ): Promise<T> {
-  const anon = getAnonKey();
-  let resp: Response;
+  let result: Awaited<ReturnType<typeof callGoogleCalendar>>;
   try {
-    resp = await fetch(getFunctionUrl(), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: anon,
-        Authorization: `Bearer ${anon}`,
-      },
-      body: JSON.stringify({
+    result = await callGoogleCalendar({
+      data: {
         path,
-        method: init.method || 'GET',
+        method: (init.method || 'GET') as any,
         query: init.query,
         body: init.body,
-      }),
+      },
     });
-  } catch {
-    throw new Error('Google Calendar backend is unreachable from this app right now.');
+  } catch (err) {
+    throw new Error(`Google Calendar backend is unreachable: ${(err as Error).message}`);
   }
-  const data = await resp.json().catch(() => ({}));
-  if (!resp.ok) {
-    throw new Error(normalizeGCalError(resp.status, data));
+  if (!result.ok) {
+    throw new Error(result.error || `Google Calendar request failed (${result.status})`);
   }
-  return data as T;
+  return result.data as T;
 }
+
 
 // ─── API surface (preserved signatures so existing callers keep working) ───────
 
