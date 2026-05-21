@@ -10,9 +10,11 @@ import {
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
+import { useGoogleTasksCalendar } from "@/hooks/useGoogleTasksCalendar";
 import { expandRecurringTask } from "@/lib/recurrence";
 import { isGCalConnected, getGCalConfig, setGCalConfig } from "@/lib/googleCalendar";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { ListTodo, LogIn, ChevronDown } from "lucide-react";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
