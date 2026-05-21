@@ -481,7 +481,7 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
 
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
 
-function KanbanCard({
+const KanbanCard = memo(function KanbanCard({
   task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub,
   isDragging, onDragStart, onDragEnd,
 }: {
