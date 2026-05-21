@@ -418,16 +418,10 @@ export default function SettingsPage() {
                     )}
                   </div>
 
-                  {isInIframe && !effectiveRedirectOverride && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-destructive/10 text-destructive border border-destructive/20">
-                      <AlertTriangle size={15} />
-                        <span>⚠️ If Google is not configured for this preview domain, set your <strong>Published URL Override</strong> below to your live domain before connecting.</span>
-                    </div>
-                  )}
-                  {isInIframe && effectiveRedirectOverride && (
+                  {isInIframe && (
                     <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
                       <Info size={15} />
-                      <span>Override set — the OAuth popup will open on <strong>{new URL(effectiveRedirectOverride).origin}</strong>. Make sure this domain is whitelisted in Google Cloud Console.</span>
+                      <span>Google sign-in now uses a popup flow. Make sure the current origin <strong>{window.location.origin}</strong> is whitelisted in Google Cloud Console as an Authorized JavaScript Origin.</span>
                     </div>
                   )}
 
@@ -443,9 +437,9 @@ export default function SettingsPage() {
                     </div>
 
                     <div>
-                      <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
-                        Published URL Override <span className="text-muted-foreground font-normal">(optional)</span>
-                      </label>
+                        <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
+                          Published URL Override <span className="text-muted-foreground font-normal">(legacy, optional)</span>
+                        </label>
                       <input
                         value={gcalRedirectOverride}
                         onChange={e => {
@@ -458,7 +452,7 @@ export default function SettingsPage() {
                         placeholder={suggestedRedirectUri}
                       />
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        Leave blank to use this app’s current origin automatically; only set this when you need Google to return to a different live domain.
+                        This is no longer needed for normal Google sign-in. Leave it blank unless you are intentionally using the legacy callback page.
                       </p>
                     </div>
 
@@ -472,7 +466,7 @@ export default function SettingsPage() {
                           <CopyButton text={computedOrigin} />
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-medium text-muted-foreground w-32 shrink-0">Redirect URI</span>
+                          <span className="text-[10px] font-medium text-muted-foreground w-32 shrink-0">Legacy Redirect URI</span>
                           <code className="text-[11px] font-mono bg-background px-2 py-1 rounded-lg border border-border flex-1 truncate">{computedRedirectUri}</code>
                           <CopyButton text={computedRedirectUri} />
                         </div>
@@ -499,7 +493,7 @@ export default function SettingsPage() {
                             toast.error(result.error || "Connection failed");
                           }
                         }}
-                        disabled={gcal.connecting || !gcalClientIdInput.trim() || (isInIframe && !effectiveRedirectOverride)}
+                        disabled={gcal.connecting || !gcalClientIdInput.trim()}
                         className="btn-primary text-sm gap-2"
                       >
                         {gcal.connecting ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
@@ -578,9 +572,9 @@ export default function SettingsPage() {
                     <p><strong className="text-foreground">1.</strong> Go to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Cloud Console</a></p>
                     <p><strong className="text-foreground">2.</strong> Create a new OAuth 2.0 Client ID (Web application type)</p>
                     <p><strong className="text-foreground">3.</strong> Add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{computedOrigin}</code> as an Authorized JavaScript Origin</p>
-                    <p><strong className="text-foreground">4.</strong> Add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{computedRedirectUri}</code> as an Authorized Redirect URI</p>
-                    <p><strong className="text-foreground">5.</strong> Copy the Client ID and paste it above</p>
-                    <p><strong className="text-foreground">6.</strong> Enable the <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Calendar API</a> in your project</p>
+                    <p><strong className="text-foreground">4.</strong> Copy the Client ID and paste it above</p>
+                    <p><strong className="text-foreground">5.</strong> Enable the <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Calendar API</a> in your project</p>
+                    <p><strong className="text-foreground">6.</strong> Only add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{computedRedirectUri}</code> as a redirect URI if you intentionally use the legacy callback flow.</p>
                   </div>
                   <div className="flex gap-2 flex-wrap pt-1">
                     <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
