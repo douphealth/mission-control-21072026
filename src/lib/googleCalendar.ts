@@ -93,9 +93,39 @@ export function isGCalConnected(): boolean {
   return Boolean(cfg.connectedEmail || cfg.lastSync || cfg.enabledCalendarIds.length);
 }
 
-// ─── Supabase Edge Function proxy ──────────────────────────────────────────────
+// ─── Backend proxy ─────────────────────────────────────────────────────────────
 
-async function gcalCall<T = any>(
+async function callLocalProxy<T = any>(
+  path: string,
+  init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
+): Promise<T> {
+  const resp = await fetch('/api/google-calendar', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      path,
+      method: init.method || 'GET',
+      query: init.query,
+      body: init.body,
+    }),
+  });
+
+  const raw = await resp.text();
+  const data = raw ? JSON.parse(raw) : {};
+
+  if (!resp.ok) {
+    const message = (data as any)?.error || (data as any)?.message || raw || `Google Calendar request failed (${resp.status})`;
+    const routeMissing = resp.status === 404 && /^not found$/i.test(String(raw).trim());
+    if (routeMissing) {
+      throw new Error('__LOCAL_GCAL_PROXY_MISSING__');
+    }
+    throw new Error(message);
+  }
+
+  return data as T;
+}
+
+async function callEdgeFunction<T = any>(
   path: string,
   init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
 ): Promise<T> {
@@ -104,29 +134,46 @@ async function gcalCall<T = any>(
     throw new Error('Google Calendar backend is unavailable because cloud sync is disconnected.');
   }
 
-  let data: any;
-  let error: any;
-  try {
-    const response = await supabase.functions.invoke('google-calendar', {
-      body: {
-        path,
-        method: init.method || 'GET',
-        query: init.query,
-        body: init.body,
-      },
-    });
-    data = response.data;
-    error = response.error;
-  } catch {
-    throw new Error('Google Calendar backend is unreachable from this app right now.');
-  }
+  const response = await supabase.functions.invoke('google-calendar', {
+    body: {
+      path,
+      method: init.method || 'GET',
+      query: init.query,
+      body: init.body,
+    },
+  });
 
-  if (error) {
-    const message = error?.message || error?.context?.message || 'Google Calendar request failed';
+  if (response.error) {
+    const message = response.error?.message || response.error?.context?.message || 'Google Calendar request failed';
     throw new Error(message);
   }
 
-  return data as T;
+  return response.data as T;
+}
+
+async function gcalCall<T = any>(
+  path: string,
+  init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
+): Promise<T> {
+  try {
+    return await callLocalProxy<T>(path, init);
+  } catch (error) {
+    if (!(error instanceof Error) || error.message !== '__LOCAL_GCAL_PROXY_MISSING__') {
+      if (error instanceof SyntaxError) {
+        throw new Error('Google Calendar backend returned an invalid response.');
+      }
+      if (error instanceof Error && !/Failed to fetch/i.test(error.message)) {
+        throw error;
+      }
+    }
+  }
+
+  try {
+    return await callEdgeFunction<T>(path, init);
+  } catch (error) {
+    if (error instanceof Error) throw error;
+    throw new Error('Google Calendar backend is unreachable from this app right now.');
+  }
 }
 
 
