@@ -823,7 +823,90 @@ const ListRow = memo(function ListRow({ task, onEdit, onDelete, onDuplicate, onT
   );
 });
 
+// ─── Virtualized List (windowed, only renders visible rows) ──────────────────
+
+function VirtualizedList({
+  tasks, bulkMode, selectedIds, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, onToggleSelect,
+}: {
+  tasks: Task[];
+  bulkMode: boolean;
+  selectedIds: Set<string>;
+  onEdit: (t: Task) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (id: string) => void;
+  onToggle: (id: string) => void;
+  onToggleSub: (taskId: string, subId: string) => void;
+  onToggleSelect: (id: string) => void;
+}) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 76,
+    overscan: 8,
+    measureElement: (el) => el?.getBoundingClientRect().height ?? 76,
+  });
+
+  // For small lists, skip virtualization overhead
+  if (tasks.length <= 30) {
+    return (
+      <>
+        {tasks.map((task, i) => (
+          <ListRow
+            key={task.id}
+            task={task}
+            index={i}
+            onEdit={() => onEdit(task)}
+            onDelete={() => onDelete(task.id)}
+            onDuplicate={() => onDuplicate(task.id)}
+            onToggle={() => onToggle(task.id)}
+            onToggleSub={(subId) => onToggleSub(task.id, subId)}
+            bulkMode={bulkMode}
+            selected={selectedIds.has(task.id)}
+            onToggleSelect={() => onToggleSelect(task.id)}
+          />
+        ))}
+      </>
+    );
+  }
+
+  const items = virtualizer.getVirtualItems();
+
+  return (
+    <div ref={parentRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)', contain: 'strict' }}>
+      <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
+        {items.map(v => {
+          const task = tasks[v.index];
+          return (
+            <div
+              key={task.id}
+              data-index={v.index}
+              ref={virtualizer.measureElement}
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)`, paddingBottom: 6 }}
+            >
+              <ListRow
+                task={task}
+                index={v.index}
+                onEdit={() => onEdit(task)}
+                onDelete={() => onDelete(task.id)}
+                onDuplicate={() => onDuplicate(task.id)}
+                onToggle={() => onToggle(task.id)}
+                onToggleSub={(subId) => onToggleSub(task.id, subId)}
+                bulkMode={bulkMode}
+                selected={selectedIds.has(task.id)}
+                onToggleSelect={() => onToggleSelect(task.id)}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
+
 
 export default function TasksPage() {
   const tasks = useTasks();
