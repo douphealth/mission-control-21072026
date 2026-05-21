@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useCustomModules, useUpdateItem, useDeleteItem, genId } from '@/hooks/useTableData';
 import type { CustomModule } from "@/lib/db";
-import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Edit2, Trash2, Search, X, Settings2, Table2, Download, Upload } from "lucide-react";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect, FormTagsInput } from "@/components/FormModal";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
@@ -162,9 +161,9 @@ export default function CustomModulePage({ sectionId }: Props) {
       </div>
 
       {/* Column editor */}
-      <AnimatePresence>
+      <>
         {showFieldEditor && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+          <div 
             className="overflow-hidden">
             <div className="card-elevated p-4 space-y-3">
               <h3 className="text-sm font-bold text-foreground flex items-center gap-2"><Table2 size={14} /> Manage Columns</h3>
@@ -195,9 +194,9 @@ export default function CustomModulePage({ sectionId }: Props) {
                 </button>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
 
       {/* Search */}
       <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 max-w-sm">

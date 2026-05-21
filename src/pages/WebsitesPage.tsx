@@ -1,7 +1,6 @@
 import { useWebsites, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { useState, useMemo, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Search, ExternalLink, Copy, Eye, EyeOff, Globe, Edit2, Trash2,
   LayoutGrid, List, Shield, Server, Key, Lock, Unlock, ChevronDown, ChevronRight,
@@ -256,7 +255,7 @@ export default function WebsitesPage() {
     const hasCredentials = site.wpUsername || site.hostingUsername;
 
     return (
-      <motion.div key={site.id} {...fadeUp(i)}
+      <div key={site.id} {...fadeUp(i)}
         onClick={bulkMode ? () => toggleSelect(site.id) : undefined}
         className={`group relative bg-card rounded-2xl border transition-all duration-300 overflow-hidden hover:shadow-lg hover:shadow-primary/5 ${bulkMode ? 'cursor-pointer' : ''} ${selectedIds.has(site.id) ? 'border-primary/50 ring-1 ring-primary/20' : 'border-border/30 hover:border-border/60'}`}>
 
@@ -342,11 +341,9 @@ export default function WebsitesPage() {
                 </span>
               </button>
 
-              <AnimatePresence>
+              <>
                 {isExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.25 }}
+                  <div 
                     className="overflow-hidden"
                   >
                     <div className="mt-2 space-y-1 p-2.5 rounded-xl bg-secondary/15 border border-border/15">
@@ -357,9 +354,9 @@ export default function WebsitesPage() {
                       {renderCredentialField('User', site.hostingUsername, `${site.id}-host`)}
                       {renderCredentialField('Pass', site.hostingPassword, `${site.id}-host`, true)}
                     </div>
-                  </motion.div>
+                  </div>
                 )}
-              </AnimatePresence>
+              </>
             </div>
           )}
 
@@ -396,7 +393,7 @@ export default function WebsitesPage() {
             </button>
           </div>
         </div>
-      </motion.div>
+      </div>
     );
   };
 
@@ -408,7 +405,7 @@ export default function WebsitesPage() {
     const isExpanded = expandedSite === site.id;
 
     return (
-      <motion.div key={site.id} {...fadeUp(i)}
+      <div key={site.id} {...fadeUp(i)}
         onClick={bulkMode ? () => toggleSelect(site.id) : undefined}
         className={`group bg-card rounded-xl border transition-all overflow-hidden hover:shadow-md ${bulkMode ? 'cursor-pointer' : ''} ${selectedIds.has(site.id) ? 'border-primary/50 ring-1 ring-primary/20' : 'border-border/20 hover:border-border/50'}`}>
         <div className="flex items-center gap-4 px-5 py-3.5">
@@ -470,11 +467,9 @@ export default function WebsitesPage() {
         </div>
 
         {/* Expandable details */}
-        <AnimatePresence>
+        <>
           {isExpanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.25 }}
+            <div 
               className="overflow-hidden"
             >
               <div className="px-5 pb-4 pt-1 border-t border-border/15">
@@ -511,10 +506,10 @@ export default function WebsitesPage() {
                   </div>
                 )}
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
-      </motion.div>
+        </>
+      </div>
     );
   };
 
@@ -544,7 +539,7 @@ export default function WebsitesPage() {
 
       {/* Bulk Action Bar */}
       {bulkMode && (
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+        <div 
           className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/15">
           <button onClick={selectAll} className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary/50 hover:bg-secondary transition-all">
             {selectedIds.size === filtered.length ? <CheckSquare size={13} /> : <Square size={13} />}
@@ -578,7 +573,7 @@ export default function WebsitesPage() {
               </button>
             </>
           )}
-        </motion.div>
+        </div>
       )}
 
       {/* Stats Overview */}
@@ -665,9 +660,9 @@ export default function WebsitesPage() {
       </div>
 
       {/* Extended filters */}
-      <AnimatePresence>
+      <>
         {showFilters && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+          <div 
             className="overflow-hidden">
             <div className="flex flex-wrap gap-3 p-4 rounded-xl bg-secondary/15 border border-border/15">
               <div>
@@ -701,9 +696,9 @@ export default function WebsitesPage() {
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
 
       {/* Results count */}
       <div className="text-xs text-muted-foreground font-medium">

@@ -1,6 +1,5 @@
 import { useRepos, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { ExternalLink, Star, GitFork, Trash2, Plus, Edit2, Search, Rocket, Code2, CheckSquare, Copy, Database } from "lucide-react";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect, FormTagsInput } from "@/components/FormModal";
 import type { GitHubRepo } from "@/lib/store";
@@ -108,7 +107,7 @@ export default function GitHubPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         {filtered.map((repo, i) => (
-          <motion.div key={repo.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+          <div key={repo.id} 
             onClick={bulk.bulkMode ? () => bulk.toggleSelect(repo.id) : undefined}
             className={`card-elevated p-4 sm:p-5 space-y-3 group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(repo.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
             <div className="flex items-start justify-between">
@@ -148,7 +147,7 @@ export default function GitHubPage() {
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 

@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { Construction } from "lucide-react";
 
 const sectionNames: Record<string, { title: string; emoji: string; desc: string }> = {
@@ -13,7 +12,7 @@ export default function PlaceholderPage({ sectionId }: { sectionId: string }) {
 
   return (
     <div className="flex flex-col items-center justify-center py-20 text-center">
-      <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.3 }}>
+      <div >
         <div className="text-6xl mb-4">{info.emoji}</div>
         <h1 className="text-2xl font-bold text-foreground mb-2">{info.title}</h1>
         <p className="text-muted-foreground max-w-md">{info.desc}</p>
@@ -21,7 +20,7 @@ export default function PlaceholderPage({ sectionId }: { sectionId: string }) {
           <Construction size={16} />
           <span>Under construction</span>
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

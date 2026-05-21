@@ -1,4 +1,3 @@
-import { motion } from "framer-motion";
 import { CheckSquare, Square, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,9 +20,7 @@ export default function BulkActionBar({
   selectedCount, totalCount, onSelectAll, allSelected, onDelete, dropdowns = [],
 }: BulkActionBarProps) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
+    <div 
       className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/15 flex-wrap"
     >
       <button
@@ -66,6 +63,6 @@ export default function BulkActionBar({
           </button>
         </>
       )}
-    </motion.div>
+    </div>
   );
 }

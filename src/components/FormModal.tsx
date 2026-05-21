@@ -1,4 +1,3 @@
-import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
 import React, { useEffect, useRef, forwardRef } from "react";
 
@@ -26,22 +25,15 @@ const FormModal = forwardRef<HTMLDivElement, FormModalProps>(({ open, onClose, t
   const widthClass = size === "sm" ? "max-w-md" : size === "lg" ? "max-w-3xl" : "max-w-xl";
 
   return (
-    <AnimatePresence>
+    <>
       {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+        <div 
           className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
           onClick={onClose}
         >
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-          <motion.div
-            ref={innerRef}
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }}
-            transition={{ duration: 0.2 }}
+          <div
+            ref={innerRef} 
             className={`relative ${widthClass} w-full bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[95vh] sm:max-h-[85vh] flex flex-col`}
             onClick={(e) => e.stopPropagation()}
           >
@@ -69,10 +61,10 @@ const FormModal = forwardRef<HTMLDivElement, FormModalProps>(({ open, onClose, t
                 </button>
               </div>
             )}
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 });
 

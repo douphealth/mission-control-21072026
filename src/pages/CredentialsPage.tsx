@@ -1,6 +1,5 @@
 import { useCredentials, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Search, Edit2, Trash2, Eye, EyeOff, Copy, ExternalLink,
   Shield, Lock, Unlock, KeyRound, Globe, User, CheckSquare
@@ -213,18 +212,18 @@ export default function CredentialsPage() {
         />
       )}
 
-      <AnimatePresence>
+      <>
         {masterLocked && !bulk.bulkMode && (
-          <motion.div initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.98 }}
+          <div 
             className="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-3 sm:p-4 flex items-start gap-3">
             <Shield size={16} className="text-amber-500 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <div className="text-sm font-semibold text-amber-600 dark:text-amber-400">Vault is Locked</div>
               <p className="text-xs text-muted-foreground mt-0.5">Tap <strong>Locked</strong> to reveal credentials. Auto-hides after 15s.</p>
             </div>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
 
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 flex-1 sm:max-w-xs">
@@ -246,7 +245,7 @@ export default function CredentialsPage() {
           const isRevealed = revealed.has(cred.id);
           const catColor = categoryColors[cred.category] || categoryColors.General;
           return (
-            <motion.div key={cred.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03, duration: 0.25 }}
+            <div key={cred.id} 
               onClick={bulk.bulkMode ? () => bulk.toggleSelect(cred.id) : undefined}
               className={`card-elevated p-4 space-y-3 group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(cred.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
               <div className="flex items-start justify-between gap-2">
@@ -295,7 +294,7 @@ export default function CredentialsPage() {
                   </div>
                 </div>
               )}
-            </motion.div>
+            </div>
           );
         })}
       </div>

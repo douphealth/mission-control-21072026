@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   Mic,
   MicOff,
@@ -496,38 +495,26 @@ export default function VoiceCapture() {
 
   return (
     <>
-      <motion.button
+      <button
         onClick={() => {
           setOpen(true);
           if (supported && phase === 'idle') void startRecording();
-        }}
-        initial={{ scale: 0, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: 0.4, type: 'spring', stiffness: 200 }}
-        whileHover={{ scale: 1.08 }}
-        whileTap={{ scale: 0.92 }}
+        }} 
         className="fixed z-40 bottom-24 right-4 lg:bottom-8 lg:right-8 w-14 h-14 lg:w-16 lg:h-16 rounded-full gradient-primary text-primary-foreground shadow-[0_10px_40px_-8px_hsl(var(--primary)/0.6)] flex items-center justify-center group"
         title="Voice capture (⌘⇧V)"
         aria-label="Voice capture"
       >
         <Mic size={22} className="lg:w-7 lg:h-7" />
         <span className="absolute inset-0 rounded-full ring-2 ring-primary/40 animate-ping opacity-40 group-hover:opacity-70" />
-      </motion.button>
+      </button>
 
-      <AnimatePresence>
+      <>
         {open && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+          <div 
             className="fixed inset-0 z-50 bg-background/70 backdrop-blur-md flex items-end sm:items-center justify-center p-3 sm:p-6"
             onClick={handleClose}
           >
-            <motion.div
-              initial={{ y: 40, opacity: 0, scale: 0.96 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 40, opacity: 0, scale: 0.96 }}
-              transition={{ type: 'spring', stiffness: 280, damping: 28 }}
+            <div 
               onClick={e => e.stopPropagation()}
               className="w-full max-w-xl bg-card border border-border/50 rounded-3xl shadow-2xl overflow-hidden"
             >
@@ -549,13 +536,12 @@ export default function VoiceCapture() {
 
               {/* Mic + waveform */}
               <div className="px-5 sm:px-6 py-6 flex flex-col items-center gap-4 bg-gradient-to-b from-secondary/20 to-transparent">
-                <motion.button
+                <button
                   onClick={() => {
                     if (isRecording) stopRecording('manual');
                     else if (phase !== 'processing') void startRecording();
                   }}
-                  disabled={!supported || phase === 'processing'}
-                  whileTap={{ scale: 0.92 }}
+                  disabled={!supported || phase === 'processing'} 
                   className={`relative w-24 h-24 rounded-full flex items-center justify-center transition-all ${
                     isRecording
                       ? 'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-[0_10px_40px_-8px_rgb(244,63,94,0.6)]'
@@ -570,13 +556,11 @@ export default function VoiceCapture() {
                       ? <MicOff size={32} />
                       : <Mic size={32} />}
                   {isRecording && (
-                    <motion.span
-                      className="absolute inset-0 rounded-full border-2 border-rose-400/60"
-                      animate={{ scale: [1, 1 + audioLevel * 0.4, 1], opacity: [0.6, 0.2, 0.6] }}
-                      transition={{ duration: 0.4, repeat: Infinity }}
+                    <span
+                      className="absolute inset-0 rounded-full border-2 border-rose-400/60" 
                     />
                   )}
-                </motion.button>
+                </button>
 
                 {errorMsg && (
                   <div className="w-full max-w-sm rounded-2xl border border-border/40 bg-background/80 px-4 py-3 text-center text-xs text-muted-foreground">
@@ -590,10 +574,8 @@ export default function VoiceCapture() {
                       const distance = Math.abs(i - 12) / 12;
                       const h = Math.max(4, audioLevel * 40 * (1 - distance * 0.5) * (0.6 + Math.random() * 0.4));
                       return (
-                        <motion.div
-                          key={i}
-                          animate={{ height: h }}
-                          transition={{ duration: 0.1 }}
+                        <div
+                          key={i} 
                           className="w-1 rounded-full bg-gradient-to-t from-primary/60 to-primary"
                         />
                       );
@@ -677,21 +659,20 @@ export default function VoiceCapture() {
                   >
                     Cancel
                   </button>
-                  <motion.button
-                    whileTap={{ scale: 0.95 }}
+                  <button 
                     onClick={handleSave}
                     disabled={!transcript || saving || phase === 'processing'}
                     className="px-5 py-2.5 rounded-2xl text-sm font-semibold gradient-primary text-primary-foreground shadow-[var(--shadow-primary)] disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     {saving ? <Loader2 size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
                     Save {activeOpt.label}
-                  </motion.button>
+                  </button>
                 </div>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
     </>
   );
 }

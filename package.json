@@ -43,7 +43,6 @@
     "date-fns": "^3.6.0",
     "dexie": "^4.3.0",
     "dexie-react-hooks": "^4.2.0",
-    "framer-motion": "^12.34.3",
     "fuse.js": "^7.1.0",
     "lucide-react": "^0.462.0",
     "next-themes": "^0.3.0",

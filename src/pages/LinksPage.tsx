@@ -1,6 +1,5 @@
 import { useLinks, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { ExternalLink, Copy, Pin, PinOff, Trash2, Search, Plus, Edit2, CheckSquare } from "lucide-react";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect } from "@/components/FormModal";
 import type { LinkItem } from "@/lib/store";
@@ -105,7 +104,7 @@ export default function LinksPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filtered.map((link, i) => (
-          <motion.div key={link.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+          <div key={link.id} 
             onClick={bulk.bulkMode ? () => bulk.toggleSelect(link.id) : undefined}
             className={`card-elevated p-4 group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(link.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
             {bulk.bulkMode && (
@@ -136,7 +135,7 @@ export default function LinksPage() {
                 </div>
               </div>
             )}
-          </motion.div>
+          </div>
         ))}
       </div>
 

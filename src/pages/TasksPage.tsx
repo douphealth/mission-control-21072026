@@ -1,6 +1,5 @@
 import { useTasks, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Search, CheckCircle2, Circle, AlertTriangle, Edit2, Trash2,
   GripVertical, ChevronDown, LayoutGrid, List, Flag, Tag, Calendar,
@@ -99,14 +98,12 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
   const st = getStatus(form.status);
 
   return (
-    <AnimatePresence>
+    <>
       {open && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        <div 
           className="fixed inset-0 z-[200] flex items-end sm:items-start justify-center sm:p-4 sm:pt-16" onClick={onClose}>
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-          <motion.div
-            initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }} transition={{ duration: 0.18 }}
+          <div 
             className="relative w-full sm:max-w-2xl bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl border border-border/50 overflow-hidden max-h-[95vh] sm:max-h-none flex flex-col"
             onClick={e => e.stopPropagation()}>
 
@@ -474,10 +471,10 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
                 {task ? "Save Changes" : "Create Task"}
               </button>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }
 
@@ -494,8 +491,8 @@ function KanbanCard({
   onToggle: () => void;
   onToggleSub: (subId: string) => void;
   isDragging: boolean;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragEnd: (e: React.DragEvent) => void;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }) {
   const pr = getPriority(task.priority);
   const overdue = isOverdue(task);
@@ -505,22 +502,21 @@ function KanbanCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <motion.div
-      layout
+    <div
       draggable
-      onDragStart={onDragStart as any}
-      onDragEnd={onDragEnd as any}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: isDragging ? 0.4 : 1, y: 0, scale: isDragging ? 0.97 : 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       className={`
         bg-card/90 backdrop-blur-sm rounded-2xl border transition-all duration-200 group cursor-grab active:cursor-grabbing select-none
         ${overdue ? "border-red-500/40 shadow-red-500/10" : "border-border/40"}
         ${todayTask ? "border-amber-500/50 shadow-amber-500/10" : ""}
         ${task.status === "done" ? "opacity-60" : ""}
+        ${isDragging ? "opacity-40" : ""}
         shadow-lg hover:shadow-xl hover:border-primary/30 hover:-translate-y-0.5
       `}
       style={{ borderLeft: `3px solid ${pr.color}` }}>
+
+
 
       {/* Card header */}
       <div className="p-3.5 pb-2">
@@ -575,9 +571,9 @@ function KanbanCard({
               </div>
               <ChevronDown size={10} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
             </button>
-            <AnimatePresence>
+            <>
               {expanded && (
-                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                <div 
                   className="overflow-hidden mt-1.5 space-y-1">
                   {task.subtasks.map(sub => (
                     <button key={sub.id} type="button" onClick={() => onToggleSub(sub.id)}
@@ -587,9 +583,9 @@ function KanbanCard({
                       <span className={sub.done ? "line-through" : ""}>{sub.title}</span>
                     </button>
                   ))}
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
+            </>
           </div>
         )}
       </div>
@@ -616,7 +612,7 @@ function KanbanCard({
           <GripVertical size={12} className="text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
         </div>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -678,7 +674,7 @@ function KanbanColumn({
 
       {/* Drop zone */}
       <div className={`flex-1 p-2.5 space-y-2.5 overflow-y-auto min-h-[120px] rounded-b-2xl border border-t-0 transition-colors ${dragOver ? "border-primary/30 bg-primary/3" : "border-border/30 bg-secondary/20"}`}>
-        <AnimatePresence>
+        <>
           {tasks.map(t => (
             <KanbanCard
               key={t.id}
@@ -688,12 +684,10 @@ function KanbanColumn({
               onDelete={() => onDelete(t.id)}
               onDuplicate={() => onDuplicate(t.id)}
               onToggle={() => onToggle(t.id)}
-              onToggleSub={(subId) => onToggleSub(t.id, subId)}
-              onDragStart={e => { e.dataTransfer.setData("taskId", t.id); e.dataTransfer.effectAllowed = "move"; }}
-              onDragEnd={() => { }}
+              onToggleSub={(subId) => onToggleSub(t.id, subId)} 
             />
           ))}
-        </AnimatePresence>
+        </>
         {tasks.length === 0 && (
           <div className={`flex items-center justify-center h-20 rounded-xl border-2 border-dashed transition-colors ${dragOver ? "border-primary/40 text-primary" : "border-border/30 text-muted-foreground"}`}>
             <p className="text-xs font-medium">{dragOver ? "Drop here" : "Empty"}</p>
@@ -718,12 +712,7 @@ function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, i
   const doneSubs = task.subtasks.filter(s => s.done).length;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, x: -8 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -8 }}
-      transition={{ delay: index * 0.02 }}
-      layout>
+    <div >
       <div className={`
         rounded-2xl border group transition-all
         hover:border-primary/20 hover:bg-secondary/20 hover:shadow-md
@@ -810,9 +799,9 @@ function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, i
         </div>
 
         {/* Subtasks expanded */}
-        <AnimatePresence>
+        <>
           {expanded && task.subtasks.length > 0 && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            <div 
               className="overflow-hidden border-t border-border/20 mx-3 sm:mx-4">
               <div className="py-2 space-y-1">
                 {task.subtasks.map(sub => (
@@ -825,11 +814,11 @@ function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, i
                   </button>
                 ))}
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </>
       </div>
-    </motion.div>
+    </div>
   );
 }
 
@@ -1096,11 +1085,8 @@ export default function TasksPage() {
       {/* ── Progress bar ── */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-          <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400"
-            initial={{ width: 0 }}
-            animate={{ width: `${stats.pct}%` }}
-            transition={{ duration: 0.8, ease: "easeOut" }}
+          <div
+            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" 
           />
         </div>
         <span className="text-xs font-bold text-muted-foreground shrink-0">{stats.pct}% complete</span>
@@ -1238,7 +1224,7 @@ export default function TasksPage() {
             )}
           </div>
 
-          <AnimatePresence mode="popLayout">
+          <>
             {filtered.map((task, i) => (
               <ListRow
                 key={task.id}
@@ -1254,7 +1240,7 @@ export default function TasksPage() {
                 onToggleSelect={() => toggleSelect(task.id)}
               />
             ))}
-          </AnimatePresence>
+          </>
           {filtered.length === 0 && (
             <div className="text-center py-20 text-muted-foreground">
               <CheckSquare size={42} className="mx-auto mb-3 opacity-20" />
