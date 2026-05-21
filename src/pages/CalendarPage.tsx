@@ -648,7 +648,7 @@ export default function CalendarPage() {
 
         {/* Google Calendar Sync Bar */}
         {gcal.connected ? (
-          <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-gradient-to-r from-blue-500/8 via-green-500/5 to-purple-500/8 border border-blue-500/15">
+          <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-gradient-to-r from-blue-500/8 via-green-500/5 to-purple-500/8 border border-blue-500/15 relative">
             <div className="flex items-center gap-2 flex-1 min-w-0">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
               <img src="https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png" alt="" className="w-4 h-4 shrink-0" />
@@ -658,12 +658,34 @@ export default function CalendarPage() {
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
+              <button onClick={() => setGcalPickerOpen(o => !o)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-secondary text-foreground text-[11px] font-semibold hover:bg-secondary/70 transition-colors">
+                Calendars ({gcal.enabledCalendarIds.length}/{gcal.calendars.length}) <ChevronDown size={10} />
+              </button>
               <button onClick={() => { gcal.syncEvents(true); if (gtasks.signed) gtasks.refresh(); }} disabled={gcal.syncing}
                 className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation">
                 {gcal.syncing ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
                 <span className="hidden sm:inline">Sync</span>
               </button>
             </div>
+            {gcalPickerOpen && (
+              <div className="absolute right-3 top-full mt-2 z-50 w-72 max-h-96 overflow-y-auto rounded-xl border border-border bg-card shadow-xl p-2 space-y-1">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground px-2 py-1">Include calendars</div>
+                {gcal.calendars.length === 0 && (
+                  <div className="text-xs text-muted-foreground px-2 py-2">No calendars found.</div>
+                )}
+                {gcal.calendars.map(c => (
+                  <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-secondary cursor-pointer">
+                    <input type="checkbox"
+                      checked={gcal.enabledCalendarIds.includes(c.id)}
+                      onChange={() => gcal.toggleCalendar(c.id)} />
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: c.backgroundColor || '#3b82f6' }} />
+                    <span className="text-xs text-foreground truncate flex-1">{c.summary || c.id}</span>
+                    {c.primary && <span className="text-[9px] uppercase text-muted-foreground">Primary</span>}
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-3 px-3 sm:px-4 py-3 rounded-2xl bg-destructive/5 border border-destructive/20">
