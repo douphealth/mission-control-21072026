@@ -491,8 +491,8 @@ function KanbanCard({
   onToggle: () => void;
   onToggleSub: (subId: string) => void;
   isDragging: boolean;
-  onDragStart: (e: React.DragEvent) => void;
-  onDragEnd: (e: React.DragEvent) => void;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
 }) {
   const pr = getPriority(task.priority);
   const overdue = isOverdue(task);
@@ -502,16 +502,21 @@ function KanbanCard({
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div 
-      draggable 
+    <div
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       className={`
         bg-card/90 backdrop-blur-sm rounded-2xl border transition-all duration-200 group cursor-grab active:cursor-grabbing select-none
         ${overdue ? "border-red-500/40 shadow-red-500/10" : "border-border/40"}
         ${todayTask ? "border-amber-500/50 shadow-amber-500/10" : ""}
         ${task.status === "done" ? "opacity-60" : ""}
+        ${isDragging ? "opacity-40" : ""}
         shadow-lg hover:shadow-xl hover:border-primary/30 hover:-translate-y-0.5
       `}
       style={{ borderLeft: `3px solid ${pr.color}` }}>
+
+
 
       {/* Card header */}
       <div className="p-3.5 pb-2">
