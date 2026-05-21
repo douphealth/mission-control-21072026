@@ -71,5 +71,5 @@ export const callGoogleCalendar = createServerFn({ method: 'POST' })
       return { ok: false as const, status: upstream.status, error: errMsg };
     }
 
-    return { ok: true as const, status: 200, data: parsed as Record<string, unknown> | null };
+    return { ok: true as const, status: 200, data: (parsed ?? null) as any };
   });
