@@ -298,6 +298,11 @@ export async function pushTasksToGCal(tasks: {
   const { toRRule } = await import('@/lib/recurrence');
   const results = new Map<string, string>();
 
+  const isFatalBackendError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return /backend is not deployed|backend is unreachable/i.test(message);
+  };
+
   for (const task of tasks) {
     if (task.gcalEventId && !task.gcalEventId.startsWith('mc')) continue;
     if (!task.dueDate) continue;
@@ -325,6 +330,7 @@ export async function pushTasksToGCal(tasks: {
       if (created?.id) results.set(task.id, created.id);
     } catch (e) {
       console.error(`Failed to push task "${task.title}" to GCal:`, e);
+      if (isFatalBackendError(e)) throw e;
     }
   }
   return results;
