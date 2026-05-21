@@ -45,6 +45,16 @@ export interface GCalConfig {
   connectedEmail: string | null;
 }
 
+function normalizeGCalError(status: number, data: any): string {
+  if (status === 404 && data?.code === 'NOT_FOUND') {
+    return 'Google Calendar backend is not deployed in Supabase yet.';
+  }
+
+  if (typeof data?.error === 'string') return data.error;
+  if (typeof data?.message === 'string') return data.message;
+  return `Google Calendar request failed (${status})`;
+}
+
 const GCAL_COLORS: Record<string, string> = {
   '1': '#7986CB', '2': '#33B679', '3': '#8E24AA', '4': '#E67C73',
   '5': '#F6BF26', '6': '#F4511E', '7': '#039BE5', '8': '#616161',
@@ -90,7 +100,8 @@ export function clearGCalConfig(): void {
 
 /** Always connected — auth is server-side via the Lovable connector. */
 export function isGCalConnected(): boolean {
-  return true;
+  const cfg = getGCalConfig();
+  return Boolean(cfg.connectedEmail || cfg.lastSync || cfg.enabledCalendarIds.length);
 }
 
 // ─── Edge function proxy ───────────────────────────────────────────────────────
@@ -110,24 +121,28 @@ async function gcalCall<T = any>(
   init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
 ): Promise<T> {
   const anon = getAnonKey();
-  const resp = await fetch(getFunctionUrl(), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: anon,
-      Authorization: `Bearer ${anon}`,
-    },
-    body: JSON.stringify({
-      path,
-      method: init.method || 'GET',
-      query: init.query,
-      body: init.body,
-    }),
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(getFunctionUrl(), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
+      },
+      body: JSON.stringify({
+        path,
+        method: init.method || 'GET',
+        query: init.query,
+        body: init.body,
+      }),
+    });
+  } catch {
+    throw new Error('Google Calendar backend is unreachable from this app right now.');
+  }
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
-    const msg = (data && (data.error || data.message)) || `Google Calendar request failed (${resp.status})`;
-    throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
+    throw new Error(normalizeGCalError(resp.status, data));
   }
   return data as T;
 }
@@ -283,6 +298,11 @@ export async function pushTasksToGCal(tasks: {
   const { toRRule } = await import('@/lib/recurrence');
   const results = new Map<string, string>();
 
+  const isFatalBackendError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error || '');
+    return /backend is not deployed|backend is unreachable/i.test(message);
+  };
+
   for (const task of tasks) {
     if (task.gcalEventId && !task.gcalEventId.startsWith('mc')) continue;
     if (!task.dueDate) continue;
@@ -310,6 +330,7 @@ export async function pushTasksToGCal(tasks: {
       if (created?.id) results.set(task.id, created.id);
     } catch (e) {
       console.error(`Failed to push task "${task.title}" to GCal:`, e);
+      if (isFatalBackendError(e)) throw e;
     }
   }
   return results;

@@ -61,6 +61,18 @@ export function useGoogleCalendar(opts?: {
         };
     });
 
+    const syncStateFromConfig = useCallback(() => {
+        const cfg = getGCalConfig();
+        setState(s => ({
+            ...s,
+            connected: isGCalConnected(),
+            email: cfg.connectedEmail,
+            enabledCalendarIds: cfg.enabledCalendarIds,
+            lastSync: cfg.lastSync,
+            autoSync: cfg.autoSync,
+        }));
+    }, []);
+
     const getTimeRange = useCallback(() => {
         const now = new Date();
         const min = opts?.timeMin || new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString();
@@ -71,12 +83,11 @@ export function useGoogleCalendar(opts?: {
     const fetchCalendars = useCallback(async () => {
         try {
             const cals = await listCalendars();
-            setState(s => ({ ...s, calendars: cals }));
+            setState(s => ({ ...s, calendars: cals, connected: true, error: null }));
             const cfg = getGCalConfig();
             if (cfg.enabledCalendarIds.length === 0) {
-                const primaryCal = cals.find(c => c.primary);
-                if (primaryCal) {
-                    const ids = [primaryCal.id];
+                const ids = cals.map(c => c.id);
+                if (ids.length > 0) {
                     setGCalConfig({ enabledCalendarIds: ids });
                     setState(s => ({ ...s, enabledCalendarIds: ids }));
                 }
@@ -89,7 +100,15 @@ export function useGoogleCalendar(opts?: {
             }
         } catch (e: any) {
             console.error('Failed to fetch calendars:', e);
-            setState(s => ({ ...s, error: e?.message || 'Failed to fetch calendars' }));
+            setState(s => ({
+                ...s,
+                calendars: [],
+                events: [],
+                rawEvents: [],
+                connected: false,
+                error: e?.message || 'Failed to fetch calendars',
+            }));
+            throw e;
         }
     }, []);
 
@@ -155,11 +174,20 @@ export function useGoogleCalendar(opts?: {
                 ...s,
                 events,
                 rawEvents,
+                connected: true,
                 syncing: false,
                 lastSync: new Date().toISOString(),
             }));
         } catch (e: any) {
-            setState(s => ({ ...s, syncing: false, error: e.message }));
+            setState(s => ({
+                ...s,
+                connected: false,
+                syncing: false,
+                events: [],
+                rawEvents: [],
+                error: e.message,
+            }));
+            throw e;
         } finally {
             syncLockRef.current = false;
         }
@@ -167,11 +195,19 @@ export function useGoogleCalendar(opts?: {
 
     // Connect / disconnect kept as no-ops for compatibility with old callers.
     const connect = useCallback(async (_clientId?: string): Promise<{ success: boolean; email?: string; error?: string }> => {
-        setState(s => ({ ...s, connected: true, connecting: false }));
-        await fetchCalendars();
-        await syncEvents(true);
-        return { success: true, email: getGCalConfig().connectedEmail || undefined };
-    }, [fetchCalendars, syncEvents]);
+        setState(s => ({ ...s, connecting: true, error: null }));
+        try {
+            await fetchCalendars();
+            await syncEvents(true);
+            syncStateFromConfig();
+            return { success: true, email: getGCalConfig().connectedEmail || undefined };
+        } catch (e: any) {
+            setState(s => ({ ...s, connected: false, connecting: false, error: e?.message || 'Google Calendar sync failed' }));
+            return { success: false, error: e?.message || 'Google Calendar sync failed' };
+        } finally {
+            setState(s => ({ ...s, connecting: false }));
+        }
+    }, [fetchCalendars, syncEvents, syncStateFromConfig]);
 
     const disconnect = useCallback(() => {
         setGCalConfig({ enabledCalendarIds: [], lastSync: null, connectedEmail: null });
@@ -205,9 +241,9 @@ export function useGoogleCalendar(opts?: {
     const setClientId = useCallback((_id: string) => { /* no-op */ }, []);
 
     useEffect(() => {
+        syncStateFromConfig();
         if (autoFetch) {
-            fetchCalendars();
-            syncEvents();
+            fetchCalendars().then(() => syncEvents()).catch(() => {});
         }
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
