@@ -16,7 +16,7 @@ const corsHeaders = {
 };
 
 const GATEWAY_BASE = 'https://connector-gateway.lovable.dev/google_calendar/calendar/v3';
-const FUNCTION_VERSION = '2026-05-21-2';
+const FUNCTION_VERSION = '2026-05-21-3';
 
 function json(status: number, body: unknown) {
   return new Response(JSON.stringify(body), {
@@ -85,6 +85,8 @@ Deno.serve(async (req: Request) => {
     return json(upstream.status, {
       error: `Google Calendar API ${upstream.status}`,
       detail: parsed,
+      path: rawPath,
+      method,
     });
   }
 
