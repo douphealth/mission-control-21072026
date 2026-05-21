@@ -376,12 +376,13 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
-                    <CheckCircle2 size={18} className="text-emerald-500 shrink-0 mt-0.5" />
+                    {gcal.connected ? <CheckCircle2 size={18} className="text-emerald-500 shrink-0 mt-0.5" /> : <XCircle size={18} className="text-destructive shrink-0 mt-0.5" />}
                     <div className="flex-1 min-w-0 space-y-1">
-                      <div className="text-sm font-semibold text-foreground">Connected via Lovable</div>
+                      <div className="text-sm font-semibold text-foreground">{gcal.connected ? 'Connected via Lovable' : 'Google Calendar backend offline'}</div>
                       <div className="text-xs text-muted-foreground">
-                        Google Calendar is authenticated server-side through the Lovable connector.
-                        No OAuth Client ID, popup, or Google Cloud Console setup is required.
+                        {gcal.connected
+                          ? 'Google Calendar is authenticated server-side through the Lovable connector. No OAuth Client ID, popup, or Google Cloud Console setup is required.'
+                          : 'The connector itself is valid, but this app cannot reach the Google Calendar backend endpoint yet. The missing piece is the deployed Supabase function, not your Google account.'}
                       </div>
                       {gcal.email && (
                         <div className="text-xs text-muted-foreground">Account: <span className="font-mono">{gcal.email}</span></div>
