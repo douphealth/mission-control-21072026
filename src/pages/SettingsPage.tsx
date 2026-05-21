@@ -14,7 +14,7 @@ import {
 } from "@/lib/supabase";
 import { generateStrongKey, setEncryptionKey, hasCustomEncryptionKey } from "@/lib/encryption";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
-import { getDefaultGCalRedirectUri, normalizeGCalRedirectUri, setGCalConfig } from "@/lib/googleCalendar";
+import { setGCalConfig } from "@/lib/googleCalendar";
 import SupabaseSyncConsole from "@/components/SupabaseSyncConsole";
 
 import { toast } from "sonner";
