@@ -166,7 +166,7 @@ export function useGoogleCalendar(opts?: {
     }, [getTimeRange, state.calendars, storeUpdateItem]);
 
     // Connect / disconnect kept as no-ops for compatibility with old callers.
-    const connect = useCallback(async (_clientId?: string) => {
+    const connect = useCallback(async (_clientId?: string): Promise<{ success: boolean; email?: string; error?: string }> => {
         setState(s => ({ ...s, connected: true, connecting: false }));
         await fetchCalendars();
         await syncEvents(true);
