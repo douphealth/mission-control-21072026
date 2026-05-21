@@ -742,20 +742,6 @@ export default function CalendarPage() {
             </button>
           </div>
         )}
-        ) : (
-          <div className="flex items-center gap-3 px-3 sm:px-4 py-3 rounded-2xl bg-destructive/5 border border-destructive/20">
-            <img src="https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png" alt="" className="w-5 h-5 shrink-0 opacity-60" />
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-foreground">Google Calendar sync is offline</div>
-              <div className="text-[11px] text-muted-foreground">{gcal.error || 'The app cannot reach the Google Calendar backend yet.'}</div>
-            </div>
-            <button onClick={() => void gcal.connect()} disabled={gcal.connecting || gcal.syncing}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50">
-              {gcal.connecting || gcal.syncing ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
-              Retry
-            </button>
-          </div>
-        )}
 
         {/* Header / Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
