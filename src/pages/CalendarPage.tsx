@@ -276,7 +276,7 @@ function EventModal({ open, event, onClose, onSave, onDelete }: EventModalProps)
 
 // ─── Event Pill ───────────────────────────────────────────────────────────────
 
-function EventPill({ ev, onClick, compact }: { ev: CalEvent; onClick: (e: React.MouseEvent) => void; compact?: boolean }) {
+const EventPill = memo(function EventPill({ ev, onClick, compact }: { ev: CalEvent; onClick: (e: React.MouseEvent) => void; compact?: boolean }) {
   const isTask = ev.isTask;
   const isGoogle = ev.isGoogleEvent;
   if (compact) {
@@ -297,7 +297,7 @@ function EventPill({ ev, onClick, compact }: { ev: CalEvent; onClick: (e: React.
       <span className="truncate">{ev.title}</span>
     </button>
   );
-}
+});
 
 // ─── Day Detail Bottom Sheet (mobile) ─────────────────────────────────────────
 
