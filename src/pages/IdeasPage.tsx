@@ -1,6 +1,5 @@
 import { useIdeas, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { Plus, Search, Edit2, Trash2, ThumbsUp, Lightbulb, Rocket, FlaskConical, ParkingCircle, Sparkles, CheckSquare, Copy } from "lucide-react";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect, FormTagsInput } from "@/components/FormModal";
 import type { Idea } from "@/lib/store";
@@ -136,7 +135,7 @@ export default function IdeasPage() {
         {filtered.map((idea, i) => {
           const cfg = statusConfig[idea.status] || statusConfig.spark;
           return (
-            <motion.div key={idea.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            <div key={idea.id} 
               onClick={bulk.bulkMode ? () => bulk.toggleSelect(idea.id) : undefined}
               className={`card-elevated overflow-hidden group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(idea.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
               <div className={`h-1.5 bg-gradient-to-r ${cfg.bg}`} />
@@ -173,7 +172,7 @@ export default function IdeasPage() {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>

@@ -1,7 +1,6 @@
 import { useUpdateData, useExportAllData, useImportAllData } from '@/hooks/useTableData';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useState, useRef, useEffect, forwardRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   Moon, Sun, Download, Upload, Trash2, AlertTriangle, Database, Palette,
   User, Shield, Info, Cloud, Copy, CheckCircle2, XCircle, RefreshCw,
@@ -285,10 +284,10 @@ export default function SettingsPage() {
 
         {/* Content */}
         <div className="flex-1 space-y-4">
-          <AnimatePresence mode="wait">
+          <>
             {/* ─── Profile ─── */}
             {activeTab === "profile" && (
-              <motion.div key="profile" {...fadeIn} className="space-y-4">
+              <div key="profile" {...fadeIn} className="space-y-4">
                 <div className="card-elevated p-6 space-y-5">
                   <h2 className="font-semibold text-lg">Profile</h2>
                   <div className="flex items-center gap-5">
@@ -319,12 +318,12 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ─── Appearance ─── */}
             {activeTab === "appearance" && (
-              <motion.div key="appearance" {...fadeIn} className="space-y-4">
+              <div key="appearance" {...fadeIn} className="space-y-4">
                 <div className="card-elevated p-6 space-y-5">
                   <h2 className="font-semibold text-lg">Appearance</h2>
                   <div>
@@ -346,12 +345,12 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ─── Google Calendar ─── */}
             {activeTab === "google-calendar" && (
-              <motion.div key="google-calendar" {...fadeIn} className="space-y-4">
+              <div key="google-calendar" {...fadeIn} className="space-y-4">
                 {/* Status Banner */}
                 <div className={`rounded-2xl border p-4 flex items-center gap-3 ${gcal.connected
                   ? "bg-emerald-500/5 border-emerald-500/20"
@@ -578,12 +577,12 @@ export default function SettingsPage() {
                     </a>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ─── Supabase Sync ─── */}
             {activeTab === "supabase" && (
-              <motion.div key="supabase" {...fadeIn} className="space-y-4">
+              <div key="supabase" {...fadeIn} className="space-y-4">
                 {/* Status Banner */}
                 <div className={`rounded-2xl border p-4 flex items-center gap-3 ${sbConnected ? (sbConnectionOk ? (sbSchemaReady ? "bg-emerald-500/5 border-emerald-500/20" : "bg-destructive/5 border-destructive/20") : "bg-destructive/5 border-destructive/20") : "bg-amber-500/5 border-amber-500/20"
                   }`}>
@@ -756,12 +755,12 @@ export default function SettingsPage() {
                     Open SQL Editor <ExternalLink size={10} />
                   </a>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ─── Security ─── */}
             {activeTab === "security" && (
-              <motion.div key="security" {...fadeIn} className="space-y-4">
+              <div key="security" {...fadeIn} className="space-y-4">
                 <div className="card-elevated p-6 space-y-5">
                   <div className="flex items-center gap-2">
                     <Key size={18} className="text-primary" />
@@ -802,12 +801,12 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ─── Data ─── */}
             {activeTab === "data" && (
-              <motion.div key="data" {...fadeIn} className="space-y-4">
+              <div key="data" {...fadeIn} className="space-y-4">
                 <div className="card-elevated p-6 space-y-4">
                   <h2 className="font-semibold text-lg">Backup & Restore</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -854,12 +853,12 @@ export default function SettingsPage() {
                     </button>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
 
             {/* ─── About ─── */}
             {activeTab === "about" && (
-              <motion.div key="about" {...fadeIn} className="space-y-4">
+              <div key="about" {...fadeIn} className="space-y-4">
                 <div className="card-elevated p-6 space-y-4">
                   <div className="flex items-center gap-4">
                     <div className="w-14 h-14 rounded-2xl gradient-primary flex items-center justify-center text-primary-foreground font-black text-xl shadow-lg">M</div>
@@ -888,9 +887,9 @@ export default function SettingsPage() {
                     <span className="badge-muted">Open Source</span>
                   </div>
                 </div>
-              </motion.div>
+              </div>
             )}
-          </AnimatePresence>
+          </>
         </div>
       </div>
     </div>

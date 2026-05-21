@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { Plus, Edit2, Trash2, GripVertical, Search, ChevronDown } from "lucide-react";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect, FormTagsInput } from "@/components/FormModal";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
@@ -113,12 +112,9 @@ export default function ProjectsPage() {
   const totalByPriority = (p: string) => cards.filter(c => c.priority === p).length;
 
   const renderCard = (card: KanbanCard) => (
-    <motion.div
+    <div
       key={card.id}
-      draggable={!isMobile}
-      onDragStart={!isMobile ? (e: any) => onDragStart(e, card.id) : undefined}
-      layout
-      layoutId={card.id}
+      draggable={!isMobile} 
       className={`card-elevated p-3.5 space-y-2.5 group/card ${!isMobile ? 'cursor-grab active:cursor-grabbing' : ''} ${dragId === card.id ? "opacity-40 scale-95" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -170,7 +166,7 @@ export default function ProjectsPage() {
           ))}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 
   return (

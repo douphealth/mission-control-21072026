@@ -1,6 +1,5 @@
 import { useHabits, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
     Flame, Plus, CheckCircle2, Circle, Trash2, Target, Calendar,
     BarChart3, Trophy, Star, Zap, Edit2, RefreshCw, CheckSquare, Copy
@@ -190,7 +189,7 @@ export default function HabitsPage() {
                     <h2 className="text-base font-bold flex items-center gap-2"><BarChart3 size={15} className="text-primary" /> History — Last 14 Days</h2>
                     <div className="space-y-2">
                         {habits.map((h, i) => (
-                            <motion.div key={h.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                            <div key={h.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                                 onClick={bulk.bulkMode ? () => bulk.toggleSelect(h.id) : undefined}
                                 className={`card-elevated p-4 group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(h.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
                                 <div className="flex items-center gap-3">
@@ -226,7 +225,7 @@ export default function HabitsPage() {
                                         </div>
                                     )}
                                 </div>
-                            </motion.div>
+                            </div>
                         ))}
                     </div>
                 </div>

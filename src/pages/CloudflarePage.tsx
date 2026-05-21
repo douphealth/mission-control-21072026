@@ -1,6 +1,5 @@
 import { useCredentials } from '@/hooks/useTableData';
 import { useState } from "react";
-import { motion } from "framer-motion";
 import {
   Cloud, Globe, Shield, Zap, Plus, ExternalLink, Copy,
   CheckCircle2, AlertTriangle, BarChart3, RefreshCw, Lock, Wifi, Activity
@@ -108,7 +107,7 @@ export default function CloudflarePage() {
           </h2>
           <div className="space-y-2">
             {zones.map((zone, i) => (
-              <motion.div key={zone.id} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.06 }}
+              <div key={zone.id} 
                 className="card-elevated p-4 flex items-center gap-4 group cursor-pointer hover:border-primary/20"
                 onClick={() => openZone(zone.name)}>
                 <StatusDot status={zone.status} />
@@ -126,7 +125,7 @@ export default function CloudflarePage() {
                   </div>
                 </div>
                 <ExternalLink size={13} className="text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
-              </motion.div>
+              </div>
             ))}
           </div>
           <p className="text-xs text-muted-foreground px-1">
@@ -167,13 +166,12 @@ export default function CloudflarePage() {
         </h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
           {cfTools.map((tool, i) => (
-            <motion.a key={tool.label} href={tool.url} target="_blank" rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+            <a key={tool.label} href={tool.url} target="_blank" rel="noopener noreferrer" 
               className="card-glass p-3.5 hover:border-primary/20 group transition-all block">
               <div className="text-xl mb-2">{tool.icon}</div>
               <div className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">{tool.label}</div>
               <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{tool.desc}</div>
-            </motion.a>
+            </a>
           ))}
         </div>
       </div>

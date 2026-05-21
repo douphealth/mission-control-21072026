@@ -1,5 +1,4 @@
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload, FileText, X, CheckCircle2, Sparkles, Wand2, Globe, Link2, Key, CreditCard,
   FileCode, ExternalLink, Clipboard, RotateCcw, ChevronDown, ChevronRight, AlertTriangle,
@@ -350,18 +349,14 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
   const activeCategories = result?.categories.filter((_, i) => !removedCategories.has(String(i))) || [];
 
   return (
-    <AnimatePresence>
+    <>
       {open && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        <div 
           className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
           onClick={onClose}
         >
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-md" />
-          <motion.div
-            initial={{ scale: 0.95, opacity: 0, y: isMobile ? 100 : 20 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.95, opacity: 0, y: isMobile ? 100 : 20 }}
-            transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+          <div 
             className="relative w-full sm:max-w-4xl bg-card/95 backdrop-blur-2xl rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col border border-border/40 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
             onDrop={handleDrop}
@@ -401,14 +396,11 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
               </div>
 
               {(phase === 'analyzing' || phase === 'importing') && (
-                <motion.div className="absolute bottom-0 left-0 right-0 h-0.5 bg-border/20">
-                  <motion.div
-                    className="h-full bg-gradient-to-r from-primary to-accent"
-                    initial={{ width: '0%' }}
-                    animate={{ width: phase === 'analyzing' ? '90%' : `${importProgress}%` }}
-                    transition={{ duration: phase === 'analyzing' ? 0.8 : 0.3 }}
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-border/20">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-accent" 
                   />
-                </motion.div>
+                </div>
               )}
             </div>
 
@@ -513,23 +505,19 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
               {/* === ANALYZING PHASE === */}
               {phase === 'analyzing' && (
                 <div className="text-center py-12 sm:py-16">
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                  <div 
                     className="w-14 h-14 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mb-5 shadow-xl shadow-primary/20"
                   >
                     <Brain size={24} className="text-white" />
-                  </motion.div>
+                  </div>
                   <h3 className="text-lg font-bold text-card-foreground mb-2">Analyzing Your Data</h3>
                   <p className="text-sm text-muted-foreground">NLP parsing + content-aware detection across 10 categories...</p>
                   <div className="flex justify-center gap-2 mt-5 flex-wrap">
                     {['Parsing', 'NLP Extract', 'Scoring', 'Splitting', 'Dedup'].map((step, i) => (
-                      <motion.span key={step}
-                        initial={{ opacity: 0.3 }} animate={{ opacity: 1 }}
-                        transition={{ delay: i * 0.15, duration: 0.4, repeat: Infinity, repeatType: 'reverse' }}
+                      <span key={step} 
                         className="text-[10px] px-2.5 py-1 rounded-full bg-primary/10 text-primary font-semibold">
                         {step}
-                      </motion.span>
+                      </span>
                     ))}
                   </div>
                 </div>
@@ -663,11 +651,9 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                                   {isItemExpanded ? <ChevronDown size={10} className="text-muted-foreground/50" /> : <ChevronRight size={10} className="text-muted-foreground/50" />}
                                 </div>
 
-                                <AnimatePresence>
+                                <>
                                   {isItemExpanded && (
-                                    <motion.div
-                                      initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                                      transition={{ duration: 0.15 }}
+                                    <div 
                                       className="overflow-hidden"
                                     >
                                       <div className="px-3 pb-2 pt-0.5">
@@ -682,9 +668,9 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                                             ))}
                                         </div>
                                       </div>
-                                    </motion.div>
+                                    </div>
                                   )}
-                                </AnimatePresence>
+                                </>
                               </div>
                             );
                           })}
@@ -744,7 +730,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                   <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto mb-5 relative">
                     <svg className="w-full h-full -rotate-90" viewBox="0 0 80 80">
                       <circle cx="40" cy="40" r="36" fill="none" stroke="currentColor" strokeWidth="4" className="text-secondary" />
-                      <motion.circle cx="40" cy="40" r="36" fill="none" stroke="currentColor" strokeWidth="4" className="text-primary"
+                      <circle cx="40" cy="40" r="36" fill="none" stroke="currentColor" strokeWidth="4" className="text-primary"
                         strokeDasharray={226} strokeDashoffset={226 - (226 * importProgress / 100)}
                         strokeLinecap="round" />
                     </svg>
@@ -760,11 +746,11 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
               {/* === DONE PHASE === */}
               {phase === 'done' && (
                 <div className="text-center py-10 sm:py-12">
-                  <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', damping: 12, stiffness: 200 }}>
+                  <div >
                     <div className="w-16 h-16 sm:w-20 sm:h-20 mx-auto rounded-3xl bg-gradient-to-br from-emerald-500 to-green-600 flex items-center justify-center mb-5 shadow-xl shadow-emerald-500/20">
                       <CheckCircle2 size={32} className="text-white" />
                     </div>
-                  </motion.div>
+                  </div>
                   <h3 className="text-xl sm:text-2xl font-bold text-card-foreground mb-2">All Done! 🎉</h3>
                   <p className="text-muted-foreground mb-4">Successfully imported {importCount} items</p>
                   <div className="flex flex-wrap justify-center gap-2">
@@ -811,9 +797,9 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                 )}
               </div>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }

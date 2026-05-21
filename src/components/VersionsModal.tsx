@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { History, Plus, RotateCcw, Trash2, Download, Upload, Pencil, X, Check, Loader2, Cloud, HardDrive, Smartphone, Sparkles, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -95,19 +94,14 @@ export default function VersionsModal({ open, onClose }: { open: boolean; onClos
     };
 
     return (
-        <AnimatePresence>
+        <>
             {open && (
                 <>
-                    <motion.div
-                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    <div 
                         className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm"
                         onClick={onClose}
                     />
-                    <motion.div
-                        initial={{ opacity: 0, y: 20, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 20, scale: 0.98 }}
-                        transition={{ duration: 0.18 }}
+                    <div 
                         className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none"
                     >
                         <div className="pointer-events-auto w-full max-w-3xl max-h-[90vh] flex flex-col bg-card border border-border/60 rounded-2xl shadow-2xl overflow-hidden">
@@ -244,12 +238,11 @@ export default function VersionsModal({ open, onClose }: { open: boolean; onClos
                                 Restoring always creates a "safety" version of your current data first — nothing is ever lost.
                             </div>
                         </div>
-                    </motion.div>
+                    </div>
 
                     {/* Restore confirm */}
                     {confirmRestore && (
-                        <motion.div
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        <div 
                             className="fixed inset-0 z-[60] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4"
                             onClick={() => setConfirmRestore(null)}
                         >
@@ -265,11 +258,11 @@ export default function VersionsModal({ open, onClose }: { open: boolean; onClos
                                     </button>
                                 </div>
                             </div>
-                        </motion.div>
+                        </div>
                     )}
                 </>
             )}
-        </AnimatePresence>
+        </>
     );
 }
 

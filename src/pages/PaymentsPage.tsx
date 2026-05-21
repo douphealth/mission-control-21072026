@@ -1,6 +1,5 @@
 import { usePayments, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { Plus, Search, Edit2, Trash2, DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, RefreshCw, CheckSquare, Copy } from "lucide-react";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect } from "@/components/FormModal";
 import type { Payment } from "@/lib/store";
@@ -129,7 +128,7 @@ export default function PaymentsPage() {
           { label: "Net Profit", value: fmt(totalIncome - totalExpenses), icon: TrendingUp, color: totalIncome - totalExpenses >= 0 ? "text-success" : "text-destructive", bg: "from-primary/15 to-primary/5" },
           { label: "Pending", value: fmt(pendingAmount), icon: RefreshCw, color: "text-warning", bg: "from-warning/15 to-warning/5" },
         ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="card-elevated p-4">
+          <div key={s.label}  className="card-elevated p-4">
             <div className="flex items-center gap-3">
               <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.bg} flex items-center justify-center`}>
                 <s.icon size={18} className={s.color} />
@@ -139,7 +138,7 @@ export default function PaymentsPage() {
                 <div className="text-xs text-muted-foreground">{s.label}</div>
               </div>
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 
@@ -161,7 +160,7 @@ export default function PaymentsPage() {
       {/* Payment List */}
       <div className="space-y-2">
         {filtered.map((payment, i) => (
-          <motion.div key={payment.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.02 }}
+          <div key={payment.id} 
             onClick={bulk.bulkMode ? () => bulk.toggleSelect(payment.id) : undefined}
             className={`card-elevated p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(payment.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
             <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -201,7 +200,7 @@ export default function PaymentsPage() {
                 </div>
               )}
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 

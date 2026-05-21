@@ -1,7 +1,6 @@
 import { useTasks, useUpdateItem } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft, ChevronRight, Plus, X, Calendar, Clock, Tag,
   CheckSquare, AlertTriangle, Zap, Edit2, Trash2, ExternalLink,
@@ -132,15 +131,13 @@ function EventModal({ open, event, onClose, onSave, onDelete }: EventModalProps)
   const isEdit = !!event?.id;
 
   return (
-    <AnimatePresence>
+    <>
       {open && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        <div 
           className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center sm:p-4"
           onClick={onClose}>
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-          <motion.div
-            initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }} transition={{ duration: 0.18 }}
+          <div 
             className="relative w-full sm:max-w-lg bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl border border-border/50 overflow-hidden max-h-[92vh] flex flex-col"
             onClick={e => e.stopPropagation()}>
 
@@ -270,10 +267,10 @@ function EventModal({ open, event, onClose, onSave, onDelete }: EventModalProps)
                 {isEdit ? "Save Changes" : "Add Event"}
               </button>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }
 
@@ -317,14 +314,11 @@ function DayDetailSheet({ date, events, onClose, onAdd, onEdit, onToggleTask }: 
   const isToday = date === today;
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    <div 
       className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center sm:p-4"
       onClick={onClose}>
       <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-      <motion.div
-        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+      <div 
         className="relative w-full sm:max-w-md bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl border border-border/50 overflow-hidden max-h-[70vh] flex flex-col"
         onClick={e => e.stopPropagation()}>
 
@@ -361,8 +355,7 @@ function DayDetailSheet({ date, events, onClose, onAdd, onEdit, onToggleTask }: 
               <button onClick={onAdd} className="text-primary text-sm font-semibold mt-2 hover:underline touch-manipulation">+ Add event</button>
             </div>
           ) : events.map(ev => (
-            <motion.button key={ev.id}
-              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+            <button key={ev.id} 
               onClick={() => ev.isGoogleEvent && ev.htmlLink ? window.open(ev.htmlLink, '_blank') : onEdit(ev)}
               className="w-full text-left flex items-center gap-3 p-3.5 rounded-2xl border border-border/30 hover:border-primary/20 hover:bg-secondary/30 transition-all touch-manipulation active:scale-[0.98]">
               <div className="w-1 h-10 rounded-full shrink-0" style={{ background: ev.color }} />
@@ -389,11 +382,11 @@ function DayDetailSheet({ date, events, onClose, onAdd, onEdit, onToggleTask }: 
                   <CheckSquare size={16} />
                 </button>
               )}
-            </motion.button>
+            </button>
           ))}
         </div>
-      </motion.div>
-    </motion.div>
+      </div>
+    </div>
   );
 }
 
@@ -670,9 +663,9 @@ export default function CalendarPage() {
         )}
 
         {/* GCal setup inline */}
-        <AnimatePresence>
+        <>
           {showGCalSetup && !gcal.connected && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            <div 
               className="overflow-hidden">
               <div className="card-elevated p-4 sm:p-5 space-y-3 sm:space-y-4">
                 <div className="flex items-center gap-3">
@@ -718,9 +711,9 @@ export default function CalendarPage() {
                   )}
                 </div>
               </div>
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </>
 
         {/* Header / Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
@@ -792,8 +785,7 @@ export default function CalendarPage() {
                 const hasOverdue = dayEvts.some(e => e.isTask && e.status !== "done" && e.date < today);
 
                 return (
-                  <motion.div key={dateStr}
-                    initial={false}
+                  <div key={dateStr} 
                     className={`
                       border-b border-r border-border/20 p-0.5 sm:p-1 group relative cursor-pointer transition-all
                       ${isMobile ? 'min-h-[52px]' : 'min-h-[90px]'}
@@ -859,7 +851,7 @@ export default function CalendarPage() {
                     {hasOverdue && (
                       <div className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                     )}
-                  </motion.div>
+                  </div>
                 );
               })}
             </div>
@@ -966,8 +958,7 @@ export default function CalendarPage() {
                   {/* Events */}
                   <div className="flex-1 space-y-2">
                     {group.events.map(ev => (
-                      <motion.div key={ev.id}
-                        initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+                      <div key={ev.id} 
                         className="flex items-center gap-3 p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border border-border/30 hover:border-primary/20 hover:bg-secondary/30 group transition-all cursor-pointer touch-manipulation active:scale-[0.98]"
                         onClick={() => ev.isGoogleEvent && ev.htmlLink ? window.open(ev.htmlLink, '_blank') : openEditEvent(ev)}>
                         <div className="w-1 h-8 sm:h-10 rounded-full shrink-0" style={{ background: ev.color }} />
@@ -992,7 +983,7 @@ export default function CalendarPage() {
                             <CheckSquare size={14} />
                           </button>
                         )}
-                      </motion.div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -1026,9 +1017,9 @@ export default function CalendarPage() {
         </div>
 
         {/* Selected day panel — desktop */}
-        <AnimatePresence>
+        <>
           {selected && !isMobile && (
-            <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
+            <div 
               className="card-elevated p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-bold text-foreground">
@@ -1062,9 +1053,9 @@ export default function CalendarPage() {
                   ))}
                 </div>
               )}
-            </motion.div>
+            </div>
           )}
-        </AnimatePresence>
+        </>
 
         {/* Upcoming tasks */}
         <div className="card-elevated p-4 flex-1 overflow-hidden flex flex-col">
@@ -1129,7 +1120,7 @@ export default function CalendarPage() {
       </div>
 
       {/* ── Mobile Day Detail Bottom Sheet ──────────────────────────────────── */}
-      <AnimatePresence>
+      <>
         {selected && isMobile && (
           <DayDetailSheet
             date={selected}
@@ -1140,7 +1131,7 @@ export default function CalendarPage() {
             onToggleTask={toggleTaskDone}
           />
         )}
-      </AnimatePresence>
+      </>
 
       {/* Event Modal */}
       <EventModal

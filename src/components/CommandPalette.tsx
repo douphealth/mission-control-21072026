@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import {
   Search, Home, CheckSquare, Calendar, FileText, Timer, Globe, Github,
   Hammer, Link2, BarChart3, Settings, DollarSign, Lightbulb, KeyRound,
@@ -358,22 +357,14 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
   ];
 
   return (
-    <AnimatePresence>
+    <>
       {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.12 }}
+        <div 
           className="fixed inset-0 z-[200] flex items-start justify-center pt-[12vh] sm:pt-[15vh] px-4"
           onClick={onClose}
         >
           <div className="absolute inset-0 bg-foreground/30 backdrop-blur-md" />
-          <motion.div
-            initial={{ scale: 0.96, opacity: 0, y: -10 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.96, opacity: 0, y: -10 }}
-            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+          <div 
             className="relative w-full max-w-xl bg-card/95 backdrop-blur-2xl rounded-2xl shadow-[var(--shadow-xl)] border border-border/50 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -423,11 +414,8 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
               {filtered.map((item, i) => {
                 const tc = typeConfig[item.type] || typeConfig.data;
                 return (
-                  <motion.button
-                    key={item.id}
-                    initial={{ opacity: 0, x: -4 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.1, delay: i * 0.015 }}
+                  <button
+                    key={item.id} 
                     onClick={item.action}
                     onMouseEnter={() => setSelectedIndex(i)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all ${
@@ -447,7 +435,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
                     {selectedIndex === i && (
                       <ArrowRight size={12} className="text-primary flex-shrink-0 ml-1" />
                     )}
-                  </motion.button>
+                  </button>
                 );
               })}
               {filtered.length === 0 && (
@@ -473,9 +461,9 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
                 <span className="font-semibold text-primary/60">Fuzzy Search</span>
               </div>
             </div>
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
-    </AnimatePresence>
+    </>
   );
 }

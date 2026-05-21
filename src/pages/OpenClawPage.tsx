@@ -1,6 +1,5 @@
 import { useCredentials } from '@/hooks/useTableData';
 import { useState } from "react";
-import { motion } from "framer-motion";
 import {
   Bug, Activity, ExternalLink, Plus, Trash2, Edit2, Globe,
   CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap, Lock
@@ -149,7 +148,7 @@ export default function OpenClawPage() {
       {/* Services */}
       <div className="space-y-2">
         {services.map((s, i) => (
-          <motion.div key={s.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+          <div key={s.id} 
             className="card-elevated p-4 flex items-center gap-4 group">
             <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${s.status === "operational" ? "bg-emerald-500" :
                 s.status === "degraded" ? "bg-amber-500" :
@@ -186,7 +185,7 @@ export default function OpenClawPage() {
                 </a>
               )}
             </div>
-          </motion.div>
+          </div>
         ))}
       </div>
 

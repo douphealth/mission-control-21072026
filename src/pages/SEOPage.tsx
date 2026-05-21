@@ -1,6 +1,5 @@
 import { useWebsites } from '@/hooks/useTableData';
 import { useState } from "react";
-import { motion } from "framer-motion";
 import {
   Search, TrendingUp, TrendingDown, ArrowUpRight, ExternalLink,
   Globe, AlertTriangle, CheckCircle2, BarChart3, FileText, Plus,
@@ -128,7 +127,7 @@ export default function SEOPage() {
       {/* Site SEO cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {filtered.map((site, i) => (
-          <motion.div key={site.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+          <div key={site.id} 
             className="card-elevated p-5 space-y-4">
             <div className="flex items-start justify-between">
               <div className="min-w-0">
@@ -178,7 +177,7 @@ export default function SEOPage() {
                 <CheckCircle2 size={11} /> No issues detected · Last checked {site.lastChecked}
               </div>
             )}
-          </motion.div>
+          </div>
         ))}
       </div>
 
@@ -189,14 +188,11 @@ export default function SEOPage() {
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {quickLinks.map((link, i) => (
-            <motion.a
+            <a
               key={link.label}
               href={link.url}
               target="_blank"
-              rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
+              rel="noopener noreferrer" 
               className="card-glass p-4 hover:border-primary/20 transition-all group block"
             >
               <div className="flex items-start gap-3">
@@ -207,7 +203,7 @@ export default function SEOPage() {
                 </div>
                 <ExternalLink size={11} className="text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0 mt-0.5" />
               </div>
-            </motion.a>
+            </a>
           ))}
         </div>
       </div>

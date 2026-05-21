@@ -1,6 +1,5 @@
 import { useBuildProjects, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
 import { useState, useCallback } from "react";
-import { motion } from "framer-motion";
 import { ExternalLink, Trash2, Plus, Edit2, Search, CheckSquare, Copy } from "lucide-react";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect, FormTagsInput } from "@/components/FormModal";
 import type { BuildProject } from "@/lib/db";
@@ -112,7 +111,7 @@ export default function BuildsPage() {
         {filtered.map((bp: any, i: number) => {
           const ps = platformStyle[bp.platform] || platformStyle.bolt;
           return (
-            <motion.div key={bp.id} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
+            <div key={bp.id} 
               onClick={bulk.bulkMode ? () => bulk.toggleSelect(bp.id) : undefined}
               className={`card-elevated p-4 sm:p-5 space-y-3 group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(bp.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
               <div className="flex items-start justify-between">
@@ -151,7 +150,7 @@ export default function BuildsPage() {
                   </div>
                 )}
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>

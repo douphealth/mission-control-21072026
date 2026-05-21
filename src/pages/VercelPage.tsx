@@ -1,6 +1,5 @@
 import { useCredentials, useBuildProjects } from '@/hooks/useTableData';
 import { useState } from "react";
-import { motion } from "framer-motion";
 import {
   Rocket, ExternalLink, GitBranch, CheckCircle2, Clock, AlertTriangle,
   Globe, RefreshCw, Activity, Zap, Lock, Code2, BarChart3
@@ -108,7 +107,7 @@ export default function VercelPage() {
         </h2>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {projects.map((proj, i) => (
-            <motion.div key={proj.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+            <div key={proj.id} 
               className="card-elevated p-4 space-y-3">
               <div className="flex items-start justify-between">
                 <div className="min-w-0">
@@ -141,7 +140,7 @@ export default function VercelPage() {
                 className="block text-[11px] font-mono text-primary/80 hover:text-primary hover:underline truncate">
                 {proj.liveUrl}
               </a>
-            </motion.div>
+            </div>
           ))}
         </div>
       </div>
@@ -153,13 +152,12 @@ export default function VercelPage() {
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {vercelTools.map((tool, i) => (
-            <motion.a key={tool.label} href={tool.url} target="_blank" rel="noopener noreferrer"
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
+            <a key={tool.label} href={tool.url} target="_blank" rel="noopener noreferrer" 
               className="card-glass p-3.5 hover:border-primary/20 group transition-all block">
               <div className="text-xl mb-2">{tool.icon}</div>
               <div className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors">{tool.label}</div>
               <div className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{tool.desc}</div>
-            </motion.a>
+            </a>
           ))}
         </div>
       </div>

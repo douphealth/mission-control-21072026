@@ -1,6 +1,5 @@
 import { useWebsites } from '@/hooks/useTableData';
 import { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
 import {
   Globe, Activity, Shield, Puzzle, Palette, Search, Users, FileText,
   CheckCircle2, AlertTriangle, XCircle, Loader2, RefreshCw, Key, ExternalLink,
@@ -346,8 +345,8 @@ export default function WordPressManagementPage() {
 
               {/* Auth modal */}
               {showAuth && (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="fixed inset-0 z-50 bg-black/50 backdrop-blur flex items-center justify-center p-4" onClick={() => setShowAuth(false)}>
-                  <motion.div initial={{ scale: 0.95, y: 10 }} animate={{ scale: 1, y: 0 }} className="bg-card rounded-2xl border border-border max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
+                <div  className="fixed inset-0 z-50 bg-black/50 backdrop-blur flex items-center justify-center p-4" onClick={() => setShowAuth(false)}>
+                  <div  className="bg-card rounded-2xl border border-border max-w-md w-full p-5" onClick={e => e.stopPropagation()}>
                     <h3 className="text-lg font-bold mb-1 flex items-center gap-2"><Key size={16} /> WordPress Application Password</h3>
                     <p className="text-xs text-muted-foreground mb-4">
                       Generate one in your WP admin → Users → Profile → Application Passwords. Stored locally in your browser only.
@@ -375,8 +374,8 @@ export default function WordPressManagementPage() {
                         <Save size={14} /> Save & Test
                       </button>
                     </div>
-                  </motion.div>
-                </motion.div>
+                  </div>
+                </div>
               )}
 
               {/* Tabs */}

@@ -1,6 +1,5 @@
 import { useNotes, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useCallback } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Pin, PinOff, Trash2, Search, Tag, ChevronRight, CheckSquare, Copy, ChevronLeft, X } from "lucide-react";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
