@@ -821,7 +821,7 @@ const ListRow = memo(function ListRow({ task, onEdit, onDelete, onDuplicate, onT
       </div>
     </div>
   );
-}
+});
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
