@@ -369,73 +369,23 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {/* Connection Settings */}
+                {/* Connection Settings — connector-backed, zero config */}
                 <div className="card-elevated p-6 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h2 className="font-semibold text-lg">Connection Settings</h2>
-                    {gcal.connected && (
-                      <button onClick={() => {
-                        gcal.disconnect();
-                        toast.info("Google Calendar disconnected");
-                      }} className="text-xs text-destructive hover:underline font-medium">
-                        Disconnect
-                      </button>
-                    )}
+                    <h2 className="font-semibold text-lg">Connection</h2>
                   </div>
 
-                  {isInIframe && (
-                    <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
-                      <Info size={15} />
-                      <span>Google sign-in now uses a popup flow. Make sure the current origin <strong>{window.location.origin}</strong> is whitelisted in Google Cloud Console as an Authorized JavaScript Origin.</span>
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">OAuth Client ID</label>
-                      <input
-                        value={gcalClientIdInput}
-                        onChange={e => setGcalClientIdInput(e.target.value)}
-                        className="input-base font-mono text-xs"
-                        placeholder="123456789-xxxxx.apps.googleusercontent.com"
-                      />
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
-                          Published URL Override <span className="text-muted-foreground font-normal">(legacy, optional)</span>
-                        </label>
-                      <input
-                        value={gcalRedirectOverride}
-                        onChange={e => {
-                          const normalized = normalizeGCalRedirectUri(e.target.value, window.location.origin) || '';
-                          const next = normalized === currentOriginRedirectUri ? '' : normalized;
-                          setGcalRedirectOverride(next);
-                          setGCalConfig({ redirectUri: next || undefined });
-                        }}
-                        className="input-base font-mono text-xs"
-                        placeholder={suggestedRedirectUri}
-                      />
-                      <p className="text-[10px] text-muted-foreground mt-1">
-                        This is no longer needed for normal Google sign-in. Leave it blank unless you are intentionally using the legacy callback page.
-                      </p>
-                    </div>
-
-                    {/* Required Google Cloud Console URLs */}
-                    <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-2">
-                      <p className="text-xs font-semibold text-muted-foreground">Add these to your Google Cloud Console:</p>
-                      <div className="space-y-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-medium text-muted-foreground w-32 shrink-0">Authorized JS Origin</span>
-                          <code className="text-[11px] font-mono bg-background px-2 py-1 rounded-lg border border-border flex-1 truncate">{computedOrigin}</code>
-                          <CopyButton text={computedOrigin} />
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-medium text-muted-foreground w-32 shrink-0">Legacy Redirect URI</span>
-                          <code className="text-[11px] font-mono bg-background px-2 py-1 rounded-lg border border-border flex-1 truncate">{computedRedirectUri}</code>
-                          <CopyButton text={computedRedirectUri} />
-                        </div>
+                  <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
+                    <CheckCircle2 size={18} className="text-emerald-500 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="text-sm font-semibold text-foreground">Connected via Lovable</div>
+                      <div className="text-xs text-muted-foreground">
+                        Google Calendar is authenticated server-side through the Lovable connector.
+                        No OAuth Client ID, popup, or Google Cloud Console setup is required.
                       </div>
+                      {gcal.email && (
+                        <div className="text-xs text-muted-foreground">Account: <span className="font-mono">{gcal.email}</span></div>
+                      )}
                     </div>
                   </div>
 
@@ -447,34 +397,26 @@ export default function SettingsPage() {
                   )}
 
                   <div className="flex gap-2 flex-wrap">
-                    {!gcal.connected ? (
-                      <button
-                        onClick={async () => {
-                          if (!gcalClientIdInput.trim()) { toast.error("Enter Client ID first"); return; }
-                          const result = await gcal.connect(gcalClientIdInput.trim());
-                          if (result.success) {
-                            toast.success(`✅ Connected as ${result.email}`);
-                          } else {
-                            toast.error(result.error || "Connection failed");
-                          }
-                        }}
-                        disabled={gcal.connecting || !gcalClientIdInput.trim()}
-                        className="btn-primary text-sm gap-2"
-                      >
-                        {gcal.connecting ? <Loader2 size={14} className="animate-spin" /> : <Calendar size={14} />}
-                        Connect with Google
-                      </button>
-                    ) : (
-                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-sm font-medium">
-                        <CheckCircle2 size={15} />
-                        Connected{gcal.email ? ` as ${gcal.email}` : ''}
-                      </div>
-                    )}
+                    <button
+                      onClick={async () => {
+                        const result = await gcal.connect();
+                        if (result.success) {
+                          toast.success(result.email ? `✅ Synced as ${result.email}` : '✅ Google Calendar synced');
+                        } else {
+                          toast.error(result.error || 'Sync failed');
+                        }
+                      }}
+                      disabled={gcal.connecting || gcal.syncing}
+                      className="btn-primary text-sm gap-2"
+                    >
+                      {gcal.connecting || gcal.syncing ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+                      Refresh & Sync Now
+                    </button>
                   </div>
                 </div>
 
                 {/* Calendar Picker */}
-                {gcal.connected && gcal.calendars.length > 0 && (
+                {gcal.calendars.length > 0 && (
                   <div className="card-elevated p-6 space-y-4">
                     <h2 className="font-semibold text-lg">Calendars</h2>
                     <p className="text-xs text-muted-foreground">Choose which calendars to show in Mission Control</p>
@@ -507,51 +449,25 @@ export default function SettingsPage() {
                 )}
 
                 {/* Auto-sync */}
-                {gcal.connected && (
-                  <div className="card-elevated p-6 space-y-4">
-                    <h2 className="font-semibold text-lg">Sync Settings</h2>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-medium text-foreground">Auto-sync</div>
-                        <div className="text-xs text-muted-foreground">Automatically refresh events every 5 minutes</div>
-                      </div>
-                      <button
-                        onClick={() => {
-                          gcal.setAutoSync(!gcal.autoSync);
-                          toast.success(gcal.autoSync ? "Auto-sync disabled" : "Auto-sync enabled");
-                        }}
-                        className={`relative w-12 h-6 rounded-full transition-colors ${gcal.autoSync ? "bg-primary" : "bg-secondary"}`}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${gcal.autoSync ? "translate-x-6" : ""}`} />
-                      </button>
+                <div className="card-elevated p-6 space-y-4">
+                  <h2 className="font-semibold text-lg">Sync Settings</h2>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-foreground">Auto-sync</div>
+                      <div className="text-xs text-muted-foreground">Automatically refresh events every 5 minutes</div>
                     </div>
-                  </div>
-                )}
-
-                {/* Setup Guide */}
-                <div className="card-elevated p-6 space-y-3">
-                  <h2 className="font-semibold text-lg flex items-center gap-2">
-                    <Info size={16} className="text-muted-foreground" /> Setup Guide
-                  </h2>
-                  <div className="text-xs text-muted-foreground space-y-2 leading-relaxed">
-                    <p><strong className="text-foreground">1.</strong> Go to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Cloud Console</a></p>
-                    <p><strong className="text-foreground">2.</strong> Create a new OAuth 2.0 Client ID (Web application type)</p>
-                    <p><strong className="text-foreground">3.</strong> Add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{computedOrigin}</code> as an Authorized JavaScript Origin</p>
-                    <p><strong className="text-foreground">4.</strong> Copy the Client ID and paste it above</p>
-                    <p><strong className="text-foreground">5.</strong> Enable the <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Calendar API</a> in your project</p>
-                    <p><strong className="text-foreground">6.</strong> Only add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{computedRedirectUri}</code> as a redirect URI if you intentionally use the legacy callback flow.</p>
-                  </div>
-                  <div className="flex gap-2 flex-wrap pt-1">
-                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-                      Google Cloud Console <ExternalLink size={10} />
-                    </a>
-                    <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline">
-                      Enable Calendar API <ExternalLink size={10} />
-                    </a>
+                    <button
+                      onClick={() => {
+                        gcal.setAutoSync(!gcal.autoSync);
+                        toast.success(gcal.autoSync ? "Auto-sync disabled" : "Auto-sync enabled");
+                      }}
+                      className={`relative w-12 h-6 rounded-full transition-colors ${gcal.autoSync ? "bg-primary" : "bg-secondary"}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${gcal.autoSync ? "translate-x-6" : ""}`} />
+                    </button>
                   </div>
                 </div>
+
               </div>
             )}
 
