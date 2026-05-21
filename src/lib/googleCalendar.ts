@@ -157,22 +157,20 @@ async function gcalCall<T = any>(
   init: { method?: string; query?: Record<string, string>; body?: unknown } = {},
 ): Promise<T> {
   try {
-    return await callLocalProxy<T>(path, init);
+    return await callEdgeFunction<T>(path, init);
   } catch (error) {
-    if (!(error instanceof Error) || error.message !== '__LOCAL_GCAL_PROXY_MISSING__') {
-      if (error instanceof SyntaxError) {
-        throw new Error('Google Calendar backend returned an invalid response.');
-      }
-      if (error instanceof Error && !/Failed to fetch/i.test(error.message)) {
-        throw error;
-      }
+    if (error instanceof SyntaxError) {
+      throw new Error('Google Calendar backend returned an invalid response.');
+    }
+    if (error instanceof Error && !/Failed to fetch/i.test(error.message)) {
+      throw error;
     }
   }
 
   try {
-    return await callEdgeFunction<T>(path, init);
+    return await callLocalProxy<T>(path, init);
   } catch (error) {
-    if (error instanceof Error) throw error;
+    if (error instanceof Error && error.message !== '__LOCAL_GCAL_PROXY_MISSING__') throw error;
     throw new Error('Google Calendar backend is unreachable from this app right now.');
   }
 }
