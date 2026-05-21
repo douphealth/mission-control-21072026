@@ -1,6 +1,6 @@
 import { useTasks, useUpdateItem } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef, memo } from "react";
 import {
   ChevronLeft, ChevronRight, Plus, X, Calendar, Clock, Tag,
   CheckSquare, AlertTriangle, Zap, Edit2, Trash2, ExternalLink,
