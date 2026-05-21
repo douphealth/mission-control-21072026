@@ -615,7 +615,7 @@ const KanbanCard = memo(function KanbanCard({
       </div>
     </div>
   );
-}
+});
 
 // ─── Kanban Column ────────────────────────────────────────────────────────────
 
