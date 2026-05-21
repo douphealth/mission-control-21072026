@@ -421,6 +421,7 @@ export default function CalendarPage() {
   const gcal = useGoogleCalendar({ autoFetch: true });
   const gtasks = useGoogleTasksCalendar();
   const [gtPickerOpen, setGtPickerOpen] = useState(false);
+  const [gcalPickerOpen, setGcalPickerOpen] = useState(false);
 
   const googleEvents: CalEvent[] = useMemo(() =>
     gcal.events.map(gev => ({
