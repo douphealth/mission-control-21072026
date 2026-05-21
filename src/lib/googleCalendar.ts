@@ -45,15 +45,6 @@ export interface GCalConfig {
   connectedEmail: string | null;
 }
 
-function normalizeGCalError(status: number, data: any): string {
-  if (status === 404 && data?.code === 'NOT_FOUND') {
-    return 'Google Calendar backend is not deployed in Supabase yet.';
-  }
-
-  if (typeof data?.error === 'string') return data.error;
-  if (typeof data?.message === 'string') return data.message;
-  return `Google Calendar request failed (${status})`;
-}
 
 const GCAL_COLORS: Record<string, string> = {
   '1': '#7986CB', '2': '#33B679', '3': '#8E24AA', '4': '#E67C73',
