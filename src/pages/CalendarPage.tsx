@@ -412,8 +412,6 @@ export default function CalendarPage() {
   const [modal, setModal] = useState<{ open: boolean; event?: Partial<CalEvent>; date?: string }>({ open: false });
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>("all");
-  const [showGCalSetup, setShowGCalSetup] = useState(false);
-  const [gcalClientId, setGcalClientId] = useState('');
 
   const today = fmtDate(new Date());
 
@@ -651,69 +649,19 @@ export default function CalendarPage() {
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-blue-500/5 to-purple-500/5 border border-border/40 cursor-pointer hover:border-primary/30 transition-all touch-manipulation"
-            onClick={() => setShowGCalSetup(s => !s)}>
+          <div className="flex items-center gap-3 px-3 sm:px-4 py-3 rounded-2xl bg-destructive/5 border border-destructive/20">
             <img src="https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png" alt="" className="w-5 h-5 shrink-0 opacity-60" />
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-foreground">Connect Google Calendar</div>
-              <div className="text-[11px] text-muted-foreground hidden sm:block">See all your events in one place</div>
+              <div className="text-xs font-semibold text-foreground">Google Calendar sync is offline</div>
+              <div className="text-[11px] text-muted-foreground">{gcal.error || 'The app cannot reach the Google Calendar backend yet.'}</div>
             </div>
-            <ChevronRight size={14} className={`text-muted-foreground transition-transform ${showGCalSetup ? 'rotate-90' : ''}`} />
+            <button onClick={() => void gcal.connect()} disabled={gcal.connecting || gcal.syncing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50">
+              {gcal.connecting || gcal.syncing ? <Loader2 size={10} className="animate-spin" /> : <RefreshCw size={10} />}
+              Retry
+            </button>
           </div>
         )}
-
-        {/* GCal setup inline */}
-        <>
-          {showGCalSetup && !gcal.connected && (
-            <div 
-              className="overflow-hidden">
-              <div className="card-elevated p-4 sm:p-5 space-y-3 sm:space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                    <img src="https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png" alt="" className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-foreground">Quick Setup</h3>
-                    <p className="text-[11px] text-muted-foreground">Enter your Google Cloud OAuth Client ID</p>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <input
-                    value={gcalClientId}
-                    onChange={e => setGcalClientId(e.target.value)}
-                    placeholder="Google OAuth Client ID..."
-                    className="w-full px-3 py-2.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/40 font-mono text-xs"
-                  />
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      onClick={async () => {
-                        if (!gcalClientId.trim()) { toast.error('Enter your Client ID first'); return; }
-                        const result = await gcal.connect(gcalClientId.trim());
-                        if (result.success) {
-                          toast.success(`✅ Connected as ${result.email}`);
-                          setShowGCalSetup(false);
-                        } else {
-                          toast.error(result.error || 'Connection failed');
-                        }
-                      }}
-                      disabled={gcal.connecting || !gcalClientId.trim()}
-                      className="btn-primary text-sm flex items-center gap-2 disabled:opacity-40 touch-manipulation">
-                      {gcal.connecting ? <Loader2 size={14} className="animate-spin" /> : <Cloud size={14} />}
-                      Connect
-                    </button>
-                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
-                      className="text-[11px] text-primary hover:underline flex items-center gap-1">
-                      Get Client ID <ExternalLink size={9} />
-                    </a>
-                  </div>
-                  {gcal.error && (
-                    <div className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{gcal.error}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </>
 
         {/* Header / Controls */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
