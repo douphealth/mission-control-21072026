@@ -65,24 +65,25 @@ export default function SettingsPage() {
   const [gcalClientIdInput, setGcalClientIdInput] = useState(gcal.clientId);
   const [gcalRedirectOverride, setGcalRedirectOverride] = useState('');
   const isInIframe = window.self !== window.top;
-  const suggestedRedirectUri = getDefaultGCalRedirectUri();
-  const effectiveRedirectOverride = gcalRedirectOverride || suggestedRedirectUri;
-  const computedRedirectUri = effectiveRedirectOverride || (window.location.origin + '/oauth-callback.html');
-  const computedOrigin = effectiveRedirectOverride ? new URL(effectiveRedirectOverride).origin : window.location.origin;
+  const currentOriginRedirectUri = getDefaultGCalRedirectUri(window.location.origin);
+  const suggestedRedirectUri = currentOriginRedirectUri;
+  const effectiveRedirectOverride = gcalRedirectOverride || '';
+  const computedRedirectUri = effectiveRedirectOverride || currentOriginRedirectUri;
+  const computedOrigin = computedRedirectUri ? new URL(computedRedirectUri).origin : window.location.origin;
 
   useEffect(() => {
     let stored = '';
     try {
-      stored = normalizeGCalRedirectUri(JSON.parse(localStorage.getItem('mc_gcal_config') || '{}').redirectUri) || '';
+      stored = normalizeGCalRedirectUri(JSON.parse(localStorage.getItem('mc_gcal_config') || '{}').redirectUri, window.location.origin) || '';
     } catch {
       stored = '';
     }
-    const next = stored || suggestedRedirectUri;
+    const next = stored === currentOriginRedirectUri ? '' : stored;
     setGcalRedirectOverride(next);
-    if (next !== stored) {
-      setGCalConfig({ redirectUri: next });
+    if (stored && next !== stored) {
+      setGCalConfig({ redirectUri: next || undefined });
     }
-  }, [isInIframe, suggestedRedirectUri]);
+  }, [currentOriginRedirectUri]);
 
   // Supabase state
   const [sbUrl, setSbUrl] = useState(getSupabaseConfig()?.url || "");
@@ -407,7 +408,7 @@ export default function SettingsPage() {
                   {isInIframe && !effectiveRedirectOverride && (
                     <div className="flex items-center gap-2 p-3 rounded-xl text-sm font-medium bg-destructive/10 text-destructive border border-destructive/20">
                       <AlertTriangle size={15} />
-                      <span>⚠️ Set your <strong>Published URL Override</strong> below before connecting — Google OAuth cannot work from the Lovable preview origin.</span>
+                        <span>⚠️ If Google is not configured for this preview domain, set your <strong>Published URL Override</strong> below to your live domain before connecting.</span>
                     </div>
                   )}
                   {isInIframe && effectiveRedirectOverride && (
@@ -435,15 +436,16 @@ export default function SettingsPage() {
                       <input
                         value={gcalRedirectOverride}
                         onChange={e => {
-                          const uri = normalizeGCalRedirectUri(e.target.value) || '';
-                          setGcalRedirectOverride(uri);
-                          setGCalConfig({ redirectUri: uri || undefined });
+                          const normalized = normalizeGCalRedirectUri(e.target.value, window.location.origin) || '';
+                          const next = normalized === currentOriginRedirectUri ? '' : normalized;
+                          setGcalRedirectOverride(next);
+                          setGCalConfig({ redirectUri: next || undefined });
                         }}
                         className="input-base font-mono text-xs"
                         placeholder={suggestedRedirectUri}
                       />
                       <p className="text-[10px] text-muted-foreground mt-1">
-                        Set this to your deployed URL's callback if testing from Lovable preview
+                        Leave blank to use this app’s current origin automatically; only set this when you need Google to return to a different live domain.
                       </p>
                     </div>
 
@@ -562,9 +564,10 @@ export default function SettingsPage() {
                   <div className="text-xs text-muted-foreground space-y-2 leading-relaxed">
                     <p><strong className="text-foreground">1.</strong> Go to the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Cloud Console</a></p>
                     <p><strong className="text-foreground">2.</strong> Create a new OAuth 2.0 Client ID (Web application type)</p>
-                    <p><strong className="text-foreground">3.</strong> Add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{window.location.origin}</code> as an Authorized JavaScript Origin</p>
-                    <p><strong className="text-foreground">4.</strong> Copy the Client ID and paste it above</p>
-                    <p><strong className="text-foreground">5.</strong> Enable the <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Calendar API</a> in your project</p>
+                    <p><strong className="text-foreground">3.</strong> Add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{computedOrigin}</code> as an Authorized JavaScript Origin</p>
+                    <p><strong className="text-foreground">4.</strong> Add <code className="bg-secondary px-1.5 py-0.5 rounded text-foreground">{computedRedirectUri}</code> as an Authorized Redirect URI</p>
+                    <p><strong className="text-foreground">5.</strong> Copy the Client ID and paste it above</p>
+                    <p><strong className="text-foreground">6.</strong> Enable the <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Google Calendar API</a> in your project</p>
                   </div>
                   <div className="flex gap-2 flex-wrap pt-1">
                     <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer"
