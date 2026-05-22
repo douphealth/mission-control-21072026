@@ -621,7 +621,7 @@ const KanbanCard = memo(function KanbanCard({
 
 function KanbanColumn({
   status, tasks, onEdit, onDelete, onDuplicate, onToggle, onToggleSub,
-  onAddNew, onDrop, draggingId,
+  onAddNew, onDrop, draggingId, onCardDragStart, onCardDragEnd,
 }: {
   status: typeof STATUSES[number];
   tasks: Task[];
@@ -633,6 +633,8 @@ function KanbanColumn({
   onAddNew: () => void;
   onDrop: (taskId: string, newStatus: StatusId) => void;
   draggingId: string | null;
+  onCardDragStart: (taskId: string) => void;
+  onCardDragEnd: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -645,7 +647,7 @@ function KanbanColumn({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const taskId = e.dataTransfer.getData("taskId");
+    const taskId = e.dataTransfer.getData("taskId") || e.dataTransfer.getData("text/plain") || draggingId;
     if (taskId) onDrop(taskId, status.id);
   };
 
@@ -687,10 +689,12 @@ function KanbanColumn({
               onToggle={() => onToggle(t.id)}
               onToggleSub={(subId) => onToggleSub(t.id, subId)}
               onDragStart={(e) => {
+                onCardDragStart(t.id);
+                e.dataTransfer.setData("text/plain", t.id);
                 e.dataTransfer.setData("taskId", t.id);
                 e.dataTransfer.effectAllowed = "move";
               }}
-              onDragEnd={() => { /* draggingId reset in handleDrop */ }}
+              onDragEnd={onCardDragEnd}
             />
           ))}
         </>
@@ -1273,6 +1277,8 @@ export default function TasksPage() {
               onAddNew={() => setModal({ open: true, task: null, defaultStatus: status.id })}
               onDrop={handleDrop}
               draggingId={draggingId}
+              onCardDragStart={setDraggingId}
+              onCardDragEnd={() => setDraggingId(null)}
             />
           ))}
         </div>
