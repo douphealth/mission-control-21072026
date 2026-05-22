@@ -621,7 +621,7 @@ const KanbanCard = memo(function KanbanCard({
 
 function KanbanColumn({
   status, tasks, onEdit, onDelete, onDuplicate, onToggle, onToggleSub,
-  onAddNew, onDrop, draggingId,
+  onAddNew, onDrop, draggingId, onCardDragStart, onCardDragEnd,
 }: {
   status: typeof STATUSES[number];
   tasks: Task[];
@@ -633,6 +633,8 @@ function KanbanColumn({
   onAddNew: () => void;
   onDrop: (taskId: string, newStatus: StatusId) => void;
   draggingId: string | null;
+  onCardDragStart: (taskId: string) => void;
+  onCardDragEnd: () => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
 
@@ -687,12 +689,12 @@ function KanbanColumn({
               onToggle={() => onToggle(t.id)}
               onToggleSub={(subId) => onToggleSub(t.id, subId)}
               onDragStart={(e) => {
-                setDraggingId(t.id);
+                onCardDragStart(t.id);
                 e.dataTransfer.setData("text/plain", t.id);
                 e.dataTransfer.setData("taskId", t.id);
                 e.dataTransfer.effectAllowed = "move";
               }}
-              onDragEnd={() => setDraggingId(null)}
+              onDragEnd={onCardDragEnd}
             />
           ))}
         </>
