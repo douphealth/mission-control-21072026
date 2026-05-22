@@ -1277,6 +1277,8 @@ export default function TasksPage() {
               onAddNew={() => setModal({ open: true, task: null, defaultStatus: status.id })}
               onDrop={handleDrop}
               draggingId={draggingId}
+              onCardDragStart={setDraggingId}
+              onCardDragEnd={() => setDraggingId(null)}
             />
           ))}
         </div>
