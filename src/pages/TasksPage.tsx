@@ -685,7 +685,12 @@ function KanbanColumn({
               onDelete={() => onDelete(t.id)}
               onDuplicate={() => onDuplicate(t.id)}
               onToggle={() => onToggle(t.id)}
-              onToggleSub={(subId) => onToggleSub(t.id, subId)} 
+              onToggleSub={(subId) => onToggleSub(t.id, subId)}
+              onDragStart={(e) => {
+                e.dataTransfer.setData("taskId", t.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+              onDragEnd={() => { /* draggingId reset in handleDrop */ }}
             />
           ))}
         </>
