@@ -687,11 +687,12 @@ function KanbanColumn({
               onToggle={() => onToggle(t.id)}
               onToggleSub={(subId) => onToggleSub(t.id, subId)}
               onDragStart={(e) => {
+                setDraggingId(t.id);
                 e.dataTransfer.setData("text/plain", t.id);
                 e.dataTransfer.setData("taskId", t.id);
                 e.dataTransfer.effectAllowed = "move";
               }}
-              onDragEnd={() => { /* draggingId reset in handleDrop */ }}
+              onDragEnd={() => setDraggingId(null)}
             />
           ))}
         </>
