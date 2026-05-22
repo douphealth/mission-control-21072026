@@ -645,7 +645,7 @@ function KanbanColumn({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const taskId = e.dataTransfer.getData("taskId");
+    const taskId = e.dataTransfer.getData("taskId") || e.dataTransfer.getData("text/plain") || draggingId;
     if (taskId) onDrop(taskId, status.id);
   };
 
@@ -687,6 +687,7 @@ function KanbanColumn({
               onToggle={() => onToggle(t.id)}
               onToggleSub={(subId) => onToggleSub(t.id, subId)}
               onDragStart={(e) => {
+                e.dataTransfer.setData("text/plain", t.id);
                 e.dataTransfer.setData("taskId", t.id);
                 e.dataTransfer.effectAllowed = "move";
               }}
