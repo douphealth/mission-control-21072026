@@ -11,6 +11,7 @@ import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
 const TodayPage = lazy(() => import('@/pages/TodayPage'));
 const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
+const AutomationCenterPage = lazy(() => import('@/pages/AutomationCenterPage'));
 const TasksPage = lazy(() => import('@/pages/TasksPage'));
 const GoogleTasksPage = lazy(() => import('@/pages/GoogleTasksPage'));
 const WebsitesPage = lazy(() => import('@/pages/WebsitesPage'));
@@ -37,6 +38,7 @@ const sectionMap: Record<string, React.LazyExoticComponent<any>> = {
   dashboard: TodayPage,
   today: TodayPage,
   analytics: DashboardHome,
+  automations: AutomationCenterPage,
   tasks: TasksPage,
   'google-tasks': GoogleTasksPage,
   websites: WebsitesPage,
