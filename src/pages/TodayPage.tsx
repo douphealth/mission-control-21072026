@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { AlertTriangle, CalendarDays, CheckCircle2, Circle, Clock3, Play, Target } from 'lucide-react';
+import { Activity, AlertTriangle, CalendarDays, CheckCircle2, Circle, Clock3, Play, Target } from 'lucide-react';
 import { useTasks, useUpdateItem } from '@/hooks/useTableData';
 import { rankTasks } from '@/lib/taskPriority';
 import type { Task } from '@/lib/db';
+import { useNavigationStore } from '@/stores/navigationStore';
 
 function dateLabel(value: string) {
   if (!value) return 'No due date';
@@ -13,6 +14,7 @@ function dateLabel(value: string) {
 export default function TodayPage() {
   const tasks = useTasks();
   const updateItem = useUpdateItem();
+  const setActiveSection = useNavigationStore(state => state.setActiveSection);
   const ranked = useMemo(() => rankTasks(tasks), [tasks]);
   const today = new Date().toISOString().slice(0, 10);
   const top = ranked.slice(0, 7);
@@ -34,8 +36,13 @@ export default function TodayPage() {
             <h1 className="mt-2 text-3xl font-extrabold tracking-tight text-foreground">One queue. The right work first.</h1>
             <p className="mt-2 max-w-2xl text-sm text-muted-foreground">Mission Control ranks unfinished work by urgency, priority, progress, and blockage. This is the canonical execution queue.</p>
           </div>
-          <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
-            <span className="font-semibold text-foreground">{ranked.length}</span> open tasks
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setActiveSection('automations')} className="inline-flex items-center gap-2 rounded-2xl border border-border bg-background/50 px-4 py-3 text-sm font-semibold hover:bg-secondary">
+              <Activity size={16} className="text-primary" /> Automation Center
+            </button>
+            <div className="rounded-2xl border border-border/50 bg-background/50 px-4 py-3 text-sm text-muted-foreground">
+              <span className="font-semibold text-foreground">{ranked.length}</span> open tasks
+            </div>
           </div>
         </div>
       </section>
