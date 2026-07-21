@@ -8,12 +8,12 @@ import { useNavigationStore } from '@/stores/navigationStore';
 
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
+import GoogleTasksPage from '@/pages/GoogleTasksPage';
 
 const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
 
 const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
 const TasksPage = lazy(() => import('@/pages/TasksPage'));
-const GoogleTasksPage = lazy(() => import('@/pages/GoogleTasksPage'));
 const WebsitesPage = lazy(() => import('@/pages/WebsitesPage'));
 const WordPressManagementPage = lazy(() => import('@/pages/WordPressManagementPage'));
 const GitHubPage = lazy(() => import('@/pages/GitHubPage'));
