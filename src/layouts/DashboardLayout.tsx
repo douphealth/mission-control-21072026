@@ -34,7 +34,7 @@ const OpenClawPage = lazy(() => import('@/pages/OpenClawPage'));
 const HabitsPage = lazy(() => import('@/pages/HabitsPage'));
 const CustomModulePage = lazy(() => import('@/pages/CustomModulePage'));
 
-const sectionMap: Record<string, React.LazyExoticComponent<any>> = {
+const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
   dashboard: DashboardHome,
   tasks: TasksPage,
   'google-tasks': GoogleTasksPage,
