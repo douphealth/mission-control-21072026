@@ -1277,7 +1277,7 @@ export function normalizeItems(
   }).filter(item => {
     const meta = TARGET_META[target];
     const filledRequired = meta.requiredFields.filter(f => {
-      const val = item[f];
+      const val = (item as Record<string, unknown>)[f];
       return val !== undefined && val !== null && val !== '' && val !== 'Unnamed' && val !== 'Untitled' && val !== 'unnamed-repo';
     });
     if (filledRequired.length > 0) return true;
