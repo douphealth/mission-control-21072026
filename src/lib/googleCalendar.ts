@@ -1,0 +1,482 @@
+/**
+ * Google Calendar — per-user OAuth via Google Identity Services (token flow).
+ * Uses each app user's own Google account, matching the Google Tasks setup.
+ */
+
+const CLIENT_ID = '444136985265-oehu4tfpce7b0kadq5vvn14kn6gk5tor.apps.googleusercontent.com';
+const OAUTH_SCOPES = 'https://www.googleapis.com/auth/calendar';
+const TOKEN_STORAGE_KEY = 'mc_gcal_token_v1';
+const CONFIG_STORAGE_KEY = 'mc_gcal_config';
+
+type StoredToken = { access_token: string; expires_at: number };
+
+let gisLoaded: Promise<void> | null = null;
+
+function loadGis(): Promise<void> {
+  if (gisLoaded) return gisLoaded;
+  gisLoaded = new Promise((resolve, reject) => {
+    if ((window as any).google?.accounts?.oauth2) return resolve();
+    const script = document.createElement('script');
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+    document.head.appendChild(script);
+  });
+  return gisLoaded;
+}
+
+function readToken(): StoredToken | null {
+  try {
+    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!raw) return null;
+    const token = JSON.parse(raw) as StoredToken;
+    if (token.expires_at - 30_000 < Date.now()) return null;
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+function saveToken(access_token: string, expires_in: number) {
+  const token: StoredToken = {
+    access_token,
+    expires_at: Date.now() + expires_in * 1000,
+  };
+  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(token));
+}
+
+async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = readToken();
+  if (!token) throw new Error('Not signed in to Google Calendar');
+
+  const response = await fetch(`https://www.googleapis.com/calendar/v3/${path.replace(/^\/+/, '')}`, {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      Authorization: `Bearer ${token.access_token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (response.status === 401) {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    throw new Error('Google Calendar session expired — please sign in again');
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Google Calendar ${response.status}: ${text.slice(0, 300)}`);
+  }
+
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
+async function ensureCalendarToken(): Promise<void> {
+  if (readToken()) return;
+  await connectGCal();
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  location?: string;
+  start: { dateTime?: string; date?: string; timeZone?: string };
+  end: { dateTime?: string; date?: string; timeZone?: string };
+  status?: string;
+  htmlLink?: string;
+  colorId?: string;
+  creator?: { email?: string };
+  organizer?: { email?: string; displayName?: string };
+  attendees?: { email: string; responseStatus?: string }[];
+  reminders?: { useDefault: boolean };
+  calendarId?: string;
+}
+
+export interface GoogleCalendarList {
+  id: string;
+  summary: string;
+  backgroundColor?: string;
+  foregroundColor?: string;
+  primary?: boolean;
+  selected?: boolean;
+}
+
+export interface GCalConfig {
+  enabledCalendarIds: string[];
+  autoSync: boolean;
+  syncIntervalMinutes: number;
+  lastSync: string | null;
+  connectedEmail: string | null;
+}
+
+const GCAL_COLORS: Record<string, string> = {
+  '1': '#7986CB', '2': '#33B679', '3': '#8E24AA', '4': '#E67C73',
+  '5': '#F6BF26', '6': '#F4511E', '7': '#039BE5', '8': '#616161',
+  '9': '#3F51B5', '10': '#0B8043', '11': '#D50000',
+};
+
+export function getGCalColor(colorId?: string): string {
+  return colorId && GCAL_COLORS[colorId] ? GCAL_COLORS[colorId] : '#039BE5';
+}
+
+const DEFAULT_CONFIG: GCalConfig = {
+  enabledCalendarIds: [],
+  autoSync: true,
+  syncIntervalMinutes: 5,
+  lastSync: null,
+  connectedEmail: null,
+};
+
+export function getGCalConfig(): GCalConfig {
+  try {
+    const raw = localStorage.getItem(CONFIG_STORAGE_KEY);
+    if (!raw) return { ...DEFAULT_CONFIG };
+    const parsed = JSON.parse(raw);
+    return { ...DEFAULT_CONFIG, ...parsed };
+  } catch {
+    return { ...DEFAULT_CONFIG };
+  }
+}
+
+export function setGCalConfig(partial: Partial<GCalConfig>): GCalConfig {
+  const updated = { ...getGCalConfig(), ...partial };
+  localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(updated));
+  return updated;
+}
+
+export function clearGCalConfig(): void {
+  localStorage.removeItem(CONFIG_STORAGE_KEY);
+}
+
+export function isGCalConnected(): boolean {
+  return readToken() !== null;
+}
+
+export async function connectGCal(): Promise<{ email?: string }> {
+  await loadGis();
+
+  await new Promise<void>((resolve, reject) => {
+    const client = (window as any).google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: OAUTH_SCOPES,
+      prompt: '',
+      callback: (resp: any) => {
+        if (resp.error) return reject(new Error(resp.error_description || resp.error));
+        saveToken(resp.access_token, Number(resp.expires_in || 3600));
+        resolve();
+      },
+      error_callback: (err: any) => reject(new Error(err?.message || 'Google Calendar sign-in cancelled')),
+    });
+    client.requestAccessToken({ prompt: 'consent' });
+  });
+
+  const calendars = await listCalendars();
+  const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
+  if (primary) setGCalConfig({ connectedEmail: primary.id });
+  return { email: primary?.id };
+}
+
+export function disconnectGCal(): void {
+  const token = readToken();
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  if (token?.access_token && (window as any).google?.accounts?.oauth2) {
+    try { (window as any).google.accounts.oauth2.revoke(token.access_token, () => {}); } catch { /* noop */ }
+  }
+  clearGCalConfig();
+}
+
+export async function listCalendars(): Promise<GoogleCalendarList[]> {
+  await ensureCalendarToken();
+
+  const calendars: GoogleCalendarList[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const qs = new URLSearchParams({ maxResults: '250', showHidden: 'true' });
+    if (pageToken) qs.set('pageToken', pageToken);
+    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(`users/me/calendarList?${qs.toString()}`);
+
+    calendars.push(...(data.items || []).map((cal) => ({
+      id: cal.id,
+      summary: cal.summary || cal.id,
+      backgroundColor: cal.backgroundColor,
+      foregroundColor: cal.foregroundColor,
+      primary: cal.primary || false,
+      selected: cal.selected !== false,
+    })));
+
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return calendars;
+}
+
+export async function fetchCalendarEvents(
+  calendarId: string,
+  timeMin: string,
+  timeMax: string,
+  maxResults = 250,
+): Promise<GoogleCalendarEvent[]> {
+  await ensureCalendarToken();
+
+  const events: GoogleCalendarEvent[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const qs = new URLSearchParams({
+      timeMin,
+      timeMax,
+      maxResults: String(maxResults),
+      singleEvents: 'true',
+      orderBy: 'startTime',
+    });
+    if (pageToken) qs.set('pageToken', pageToken);
+
+    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(
+      `calendars/${encodeURIComponent(calendarId)}/events?${qs.toString()}`,
+    );
+
+    events.push(...(data.items || []).map((ev) => ({ ...ev, calendarId })));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+
+  return events;
+}
+
+export async function fetchAllEvents(timeMin: string, timeMax: string): Promise<GoogleCalendarEvent[]> {
+  const cfg = getGCalConfig();
+  let calendarIds = cfg.enabledCalendarIds;
+
+  if (!calendarIds || calendarIds.length === 0) {
+    const all = await listCalendars();
+    calendarIds = all.map((c) => c.id);
+  }
+
+  const results = await Promise.allSettled(
+    calendarIds.map((id) => fetchCalendarEvents(id, timeMin, timeMax)),
+  );
+
+  const events: GoogleCalendarEvent[] = [];
+  for (const result of results) {
+    if (result.status === 'fulfilled') events.push(...result.value);
+  }
+
+  setGCalConfig({ lastSync: new Date().toISOString() });
+  return events;
+}
+
+export function taskIdToGCalId(taskId: string): string {
+  const hex = taskId.replace(/[^a-fA-F0-9]/g, '').toLowerCase();
+  return `mc${hex}`.slice(0, 1024);
+}
+
+export async function createGCalEvent(
+  calendarId: string,
+  event: {
+    summary: string;
+    description?: string;
+    start: { dateTime?: string; date?: string; timeZone?: string };
+    end: { dateTime?: string; date?: string; timeZone?: string };
+    recurrence?: string[];
+  },
+  deterministicId?: string,
+): Promise<GoogleCalendarEvent> {
+  await ensureCalendarToken();
+  const body: any = { ...event };
+  if (deterministicId) body.id = deterministicId;
+
+  try {
+    return await gcalApi<GoogleCalendarEvent>(
+      `calendars/${encodeURIComponent(calendarId)}/events`,
+      { method: 'POST', body: JSON.stringify(body) },
+    );
+  } catch (e: any) {
+    if (deterministicId && /\b409\b/.test(e?.message || '')) {
+      try {
+        return await gcalApi<GoogleCalendarEvent>(
+          `calendars/${encodeURIComponent(calendarId)}/events/${deterministicId}`,
+          { method: 'PUT', body: JSON.stringify({ ...event }) },
+        );
+      } catch {
+        return { id: deterministicId, summary: event.summary, start: event.start, end: event.end } as GoogleCalendarEvent;
+      }
+    }
+    throw e;
+  }
+}
+
+export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): Promise<boolean> {
+  if (!eventId) return false;
+  try {
+    await ensureCalendarToken();
+    await gcalApi(
+      `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+      { method: 'DELETE' },
+    );
+    return true;
+  } catch (e: any) {
+    if (/\b404\b/.test(e?.message || '')) return true;
+    return false;
+  }
+}
+
+export async function pushTaskToGCal(task: {
+  title: string;
+  description?: string;
+  dueDate: string;
+}): Promise<GoogleCalendarEvent | null> {
+  try {
+    return await createGCalEvent('primary', {
+      summary: `📋 ${task.title}`,
+      description: task.description || '',
+      start: { date: task.dueDate },
+      end: { date: task.dueDate },
+    });
+  } catch (e) {
+    console.error('Failed to push task to Google Calendar:', e);
+    return null;
+  }
+}
+
+export async function pushTasksToGCal(tasks: {
+  id: string;
+  title: string;
+  description?: string;
+  dueDate: string;
+  startDate?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  gcalEventId?: string;
+  recurring?: boolean;
+  recurringInterval?: string;
+  recurringEndType?: string;
+  recurringEndDate?: string;
+  recurringEndCount?: number;
+  recurringCustomDays?: number;
+}[]): Promise<Map<string, string>> {
+  const { toRRule } = await import('@/lib/recurrence');
+  const results = new Map<string, string>();
+
+  for (const task of tasks) {
+    if (task.gcalEventId && !task.gcalEventId.startsWith('mc')) continue;
+    if (!task.dueDate) continue;
+
+    try {
+      const isAllDay = task.allDay !== false && !task.startTime;
+      const eventBody: any = {
+        summary: `📋 ${task.title}`,
+        description: task.description || '',
+      };
+      const eventDate = task.startDate || task.dueDate;
+      if (isAllDay) {
+        eventBody.start = { date: eventDate };
+        eventBody.end = { date: eventDate };
+      } else {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        eventBody.start = { dateTime: `${eventDate}T${task.startTime || '09:00'}:00`, timeZone: tz };
+        eventBody.end = { dateTime: `${eventDate}T${task.endTime || '10:00'}:00`, timeZone: tz };
+      }
+      if (task.recurring && task.recurringInterval) {
+        const rrule = toRRule(task as any);
+        if (rrule) eventBody.recurrence = [rrule];
+      }
+      const deterministicId = taskIdToGCalId(task.id);
+      const created = await createGCalEvent('primary', eventBody, deterministicId);
+      if (created?.id) results.set(task.id, created.id);
+    } catch (e) {
+      console.error(`Failed to push task "${task.title}" to Google Calendar:`, e);
+    }
+  }
+
+  return results;
+}
+
+let cachedEvents: GoogleCalendarEvent[] = [];
+let cacheTimestamp = 0;
+const CACHE_TTL = 60 * 1000;
+
+export function getCachedGCalEvents(): GoogleCalendarEvent[] {
+  return cachedEvents;
+}
+
+export async function syncGCalEvents(
+  timeMin: string,
+  timeMax: string,
+  forceRefresh = false,
+): Promise<GoogleCalendarEvent[]> {
+  if (!forceRefresh && cachedEvents.length > 0 && Date.now() - cacheTimestamp < CACHE_TTL) {
+    return cachedEvents;
+  }
+
+  try {
+    cachedEvents = await fetchAllEvents(timeMin, timeMax);
+    cacheTimestamp = Date.now();
+    return cachedEvents;
+  } catch (e) {
+    console.error('Google Calendar sync error:', e);
+    return cachedEvents;
+  }
+}
+
+export function gCalEventToCalEvent(gev: GoogleCalendarEvent, calColor?: string): {
+  id: string;
+  title: string;
+  date: string;
+  endDate?: string;
+  startTime?: string;
+  endTime?: string;
+  color: string;
+  category: string;
+  description?: string;
+  isTask: false;
+  isGoogleEvent: true;
+  allDay: boolean;
+  htmlLink?: string;
+  googleEventId: string;
+} {
+  const isAllDay = !!gev.start.date;
+  let date: string;
+  let endDate: string | undefined;
+  let startTime: string | undefined;
+  let endTime: string | undefined;
+
+  if (isAllDay) {
+    date = gev.start.date!;
+    if (gev.end.date && gev.end.date !== gev.start.date) {
+      const endD = new Date(gev.end.date);
+      endD.setDate(endD.getDate() - 1);
+      const ed = endD.toISOString().split('T')[0];
+      endDate = ed !== date ? ed : undefined;
+    }
+  } else {
+    const startDt = new Date(gev.start.dateTime!);
+    const endDt = new Date(gev.end.dateTime!);
+    date = startDt.toISOString().split('T')[0];
+    startTime = startDt.toTimeString().slice(0, 5);
+    endTime = endDt.toTimeString().slice(0, 5);
+    const endDateStr = endDt.toISOString().split('T')[0];
+    endDate = endDateStr !== date ? endDateStr : undefined;
+  }
+
+  return {
+    id: `gcal-${gev.id}`,
+    title: gev.summary || '(No title)',
+    date,
+    endDate,
+    startTime,
+    endTime,
+    color: calColor || getGCalColor(gev.colorId),
+    category: 'Google Calendar',
+    description: gev.description,
+    isTask: false,
+    isGoogleEvent: true,
+    allDay: isAllDay,
+    htmlLink: gev.htmlLink,
+    googleEventId: gev.id,
+  };
+}
