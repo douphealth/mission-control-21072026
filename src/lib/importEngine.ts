@@ -15,6 +15,7 @@
  * - EXPRESS IMPORT: High-confidence data can skip review
  */
 import Papa from 'papaparse';
+import { parseCredentialsDump } from './parseCredentialsDump';
 
 export type ImportTarget = 'websites' | 'links' | 'tasks' | 'repos' | 'buildProjects' | 'credentials' | 'payments' | 'notes' | 'ideas' | 'habits';
 
