@@ -15,6 +15,7 @@
  * - EXPRESS IMPORT: High-confidence data can skip review
  */
 import Papa from 'papaparse';
+import { parseCredentialsDump } from './parseCredentialsDump';
 
 export type ImportTarget = 'websites' | 'links' | 'tasks' | 'repos' | 'buildProjects' | 'credentials' | 'payments' | 'notes' | 'ideas' | 'habits';
 
@@ -1459,6 +1460,21 @@ export interface AutonomousImportResult {
  * v15: Now supports multi-category output and express mode.
  */
 export function autonomousImport(text: string, fileName?: string): AutonomousImportResult {
+  // Fast-path: bulk credentials/hosting dumps (WordPress + CyberPanel + FTP + Cloudflare)
+  try {
+    const dump = parseCredentialsDump(text);
+    if (dump && dump.length > 0) {
+      const totalItems = dump.reduce((sum, c) => sum + c.items.length, 0);
+      return {
+        categories: dump.sort((a, b) => b.items.length - a.items.length),
+        parsedData: { rows: [], sourceFields: [], format: 'text' } as any,
+        totalItems,
+        expressReady: true,
+      };
+    }
+  } catch { /* fall through to generic pipeline */ }
+
+
   const parsedData = parseImportData(text, fileName);
 
   if (parsedData.rows.length === 0) {
