@@ -1462,9 +1462,6 @@ export interface AutonomousImportResult {
 export function autonomousImport(text: string, fileName?: string): AutonomousImportResult {
   // Fast-path: bulk credentials/hosting dumps (WordPress + CyberPanel + FTP + Cloudflare)
   try {
-    // Lazy require so this stays a pure ESM module cycle-safe.
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { parseCredentialsDump } = require('./parseCredentialsDump') as typeof import('./parseCredentialsDump');
     const dump = parseCredentialsDump(text);
     if (dump && dump.length > 0) {
       const totalItems = dump.reduce((sum, c) => sum + c.items.length, 0);
@@ -1476,6 +1473,7 @@ export function autonomousImport(text: string, fileName?: string): AutonomousImp
       };
     }
   } catch { /* fall through to generic pipeline */ }
+
 
   const parsedData = parseImportData(text, fileName);
 
