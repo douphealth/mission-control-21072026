@@ -1,84 +1,128 @@
 import { useWebsites, useBuildProjects, useTasks, useNotes, usePayments, useIdeas, useHabits } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { forwardRef, useState, useEffect } from 'react';
+import { forwardRef, useState, useEffect, useMemo } from 'react';
 import {
-  Globe, CheckSquare, Clock, Zap, Calendar, FileText, Target, DollarSign,
-  Eye, EyeOff, ArrowUpRight, ArrowDownRight, ExternalLink,
-  Flame, ChevronRight, BarChart3, ArrowUp, ArrowDown, X,
-  LayoutGrid, ChevronDown, Plus, TrendingUp, Cloud, RefreshCw, Loader2,
+  CheckSquare, Clock, Calendar, FileText, Target, DollarSign,
+  ArrowUpRight, ArrowDownRight, ExternalLink,
+  Flame, ChevronRight, BarChart3, ArrowUp, Plus, TrendingUp,
+  Cloud, Sparkles, Zap, MoreHorizontal, Play, Pause, Search,
+  Github, Rocket, Bug, Lightbulb, Globe, Bell,
 } from 'lucide-react';
 
-type GCalSummary = { connected: boolean; events: Array<{ id: string; date: string; title: string; color: string; htmlLink?: string; startTime?: string; endTime?: string }> };
-
-function readGCalSummary(): GCalSummary {
-  try {
-    const raw = localStorage.getItem('mc_gcal_config');
-    if (!raw) return { connected: false, events: [] };
-    const cfg = JSON.parse(raw);
-    return { connected: !!(cfg.accessToken && cfg.tokenExpiry && cfg.tokenExpiry > Date.now()), events: [] };
-  } catch {
-    return { connected: false, events: [] };
-  }
-}
-
-/* ─── animation helpers ─── */
-const fe = [0.22, 1, 0.36, 1] as any;
-const fu = (i: number) => ({
-  initial: { opacity: 0, y: 14 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.46, delay: i * 0.055, ease: fe },
-});
-
-/* ─── priority config ─── */
-const PRI: Record<string, { c: string; bg: string; lbl: string; dot: string }> = {
-  critical: { c: 'text-rose-500', bg: 'bg-rose-500/10', lbl: 'Critical', dot: 'bg-rose-500' },
-  high: { c: 'text-amber-500', bg: 'bg-amber-500/10', lbl: 'High', dot: 'bg-amber-500' },
-  medium: { c: 'text-blue-500', bg: 'bg-blue-500/10', lbl: 'Medium', dot: 'bg-blue-500' },
-  low: { c: 'text-emerald-500', bg: 'bg-emerald-500/10', lbl: 'Low', dot: 'bg-emerald-500' },
+/* ═══════════════════════════════════════════════════════════════════
+   Design tokens — Dribbble "task management" palette (works L + D)
+   ═══════════════════════════════════════════════════════════════════ */
+const HUES = {
+  emerald: { grad: 'linear-gradient(140deg,#10b981,#059669 65%,#047857)', soft: 'rgba(16,185,129,0.12)', ink: '#065f46' },
+  violet:  { grad: 'linear-gradient(140deg,#a78bfa,#8b5cf6 60%,#6d28d9)', soft: 'rgba(139,92,246,0.12)', ink: '#5b21b6' },
+  rose:    { grad: 'linear-gradient(140deg,#fb7185,#f43f5e 60%,#e11d48)', soft: 'rgba(244,63,94,0.12)',  ink: '#9f1239' },
+  amber:   { grad: 'linear-gradient(140deg,#fbbf24,#f59e0b 60%,#d97706)', soft: 'rgba(245,158,11,0.14)', ink: '#92400e' },
+  sky:     { grad: 'linear-gradient(140deg,#38bdf8,#0ea5e9 60%,#0369a1)', soft: 'rgba(14,165,233,0.12)', ink: '#0c4a6e' },
+  ink:     { grad: 'linear-gradient(160deg,#0f172a,#1e293b 60%,#0b1220)', soft: 'rgba(15,23,42,0.06)',   ink: '#0f172a' },
 };
 
-/* ─── sub-components ─── */
-const PillChart = forwardRef<HTMLDivElement, { data: number[]; color?: string }>(function PillChart({ data, color = 'hsl(150 60% 48%)' }, ref) {
-  const max = Math.max(...data, 1);
-  const labels = 'SMTWTFS';
-  return (
-    <div ref={ref} className="flex items-end gap-1.5 w-full h-full">
-      {data.map((v, i) => (
-        <div key={i} className="flex flex-col items-center gap-1.5 flex-1 h-full">
-          <div className="flex-1 flex items-end w-full">
-            <div
-              style={{ background: color, borderRadius: 999, opacity: 0.2 + (v / max) * 0.8, width: '100%' }} 
-            />
-          </div>
-          <span className="text-[9px] text-white/35 font-medium">{labels[i % 7]}</span>
-        </div>
-      ))}
-    </div>
-  );
+const fu = (i: number) => ({
+  style: { animation: `fadeUp 0.55s ${i * 55}ms cubic-bezier(0.22,1,0.36,1) both` } as React.CSSProperties,
 });
 
-const WH = forwardRef<HTMLDivElement, { title: string; sub?: string; action?: string; onAction?: () => void; light?: boolean }>(
-  ({ title, sub, action, onAction, light }, ref) => {
+const PRI: Record<string, { hue: keyof typeof HUES; lbl: string }> = {
+  critical: { hue: 'rose',    lbl: 'Critical' },
+  high:     { hue: 'amber',   lbl: 'High' },
+  medium:   { hue: 'sky',     lbl: 'Medium' },
+  low:      { hue: 'emerald', lbl: 'Low' },
+};
+
+/* ─── tiny UI atoms ─── */
+const SectionTitle = ({ title, sub, onAction, actionLabel = 'View all', invert }: any) => (
+  <div className="flex items-start justify-between mb-5">
+    <div>
+      <h3 className={`text-[15px] font-bold tracking-tight ${invert ? 'text-white' : 'text-foreground'}`}>{title}</h3>
+      {sub && <p className={`text-[11px] mt-0.5 ${invert ? 'text-white/50' : 'text-muted-foreground'}`}>{sub}</p>}
+    </div>
+    {onAction && (
+      <button onClick={onAction}
+        className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-full transition ${invert ? 'text-white/70 hover:text-white bg-white/10 hover:bg-white/15' : 'text-muted-foreground hover:text-foreground bg-secondary hover:bg-secondary/70'}`}>
+        {actionLabel} <ChevronRight size={11} />
+      </button>
+    )}
+  </div>
+);
+
+const Ring = ({ pct, size = 96, stroke = 9, color = 'var(--gradient-primary)', track = 'hsl(var(--border))' }: any) => {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const dash = c * (Math.max(0, Math.min(100, pct)) / 100);
   return (
-    <div ref={ref} className="flex items-start justify-between mb-4 sm:mb-5 flex-shrink-0">
-      <div>
-        <h3 className={`font-bold text-[13px] sm:text-[14px] tracking-tight ${light ? 'text-white' : 'text-foreground'}`}>{title}</h3>
-        {sub && <p className={`text-[10px] mt-0.5 ${light ? 'text-white/45' : 'text-muted-foreground/50'}`}>{sub}</p>}
-      </div>
-      {action && onAction && (
-        <button onClick={onAction} className={`text-[10px] font-semibold flex items-center gap-0.5 px-2.5 py-1.5 rounded-xl transition-all flex-shrink-0 ${light ? 'text-white/55 hover:text-white hover:bg-white/12' : 'text-muted-foreground/50 hover:text-primary hover:bg-secondary/60'}`}>
-          {action}<ChevronRight size={10} />
-        </button>
+    <svg width={size} height={size} className="-rotate-90">
+      <defs>
+        <linearGradient id="ringG" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#10b981" />
+          <stop offset="100%" stopColor="#0ea5e9" />
+        </linearGradient>
+      </defs>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={track} strokeWidth={stroke} opacity={0.35} />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="url(#ringG)" strokeWidth={stroke} strokeLinecap="round"
+        strokeDasharray={`${dash} ${c}`} />
+    </svg>
+  );
+};
+
+const AreaChart = ({ data, tone = 'emerald' }: { data: number[]; tone?: keyof typeof HUES }) => {
+  const w = 520, h = 160, pad = 6;
+  const max = Math.max(...data, 1);
+  const stepX = (w - pad * 2) / (data.length - 1);
+  const pts = data.map((v, i) => [pad + i * stepX, h - pad - (v / max) * (h - pad * 2 - 20)]);
+  const line = pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]},${p[1]}`).join(' ');
+  const area = `${line} L${pts[pts.length-1][0]},${h-pad} L${pts[0][0]},${h-pad} Z`;
+  const gid = `ac-${tone}`;
+  const stops: any = {
+    emerald: ['#10b981', '#10b981'],
+    violet:  ['#8b5cf6', '#8b5cf6'],
+    sky:     ['#0ea5e9', '#0ea5e9'],
+    amber:   ['#f59e0b', '#f59e0b'],
+    rose:    ['#f43f5e', '#f43f5e'],
+    ink:     ['#64748b', '#64748b'],
+  };
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="w-full h-full">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={stops[tone][0]} stopOpacity={0.35} />
+          <stop offset="100%" stopColor={stops[tone][1]} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gid})`} />
+      <path d={line} fill="none" stroke={stops[tone][0]} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+      {pts.map((p, i) => (
+        <circle key={i} cx={p[0]} cy={p[1]} r={i === pts.length - 1 ? 4 : 0} fill="white" stroke={stops[tone][0]} strokeWidth={2.5} />
+      ))}
+    </svg>
+  );
+};
+
+const AvatarStack = ({ names, size = 28 }: { names: string[]; size?: number }) => {
+  const colors = ['#f59e0b', '#8b5cf6', '#10b981', '#0ea5e9', '#f43f5e'];
+  return (
+    <div className="flex -space-x-2">
+      {names.slice(0, 4).map((n, i) => (
+        <div key={i} style={{ width: size, height: size, background: colors[i % colors.length] }}
+          className="rounded-full ring-2 ring-background flex items-center justify-center text-white text-[10px] font-bold uppercase">
+          {n.charAt(0)}
+        </div>
+      ))}
+      {names.length > 4 && (
+        <div style={{ width: size, height: size }} className="rounded-full ring-2 ring-background bg-secondary text-foreground/70 flex items-center justify-center text-[10px] font-bold">
+          +{names.length - 4}
+        </div>
       )}
     </div>
   );
-  },
-);
+};
 
-WH.displayName = 'WidgetHeader';
-
-/* ─── Main Dashboard ─── */
+/* ═══════════════════════════════════════════════════════════════════
+   MAIN
+   ═══════════════════════════════════════════════════════════════════ */
 const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) {
   const websites = useWebsites();
   const buildProjects = useBuildProjects();
@@ -90,16 +134,23 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const { setActiveSection } = useNavigationStore();
   const { userName } = useSettingsStore();
   const [clock, setClock] = useState(new Date());
-  const [gcal] = useState<GCalSummary>(() => readGCalSummary());
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerSec, setTimerSec] = useState(25 * 60);
 
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => {
+    if (!timerRunning) return;
+    const t = setInterval(() => setTimerSec(s => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [timerRunning]);
 
-  /* computed */
+  /* ─── derived ─── */
   const today = new Date().toISOString().split('T')[0];
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n);
   const done = tasks.filter(t => t.status === 'done');
   const open = tasks.filter(t => t.status !== 'done');
+  const inProgress = tasks.filter(t => t.status === 'in-progress');
+  const todo = tasks.filter(t => t.status === 'todo');
   const dueToday = tasks.filter(t => t.dueDate === today && t.status !== 'done').length;
   const overdue = tasks.filter(t => t.dueDate < today && t.status !== 'done').length;
   const completedToday = tasks.filter(t => t.completedAt === today).length;
@@ -107,469 +158,481 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const expense = payments.filter(p => (p.type === 'expense' || p.type === 'subscription') && p.status === 'paid').reduce((s, p) => s + p.amount, 0);
   const pending = payments.filter(p => p.status === 'pending' || p.status === 'overdue').reduce((s, p) => s + p.amount, 0);
   const pct = tasks.length > 0 ? (done.length / tasks.length) * 100 : 0;
-  const activeSites = websites.filter(w => w.status === 'active').length;
-  const topTasks = [...open].sort((a, b) => { const p: any = { critical: 0, high: 1, medium: 2, low: 3 }; return (p[a.priority] || 3) - (p[b.priority] || 3); }).slice(0, 7);
-  const upcoming = tasks.filter(t => t.status !== 'done' && t.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 6);
-  const recentBuilds = [...buildProjects].sort((a, b) => b.lastWorkedOn.localeCompare(a.lastWorkedOn)).slice(0, 5);
+  const upcoming = tasks.filter(t => t.status !== 'done' && t.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5);
   const topIdeas = ideas.filter(i => i.status !== 'parked').sort((a, b) => b.votes - a.votes).slice(0, 4);
-  const pinnedNotes = notes.filter(n => n.pinned).slice(0, 4);
-  const taskBar = [3, 5, 4, 7, 6, 8, open.length];
+  const pinnedNotes = notes.filter(n => n.pinned).slice(0, 3);
+  const taskWave = useMemo(() => [4, 6, 5, 8, 7, 9, done.length || 6, 11, 8, 12, open.length + 6, 14], [done.length, open.length]);
+  const hour = clock.getHours();
+  const greet = hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const dateLabel = clock.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  const timerText = `${String(Math.floor(timerSec / 60)).padStart(2,'0')}:${String(timerSec % 60).padStart(2,'0')}`;
 
-  /* shared card style */
-  const card = 'enterprise-card rounded-2xl sm:rounded-3xl transition-all duration-300 hover:shadow-md hover:border-primary/20 overflow-hidden';
-  const darkCard = 'rounded-2xl sm:rounded-3xl overflow-hidden';
+  /* ─── kanban buckets from real tasks ─── */
+  const kanban = [
+    { key: 'todo',        title: 'To do',       hue: 'sky' as const,     items: todo.slice(0, 4) },
+    { key: 'in-progress', title: 'In progress', hue: 'amber' as const,   items: inProgress.slice(0, 4) },
+    { key: 'review',      title: 'In review',   hue: 'violet' as const,  items: open.filter(t => t.priority === 'high').slice(0, 3) },
+    { key: 'done',        title: 'Completed',   hue: 'emerald' as const, items: done.slice(0, 3) },
+  ];
 
   return (
-    <div ref={ref} className="flex flex-col gap-3 sm:gap-5">
+    <div ref={ref} className="flex flex-col gap-5 sm:gap-6 pb-8">
 
-      {/* ── Page header ── */}
-      <div {...fu(0)} className="enterprise-panel rounded-2xl sm:rounded-3xl p-4 sm:p-6 flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
-        <div>
-          <div className="flex items-center gap-2 sm:gap-3 mb-1">
-            <h1 className="text-xl sm:text-3xl font-extrabold text-foreground tracking-tighter">Mission Control</h1>
-            <span 
-              className="px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold border shadow-sm"
-              style={{ background: 'hsl(var(--success)/0.1)', color: 'hsl(var(--success))', borderColor: 'hsl(var(--success)/0.2)' }}>
-              ● Live
-            </span>
+      {/* Anim keyframes */}
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}`}</style>
+
+      {/* ═══ HERO ═══ */}
+      <div {...fu(0)} className="relative overflow-hidden rounded-[32px] p-6 sm:p-10"
+        style={{
+          background: 'linear-gradient(135deg, #0b1220 0%, #0f172a 45%, #052e2b 100%)',
+          boxShadow: '0 40px 90px -40px rgba(15,23,42,0.55)',
+        }}>
+        {/* aurora */}
+        <div className="absolute inset-0 pointer-events-none opacity-90"
+          style={{ background: 'radial-gradient(600px 300px at 8% -10%, rgba(16,185,129,0.35), transparent 60%), radial-gradient(700px 350px at 100% 0%, rgba(139,92,246,0.28), transparent 55%), radial-gradient(500px 300px at 60% 120%, rgba(14,165,233,0.22), transparent 55%)' }} />
+        {/* grid dots */}
+        <div className="absolute inset-0 pointer-events-none opacity-[0.12]"
+          style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.6) 1px, transparent 1px)', backgroundSize: '22px 22px' }} />
+
+        <div className="relative flex flex-col lg:flex-row gap-8 lg:items-end justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/15 text-[11px] font-semibold text-white/85 mb-5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Mission Control · {dateLabel}
+            </div>
+            <h1 className="text-white font-extrabold tracking-tighter leading-[0.95] text-[40px] sm:text-[56px] lg:text-[68px]">
+              {greet},<br />
+              <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg,#6ee7b7,#38bdf8 55%,#a78bfa)' }}>
+                {userName}.
+              </span>
+            </h1>
+            <p className="mt-4 text-white/60 text-[14px] sm:text-[15px] max-w-xl">
+              You have <strong className="text-white">{open.length} open tasks</strong>, {dueToday} due today
+              {overdue > 0 && <> and <strong className="text-rose-300">{overdue} overdue</strong></>}. Let's crush the day.
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center gap-2.5">
+              <button onClick={() => setActiveSection('tasks')}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-slate-900 text-[13px] font-bold hover:scale-[1.02] active:scale-[0.98] transition shadow-lg">
+                <Plus size={15} /> New task
+              </button>
+              <button onClick={() => setActiveSection('focus')}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/10 border border-white/15 text-white text-[13px] font-semibold hover:bg-white/15 backdrop-blur transition">
+                <Zap size={15} /> Start focus
+              </button>
+              <button onClick={() => setActiveSection('calendar')}
+                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-white/75 hover:text-white text-[13px] font-medium transition">
+                <Calendar size={15} /> Today's schedule
+              </button>
+            </div>
           </div>
-          <p className="text-[12px] sm:text-[13px] text-muted-foreground/70">Welcome back, <strong className="text-foreground/85">{userName}</strong></p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {completedToday > 0 && (
-            <div {...fu(1)} className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl text-[10px] sm:text-[11px] font-semibold"
-              style={{ background: 'hsl(var(--success)/0.08)', color: 'hsl(var(--success))', border: '1px solid hsl(var(--success)/0.15)' }}>
-              <Target size={11} />{completedToday} done today
+
+          {/* Hero side — floating summary card */}
+          <div className="relative w-full lg:w-[320px] shrink-0">
+            <div className="rounded-3xl p-5 backdrop-blur-xl border border-white/15"
+              style={{ background: 'linear-gradient(160deg,rgba(255,255,255,0.14),rgba(255,255,255,0.05))' }}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="text-[11px] text-white/60 font-semibold uppercase tracking-widest">Today's progress</div>
+                <MoreHorizontal size={16} className="text-white/50" />
+              </div>
+              <div className="flex items-center gap-5">
+                <div className="relative">
+                  <Ring pct={pct} size={92} stroke={9} />
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-white text-xl font-extrabold tabular-nums">{Math.round(pct)}%</span>
+                    <span className="text-[9px] text-white/50">done</span>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center justify-between text-[12px]"><span className="text-white/60">Completed</span><span className="text-white font-bold tabular-nums">{done.length}</span></div>
+                  <div className="flex items-center justify-between text-[12px]"><span className="text-white/60">Active</span><span className="text-white font-bold tabular-nums">{inProgress.length}</span></div>
+                  <div className="flex items-center justify-between text-[12px]"><span className="text-white/60">Overdue</span><span className={`font-bold tabular-nums ${overdue ? 'text-rose-300' : 'text-white'}`}>{overdue}</span></div>
+                </div>
+              </div>
+              <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between">
+                <AvatarStack names={[userName, 'Alex', 'Jamie', 'Sam', 'Riley']} />
+                <button onClick={() => setActiveSection('tasks')} className="text-[11px] text-white/70 hover:text-white font-semibold inline-flex items-center gap-1">
+                  View team <ArrowUpRight size={12} />
+                </button>
+              </div>
             </div>
-          )}
-          {overdue > 0 && (
-            <div {...fu(2)} className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl sm:rounded-2xl text-[10px] sm:text-[11px] font-semibold animate-pulse"
-              style={{ background: 'hsl(var(--destructive)/0.08)', color: 'hsl(var(--destructive))', border: '1px solid hsl(var(--destructive)/0.15)' }}>
-              ⚠️ {overdue} overdue
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════
-          ROW 1: Stats (4 equal columns — 2 on mobile)
-      ═══════════════════════════════════ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
+      {/* ═══ STAT CARDS — 4 distinct colored tiles ═══ */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total Projects', value: websites.length + buildProjects.length, change: '+5.4%', sub: 'From last month', Icon: BarChart3, isHero: true, nav: 'websites' },
-          { label: 'Completed Tasks', value: done.length, change: '+3.2%', sub: 'Increased', Icon: CheckSquare, isHero: false, nav: 'tasks' },
-          { label: 'Active Tasks', value: open.length, change: overdue > 0 ? `${overdue} overdue` : '+8.1%', sub: 'Running now', Icon: TrendingUp, isHero: false, nav: 'tasks' },
-          { label: 'Net Revenue', value: fmt(income - expense), change: '+12.8%', sub: 'This period', Icon: DollarSign, isHero: false, nav: 'payments' },
-        ].map((s, i) => (
-          <div key={s.label} {...fu(i)}  onClick={() => setActiveSection(s.nav)}
-            className="relative overflow-hidden cursor-pointer p-4 sm:p-7 flex flex-col gap-3 sm:gap-5 touch-manipulation"
-            style={{
-              borderRadius: 'calc(var(--radius) + 8px)',
-              background: s.isHero ? 'var(--gradient-primary)' : 'var(--surface-raised)',
-              boxShadow: s.isHero ? 'var(--shadow-primary)' : 'var(--shadow-sm)',
-              border: s.isHero ? '1px solid hsl(var(--primary) / 0.25)' : 'var(--hairline)',
-            }}>
-            {s.isHero && <>
-              <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle,rgba(255,255,255,0.1),transparent 70%)' }} />
-            </>}
-            <div className="flex items-start justify-between">
-              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl flex items-center justify-center ${s.isHero ? 'bg-white/16' : 'bg-secondary/80'}`}>
-                <s.Icon size={15} className={s.isHero ? 'text-white/90' : 'text-muted-foreground/60'} />
+          { hue: 'emerald' as const, label: 'Total projects', value: websites.length + buildProjects.length, delta: '+5.4%', Icon: BarChart3, nav: 'websites', sub: 'across all workspaces' },
+          { hue: 'violet'  as const, label: 'Completed',      value: done.length,                            delta: '+3.2%', Icon: CheckSquare, nav: 'tasks', sub: 'tasks this month' },
+          { hue: 'amber'   as const, label: 'Active tasks',   value: open.length,                            delta: overdue ? `${overdue} overdue` : '+8.1%', Icon: TrendingUp, nav: 'tasks', sub: 'currently running' },
+          { hue: 'sky'     as const, label: 'Net revenue',    value: fmt(income - expense),                   delta: '+12.8%', Icon: DollarSign, nav: 'payments', sub: 'this period' },
+        ].map((s, i) => {
+          const h = HUES[s.hue];
+          return (
+            <button key={s.label} onClick={() => setActiveSection(s.nav)} {...fu(i + 1)}
+              className="group relative text-left rounded-[28px] p-6 overflow-hidden text-white transition-transform hover:-translate-y-1"
+              style={{ background: h.grad, boxShadow: `0 20px 50px -20px ${h.soft.replace('0.12','0.55').replace('0.14','0.55')}` }}>
+              <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-30" style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.6), transparent 65%)' }} />
+              <div className="relative">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+                    <s.Icon size={18} className="text-white" />
+                  </div>
+                  <ArrowUpRight size={16} className="text-white/70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                </div>
+                <div className="text-[36px] font-extrabold tracking-tighter leading-none tabular-nums">{s.value}</div>
+                <div className="mt-2 text-[13px] font-semibold text-white/90">{s.label}</div>
+                <div className="mt-1 text-[11px] text-white/65">{s.sub}</div>
+                <div className="mt-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold">
+                  <ArrowUp size={10} /> {s.delta}
+                </div>
               </div>
-              <ArrowUpRight size={12} className={`hidden sm:block ${s.isHero ? 'text-white/40' : 'text-muted-foreground/20'}`} />
-            </div>
-            <div>
-              <div className={`text-2xl sm:text-4xl font-extrabold tracking-tighter leading-none mb-1 sm:mb-2 tabular-nums ${s.isHero ? 'text-white' : 'text-foreground'}`}>{s.value}</div>
-              <div className={`text-[10px] sm:text-[11px] font-semibold mb-1.5 sm:mb-2.5 ${s.isHero ? 'text-white/60' : 'text-muted-foreground/55'}`}>{s.label}</div>
-              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-                <span className={`inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-full ${s.isHero ? 'bg-white/18 text-white' : 'bg-success/10 text-success'}`}><ArrowUp size={8} />{s.change}</span>
-              </div>
-            </div>
-          </div>
-        ))}
+            </button>
+          );
+        })}
       </div>
 
-      {/* ═══════════════════════════════════
-          ROW 2: Analytics + Time Tracker
-          Auto height on mobile, fixed on desktop
-      ═══════════════════════════════════ */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 sm:gap-4 lg:h-[380px]">
+      {/* ═══ ANALYTICS (7) + POMODORO (5) ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Performance chart */}
+        <div {...fu(6)} className="lg:col-span-8 enterprise-card rounded-[28px] p-6 sm:p-7">
+          <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+            <div>
+              <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Productivity</div>
+              <h3 className="text-[22px] font-extrabold tracking-tight text-foreground">Weekly performance</h3>
+              <p className="text-[12px] text-muted-foreground mt-1">Tasks completed vs. planned — last 12 days</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-2xl bg-secondary p-1 text-[11px] font-semibold">
+                {['1W', '1M', '3M', '1Y'].map((v, idx) => (
+                  <button key={v} className={`px-3 py-1.5 rounded-xl transition ${idx === 0 ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
+                ))}
+              </div>
+              <button className="w-9 h-9 rounded-2xl bg-secondary hover:bg-secondary/70 flex items-center justify-center text-muted-foreground"><MoreHorizontal size={16} /></button>
+            </div>
+          </div>
 
-        {/* Analytics — dark card */}
-        <div {...fu(4)} className={`lg:col-span-7 ${darkCard} flex flex-col p-4 sm:p-6`}
-          style={{ background: 'linear-gradient(145deg,hsl(220 28% 10%),hsl(222 25% 14%))', border: '1px solid hsl(222 20% 18% / 0.7)', boxShadow: 'var(--shadow-lg)' }}>
-          <WH light title="Analytics" sub="Last 7 days" action="View All" onAction={() => setActiveSection('tasks')} />
-          <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4 sm:mb-5 flex-shrink-0">
+          <div className="grid grid-cols-3 gap-3 mb-5">
             {[
-              { lbl: 'Done', val: done.length, c: 'text-emerald-400', bg: 'bg-emerald-500/14' },
-              { lbl: 'Active', val: open.filter(t => t.status === 'in-progress').length, c: 'text-blue-400', bg: 'bg-blue-500/14' },
-              { lbl: 'Overdue', val: overdue, c: 'text-rose-400', bg: 'bg-rose-500/14' },
+              { hue: 'emerald' as const, lbl: 'Completed', val: done.length, delta: '+18%' },
+              { hue: 'amber'   as const, lbl: 'Active',    val: inProgress.length, delta: '+4%' },
+              { hue: 'rose'    as const, lbl: 'Overdue',   val: overdue, delta: overdue ? '⚠️' : 'clear' },
             ].map(m => (
-              <div key={m.lbl} className={`${m.bg} rounded-xl sm:rounded-2xl p-3 sm:p-4 text-center`}>
-                <div className={`text-xl sm:text-2xl font-extrabold ${m.c} tabular-nums`}>{m.val}</div>
-                <div className="text-[9px] text-white/35 font-semibold mt-1">{m.lbl}</div>
+              <div key={m.lbl} className="rounded-2xl p-4 border border-border/60 bg-secondary/40">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="w-2 h-2 rounded-full" style={{ background: HUES[m.hue].grad }} />
+                  <span className="text-[11px] font-semibold text-muted-foreground">{m.lbl}</span>
+                </div>
+                <div className="flex items-end justify-between">
+                  <span className="text-2xl font-extrabold tabular-nums text-foreground">{m.val}</span>
+                  <span className="text-[10px] font-bold text-muted-foreground">{m.delta}</span>
+                </div>
               </div>
             ))}
           </div>
-          <div className="flex-1 min-h-[100px] sm:min-h-0">
-            <PillChart data={taskBar} color="hsl(150 60% 48%)" />
+
+          <div className="h-[180px] -mx-2">
+            <AreaChart data={taskWave} tone="emerald" />
           </div>
         </div>
 
-        {/* Time Tracker — dark card */}
-        <div {...fu(5)} className={`lg:col-span-5 ${darkCard} flex flex-col`}
-          style={{ background: 'linear-gradient(145deg,hsl(220 28% 10%),hsl(222 25% 14%))', border: '1px solid hsl(222 20% 18% / 0.7)', boxShadow: 'var(--shadow-lg)' }}>
-          <div className="flex-1 p-4 sm:p-6 flex flex-col relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-40 h-40 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle,hsl(150 60% 50% / 0.1),transparent 65%)' }} />
-            <div className="text-[9px] text-emerald-400/75 font-bold uppercase tracking-widest mb-3 sm:mb-4 flex items-center gap-1.5">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />Time Tracker
-            </div>
-            <div className="text-[32px] sm:text-[42px] font-extrabold tracking-tighter tabular-nums text-white leading-none mb-1">
-              {clock.toLocaleTimeString('en-US', { hour12: false })}
-            </div>
-            <div className="text-[10px] sm:text-[11px] text-white/30 mb-4 sm:mb-5">
-              {clock.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </div>
-            <div className="flex flex-wrap gap-1.5 sm:gap-2 mb-auto">
-              {completedToday > 0 && <span className="text-[10px] bg-emerald-500/18 text-emerald-300 px-2 sm:px-2.5 py-1 rounded-full font-semibold">{completedToday} done</span>}
-              {dueToday > 0 && <span className="text-[10px] bg-amber-500/18 text-amber-300 px-2 sm:px-2.5 py-1 rounded-full font-semibold">{dueToday} due</span>}
-              {overdue > 0 && <span className="text-[10px] bg-rose-500/18 text-rose-300 px-2 sm:px-2.5 py-1 rounded-full font-semibold">{overdue} overdue</span>}
-            </div>
-            <div className="mt-4 sm:mt-5">
-              <div className="flex justify-between mb-2"><span className="text-[10px] text-white/30">Daily progress</span><span className="text-[10px] text-white/55 font-bold">{Math.round(pct)}%</span></div>
-              <div className="h-1.5 rounded-full bg-white/8 overflow-hidden">
-                <div className="h-full rounded-full" style={{ background: 'linear-gradient(90deg,hsl(150 60% 48%),hsl(150 55% 56%))' }}  />
+        {/* Pomodoro / Focus */}
+        <div {...fu(7)} className="lg:col-span-4 rounded-[28px] p-6 sm:p-7 text-white relative overflow-hidden"
+          style={{ background: 'linear-gradient(160deg,#0f172a,#111827 55%,#0b1220)' }}>
+          <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full opacity-40"
+            style={{ background: 'radial-gradient(circle,#10b981,transparent 65%)' }} />
+          <div className="relative">
+            <div className="flex items-center justify-between mb-4">
+              <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold uppercase tracking-wider">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> Focus session
               </div>
+              <MoreHorizontal size={16} className="text-white/50" />
             </div>
-          </div>
-          <div className="border-t border-white/7 px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3 flex-shrink-0">
-            <button className="w-9 h-9 rounded-2xl bg-white/10 hover:bg-white/16 flex items-center justify-center transition-all touch-manipulation">
-              <div className="w-0 h-0 border-l-[7px] border-l-white border-t-[4.5px] border-t-transparent border-b-[4.5px] border-b-transparent ml-0.5" />
-            </button>
-            <button className="w-9 h-9 rounded-2xl bg-rose-500/60 hover:bg-rose-500 flex items-center justify-center transition-all touch-manipulation">
-              <div className="w-3 h-3 rounded-sm bg-white" />
-            </button>
-            <div className="ml-1 flex-1">
-              <div className="text-[9px] text-white/35">Current session</div>
-              <div className="text-[13px] font-bold text-white">Focus Mode</div>
+
+            <div className="text-[64px] font-extrabold tracking-tighter tabular-nums leading-none">{timerText}</div>
+            <div className="text-[12px] text-white/50 mt-1">Deep work · Pomodoro 25/5</div>
+
+            <div className="mt-6 h-1.5 rounded-full bg-white/10 overflow-hidden">
+              <div className="h-full rounded-full transition-all" style={{ width: `${100 - (timerSec / (25 * 60)) * 100}%`, background: 'linear-gradient(90deg,#10b981,#38bdf8)' }} />
+            </div>
+
+            <div className="mt-6 flex items-center gap-3">
+              <button onClick={() => setTimerRunning(r => !r)}
+                className="flex-1 inline-flex items-center justify-center gap-2 py-3 rounded-2xl bg-white text-slate-900 font-bold text-[13px] hover:scale-[1.02] transition">
+                {timerRunning ? <><Pause size={14} /> Pause</> : <><Play size={14} /> Start</>}
+              </button>
+              <button onClick={() => { setTimerRunning(false); setTimerSec(25 * 60); }}
+                className="px-4 py-3 rounded-2xl bg-white/10 hover:bg-white/15 text-white/80 text-[13px] font-semibold transition">Reset</button>
+            </div>
+
+            <div className="mt-6 pt-5 border-t border-white/10 grid grid-cols-3 gap-2 text-center">
+              <div><div className="text-lg font-extrabold text-white">{completedToday}</div><div className="text-[10px] text-white/50 mt-0.5">Done today</div></div>
+              <div><div className="text-lg font-extrabold text-white">{dueToday}</div><div className="text-[10px] text-white/50 mt-0.5">Due today</div></div>
+              <div><div className={`text-lg font-extrabold ${overdue ? 'text-rose-300' : 'text-white'}`}>{overdue}</div><div className="text-[10px] text-white/50 mt-0.5">Overdue</div></div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════
-          ROW 3: Focus + Reminders + Habits
-          Auto height on mobile
-      ═══════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:h-[420px]">
-
-        {/* Today's Focus */}
-        <div {...fu(6)} className={`sm:col-span-2 lg:col-span-5 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Today's Focus" sub={`${topTasks.length} tasks pending`} action="All Tasks" onAction={() => setActiveSection('tasks')} />
-          <div className="mb-3 sm:mb-4 flex-shrink-0">
-            <div className="flex justify-between mb-1.5">
-              <span className="text-[10px] text-muted-foreground/50 font-medium">Progress</span>
-              <span className="text-[10px] font-bold text-foreground">{Math.round(pct)}%</span>
-            </div>
-            <div className="h-2 rounded-full bg-secondary overflow-hidden">
-              <div className="h-full rounded-full" style={{ background: 'linear-gradient(90deg,hsl(150 52% 28%),hsl(212 82% 54%))' }}  />
-            </div>
+      {/* ═══ KANBAN — the centerpiece from the Dribbble reference ═══ */}
+      <div {...fu(8)} className="enterprise-card rounded-[28px] p-6 sm:p-7">
+        <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+          <div>
+            <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Task board</div>
+            <h3 className="text-[22px] font-extrabold tracking-tight text-foreground">What's on your plate</h3>
+            <p className="text-[12px] text-muted-foreground mt-1">Live view · updates in real time</p>
           </div>
-          <div className="flex-1 overflow-y-auto space-y-0.5 min-h-0 max-h-[280px] sm:max-h-none">
-            {topTasks.map((t, i) => {
-              const p = PRI[t.priority] || PRI.medium;
-              return (
-                <div key={t.id} {...fu(i)} onClick={() => setActiveSection('tasks')}
-                  className="flex items-center gap-2.5 sm:gap-3 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl hover:bg-secondary/50 transition-all cursor-pointer touch-manipulation active:bg-secondary/70">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${p.dot}`} />
-                  <span className="text-[11px] sm:text-[12px] text-foreground flex-1 truncate font-medium">{t.title}</span>
-                  <span className={`text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold flex-shrink-0 ${p.bg} ${p.c}`}>{p.lbl}</span>
-                  <span className={`text-[9px] font-mono tabular-nums flex-shrink-0 hidden sm:inline ${t.dueDate < today ? 'text-rose-500 font-bold' : 'text-muted-foreground/30'}`}>
-                    {t.dueDate === today ? 'Today' : t.dueDate.slice(5)}
-                  </span>
-                </div>
-              );
-            })}
-            {topTasks.length === 0 && <div className="flex flex-col items-center justify-center h-full"><div className="text-4xl mb-3">🎉</div><p className="text-sm font-semibold text-foreground/50">All done!</p></div>}
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input placeholder="Search tasks..." className="pl-9 pr-3 py-2 rounded-2xl bg-secondary text-[12px] text-foreground placeholder:text-muted-foreground/60 outline-none w-52 focus:ring-2 focus:ring-primary/30" />
+            </div>
+            <button onClick={() => setActiveSection('tasks')} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-foreground text-background text-[12px] font-bold hover:opacity-90 transition">
+              <Plus size={13} /> New task
+            </button>
           </div>
         </div>
 
-        {/* Reminders + Google Calendar */}
-        <div {...fu(7)} className={`lg:col-span-4 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title={gcal.connected ? 'Calendar' : 'Reminders'} sub={gcal.connected ? `${gcal.events.length} Google events` : 'Upcoming deadlines'} action="Calendar" onAction={() => setActiveSection('calendar')} />
-
-          {/* Google Calendar today's events */}
-          {gcal.connected && gcal.events.filter(e => e.date === today).length > 0 && (
-            <div className="mb-3 sm:mb-4 flex-shrink-0">
-              <div className="text-[9px] font-bold uppercase tracking-wide text-blue-400 mb-2 flex items-center gap-1.5">
-                <Cloud size={10} /> Today from Google
-              </div>
-              <div className="space-y-1">
-                {gcal.events.filter(e => e.date === today).slice(0, 3).map(ev => (
-                  <a key={ev.id} href={ev.htmlLink} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-secondary/50 transition-all group">
-                    <div className="w-1 h-5 rounded-full shrink-0" style={{ background: ev.color }} />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[11px] font-semibold text-foreground truncate">{ev.title}</div>
-                      {ev.startTime && <div className="text-[9px] text-muted-foreground/50">{ev.startTime}{ev.endTime ? ` – ${ev.endTime}` : ''}</div>}
-                    </div>
-                    <ExternalLink size={9} className="text-muted-foreground/30 group-hover:text-primary transition-colors shrink-0" />
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Connect Google Calendar CTA (when not connected) */}
-          {!gcal.connected && (
-            <button onClick={() => setActiveSection('settings')}
-              className="mb-3 sm:mb-4 p-3 rounded-xl bg-blue-500/5 border border-blue-500/15 hover:border-blue-500/30 transition-all flex items-center gap-2.5 text-left flex-shrink-0 group">
-              <img src="https://www.gstatic.com/images/branding/product/2x/calendar_2020q4_48dp.png" alt="" className="w-5 h-5 opacity-60 group-hover:opacity-100 transition-opacity" />
-              <div className="flex-1">
-                <div className="text-[11px] font-semibold text-foreground">Connect Google Calendar</div>
-                <div className="text-[9px] text-muted-foreground/50">See meetings & events here</div>
-              </div>
-              <ChevronRight size={12} className="text-muted-foreground/30" />
-            </button>
-          )}
-
-          {upcoming[0] && (
-            <div className="mb-3 sm:mb-4 p-3 sm:p-4 rounded-xl sm:rounded-2xl flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg,hsl(150 52% 26% / 0.07),hsl(150 48% 33% / 0.04))', border: '1px solid hsl(150 52% 26% / 0.12)' }}>
-              <div className="text-[9px] text-primary font-bold uppercase tracking-wide mb-1">Next Up</div>
-              <div className="text-[12px] sm:text-[13px] font-bold text-foreground truncate mb-1">{upcoming[0].title}</div>
-              <div className="text-[10px] text-muted-foreground/50 mb-2 sm:mb-3">{upcoming[0].dueDate}</div>
-              <button onClick={() => setActiveSection('calendar')} className="text-[11px] bg-primary text-primary-foreground px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl font-semibold hover:opacity-90 transition-all flex items-center gap-1.5 touch-manipulation" style={{ boxShadow: 'var(--shadow-primary)' }}>
-                <Calendar size={11} />Calendar
-              </button>
-            </div>
-          )}
-          <div className="flex-1 overflow-y-auto space-y-1 min-h-0 max-h-[220px] sm:max-h-none">
-            {upcoming.slice(1).map((t, i) => {
-              const d = Math.ceil((new Date(t.dueDate).getTime() - Date.now()) / 86400000);
-              return (
-                <div key={t.id} {...fu(i)} className="flex items-center gap-2.5 sm:gap-3 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl hover:bg-secondary/50 transition-all touch-manipulation active:bg-secondary/70">
-                  <div className="w-8 sm:w-9 flex-shrink-0 text-center">
-                    <div className="text-[8px] text-muted-foreground/35 leading-none">{new Date(t.dueDate).toLocaleDateString('en', { month: 'short' })}</div>
-                    <div className={`text-sm font-extrabold ${d <= 1 ? 'text-rose-500' : d <= 3 ? 'text-amber-500' : 'text-foreground'}`}>{new Date(t.dueDate).getDate()}</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+          {kanban.map((col, ci) => {
+            const h = HUES[col.hue];
+            return (
+              <div key={col.key} {...fu(9 + ci)} className="rounded-3xl p-4 border border-border/60 flex flex-col gap-3"
+                style={{ background: 'var(--surface-panel)' }}>
+                <div className="flex items-center justify-between px-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full" style={{ background: h.grad }} />
+                    <span className="text-[12px] font-bold text-foreground">{col.title}</span>
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full text-muted-foreground bg-secondary">{col.items.length}</span>
                   </div>
-                  <div className="w-px h-6 sm:h-7 bg-border/40 flex-shrink-0" />
-                  <span className="text-[11px] sm:text-[12px] text-foreground flex-1 truncate font-medium">{t.title}</span>
-                  <span className={`text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0 ${d <= 1 ? 'bg-rose-500/10 text-rose-500' : d <= 3 ? 'bg-amber-500/10 text-amber-500' : 'bg-secondary text-muted-foreground'}`}>
-                    {d <= 0 ? 'Today' : d === 1 ? 'Tomorrow' : `${d}d`}
-                  </span>
+                  <button className="text-muted-foreground hover:text-foreground"><Plus size={13} /></button>
+                </div>
+
+                {col.items.length === 0 && (
+                  <div className="text-center py-6 text-[11px] text-muted-foreground/60">Nothing here yet</div>
+                )}
+
+                {col.items.map((t, i) => {
+                  const p = PRI[t.priority] || PRI.medium;
+                  const ph = HUES[p.hue];
+                  const isOverdue = t.dueDate && t.dueDate < today && col.key !== 'done';
+                  return (
+                    <button key={t.id} onClick={() => setActiveSection('tasks')}
+                      className="text-left rounded-2xl p-3.5 border border-border/60 bg-background hover:shadow-md hover:border-primary/30 transition-all group">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold"
+                          style={{ background: ph.soft, color: ph.ink }}>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ background: ph.grad }} /> {p.lbl}
+                        </span>
+                        <MoreHorizontal size={13} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <div className="text-[13px] font-semibold text-foreground line-clamp-2 leading-snug mb-3">{t.title}</div>
+                      <div className="flex items-center justify-between">
+                        <AvatarStack names={[userName, 'Alex', 'Jamie'].slice(0, (i % 3) + 1)} size={22} />
+                        <div className={`flex items-center gap-1 text-[10px] font-semibold ${isOverdue ? 'text-rose-500' : 'text-muted-foreground'}`}>
+                          <Clock size={10} />
+                          {t.dueDate ? (t.dueDate === today ? 'Today' : t.dueDate.slice(5)) : '—'}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ═══ FINANCE + SCHEDULE + HABITS ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Finance */}
+        <div {...fu(13)} className="lg:col-span-5 enterprise-card rounded-[28px] p-6 sm:p-7">
+          <SectionTitle title="Finance" sub="Income, expenses & profit" onAction={() => setActiveSection('payments')} actionLabel="Details" />
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { hue: 'emerald' as const, lbl: 'Income',   val: income,  Icon: ArrowUpRight },
+              { hue: 'rose'    as const, lbl: 'Expenses', val: expense, Icon: ArrowDownRight },
+              { hue: 'amber'   as const, lbl: 'Pending',  val: pending, Icon: Clock },
+            ].map(d => (
+              <div key={d.lbl} className="rounded-2xl p-4 border border-border/60"
+                style={{ background: HUES[d.hue].soft }}>
+                <d.Icon size={14} style={{ color: HUES[d.hue].ink }} />
+                <div className="mt-2 text-[15px] font-extrabold tabular-nums" style={{ color: HUES[d.hue].ink }}>{fmt(d.val)}</div>
+                <div className="text-[10px] font-semibold text-muted-foreground mt-0.5">{d.lbl}</div>
+              </div>
+            ))}
+          </div>
+          <div className="p-4 rounded-2xl border border-border/60 bg-secondary/40 flex items-center justify-between">
+            <div>
+              <div className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wide">Net profit</div>
+              <div className={`text-[24px] font-extrabold tabular-nums leading-none mt-1 ${income - expense >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>{fmt(income - expense)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-muted-foreground">{payments.length} transactions</div>
+              <div className={`text-[11px] font-bold mt-0.5 ${income - expense >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-500'}`}>{income - expense >= 0 ? '▲ Profitable' : '▼ Loss'}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Schedule */}
+        <div {...fu(14)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+          <SectionTitle title="Upcoming" sub={`${upcoming.length} deadlines`} onAction={() => setActiveSection('calendar')} actionLabel="Calendar" />
+          <div className="space-y-2">
+            {upcoming.map((t, i) => {
+              const d = Math.ceil((new Date(t.dueDate).getTime() - Date.now()) / 86400000);
+              const hue: keyof typeof HUES = d <= 0 ? 'rose' : d <= 2 ? 'amber' : 'sky';
+              const h = HUES[hue];
+              return (
+                <div key={t.id} {...fu(i)} className="flex items-center gap-3 p-3 rounded-2xl hover:bg-secondary/50 transition cursor-pointer" onClick={() => setActiveSection('tasks')}>
+                  <div className="w-11 h-11 rounded-2xl flex flex-col items-center justify-center flex-shrink-0"
+                    style={{ background: h.soft, color: h.ink }}>
+                    <span className="text-[8px] font-bold uppercase leading-none">{new Date(t.dueDate).toLocaleDateString('en', { month: 'short' })}</span>
+                    <span className="text-sm font-extrabold leading-tight">{new Date(t.dueDate).getDate()}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold text-foreground truncate">{t.title}</div>
+                    <div className="text-[10px] text-muted-foreground">{d <= 0 ? 'Due today' : d === 1 ? 'Tomorrow' : `In ${d} days`}</div>
+                  </div>
+                  <ChevronRight size={14} className="text-muted-foreground" />
                 </div>
               );
             })}
-            {upcoming.length === 0 && <div className="py-6 sm:py-8 text-center text-muted-foreground/40 text-sm">No deadlines 🌟</div>}
+            {upcoming.length === 0 && (
+              <div className="text-center py-10">
+                <div className="text-4xl mb-2">🌟</div>
+                <p className="text-[12px] text-muted-foreground">Nothing scheduled</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Habits */}
-        <div {...fu(8)} className={`lg:col-span-3 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Habits" sub={`${habits.filter(h => h.completions?.includes(today)).length}/${habits.length} today`} action="Track" onAction={() => setActiveSection('habits')} />
-          <div className="flex-1 overflow-y-auto space-y-1 sm:space-y-1.5 min-h-0 max-h-[220px] sm:max-h-none">
-            {habits.slice(0, 7).map((h, i) => {
-              const isDone = h.completions?.includes(today);
-              return (
-                <div key={h.id} {...fu(i)} className={`flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl transition-all touch-manipulation active:scale-[0.98] ${isDone ? 'bg-emerald-500/8 border border-emerald-500/14' : 'hover:bg-secondary/50 border border-transparent'}`}>
-                  <span className="text-sm sm:text-base">{h.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] font-semibold text-foreground truncate">{h.name}</div>
-                    <div className="text-[9px] text-muted-foreground/40 hidden sm:block">{h.frequency}</div>
+        <div {...fu(15)} className="lg:col-span-3 rounded-[28px] p-6 sm:p-7 text-white relative overflow-hidden"
+          style={{ background: 'linear-gradient(160deg,#7c2d12,#c2410c 60%,#f97316)' }}>
+          <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-40"
+            style={{ background: 'radial-gradient(circle,#fbbf24,transparent 65%)' }} />
+          <div className="relative">
+            <SectionTitle invert title="Habits" sub={`${habits.filter(h => h.completions?.includes(today)).length}/${habits.length} today`} onAction={() => setActiveSection('habits')} actionLabel="Track" />
+            <div className="space-y-2">
+              {habits.slice(0, 5).map((h, i) => {
+                const isDone = h.completions?.includes(today);
+                return (
+                  <div key={h.id} {...fu(i)} className={`flex items-center gap-2.5 p-2.5 rounded-2xl transition ${isDone ? 'bg-white/25' : 'bg-white/10 hover:bg-white/15'}`}>
+                    <span className="text-base">{h.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[12px] font-bold text-white truncate">{h.name}</div>
+                      <div className="text-[9px] text-white/70">{h.frequency}</div>
+                    </div>
+                    <div className="flex items-center gap-0.5 text-white"><Flame size={11} /><span className="text-[10px] font-extrabold tabular-nums">{h.streak}</span></div>
+                    <div className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] ${isDone ? 'bg-white text-orange-600' : 'bg-white/20 text-white/40'}`}>{isDone ? '✓' : ''}</div>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0"><Flame size={10} className="text-amber-500" /><span className="text-[10px] font-extrabold text-amber-500 tabular-nums">{h.streak}</span></div>
-                  <div className={`w-5 h-5 rounded-lg flex items-center justify-center flex-shrink-0 text-[10px] ${isDone ? 'bg-emerald-500 text-white' : 'bg-secondary text-muted-foreground/25'}`}>{isDone ? '✓' : ''}</div>
+                );
+              })}
+              {habits.length === 0 && (
+                <div className="text-center py-8">
+                  <Flame size={28} className="mx-auto text-white/60 mb-2" />
+                  <p className="text-[11px] text-white/80 mb-2">Build a streak</p>
+                  <button onClick={() => setActiveSection('habits')} className="text-[11px] text-white font-bold hover:underline">Start →</button>
                 </div>
-              );
-            })}
-            {habits.length === 0 && <div className="py-6 sm:py-8 text-center"><div className="text-3xl mb-2">🔥</div><p className="text-[11px] text-muted-foreground/50 mb-2">No habits yet</p><button onClick={() => setActiveSection('habits')} className="text-[11px] text-primary font-semibold hover:underline">Start →</button></div>}
+              )}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════
-          ROW 4: Finance + Progress + Notes
-          Auto height on mobile
-      ═══════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:h-[380px]">
-
-        {/* Finance */}
-        <div {...fu(9)} className={`sm:col-span-2 lg:col-span-5 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Finance" sub="Income, expenses & profit" action="Details" onAction={() => setActiveSection('payments')} />
-          <div className="grid grid-cols-3 gap-2 sm:gap-2.5 mb-3 sm:mb-4 flex-shrink-0">
-            {[
-              { lbl: 'Income', val: income, Icon: ArrowUpRight, c: 'text-emerald-500', bg: 'bg-emerald-500/8' },
-              { lbl: 'Expenses', val: expense, Icon: ArrowDownRight, c: 'text-rose-500', bg: 'bg-rose-500/8' },
-              { lbl: 'Pending', val: pending, Icon: Clock, c: 'text-amber-500', bg: 'bg-amber-500/8' },
-            ].map(d => (
-              <div key={d.lbl} className={`text-center p-3 sm:p-4 rounded-xl sm:rounded-2xl ${d.bg}`}>
-                <d.Icon size={14} className={`${d.c} mx-auto mb-1.5 sm:mb-2 opacity-70`} />
-                <div className={`text-sm sm:text-base font-extrabold ${d.c} tabular-nums leading-tight`}>{fmt(d.val)}</div>
-                <div className="text-[9px] text-muted-foreground/45 mt-1 font-medium">{d.lbl}</div>
-              </div>
-            ))}
-          </div>
-          <div className="flex items-center justify-between p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-secondary/30 border border-border/20 mb-2 sm:mb-3 flex-shrink-0">
-            <div>
-              <div className="text-[10px] text-muted-foreground/50 mb-0.5">Net Profit</div>
-              <div className={`text-xl sm:text-2xl font-extrabold tabular-nums ${income - expense >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{fmt(income - expense)}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] text-muted-foreground/40">{payments.length} txns</div>
-              <div className={`text-[11px] font-semibold mt-0.5 ${income - expense >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>{income - expense >= 0 ? '▲ Profitable' : '▼ Loss'}</div>
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-1 min-h-0">
-            {payments.filter(p => p.status === 'overdue' || p.status === 'pending').slice(0, 3).map(p => (
-              <div key={p.id} className="flex items-center gap-2 px-2.5 sm:px-3 py-2 rounded-xl bg-rose-500/5 border border-rose-500/10">
-                <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.status === 'overdue' ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}`} />
-                <span className="text-[11px] text-foreground font-medium flex-1 truncate">{p.title}</span>
-                <span className="text-[10px] text-rose-500 font-bold">{fmt(p.amount)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Progress / Ideas */}
-        <div {...fu(10)} className={`lg:col-span-4 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Progress" sub={`${done.length} of ${tasks.length} tasks done`} action="Ideas" onAction={() => setActiveSection('ideas')} />
-          <div className="flex items-center justify-center my-1 sm:my-2 flex-shrink-0">
-            <div className="relative" style={{ width: 90, height: 90 }}>
-              <svg width="90" height="90" className="-rotate-90">
-                <circle cx="45" cy="45" r="38" fill="none" stroke="currentColor" strokeWidth="8" className="text-secondary" />
-                <circle cx="45" cy="45" r="38" fill="none" stroke="hsl(var(--primary))" strokeWidth="8" strokeLinecap="round"  />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <span className="text-xl sm:text-2xl font-extrabold text-foreground">{Math.round(pct)}%</span>
-                <span className="text-[9px] text-muted-foreground/50">done</span>
-              </div>
-            </div>
-          </div>
-          <div className="flex justify-center gap-3 sm:gap-4 mb-3 sm:mb-4 flex-shrink-0 flex-wrap">
-            {[{ lbl: 'Done', val: done.length, c: 'bg-primary' }, { lbl: 'Active', val: open.filter(t => t.status === 'in-progress').length, c: 'bg-blue-500' }, { lbl: 'Todo', val: open.filter(t => t.status === 'todo').length, c: 'bg-amber-500' }].map(s => (
-              <div key={s.lbl} className="flex items-center gap-1.5"><div className={`w-2 h-2 rounded-full ${s.c}`} /><span className="text-[10px] text-muted-foreground/55">{s.lbl} <strong className="text-foreground">{s.val}</strong></span></div>
-            ))}
-          </div>
-          <div className="flex-1 overflow-y-auto space-y-1 sm:space-y-1.5 min-h-0">
+      {/* ═══ IDEAS + NOTES + PLATFORMS ═══ */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        {/* Ideas */}
+        <div {...fu(16)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+          <SectionTitle title="Top ideas" sub="Voted by team" onAction={() => setActiveSection('ideas')} />
+          <div className="space-y-2">
             {topIdeas.map((idea, i) => (
-              <div key={idea.id} {...fu(i)} onClick={() => setActiveSection('ideas')} className="flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl hover:bg-secondary/50 cursor-pointer transition-all touch-manipulation active:bg-secondary/70">
-                <span className="text-[11px] sm:text-[12px] font-extrabold text-primary bg-primary/8 w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center tabular-nums flex-shrink-0">{idea.votes}</span>
-                <div className="flex-1 min-w-0"><div className="text-[11px] font-semibold text-foreground truncate">{idea.title}</div><div className="text-[9px] text-muted-foreground/40">{idea.category}</div></div>
-                <span className={`text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full font-semibold capitalize flex-shrink-0 ${idea.status === 'validated' ? 'bg-emerald-500/10 text-emerald-500' : idea.status === 'exploring' ? 'bg-blue-500/10 text-blue-500' : 'bg-secondary text-muted-foreground'}`}>{idea.status}</span>
-              </div>
+              <button key={idea.id} {...fu(i)} onClick={() => setActiveSection('ideas')}
+                className="w-full text-left flex items-center gap-3 p-3 rounded-2xl border border-border/60 hover:border-primary/30 hover:bg-secondary/40 transition">
+                <div className="w-11 h-11 rounded-2xl flex items-center justify-center font-extrabold tabular-nums text-[13px] flex-shrink-0"
+                  style={{ background: HUES.violet.soft, color: HUES.violet.ink }}>
+                  {idea.votes}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-foreground truncate">{idea.title}</div>
+                  <div className="text-[10px] text-muted-foreground">{idea.category}</div>
+                </div>
+                <span className="text-[9px] px-2 py-0.5 rounded-full font-bold capitalize"
+                  style={{ background: idea.status === 'validated' ? HUES.emerald.soft : HUES.sky.soft, color: idea.status === 'validated' ? HUES.emerald.ink : HUES.sky.ink }}>
+                  {idea.status}
+                </span>
+              </button>
             ))}
-            {topIdeas.length === 0 && <div className="py-4 text-center text-[11px] text-muted-foreground/40">No active ideas</div>}
+            {topIdeas.length === 0 && (
+              <div className="text-center py-10">
+                <Lightbulb size={28} className="mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-[12px] text-muted-foreground">No ideas yet</p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Pinned Notes */}
-        <div {...fu(11)} className={`lg:col-span-3 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Notes" sub={`${pinnedNotes.length} pinned`} action="All" onAction={() => setActiveSection('notes')} />
-          <div className="flex-1 overflow-y-auto space-y-1.5 sm:space-y-2 min-h-0">
+        {/* Notes */}
+        <div {...fu(17)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+          <SectionTitle title="Pinned notes" sub={`${pinnedNotes.length} pinned`} onAction={() => setActiveSection('notes')} />
+          <div className="space-y-2.5">
             {pinnedNotes.map((n, i) => {
-              const accents = ['border-primary/20 bg-primary/4', 'border-amber-500/20 bg-amber-500/4', 'border-blue-500/20 bg-blue-500/4', 'border-emerald-500/20 bg-emerald-500/4'];
-              const dots = ['bg-primary', 'bg-amber-500', 'bg-blue-500', 'bg-emerald-500'];
+              const tones = ['violet', 'amber', 'sky', 'emerald'] as (keyof typeof HUES)[];
+              const h = HUES[tones[i % 4]];
               return (
-                <button key={n.id} {...fu(i)} onClick={() => setActiveSection('notes')} 
-                  className={`w-full text-left p-3 sm:p-3.5 rounded-xl sm:rounded-2xl border transition-all touch-manipulation active:scale-[0.98] ${accents[i % 4]}`}>
-                  <div className="flex items-center gap-2 mb-1"><div className={`w-2 h-2 rounded-full flex-shrink-0 ${dots[i % 4]}`} /><div className="text-[11px] sm:text-[12px] font-bold text-foreground truncate">{n.title}</div></div>
-                  <div className="text-[10px] text-muted-foreground/50 line-clamp-2 leading-relaxed ml-4">{n.content.slice(0, 80)}</div>
+                <button key={n.id} onClick={() => setActiveSection('notes')} {...fu(i)}
+                  className="w-full text-left p-4 rounded-2xl border transition hover:shadow-md"
+                  style={{ background: h.soft, borderColor: h.soft }}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="w-2 h-2 rounded-full" style={{ background: h.grad }} />
+                    <div className="text-[13px] font-bold truncate" style={{ color: h.ink }}>{n.title}</div>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground line-clamp-2 leading-relaxed">{n.content.slice(0, 100)}</div>
                 </button>
               );
             })}
-            {pinnedNotes.length === 0 && <div className="flex flex-col items-center pt-4 sm:pt-6 pb-2"><FileText size={24} className="text-muted-foreground/20 mb-3" /><p className="text-[11px] text-muted-foreground/45 mb-2">No pinned notes</p><button onClick={() => setActiveSection('notes')} className="text-[11px] text-primary font-semibold hover:underline">Create one →</button></div>}
+            {pinnedNotes.length === 0 && (
+              <div className="text-center py-10">
+                <FileText size={28} className="mx-auto text-muted-foreground/40 mb-2" />
+                <p className="text-[12px] text-muted-foreground mb-2">No pinned notes</p>
+                <button onClick={() => setActiveSection('notes')} className="text-[12px] text-primary font-bold hover:underline">Create one →</button>
+              </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* ═══════════════════════════════════
-          ROW 5: Platforms + Projects + Websites
-          Auto height on mobile
-      ═══════════════════════════════════ */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 sm:gap-4 lg:h-[340px]">
-
-        {/* Platforms & Team */}
-        <div {...fu(12)} className={`sm:col-span-2 lg:col-span-5 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Platforms & Team" sub="Status & collaboration" action="Manage" onAction={() => setActiveSection('cloudflare')} />
-          <div className="flex-1 space-y-0.5 sm:space-y-1">
+        {/* Platforms */}
+        <div {...fu(18)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+          <SectionTitle title="Platforms" sub="System status" onAction={() => setActiveSection('cloudflare')} actionLabel="Manage" />
+          <div className="space-y-2">
             {[
-              { name: 'Cloudflare', ok: true, e: '☁️', s: 'cloudflare', up: '99.9%' },
-              { name: 'Vercel', ok: true, e: '⚡', s: 'vercel', up: '99.8%' },
-              { name: 'GitHub', ok: true, e: '🐙', s: 'github', up: '99.9%' },
-              { name: 'OpenClaw', ok: true, e: '🐾', s: 'openclaw', up: '100%' },
-            ].map(p => (
-              <button key={p.name} onClick={() => setActiveSection(p.s)} 
-                className="w-full flex items-center gap-2.5 sm:gap-3 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl hover:bg-secondary/50 transition-all touch-manipulation active:bg-secondary/70">
-                <span className="text-sm sm:text-base">{p.e}</span>
-                <div className="flex-1 text-left">
-                  <div className="text-[11px] sm:text-[12px] font-semibold text-foreground">{p.name}</div>
-                  <div className={`text-[9px] flex items-center gap-1 ${p.ok ? 'text-emerald-500' : 'text-amber-500'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full ${p.ok ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />{p.ok ? 'Operational' : 'Warning'}
-                  </div>
-                </div>
-                <span className="text-[9px] font-mono text-muted-foreground/30">{p.up}</span>
-              </button>
-            ))}
-          </div>
-          <div className="border-t border-border/20 pt-3 sm:pt-4 mt-2 flex-shrink-0">
-            <div className="text-[9px] text-muted-foreground/35 font-bold uppercase tracking-widest mb-2">Team</div>
-            <div className="flex items-center gap-1">
-              {['A', 'E', 'I', 'D'].map((l, i) => (
-                <div key={i} title={['Alexandra', 'Edwin', 'Isaac', 'David'][i]}
-                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-primary-foreground text-[10px] font-bold ring-2 ring-card cursor-pointer hover:scale-110 transition-transform"
-                  style={{ background: 'linear-gradient(135deg,hsl(150 52% 26%),hsl(150 48% 35%))', marginLeft: i > 0 ? -6 : 0, boxShadow: '0 2px 8px hsl(0 0% 0% / 0.12)' }}>
-                  {l}
-                </div>
-              ))}
-              <span className="text-[10px] text-muted-foreground/45 font-medium ml-2 sm:ml-3">4 members</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Projects */}
-        <div {...fu(13)} className={`lg:col-span-4 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Projects" sub={`${recentBuilds.length} recent`} action="Manage" onAction={() => setActiveSection('builds')} />
-          <div className="flex-1 overflow-y-auto space-y-1 sm:space-y-1.5 min-h-0">
-            {recentBuilds.map((b, i) => {
-              const icons = ['🔧', '🚀', '📦', '⚡', '🎯'];
-              const sc: any = { deployed: 'text-emerald-500 bg-emerald-500/10', building: 'text-blue-500 bg-blue-500/10', testing: 'text-amber-500 bg-amber-500/10', ideation: 'text-muted-foreground bg-secondary' };
+              { name: 'Cloudflare', Icon: Cloud,   hue: 'amber'   as const, s: 'cloudflare', up: '99.9%' },
+              { name: 'Vercel',     Icon: Rocket,  hue: 'ink'     as const, s: 'vercel',     up: '99.8%' },
+              { name: 'GitHub',     Icon: Github,  hue: 'violet'  as const, s: 'github',     up: '99.9%' },
+              { name: 'OpenClaw',   Icon: Bug,     hue: 'emerald' as const, s: 'openclaw',   up: '100%'  },
+              { name: 'Websites',   Icon: Globe,   hue: 'sky'     as const, s: 'websites',   up: `${websites.filter(w => w.status === 'active').length} live` },
+            ].map(p => {
+              const h = HUES[p.hue];
               return (
-                <div key={b.id} {...fu(i)} onClick={() => setActiveSection('builds')} className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-3.5 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl hover:bg-secondary/50 cursor-pointer group transition-all touch-manipulation active:bg-secondary/70">
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-secondary/80 flex items-center justify-center text-sm sm:text-base flex-shrink-0">{icons[i % 5]}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[11px] sm:text-[12px] font-semibold text-foreground truncate">{b.name}</div>
-                    <div className="text-[9px] text-muted-foreground/40">{b.platform} · {b.lastWorkedOn.slice(5, 10)}</div>
+                <button key={p.name} onClick={() => setActiveSection(p.s)}
+                  className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-secondary/50 transition">
+                  <div className="w-10 h-10 rounded-2xl flex items-center justify-center" style={{ background: h.soft, color: h.ink }}>
+                    <p.Icon size={16} />
                   </div>
-                  <span className={`text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full font-semibold capitalize flex-shrink-0 ${sc[b.status] || sc.ideation}`}>{b.status}</span>
-                </div>
+                  <div className="flex-1 text-left">
+                    <div className="text-[13px] font-semibold text-foreground">{p.name}</div>
+                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> Operational
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-mono tabular-nums text-muted-foreground">{p.up}</span>
+                </button>
               );
             })}
-            {recentBuilds.length === 0 && <div className="py-6 sm:py-8 text-center"><div className="text-3xl mb-2">🚀</div><p className="text-[12px] text-muted-foreground/50 mb-2">No projects</p><button onClick={() => setActiveSection('builds')} className="text-[11px] text-primary font-semibold hover:underline">Add →</button></div>}
-          </div>
-        </div>
-
-        {/* Websites */}
-        <div {...fu(14)} className={`lg:col-span-3 ${card} p-4 sm:p-6 flex flex-col`}>
-          <WH title="Websites" sub={`${activeSites} live`} action="Manage" onAction={() => setActiveSection('websites')} />
-          <div className="flex-1 overflow-y-auto space-y-1 sm:space-y-1.5 min-h-0">
-            {websites.slice(0, 7).map((w, i) => (
-              <div key={w.id} {...fu(i)} className="flex items-center gap-2 sm:gap-2.5 px-2.5 sm:px-3 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl hover:bg-secondary/50 transition-all cursor-pointer touch-manipulation active:bg-secondary/70">
-                <div className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full flex-shrink-0 ring-2 ring-offset-2 ring-offset-card ${w.status === 'active' ? 'bg-emerald-500 ring-emerald-500/25' : w.status === 'maintenance' ? 'bg-amber-500 ring-amber-500/25' : 'bg-rose-500 ring-rose-500/25'}`} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-[11px] sm:text-[12px] font-semibold text-foreground truncate">{w.name}</div>
-                  <div className="text-[9px] text-muted-foreground/40">{w.hostingProvider || w.category}</div>
-                </div>
-                <a href={w.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} className="p-1.5 rounded-xl hover:bg-secondary transition-all">
-                  <ExternalLink size={11} className="text-primary" />
-                </a>
-              </div>
-            ))}
-            {websites.length === 0 && <div className="py-6 sm:py-8 text-center"><Globe size={24} className="text-muted-foreground/20 mx-auto mb-2" /><p className="text-[11px] text-muted-foreground/50 mb-2">No websites</p><button onClick={() => setActiveSection('websites')} className="text-[11px] text-primary font-semibold hover:underline">Add →</button></div>}
           </div>
         </div>
       </div>
-
     </div>
   );
 });
