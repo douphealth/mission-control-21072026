@@ -13,7 +13,7 @@ export default function FocusPage() {
   const [remaining, setRemaining] = useState(PRESETS[0].minutes * 60);
   const [running, setRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval>>();
+  const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
   useEffect(() => {
     if (running && remaining > 0) {

@@ -237,8 +237,8 @@ export function getSupabaseConfig(): { url: string; anonKey: string } | null {
         const anonKey = localStorage.getItem('mc-supabase-anon-key');
         if (url && anonKey && url.startsWith('https://')) return { url, anonKey };
     } catch { }
-    // Default: always connected to the bundled Supabase project
-    return { url: DEFAULT_SUPABASE_URL, anonKey: DEFAULT_SUPABASE_ANON_KEY };
+    // Start in local-only mode unless the user explicitly connects cloud sync.
+    return null;
 }
 
 export function setSupabaseConfig(url: string, anonKey: string): void {
