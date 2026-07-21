@@ -8,12 +8,12 @@ import { useNavigationStore } from '@/stores/navigationStore';
 
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
+import GoogleTasksPage from '@/pages/GoogleTasksPage';
 
 const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
 
 const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
 const TasksPage = lazy(() => import('@/pages/TasksPage'));
-const GoogleTasksPage = lazy(() => import('@/pages/GoogleTasksPage'));
 const WebsitesPage = lazy(() => import('@/pages/WebsitesPage'));
 const WordPressManagementPage = lazy(() => import('@/pages/WordPressManagementPage'));
 const GitHubPage = lazy(() => import('@/pages/GitHubPage'));
@@ -34,7 +34,7 @@ const OpenClawPage = lazy(() => import('@/pages/OpenClawPage'));
 const HabitsPage = lazy(() => import('@/pages/HabitsPage'));
 const CustomModulePage = lazy(() => import('@/pages/CustomModulePage'));
 
-const sectionMap: Record<string, React.LazyExoticComponent<any>> = {
+const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
   dashboard: DashboardHome,
   tasks: TasksPage,
   'google-tasks': GoogleTasksPage,

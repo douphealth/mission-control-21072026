@@ -1,23 +1,69 @@
 // Google Tasks — per-user OAuth via Google Identity Services (token flow).
 // No client secret needed in the browser.
 
-const CLIENT_ID = '444136985265-oehu4tfpce7b0kadq5vvn14kn6gk5tor.apps.googleusercontent.com';
+const DEFAULT_CLIENT_ID = '444136985265-oehu4tfpce7b0kadq5vvn14kn6gk5tor.apps.googleusercontent.com';
+const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() || DEFAULT_CLIENT_ID;
 const SCOPES = 'https://www.googleapis.com/auth/tasks';
 const STORAGE_KEY = 'google_tasks_token_v1';
 
 type StoredToken = { access_token: string; expires_at: number };
 
 let gisLoaded: Promise<void> | null = null;
+
+export function getGoogleTasksOAuthDiagnostics() {
+  if (typeof window === 'undefined') {
+    return { clientId: CLIENT_ID, origin: '', embedded: false };
+  }
+  return {
+    clientId: CLIENT_ID,
+    origin: window.location.origin,
+    embedded: window.self !== window.top,
+  };
+}
+
+function formatGoogleAuthError(error: unknown): Error {
+  const raw = typeof error === 'string'
+    ? error
+    : error && typeof error === 'object'
+      ? [
+          (error as any).message,
+          (error as any).error,
+          (error as any).type,
+          (error as any).details,
+        ].filter(Boolean).join(': ')
+      : '';
+  const lower = raw.toLowerCase();
+
+  if (lower.includes('origin_mismatch') || lower.includes('origin mismatch')) {
+    return new Error(`Google rejected this app origin. Add ${window.location.origin} to Authorized JavaScript origins for OAuth client ${CLIENT_ID}.`);
+  }
+  if (lower.includes('popup') || lower.includes('blocked')) {
+    return new Error('Google sign-in was blocked by the browser. Open this app in a standalone tab and allow popups for this site.');
+  }
+  if (lower.includes('idpiframe') || lower.includes('iframe')) {
+    return new Error('Google blocks sign-in inside embedded previews. Open the app in a standalone tab, then connect Google Tasks.');
+  }
+  return new Error(raw || 'Google sign-in failed');
+}
+
 function loadGis(): Promise<void> {
   if (gisLoaded) return gisLoaded;
   gisLoaded = new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') {
+      reject(new Error('Google sign-in is only available in the browser'));
+      return;
+    }
+    if (window.self !== window.top) {
+      reject(new Error('Google blocks sign-in inside embedded previews. Open the app in a standalone tab, then connect Google Tasks.'));
+      return;
+    }
     if ((window as any).google?.accounts?.oauth2) return resolve();
     const s = document.createElement('script');
     s.src = 'https://accounts.google.com/gsi/client';
     s.async = true;
     s.defer = true;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load Google Identity Services'));
+    s.onerror = () => reject(new Error('Failed to load Google Identity Services. Check your browser privacy settings, ad blocker, or network policy.'));
     document.head.appendChild(s);
   });
   return gisLoaded;
@@ -56,15 +102,15 @@ export async function signIn(): Promise<void> {
     const client = (window as any).google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPES,
-      prompt: '',
+      prompt: 'select_account consent',
       callback: (resp: any) => {
-        if (resp.error) return reject(new Error(resp.error_description || resp.error));
+        if (resp.error) return reject(formatGoogleAuthError(resp.error_description || resp.error));
         saveToken(resp.access_token, Number(resp.expires_in || 3600));
         resolve();
       },
-      error_callback: (err: any) => reject(new Error(err?.message || 'Sign-in cancelled')),
+      error_callback: (err: any) => reject(formatGoogleAuthError(err)),
     });
-    client.requestAccessToken({ prompt: 'consent' });
+    client.requestAccessToken({ prompt: 'select_account consent' });
   });
 }
 
