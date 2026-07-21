@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAddItem } from '@/hooks/useTableData';
 import type { Task, Note, Idea, LinkItem } from '@/lib/db';
-import { transcribeAndClassify, type VoiceCaptureResult } from '@/server/voice.functions';
+import { transcribeAndClassify, type VoiceCaptureResult } from '@/lib/voice.functions';
 import { buildRecognitionSnapshot, type RecognitionResultLike } from '@/lib/speechTranscript';
 import { toast } from 'sonner';
 
