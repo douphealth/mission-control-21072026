@@ -111,10 +111,17 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
   const handleAnalyze = useCallback(async (text: string, fileName?: string) => {
     if (!text.trim()) return;
     setPhase('analyzing');
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 100));
 
     try {
-      const importResult = autonomousImport(text, fileName);
+      let importResult: AutonomousImportResult;
+      try {
+        importResult = await aiAutonomousImport(text, fileName);
+        if (importResult.totalItems === 0) throw new Error('AI returned no items');
+      } catch (aiErr) {
+        console.warn('AI import fallback →', aiErr);
+        importResult = autonomousImport(text, fileName);
+      }
 
       if (importResult.totalItems === 0 && importResult.parsedData.rows.length === 0) {
         toast.error('Could not detect any importable data. Try another format.');
