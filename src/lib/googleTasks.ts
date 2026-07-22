@@ -1,23 +1,24 @@
-// Google Tasks — per-user OAuth via Google Identity Services (token flow).
-// No client secret needed in the browser.
+// Google Tasks — uses Lovable Cloud managed Google OAuth.
+// This avoids the hardcoded Google Client ID/origin mismatch failure entirely.
 
-const DEFAULT_CLIENT_ID = '444136985265-oehu4tfpce7b0kadq5vvn14kn6gk5tor.apps.googleusercontent.com';
-const CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim() || DEFAULT_CLIENT_ID;
-const SCOPES = 'https://www.googleapis.com/auth/tasks';
+import { lovable } from '@/integrations/lovable';
+import { supabase } from '@/integrations/supabase/client';
+
+const TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks';
+const SCOPES = `openid email profile ${TASKS_SCOPE}`;
 const STORAGE_KEY = 'google_tasks_token_v1';
 
 type StoredToken = { access_token: string; expires_at: number };
 
-let gisLoaded: Promise<void> | null = null;
-
 export function getGoogleTasksOAuthDiagnostics() {
   if (typeof window === 'undefined') {
-    return { clientId: CLIENT_ID, origin: '', embedded: false };
+    return { origin: '', embedded: false, scopes: SCOPES, mode: 'Lovable Cloud managed Google OAuth' };
   }
   return {
-    clientId: CLIENT_ID,
     origin: window.location.origin,
     embedded: window.self !== window.top,
+    scopes: SCOPES,
+    mode: 'Lovable Cloud managed Google OAuth',
   };
 }
 
@@ -35,38 +36,15 @@ function formatGoogleAuthError(error: unknown): Error {
   const lower = raw.toLowerCase();
 
   if (lower.includes('origin_mismatch') || lower.includes('origin mismatch')) {
-    return new Error(`Google rejected this app origin. Add ${window.location.origin} to Authorized JavaScript origins for OAuth client ${CLIENT_ID}.`);
+    return new Error('Google rejected the old custom OAuth client. Refresh the app and try again — this screen now uses Lovable Cloud managed Google OAuth instead.');
   }
   if (lower.includes('popup') || lower.includes('blocked')) {
-    return new Error('Google sign-in was blocked by the browser. Open this app in a standalone tab and allow popups for this site.');
+    return new Error('Google sign-in popup was blocked. Allow popups for this site and try again.');
   }
   if (lower.includes('idpiframe') || lower.includes('iframe')) {
-    return new Error('Google blocks sign-in inside embedded previews. Open the app in a standalone tab, then connect Google Tasks.');
+    return new Error('Google blocked the sign-in frame. Try again from the standalone app tab.');
   }
   return new Error(raw || 'Google sign-in failed');
-}
-
-function loadGis(): Promise<void> {
-  if (gisLoaded) return gisLoaded;
-  gisLoaded = new Promise((resolve, reject) => {
-    if (typeof window === 'undefined' || typeof document === 'undefined') {
-      reject(new Error('Google sign-in is only available in the browser'));
-      return;
-    }
-    if (window.self !== window.top) {
-      reject(new Error('Google blocks sign-in inside embedded previews. Open the app in a standalone tab, then connect Google Tasks.'));
-      return;
-    }
-    if ((window as any).google?.accounts?.oauth2) return resolve();
-    const s = document.createElement('script');
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.defer = true;
-    s.onload = () => resolve();
-    s.onerror = () => reject(new Error('Failed to load Google Identity Services. Check your browser privacy settings, ad blocker, or network policy.'));
-    document.head.appendChild(s);
-  });
-  return gisLoaded;
 }
 
 function readToken(): StoredToken | null {
@@ -79,9 +57,23 @@ function readToken(): StoredToken | null {
   } catch { return null; }
 }
 
-function saveToken(access_token: string, expires_in: number) {
-  const t: StoredToken = { access_token, expires_at: Date.now() + expires_in * 1000 };
+function saveToken(access_token: string, expiresAt?: number) {
+  const t: StoredToken = { access_token, expires_at: expiresAt || Date.now() + 60 * 60 * 1000 };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(t));
+}
+
+async function persistProviderTokenFromSession(fallbackToken?: string): Promise<StoredToken | null> {
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+  const providerToken = fallbackToken || session?.provider_token;
+  if (!providerToken) return readToken();
+  const expiresAt = session?.expires_at ? session.expires_at * 1000 : Date.now() + 60 * 60 * 1000;
+  saveToken(providerToken, expiresAt);
+  return readToken();
+}
+
+export async function refreshSignInState(): Promise<boolean> {
+  return (await persistProviderTokenFromSession()) !== null;
 }
 
 export function isSignedIn(): boolean {
@@ -89,34 +81,46 @@ export function isSignedIn(): boolean {
 }
 
 export function signOut() {
-  const t = readToken();
   localStorage.removeItem(STORAGE_KEY);
-  if (t?.access_token && (window as any).google?.accounts?.oauth2) {
-    try { (window as any).google.accounts.oauth2.revoke(t.access_token, () => {}); } catch { /* noop */ }
-  }
+  void supabase.auth.signOut();
 }
 
 export async function signIn(): Promise<void> {
-  await loadGis();
-  return new Promise((resolve, reject) => {
-    const client = (window as any).google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
-      scope: SCOPES,
+  if (typeof window === 'undefined') throw new Error('Google sign-in is only available in the browser');
+
+  const result = await lovable.auth.signInWithOAuth('google', {
+    redirect_uri: window.location.origin,
+    extraParams: {
       prompt: 'select_account consent',
-      callback: (resp: any) => {
-        if (resp.error) return reject(formatGoogleAuthError(resp.error_description || resp.error));
-        saveToken(resp.access_token, Number(resp.expires_in || 3600));
-        resolve();
-      },
-      error_callback: (err: any) => reject(formatGoogleAuthError(err)),
-    });
-    client.requestAccessToken({ prompt: 'select_account consent' });
+      access_type: 'online',
+      include_granted_scopes: 'true',
+      scope: SCOPES,
+    },
   });
+
+  if ((result as any).error) {
+    throw formatGoogleAuthError((result as any).error);
+  }
+
+  if ((result as any).redirected) {
+    return;
+  }
+
+  const fallbackToken = (result as any).tokens?.provider_token || (result as any).provider_token;
+  const token = await persistProviderTokenFromSession(fallbackToken);
+  if (!token) {
+    throw new Error('Google sign-in finished, but Google Tasks access was not granted. Please approve Tasks access and try again.');
+  }
+}
+
+async function ensureToken(): Promise<StoredToken> {
+  const token = readToken() || await persistProviderTokenFromSession();
+  if (!token) throw new Error('Not signed in to Google Tasks');
+  return token;
 }
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  let token = readToken();
-  if (!token) throw new Error('Not signed in to Google Tasks');
+  const token = await ensureToken();
   const res = await fetch(`https://tasks.googleapis.com/tasks/v1${path}`, {
     ...init,
     headers: {
