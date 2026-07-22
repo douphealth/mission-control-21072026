@@ -17,6 +17,7 @@ import {
   type TargetMeta,
   generateTemplate,
 } from '@/lib/importEngine';
+import { aiAutonomousImport } from '@/lib/aiImport';
 import { deduplicateItems } from '@/lib/dedup';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -110,10 +111,17 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
   const handleAnalyze = useCallback(async (text: string, fileName?: string) => {
     if (!text.trim()) return;
     setPhase('analyzing');
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 100));
 
     try {
-      const importResult = autonomousImport(text, fileName);
+      let importResult: AutonomousImportResult;
+      try {
+        importResult = await aiAutonomousImport(text, fileName);
+        if (importResult.totalItems === 0) throw new Error('AI returned no items');
+      } catch (aiErr) {
+        console.warn('AI import fallback →', aiErr);
+        importResult = autonomousImport(text, fileName);
+      }
 
       if (importResult.totalItems === 0 && importResult.parsedData.rows.length === 0) {
         toast.error('Could not detect any importable data. Try another format.');
@@ -252,7 +260,14 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     await new Promise(r => setTimeout(r, 200));
 
     try {
-      const importResult = autonomousImport(rawText);
+      let importResult: AutonomousImportResult;
+      try {
+        importResult = await aiAutonomousImport(rawText);
+        if (importResult.totalItems === 0) throw new Error('AI returned no items');
+      } catch (aiErr) {
+        console.warn('AI express fallback →', aiErr);
+        importResult = autonomousImport(rawText);
+      }
       let totalSkipped = 0;
       for (const cat of importResult.categories) {
         const unique = await deduplicateItems(cat.target, cat.items);
