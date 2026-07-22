@@ -1,31 +1,17 @@
 /**
- * Google Calendar — per-user OAuth via Google Identity Services (token flow).
- * Uses each app user's own Google account, matching the Google Tasks setup.
+ * Google Calendar — per-user access through Lovable Cloud managed Google OAuth.
+ * This avoids the old hardcoded Google OAuth client that caused origin_mismatch.
  */
 
-const CLIENT_ID = '444136985265-oehu4tfpce7b0kadq5vvn14kn6gk5tor.apps.googleusercontent.com';
-const OAUTH_SCOPES = 'https://www.googleapis.com/auth/calendar';
+import { lovable } from '@/integrations/lovable';
+import { supabase } from '@/integrations/supabase/client';
+
+const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
+const OAUTH_SCOPES = `openid email profile ${CALENDAR_SCOPE}`;
 const TOKEN_STORAGE_KEY = 'mc_gcal_token_v1';
 const CONFIG_STORAGE_KEY = 'mc_gcal_config';
 
 type StoredToken = { access_token: string; expires_at: number };
-
-let gisLoaded: Promise<void> | null = null;
-
-function loadGis(): Promise<void> {
-  if (gisLoaded) return gisLoaded;
-  gisLoaded = new Promise((resolve, reject) => {
-    if ((window as any).google?.accounts?.oauth2) return resolve();
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error('Failed to load Google Identity Services'));
-    document.head.appendChild(script);
-  });
-  return gisLoaded;
-}
 
 function readToken(): StoredToken | null {
   try {
@@ -39,16 +25,26 @@ function readToken(): StoredToken | null {
   }
 }
 
-function saveToken(access_token: string, expires_in: number) {
+function saveToken(access_token: string, expiresAt?: number) {
   const token: StoredToken = {
     access_token,
-    expires_at: Date.now() + expires_in * 1000,
+    expires_at: expiresAt || Date.now() + 60 * 60 * 1000,
   };
   localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(token));
 }
 
+async function persistProviderTokenFromSession(fallbackToken?: string): Promise<StoredToken | null> {
+  const { data } = await supabase.auth.getSession();
+  const session = data.session;
+  const providerToken = fallbackToken || session?.provider_token;
+  if (!providerToken) return readToken();
+  const expiresAt = session?.expires_at ? session.expires_at * 1000 : Date.now() + 60 * 60 * 1000;
+  saveToken(providerToken, expiresAt);
+  return readToken();
+}
+
 async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = readToken();
+  const token = readToken() || await persistProviderTokenFromSession();
   if (!token) throw new Error('Not signed in to Google Calendar');
 
   const response = await fetch(`https://www.googleapis.com/calendar/v3/${path.replace(/^\/+/, '')}`, {
@@ -75,7 +71,7 @@ async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 async function ensureCalendarToken(): Promise<void> {
-  if (readToken()) return;
+  if (readToken() || await persistProviderTokenFromSession()) return;
   await connectGCal();
 }
 
@@ -157,22 +153,35 @@ export function isGCalConnected(): boolean {
 }
 
 export async function connectGCal(): Promise<{ email?: string }> {
-  await loadGis();
+  if (typeof window === 'undefined') throw new Error('Google Calendar sign-in is only available in the browser');
 
-  await new Promise<void>((resolve, reject) => {
-    const client = (window as any).google.accounts.oauth2.initTokenClient({
-      client_id: CLIENT_ID,
+  const result = await lovable.auth.signInWithOAuth('google', {
+    redirect_uri: window.location.origin,
+    extraParams: {
+      prompt: 'select_account consent',
+      access_type: 'online',
+      include_granted_scopes: 'true',
       scope: OAUTH_SCOPES,
-      prompt: '',
-      callback: (resp: any) => {
-        if (resp.error) return reject(new Error(resp.error_description || resp.error));
-        saveToken(resp.access_token, Number(resp.expires_in || 3600));
-        resolve();
-      },
-      error_callback: (err: any) => reject(new Error(err?.message || 'Google Calendar sign-in cancelled')),
-    });
-    client.requestAccessToken({ prompt: 'consent' });
+    },
   });
+
+  if ((result as any).error) {
+    const raw = (result as any).error?.message || String((result as any).error);
+    if (/origin_mismatch|origin mismatch/i.test(raw)) {
+      throw new Error('Google rejected the old custom OAuth client. Refresh the app and try again — Google Calendar now uses Lovable Cloud managed Google OAuth.');
+    }
+    throw new Error(raw || 'Google Calendar sign-in failed');
+  }
+
+  if (!(result as any).redirected) {
+    const fallbackToken = (result as any).tokens?.provider_token || (result as any).provider_token;
+    const token = await persistProviderTokenFromSession(fallbackToken);
+    if (!token) {
+      throw new Error('Google Calendar sign-in finished, but Calendar access was not granted. Please approve Calendar access and try again.');
+    }
+  } else {
+    return {};
+  }
 
   const calendars = await listCalendars();
   const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
@@ -181,11 +190,8 @@ export async function connectGCal(): Promise<{ email?: string }> {
 }
 
 export function disconnectGCal(): void {
-  const token = readToken();
   localStorage.removeItem(TOKEN_STORAGE_KEY);
-  if (token?.access_token && (window as any).google?.accounts?.oauth2) {
-    try { (window as any).google.accounts.oauth2.revoke(token.access_token, () => {}); } catch { /* noop */ }
-  }
+  void supabase.auth.signOut();
   clearGCalConfig();
 }
 
