@@ -24,14 +24,18 @@ function stringifyRow(item: Record<string, any>): Record<string, string> {
  * existing importEngine so downstream dedup/import stays identical.
  */
 export async function aiAutonomousImport(text: string, fileName?: string): Promise<AutonomousImportResult> {
-  const result = await aiParseImport({ data: { text, fileName } });
+  const result = (await aiParseImport({ data: { text, fileName } })) as {
+    categories: Array<{ target: ImportTarget; items: Record<string, any>[] }>;
+  };
   const cats = result?.categories ?? [];
 
   const categories = cats
     .map((c) => {
-      const target = c.target as ImportTarget;
+      const target = c.target;
       const rows = c.items.map(stringifyRow);
-      const sourceFields = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
+      const sourceFields = Array.from(
+        new Set(rows.flatMap((r: Record<string, string>) => Object.keys(r))),
+      ) as string[];
       const fieldMap = autoMapFields(sourceFields, target);
       const items = normalizeItems(rows, target, fieldMap);
       return {
@@ -46,7 +50,7 @@ export async function aiAutonomousImport(text: string, fileName?: string): Promi
     .filter((c) => c.items.length > 0)
     .sort((a, b) => b.items.length - a.items.length);
 
-  const totalItems = categories.reduce((s, c) => s + c.items.length, 0);
+  const totalItems = categories.reduce((s: number, c) => s + c.items.length, 0);
 
   return {
     categories,
