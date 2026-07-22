@@ -17,6 +17,7 @@ import {
   type TargetMeta,
   generateTemplate,
 } from '@/lib/importEngine';
+import { aiAutonomousImport } from '@/lib/aiImport';
 import { deduplicateItems } from '@/lib/dedup';
 import { useIsMobile } from '@/hooks/use-mobile';
 
