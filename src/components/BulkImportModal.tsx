@@ -260,7 +260,14 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     await new Promise(r => setTimeout(r, 200));
 
     try {
-      const importResult = autonomousImport(rawText);
+      let importResult: AutonomousImportResult;
+      try {
+        importResult = await aiAutonomousImport(rawText);
+        if (importResult.totalItems === 0) throw new Error('AI returned no items');
+      } catch (aiErr) {
+        console.warn('AI express fallback →', aiErr);
+        importResult = autonomousImport(rawText);
+      }
       let totalSkipped = 0;
       for (const cat of importResult.categories) {
         const unique = await deduplicateItems(cat.target, cat.items);
