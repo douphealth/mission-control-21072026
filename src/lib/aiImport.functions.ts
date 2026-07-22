@@ -1,0 +1,95 @@
+import { createServerFn } from '@tanstack/react-start';
+import { z } from 'zod';
+
+const InputSchema = z.object({
+  text: z.string().min(1).max(200_000),
+  fileName: z.string().optional(),
+});
+
+const VALID_TARGETS = [
+  'websites', 'links', 'tasks', 'repos', 'buildProjects',
+  'credentials', 'payments', 'notes', 'ideas', 'habits',
+] as const;
+
+const SYSTEM_PROMPT = `You are an enterprise-grade data extraction engine for a personal command-center app.
+
+Your job: given ARBITRARY user-pasted content (plain text, CSV, JSON, markdown, HTML, credential dumps, receipts, chat logs, emails, meeting notes, spreadsheets, positional column dumps, mixed data — literally anything), extract EVERY meaningful item and classify each into ONE of these target categories.
+
+CATEGORIES (target -> fields):
+- websites: name, url, wpAdminUrl, wpUsername, wpPassword, hostingProvider, hostingLoginUrl, hostingUsername, hostingPassword, category, status, notes, plugins[], tags[]
+- links: title, url, category, description, status, pinned, tags[]
+- tasks: title, priority(low|medium|high|critical), status(todo|in-progress|done|blocked), dueDate(YYYY-MM-DD), category, description, linkedProject, tags[]
+- repos: name, url, description, language, stars, forks, status, demoUrl, progress, topics[], devPlatformUrl, deploymentUrl
+- buildProjects: name, platform, projectUrl, deployedUrl, description, techStack[], status, nextSteps, githubRepo
+- credentials: label, service, url, username, password, apiKey, notes, category, tags[]
+- payments: title, amount(number), currency, type(income|expense|subscription), status(paid|pending|overdue), category, from, to, dueDate(YYYY-MM-DD), recurring(bool), notes
+- notes: title, content, color, pinned, tags[]
+- ideas: title, description, category, priority, status, tags[], linkedProject, votes
+- habits: name, icon, frequency(daily|weekly|monthly), color
+
+RULES:
+1. Extract EVERY distinct item — do not summarize or collapse.
+2. Handle "positional column" dumps where labels appear once then N values across rows (e.g. "site1 site2 site3 / user1 user2 user3 / pass1 pass2 pass3") — pair them by column index.
+3. Detect mixed categories in one paste and split accordingly.
+4. Infer sensible defaults (name from domain, priority from urgency words, dueDate from natural language like "tomorrow" → ISO date relative to today ${new Date().toISOString().split('T')[0]}).
+5. Normalize URLs (add https:// if missing).
+6. For credentials of WordPress sites, prefer the "websites" target (with wpUsername/wpPassword/wpAdminUrl filled) over "credentials".
+7. Use "credentials" only for infrastructure/service accounts (CyberPanel, FTP, Cloudflare, RackNerd, hosting panels, API providers, etc.).
+8. Never invent data — leave a field empty if unknown.
+9. Return STRICT JSON matching the schema. No prose, no code fences.
+
+OUTPUT SCHEMA:
+{
+  "categories": [
+    { "target": "<one of the target keys>", "items": [ { ...fields per that target... }, ... ] }
+  ]
+}`;
+
+export const aiParseImport = createServerFn({ method: 'POST' })
+  .inputValidator((input: unknown) => InputSchema.parse(input))
+  .handler(async ({ data }) => {
+    const apiKey = process.env.LOVABLE_API_KEY;
+    if (!apiKey) throw new Error('LOVABLE_API_KEY is not configured');
+
+    const userContent = `Extract and classify all importable items from the following content${data.fileName ? ` (file: ${data.fileName})` : ''}. Return JSON only.\n\n---\n${data.text}\n---`;
+
+    const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash',
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPT },
+          { role: 'user', content: userContent },
+        ],
+        response_format: { type: 'json_object' },
+      }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      if (res.status === 429) throw new Error('AI rate limit exceeded — try again in a moment.');
+      if (res.status === 402) throw new Error('AI credits exhausted — add credits in workspace settings.');
+      throw new Error(`AI import failed [${res.status}]: ${body.slice(0, 400)}`);
+    }
+
+    const json = await res.json();
+    const raw = json?.choices?.[0]?.message?.content ?? '{}';
+    let parsed: any;
+    try { parsed = typeof raw === 'string' ? JSON.parse(raw) : raw; }
+    catch { throw new Error('AI returned malformed JSON'); }
+
+    const rawCats = Array.isArray(parsed?.categories) ? parsed.categories : [];
+    const categories = rawCats
+      .filter((c: any) => c && VALID_TARGETS.includes(c.target) && Array.isArray(c.items))
+      .map((c: any) => ({
+        target: c.target as (typeof VALID_TARGETS)[number],
+        items: c.items.filter((i: any) => i && typeof i === 'object'),
+      }))
+      .filter((c: any) => c.items.length > 0);
+
+    return { categories };
+  });
