@@ -6,6 +6,8 @@ import {
   type ImportTarget,
   type AutonomousImportResult,
 } from '@/lib/importEngine';
+import { parseCredentialsDump } from '@/lib/parseCredentialsDump';
+
 
 function stringifyRow(item: Record<string, any>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -24,10 +26,36 @@ function stringifyRow(item: Record<string, any>): Record<string, string> {
  * existing importEngine so downstream dedup/import stays identical.
  */
 export async function aiAutonomousImport(text: string, fileName?: string): Promise<AutonomousImportResult> {
+  // Fast, deterministic path for tabular credential/hosting dumps.
+  // The AI struggles to align ragged tab-separated columns; the specialised
+  // parser is 100% accurate for that shape and emits per-site credentials.
+  const dump = parseCredentialsDump(text);
+  if (dump && dump.length > 0) {
+    const normalizedCats = dump.map((c) => {
+      const rows = c.items.map(stringifyRow);
+      const sourceFields = Array.from(
+        new Set(rows.flatMap((r: Record<string, string>) => Object.keys(r))),
+      ) as string[];
+      const fieldMap = autoMapFields(sourceFields, c.target);
+      const items = normalizeItems(rows, c.target, fieldMap);
+      return { target: c.target, meta: TARGET_META[c.target], confidence: 'high' as const, items, fieldMap, score: 100 };
+    }).filter(c => c.items.length > 0);
+    const totalItems = normalizedCats.reduce((s, c) => s + c.items.length, 0);
+    if (totalItems > 0) {
+      return {
+        categories: normalizedCats,
+        parsedData: { rows: [], sourceFields: [], format: 'text' } as any,
+        totalItems,
+        expressReady: true,
+      };
+    }
+  }
+
   const result = (await aiParseImport({ data: { text, fileName } })) as {
     categories: Array<{ target: ImportTarget; items: Record<string, any>[] }>;
   };
   const cats = result?.categories ?? [];
+
 
   const categories = cats
     .map((c) => {
