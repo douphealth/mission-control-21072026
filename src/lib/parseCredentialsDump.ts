@@ -1,18 +1,12 @@
 /**
- * Specialized parser for messy, concatenated credential dumps like:
+ * Robust parser for messy, tab/column-separated credential dumps like the
+ * user's WordPress hosting export (one column per website, multiple labelled
+ * sections stacked vertically: WordPress Access / CyberPanel / FTP /
+ * Cloudflare / RackNerd / Backup Email / Cloudflare API token / Virusdie).
  *
- *   site1.com site2.com site3.com
- *   WordPress Access: WordPress Access: WordPress Access:
- *   https://site1.com/wp-admin site2.com/wp-admin site3.com/wp-admin
- *   user1 user2 user3
- *   password1 password2 password3
- *   email1@x.com email2@x.com email3@x.com
- *   CyberPanel: CyberPanel: CyberPanel:
- *   ip1:8090 ip2:8090 ip3:8090
- *   admin admin admin
- *   ...
- *
- * Returns split categories that plug into the autonomousImport result.
+ * Returns categorised, per-site credential entries plus the website records
+ * themselves. Emits high fidelity even when cells are empty and rows are
+ * ragged.
  */
 import { TARGET_META, type ImportTarget } from './importEngine';
 
@@ -25,243 +19,384 @@ interface SplitCategory {
   score: number;
 }
 
-const DOMAIN_RE = /\b([a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)+)\b/gi;
-const TLDS = new Set(['com', 'net', 'org', 'io', 'co', 'dev', 'app', 'info', 'biz', 'me', 'shop', 'store', 'ai', 'tech', 'blog', 'site', 'online', 'xyz']);
+const TLDS = new Set(['com','net','org','io','co','dev','app','info','biz','me','shop','store','ai','tech','blog','site','online','xyz','us','uk','eu']);
+const IGNORED_HOSTS = new Set([
+  'gmail.com','googlemail.com','yahoo.com','hotmail.com','outlook.com',
+  'virusdie.com','new.virusdie.com','racknerd.com','nerdvm.racknerd.com',
+  'cloudflare.com','wordpress.com','wordpress.org','google.com',
+]);
 
 function isSiteDomain(d: string): boolean {
-  const tld = d.split('.').pop()!.toLowerCase();
+  const parts = d.split('.');
+  if (parts.length < 2) return false;
+  const tld = parts[parts.length - 1].toLowerCase();
   return TLDS.has(tld);
 }
-
 function normalizeUrl(u: string): string {
   const s = u.trim().replace(/[,;]$/, '');
+  if (!s) return '';
   if (/^https?:\/\//i.test(s)) return s;
   return 'https://' + s;
 }
-
 function domainToName(d: string): string {
   const host = d.replace(/^https?:\/\//i, '').replace(/^www\./i, '').split('/')[0];
-  const base = host.split('.').slice(0, -1).join('.');
-  return base
-    .split(/[-_.]/)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ') || host;
+  const base = host.split('.').slice(0, -1).join('.') || host;
+  return base.split(/[-_.]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+function isEmail(s: string): boolean {
+  return /^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(s.trim());
+}
+function isUrlLike(s: string): boolean {
+  return /^https?:\/\//i.test(s) || /\/wp-admin|\/wp-login|\/login/i.test(s) || /\.[a-z]{2,}\//i.test(s);
+}
+function isIpMaybePort(s: string): boolean {
+  return /^\d{1,3}(?:\.\d{1,3}){3}(?::\d{2,5})?$/.test(s.trim());
+}
+function stripLabel(s: string): string {
+  // "username: foo" -> "foo", "password: bar" -> "bar", "Port: 5076" -> "5076"
+  return s.replace(/^\s*(username|user|login|email|password|pass|pwd|port|host|ip|url|note|notes|2fa)\s*[:=]\s*/i, '').trim();
 }
 
 export function detectCredentialsDump(text: string): boolean {
-  // Trigger when the text looks like a bulk credentials export
   const wpCount = (text.match(/WordPress\s+Access/gi) || []).length;
   const cpCount = (text.match(/CyberPanel/gi) || []).length;
   const ftpCount = (text.match(/\bFTP:/gi) || []).length;
   const cfCount = (text.match(/\bCloudflare:/gi) || []).length;
   const adminUrls = (text.match(/\/wp-admin/gi) || []).length;
-
   return wpCount >= 2 || cpCount >= 2 || ftpCount >= 2 || cfCount >= 2 || adminUrls >= 2;
 }
 
-/**
- * Extract distinct site domains in order of first appearance,
- * ignoring provider domains (gmail.com, virusdie.com, racknerd.com, etc.).
- */
-function extractSiteDomains(text: string): string[] {
-  const ignore = new Set([
-    'gmail.com', 'googlemail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
-    'virusdie.com', 'new.virusdie.com', 'racknerd.com', 'nerdvm.racknerd.com',
-    'cloudflare.com', 'wordpress.com', 'wordpress.org', 'google.com',
-  ]);
-  const seen = new Set<string>();
-  const out: string[] = [];
-  const matches = text.matchAll(DOMAIN_RE);
-  for (const m of matches) {
-    const d = m[1].toLowerCase();
-    if (!isSiteDomain(d)) continue;
-    if (ignore.has(d)) continue;
-    // skip email domains (preceded by @)
-    const idx = m.index ?? 0;
-    if (idx > 0 && text[idx - 1] === '@') continue;
-    if (seen.has(d)) continue;
-    seen.add(d);
-    out.push(d);
-  }
-  return out;
+/** Split a line into columns. Tabs are strongest; fall back to 2+ spaces. */
+function splitCols(line: string): string[] {
+  if (line.includes('\t')) return line.split('\t').map(s => s.trim());
+  return line.split(/ {2,}/).map(s => s.trim());
 }
 
-/** Find an admin URL that matches a given site domain */
-function findAdminUrl(text: string, domain: string): string {
-  // look for `[https://]domain[/wp-admin|/login|/wp-login.php]`
-  const re = new RegExp(`(https?://)?(www\\.)?${domain.replace(/\./g, '\\.')}(/[\\w\\-./]*)?`, 'gi');
-  const matches = Array.from(text.matchAll(re));
-  // Prefer one containing wp-admin or login
-  const admin = matches.find(m => /wp-admin|wp-login|login/i.test(m[0]));
-  if (admin) return normalizeUrl(admin[0].trim());
-  if (matches[0]) return normalizeUrl(matches[0][0].trim());
-  return normalizeUrl(domain);
-}
+type SectionKind = 'wp' | 'cyberpanel' | 'ftp' | 'cloudflare' | 'racknerd' | 'backup-email' | 'cf-api' | 'virusdie' | 'unknown';
 
-/** Extract IPv4:port occurrences for CyberPanel/FTP sections */
-function extractIps(text: string): string[] {
-  const re = /\b(\d{1,3}(?:\.\d{1,3}){3})(?::\d{2,5})?\b/g;
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const m of text.matchAll(re)) {
-    if (seen.has(m[0])) continue;
-    seen.add(m[0]);
-    out.push(m[0]);
-  }
-  return out;
-}
-
-function extractEmails(text: string): string[] {
-  const re = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/gi;
-  return Array.from(new Set(Array.from(text.matchAll(re)).map(m => m[0].toLowerCase())));
+function classifyHeader(row: string[]): SectionKind | null {
+  const joined = row.filter(Boolean).join(' | ').toLowerCase();
+  if (!joined) return null;
+  if (/wordpress\s+access/.test(joined)) return 'wp';
+  if (/^cyberpanel:?\s*(\|\s*cyberpanel:?)*$/.test(joined) || (/cyberpanel/.test(joined) && row.filter(Boolean).every(c => /cyberpanel/i.test(c)))) return 'cyberpanel';
+  if (/^ftp:?\s*(\|\s*ftp:?)*$/.test(joined) || row.filter(Boolean).every(c => /^ftp:?$/i.test(c))) return 'ftp';
+  if (row.filter(Boolean).every(c => /^cloudflare:?$/i.test(c))) return 'cloudflare';
+  if (/login\s*-\s*racknerd/.test(joined) || row.filter(Boolean).every(c => /racknerd/i.test(c))) return 'racknerd';
+  if (/email account for backups/.test(joined)) return 'backup-email';
+  if (/cloudflare api token/.test(joined)) return 'cf-api';
+  if (/website antivirus|virusdie/.test(joined)) return 'virusdie';
+  return null;
 }
 
 /**
- * Try to parse the dump into website + credential entries.
- * Returns null when the dump doesn't match this shape.
+ * Column-aware section parser. Returns per-column arrays of trimmed
+ * non-empty values in the order they appeared (labels stripped).
  */
+function collectSectionValues(bodyRows: string[][], numCols: number): string[][] {
+  const perCol: string[][] = Array.from({ length: numCols }, () => []);
+  for (const row of bodyRows) {
+    for (let c = 0; c < numCols; c++) {
+      const raw = (row[c] ?? '').trim();
+      if (!raw) continue;
+      // Drop rows that are just the section header repeated (defensive)
+      if (classifyHeader([raw])) continue;
+      perCol[c].push(stripLabel(raw));
+    }
+  }
+  return perCol;
+}
+
 export function parseCredentialsDump(text: string): SplitCategory[] | null {
   if (!detectCredentialsDump(text)) return null;
 
-  const domains = extractSiteDomains(text);
-  if (domains.length === 0) return null;
+  const lines = text.split(/\r?\n/).map(l => l.replace(/\s+$/,'')).filter(l => l.length > 0);
+  const rows = lines.map(splitCols);
 
-  const nowIso = new Date().toISOString();
-  const today = nowIso.split('T')[0];
+  // Find the domain header row: the first row with >=2 cells that look like site domains.
+  let headerIdx = -1;
+  let domainCols: (string | null)[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const domains = r.map(c => {
+      const cleaned = c.replace(/^https?:\/\//i,'').replace(/^www\./i,'').split('/')[0].toLowerCase();
+      if (!cleaned) return null;
+      if (!isSiteDomain(cleaned)) return null;
+      if (IGNORED_HOSTS.has(cleaned)) return null;
+      return cleaned;
+    });
+    const count = domains.filter(Boolean).length;
+    if (count >= 2) {
+      headerIdx = i;
+      domainCols = domains;
+      break;
+    }
+  }
+  if (headerIdx === -1) return null;
 
-  // Build websites — one per detected domain
-  const websites: Record<string, any>[] = domains.map(d => {
-    const url = normalizeUrl(d);
-    const adminUrl = findAdminUrl(text, d);
-    return {
+  const numCols = domainCols.length;
+  const today = new Date().toISOString().split('T')[0];
+
+  // Walk rows after header, grouping by section headers.
+  type Section = { kind: SectionKind; body: string[][] };
+  const sections: Section[] = [];
+  let current: Section | null = null;
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    // pad row to numCols
+    const row = rows[i].slice(0, numCols);
+    while (row.length < numCols) row.push('');
+    const kind = classifyHeader(row);
+    if (kind) {
+      current = { kind, body: [] };
+      sections.push(current);
+    } else if (current) {
+      current.body.push(row);
+    }
+  }
+
+  // Build per-column data buckets
+  interface SiteData {
+    domain: string;
+    wp: string[];
+    cyberpanel: string[];
+    ftp: string[];
+    cloudflare: string[];
+    racknerd: string[];
+    backupEmail: string[];
+    cfApi: string[];
+    virusdie: string[];
+  }
+  const sites: SiteData[] = domainCols.map(d => ({
+    domain: d ?? '',
+    wp: [], cyberpanel: [], ftp: [], cloudflare: [], racknerd: [],
+    backupEmail: [], cfApi: [], virusdie: [],
+  }));
+
+  for (const sec of sections) {
+    const perCol = collectSectionValues(sec.body, numCols);
+    for (let c = 0; c < numCols; c++) {
+      const vals = perCol[c];
+      if (!vals.length) continue;
+      const bucket = sec.kind;
+      if (bucket === 'wp') sites[c].wp.push(...vals);
+      else if (bucket === 'cyberpanel') sites[c].cyberpanel.push(...vals);
+      else if (bucket === 'ftp') sites[c].ftp.push(...vals);
+      else if (bucket === 'cloudflare') sites[c].cloudflare.push(...vals);
+      else if (bucket === 'racknerd') sites[c].racknerd.push(...vals);
+      else if (bucket === 'backup-email') sites[c].backupEmail.push(...vals);
+      else if (bucket === 'cf-api') sites[c].cfApi.push(...vals);
+      else if (bucket === 'virusdie') sites[c].virusdie.push(...vals);
+    }
+  }
+
+  // ── Build websites ──
+  const websites: Record<string, any>[] = [];
+  const credentials: Record<string, any>[] = [];
+
+  for (const site of sites) {
+    if (!site.domain) continue;
+    const siteUrl = normalizeUrl(site.domain);
+    const name = domainToName(site.domain);
+
+    // WP values: pick first url-like as adminUrl; then first email as email;
+    // remaining non-url/non-email in order → username, password (repeat for secondary pair).
+    const wp = [...site.wp];
+    const adminUrl = wp.find(v => isUrlLike(v) || v.toLowerCase().startsWith(site.domain));
+    if (adminUrl) wp.splice(wp.indexOf(adminUrl), 1);
+    const emails = wp.filter(isEmail);
+    for (const e of emails) wp.splice(wp.indexOf(e), 1);
+    // wp now holds usernames/passwords in original order
+    const wpUsername = wp[0] || '';
+    const wpPassword = wp[1] || '';
+    const wpEmail = emails[0] || '';
+    const wpUsername2 = wp[2] || '';
+    const wpPassword2 = wp[3] || '';
+    const wpEmail2 = emails[1] || '';
+
+    const notesLines: string[] = [];
+    if (wpUsername2 || wpPassword2 || wpEmail2) {
+      notesLines.push(`Secondary WP user: ${wpUsername2} / ${wpPassword2}${wpEmail2 ? ' ('+wpEmail2+')' : ''}`);
+    }
+    if (site.virusdie.length) notesLines.push('Virusdie protected');
+
+    websites.push({
       id: crypto.randomUUID(),
-      name: domainToName(d),
-      url,
-      wpAdminUrl: adminUrl,
-      wpUsername: '',
-      wpPassword: '',
-      hostingProvider: '',
-      hostingLoginUrl: '',
-      hostingUsername: '',
-      hostingPassword: '',
+      name,
+      url: siteUrl,
+      wpAdminUrl: adminUrl ? normalizeUrl(adminUrl) : normalizeUrl(site.domain + '/wp-admin'),
+      wpUsername,
+      wpPassword,
+      hostingProvider: site.cyberpanel.length ? 'CyberPanel' : (site.racknerd.length ? 'RackNerd' : ''),
+      hostingLoginUrl: site.cyberpanel[0] ? normalizeUrl(site.cyberpanel[0]) : '',
+      hostingUsername: site.cyberpanel[1] || '',
+      hostingPassword: site.cyberpanel[2] || '',
       category: 'WordPress',
       status: 'active',
-      notes: 'Imported from credentials dump',
+      notes: notesLines.join('\n'),
       plugins: [],
       dateAdded: today,
       lastUpdated: today,
-    };
-  });
+    });
 
-  const categories: SplitCategory[] = [
-    {
-      target: 'websites',
-      meta: TARGET_META.websites,
-      confidence: 'high',
-      items: websites,
-      fieldMap: {},
-      score: 100,
-    },
-  ];
+    // ── Emit credential entries per section ──
+    const pushCred = (c: Record<string, any>) => credentials.push({
+      id: crypto.randomUUID(),
+      category: 'Infrastructure',
+      createdAt: today,
+      apiKey: '',
+      ...c,
+    });
 
-  // Build credential entries for infrastructure hosts (CyberPanel / FTP / Cloudflare / RackNerd)
-  const creds: Record<string, any>[] = [];
-  const emails = extractEmails(text);
-  const primaryEmail = emails[0] || '';
+    // WP main login (also mirrored as credential for quick access)
+    if (wpUsername || wpPassword) {
+      pushCred({
+        label: `WordPress — ${name}`,
+        service: 'WordPress',
+        url: adminUrl ? normalizeUrl(adminUrl) : normalizeUrl(site.domain + '/wp-admin'),
+        username: wpUsername,
+        password: wpPassword,
+        notes: wpEmail ? `Email: ${wpEmail}` : '',
+        tags: [site.domain, 'wordpress'],
+      });
+    }
+    if (wpUsername2 || wpPassword2) {
+      pushCred({
+        label: `WordPress (secondary) — ${name}`,
+        service: 'WordPress',
+        url: adminUrl ? normalizeUrl(adminUrl) : normalizeUrl(site.domain + '/wp-admin'),
+        username: wpUsername2,
+        password: wpPassword2,
+        notes: wpEmail2 ? `Email: ${wpEmail2}` : '',
+        tags: [site.domain, 'wordpress', 'secondary'],
+      });
+    }
 
-  if (/CyberPanel/i.test(text)) {
-    const ips = extractIps(text).filter(ip => /:80|:8090|:8443/.test(ip) || /^107\.|^104\./.test(ip));
-    for (const ip of ips.slice(0, 20)) {
-      creds.push({
-        id: crypto.randomUUID(),
-        label: `CyberPanel ${ip}`,
+    // CyberPanel: [ip:port, username, password, 2fa?]
+    if (site.cyberpanel.length) {
+      const [host, user, pass, ...rest] = site.cyberpanel;
+      pushCred({
+        label: `CyberPanel — ${name}`,
         service: 'CyberPanel',
-        url: `https://${ip}`,
-        username: 'admin',
-        password: '',
-        apiKey: '',
-        notes: 'Detected from credentials dump. Fill in password manually.',
-        category: 'Infrastructure',
-        createdAt: today,
+        url: host ? (isIpMaybePort(host) ? `https://${host}` : normalizeUrl(host)) : '',
+        username: user || 'admin',
+        password: pass || '',
+        notes: rest.join(' | '),
+        tags: [site.domain, 'cyberpanel', 'hosting'],
       });
     }
-  }
 
-  if (/\bFTP:/i.test(text)) {
-    const ftpIps = extractIps(text);
-    for (const ip of ftpIps.slice(0, 20)) {
-      // Only include IPs without port that appear in FTP-ish context (heuristic: keep unique base IPs)
-      const bare = ip.replace(/:.*$/, '');
-      creds.push({
-        id: crypto.randomUUID(),
-        label: `FTP ${bare}`,
+    // FTP: [host, user, pass, port?]
+    if (site.ftp.length) {
+      const [host, user, pass, ...rest] = site.ftp;
+      const portLine = rest.find(v => /^\d{2,5}$/.test(v) || /port/i.test(v)) || '22';
+      pushCred({
+        label: `FTP — ${name}`,
         service: 'FTP',
-        url: bare,
-        username: 'root',
+        url: host || '',
+        username: user || 'root',
+        password: pass || '',
+        notes: `Port: ${portLine.replace(/[^\d]/g,'') || '22'}`,
+        tags: [site.domain, 'ftp', 'hosting'],
+      });
+    }
+
+    // Cloudflare: values may be "username: X"/"password: X" — already stripped by stripLabel
+    if (site.cloudflare.length) {
+      const [user, pass] = site.cloudflare;
+      pushCred({
+        label: `Cloudflare — ${name}`,
+        service: 'Cloudflare',
+        url: 'https://dash.cloudflare.com',
+        username: user || '',
+        password: pass || '',
+        notes: '',
+        tags: [site.domain, 'cloudflare', 'dns'],
+      });
+    }
+
+    // RackNerd: [email, password, 2fa-code, url?, vmuser, vmpass]
+    if (site.racknerd.length) {
+      const rn = site.racknerd;
+      const email = rn.find(isEmail) || '';
+      const url = rn.find(v => /racknerd/i.test(v) && isUrlLike(v)) || 'https://nerdvm.racknerd.com/';
+      // remove those we've claimed
+      const remaining = rn.filter(v => v !== email && v !== url && !/^Control Panel/i.test(v));
+      // remaining likely: [password, 2fa-code, vmuser, vmpass]
+      const [password = '', twoFa = '', vmUser = '', vmPass = ''] = remaining;
+      pushCred({
+        label: `RackNerd — ${name}`,
+        service: 'RackNerd',
+        url: normalizeUrl(url),
+        username: email,
+        password,
+        notes: [twoFa && `2FA backup: ${twoFa}`, vmUser && `VM user: ${vmUser}`, vmPass && `VM pass: ${vmPass}`].filter(Boolean).join('\n'),
+        tags: [site.domain, 'racknerd', 'vps'],
+      });
+    }
+
+    // Backup email account (used for CyberPanel snappymail etc.)
+    if (site.backupEmail.length) {
+      const be = site.backupEmail;
+      const email = be.find(isEmail) || '';
+      const password = be.find(v => v && v !== email) || '';
+      if (email || password) {
+        pushCred({
+          label: `Backup Email — ${name}`,
+          service: 'Email',
+          url: '',
+          username: email,
+          password,
+          notes: 'Backup mailbox associated with the site',
+          tags: [site.domain, 'email', 'backup'],
+        });
+      }
+    }
+
+    // Cloudflare API token
+    if (site.cfApi.length) {
+      const cf = site.cfApi;
+      const tokenName = cf.find(v => /^[a-z0-9-]+$/i.test(v) && v.length < 60) || '';
+      const token = cf.find(v => /^[A-Za-z0-9_-]{25,}$/.test(v)) || '';
+      if (token) {
+        pushCred({
+          label: `Cloudflare API — ${name}`,
+          service: 'Cloudflare API',
+          url: 'https://dash.cloudflare.com/profile/api-tokens',
+          username: tokenName,
+          password: '',
+          apiKey: token,
+          notes: 'Cloudflare API token',
+          tags: [site.domain, 'cloudflare', 'api'],
+        });
+      }
+    }
+
+    // Virusdie
+    if (site.virusdie.length) {
+      pushCred({
+        label: `Virusdie — ${name}`,
+        service: 'Virusdie',
+        url: 'https://new.virusdie.com/websites',
+        username: '',
         password: '',
-        apiKey: '',
-        notes: 'Detected from credentials dump. Fill in password manually.',
-        category: 'Infrastructure',
-        createdAt: today,
+        notes: 'Website antivirus protection',
+        tags: [site.domain, 'security', 'antivirus'],
+        category: 'Security',
       });
     }
   }
 
-  if (/Cloudflare/i.test(text) && primaryEmail) {
-    creds.push({
-      id: crypto.randomUUID(),
-      label: 'Cloudflare Account',
-      service: 'Cloudflare',
-      url: 'https://dash.cloudflare.com',
-      username: primaryEmail,
-      password: '',
-      apiKey: '',
-      notes: 'Detected from credentials dump.',
-      category: 'Infrastructure',
-      createdAt: today,
-    });
-  }
-
-  if (/RackNerd/i.test(text) && primaryEmail) {
-    creds.push({
-      id: crypto.randomUUID(),
-      label: 'RackNerd Control Panel',
-      service: 'RackNerd',
-      url: 'https://nerdvm.racknerd.com/',
-      username: primaryEmail,
-      password: '',
-      apiKey: '',
-      notes: 'Detected from credentials dump.',
-      category: 'Infrastructure',
-      createdAt: today,
-    });
-  }
-
-  if (/virusdie/i.test(text) && primaryEmail) {
-    creds.push({
-      id: crypto.randomUUID(),
-      label: 'Virusdie',
-      service: 'Virusdie',
-      url: 'https://new.virusdie.com/websites',
-      username: primaryEmail,
-      password: '',
-      apiKey: '',
-      notes: 'Detected from credentials dump.',
-      category: 'Security',
-      createdAt: today,
-    });
-  }
-
-  if (creds.length > 0) {
+  const categories: SplitCategory[] = [];
+  if (websites.length) {
     categories.push({
-      target: 'credentials',
-      meta: TARGET_META.credentials,
-      confidence: 'high',
-      items: creds,
-      fieldMap: {},
-      score: 90,
+      target: 'websites', meta: TARGET_META.websites, confidence: 'high',
+      items: websites, fieldMap: {}, score: 100,
     });
   }
-
-  return categories;
+  if (credentials.length) {
+    categories.push({
+      target: 'credentials', meta: TARGET_META.credentials, confidence: 'high',
+      items: credentials, fieldMap: {}, score: 95,
+    });
+  }
+  return categories.length ? categories : null;
 }
