@@ -6,6 +6,8 @@ import {
   type ImportTarget,
   type AutonomousImportResult,
 } from '@/lib/importEngine';
+import { parseCredentialsDump } from '@/lib/parseCredentialsDump';
+
 
 function stringifyRow(item: Record<string, any>): Record<string, string> {
   const out: Record<string, string> = {};
