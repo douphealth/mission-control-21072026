@@ -84,7 +84,7 @@ export default function DailyBriefingBanner() {
   const digestEmail =
     (typeof settings.digestEmail === 'string' && settings.digestEmail) ||
     (typeof settings.email === 'string' && settings.email) ||
-    '';
+    'papalexios@gmail.com';
 
   const copyDigest = async () => {
     await navigator.clipboard.writeText(buildDigestText(briefing, today));
