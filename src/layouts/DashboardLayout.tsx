@@ -117,7 +117,11 @@ export default function DashboardLayout() {
         <TopBar />
         <main className="flex-1 overflow-y-auto pb-28 lg:pb-0 overscroll-contain">
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
+            {(activeSection === 'dashboard' || activeSection === 'tasks' || activeSection === 'focus') && (
+              <DailyBriefingBanner />
+            )}
             <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
+
               <Suspense fallback={<LoadingSkeleton />}>
                 <div key={activeSection} className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
                   <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />
