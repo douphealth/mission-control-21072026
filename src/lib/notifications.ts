@@ -102,10 +102,53 @@ function fireNotification(task: Task, label: string) {
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let visibilityHandler: (() => void) | null = null;
 
+const DIGEST_KEY = 'mc:lastOverdueDigest';
+
+/** Fires a once-per-day summary of everything overdue / due today. */
+async function overdueDigestCheck(tasks: Task[]) {
+  if (typeof localStorage === 'undefined') return;
+  const { buildBriefing, todayISO } = await import('@/lib/overdue');
+  const today = todayISO();
+  if (localStorage.getItem(DIGEST_KEY) === today) return;
+
+  const briefing = buildBriefing(tasks, today);
+  if (briefing.overdue.length === 0 && briefing.dueToday.length === 0) return;
+
+  localStorage.setItem(DIGEST_KEY, today);
+
+  const summary = briefing.overdue.length
+    ? `${briefing.overdue.length} overdue · ${briefing.dueToday.length} due today`
+    : `${briefing.dueToday.length} due today`;
+  const preview = [...briefing.overdue, ...briefing.dueToday]
+    .slice(0, 3)
+    .map((t) => `• ${t.title}`)
+    .join('\n');
+
+  toast.warning(`📋 Daily briefing — ${summary}`, {
+    description: preview,
+    duration: 15_000,
+  });
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    try {
+      new Notification(`Mission Control — ${summary}`, {
+        body: preview,
+        icon: '/favicon.ico',
+        tag: `digest-${today}`,
+      });
+    } catch {
+      // ignore
+    }
+  }
+}
+
 const check = async () => {
   try {
     const now = Date.now();
     const tasks = await db.tasks.toArray();
+
+    await overdueDigestCheck(tasks);
+
 
     for (const task of tasks) {
       if (task.status === 'done') continue;
