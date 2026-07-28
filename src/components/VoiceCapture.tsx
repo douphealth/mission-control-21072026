@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useAddItem } from '@/hooks/useTableData';
 import type { Task, Note, Idea, LinkItem } from '@/lib/db';
-import { transcribeAndClassify, type VoiceCaptureResult } from '@/lib/voice.functions';
+import { smartCapture, type SmartCaptureResult } from '@/lib/voiceAi';
 import { buildRecognitionSnapshot, type RecognitionResultLike } from '@/lib/speechTranscript';
 import { toast } from 'sonner';
 
@@ -30,8 +30,8 @@ const TYPE_OPTIONS: { id: CaptureType; label: string; icon: LucideIcon; emoji: s
 // Voice activity detection constants
 const SILENCE_RMS_THRESHOLD = 0.012; // below this = silence
 const SPEECH_RMS_THRESHOLD = 0.025;  // above this = clearly speaking
-const SILENCE_HANG_MS = 1400;        // auto-stop after this much continuous silence (post-speech)
-const MAX_RECORD_MS = 60_000;        // hard cap
+const SILENCE_HANG_MS = 2400;        // auto-stop after this much continuous silence (post-speech)
+const MAX_RECORD_MS = 180_000;       // hard cap
 const MIN_RECORD_MS = 600;           // ignore taps shorter than this
 
 type Phase = 'idle' | 'starting' | 'listening' | 'hearing' | 'processing' | 'ready' | 'error';
@@ -90,7 +90,7 @@ export default function VoiceCapture() {
   const [transcript, setTranscript] = useState('');
   const [type, setType] = useState<CaptureType>('tasks');
   const [typeAuto, setTypeAuto] = useState(true);
-  const [aiResult, setAiResult] = useState<VoiceCaptureResult | null>(null);
+  const [aiResult, setAiResult] = useState<SmartCaptureResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [saving, setSaving] = useState(false);
 
@@ -287,9 +287,10 @@ export default function VoiceCapture() {
       setPhase('processing');
       setAudioLevel(0);
       try {
-        const result = await transcribeAndClassify({
-          data: { transcript: liveTranscriptRef.current || committedTranscriptRef.current },
-        });
+        const result = await smartCapture(
+          blob,
+          liveTranscriptRef.current || committedTranscriptRef.current,
+        );
         setTranscript(result.transcript);
         setAiResult(result);
         if (typeAuto) setType(result.type);
@@ -422,8 +423,16 @@ export default function VoiceCapture() {
           dueDate: aiResult?.dueDate || now,
           category: 'Voice',
           linkedProject: '',
-          subtasks: [],
+          subtasks: (aiResult?.subtasks || []).map((t, i) => ({
+            id: `${Date.now()}-${i}`,
+            title: t,
+            done: false,
+          })),
           createdAt: now,
+          tags: aiResult?.tags,
+          startTime: aiResult?.startTime,
+          endTime: aiResult?.endTime,
+          allDay: !aiResult?.startTime,
         };
         await addItem<Task>('tasks', taskPayload);
       } else if (type === 'notes') {
