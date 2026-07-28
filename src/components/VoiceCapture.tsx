@@ -273,7 +273,8 @@ export default function VoiceCapture() {
       const reason = stopReasonRef.current;
       stopReasonRef.current = null;
 
-      if (!hasSpokenRef.current || elapsed < MIN_RECORD_MS || blob.size < 1500) {
+      const heardSomething = hasSpokenRef.current || !!(liveTranscriptRef.current || committedTranscriptRef.current);
+      if (!heardSomething || elapsed < MIN_RECORD_MS || (blob.size < 1500 && !liveTranscriptRef.current)) {
         setPhase('idle');
         setAudioLevel(0);
         if (reason === 'silence') {
