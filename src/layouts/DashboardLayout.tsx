@@ -2,6 +2,8 @@ import Sidebar from '@/components/Sidebar';
 import TopBar from '@/components/TopBar';
 import StatusBar from '@/components/StatusBar';
 import MobileBottomNav from '@/components/MobileBottomNav';
+import DailyBriefingBanner from '@/components/DailyBriefingBanner';
+
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
