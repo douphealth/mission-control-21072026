@@ -11,6 +11,8 @@ import type {
     UserSettings, WidgetLayout,
 } from '@/lib/db';
 import { isSupabaseConnected, pushToSupabase } from '@/lib/supabase';
+import { queueCloudPush } from '@/lib/cloudSync';
+
 import { isDuplicate, deduplicateItems } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
 
