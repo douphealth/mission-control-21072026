@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { WifiOff, Database, Cloud, Check, Loader2, AlertCircle } from 'lucide-react';
 import { getSupabaseProjectHost, isSupabaseConnected, testSupabaseConnection, getSupabaseConfig } from '@/lib/supabase';
 import { onSaveStatus } from '@/stores/dataStore';
+import { CloudBackupBadge } from '@/components/CloudBackupBanner';
 
 export default function StatusBar() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -74,6 +75,7 @@ export default function StatusBar() {
         <span className="flex items-center gap-1 text-muted-foreground/40">
           <Database size={10} /> IndexedDB
         </span>
+        <CloudBackupBadge />
         {supabaseConnected && (
           <span className={`flex items-center gap-1 ${
             cloudState === 'ready'

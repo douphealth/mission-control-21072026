@@ -18,6 +18,8 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useDataStore } from '@/stores/dataStore';
 import { deduplicateAll } from '@/lib/dedup';
 import { isSupabaseConnected, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
+import { startCloudSync } from '@/lib/cloudSync';
+
 import { restoreLatestNonEmptyVersion } from '@/lib/versions';
 
 // Re-export types for backward compat with old imports
@@ -139,6 +141,15 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       try {
         await migrateFromLocalStorage();
 
+        // ── Account-scoped cloud restore (primary persistence) ──────────────
+        let cloudRestored = 0;
+        try {
+          const cloud = await startCloudSync();
+          cloudRestored = cloud.restored;
+        } catch (e) {
+          console.warn('Cloud sync unavailable:', e);
+        }
+
         const shouldHydrateFromCloud = isSupabaseConnected();
         if (shouldHydrateFromCloud) {
           const cloudSnapshot = await replaceLocalWithSupabaseSnapshot();
@@ -151,9 +162,16 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
               if (!restored.restored) await seedDefaults();
             }
           }
-        } else {
-          await seedDefaults();
+        } else if (cloudRestored === 0) {
+          const [t, w, r, b] = await Promise.all([
+            db.tasks.count(), db.websites.count(), db.repos.count(), db.buildProjects.count(),
+          ]);
+          if (t + w + r + b === 0) {
+            const restored = await restoreLatestNonEmptyVersion();
+            if (!restored.restored) await seedDefaults();
+          }
         }
+
 
         await deduplicateAll();
         await loadSettings();
