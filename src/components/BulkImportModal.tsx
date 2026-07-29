@@ -17,7 +17,7 @@ import {
   type TargetMeta,
   generateTemplate,
 } from '@/lib/importEngine';
-import { aiAutonomousImport } from '@/lib/aiImport';
+import { aiAutonomousImport, aiImageImport } from '@/lib/aiImport';
 import { deduplicateItems } from '@/lib/dedup';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -59,6 +59,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
   const isMobile = useIsMobile();
   const [phase, setPhase] = useState<Phase>('input');
   const [rawText, setRawText] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const [result, setResult] = useState<AutonomousImportResult | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [importCount, setImportCount] = useState(0);
@@ -67,11 +68,14 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
   const [autoClipboardDone, setAutoClipboardDone] = useState(false);
   const [removedCategories, setRemovedCategories] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const reset = useCallback(() => {
     setPhase('input');
     setRawText('');
+    setImages([]);
     setResult(null);
     setExpandedItems(new Set());
     setImportCount(0);
