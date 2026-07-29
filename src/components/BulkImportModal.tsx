@@ -442,7 +442,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       setRawText(text);
       handleAnalyze(text);
     }
-  }, [handleAnalyze]);
+  }, [handleAnalyze, addImages]);
 
   const stats = useMemo(() => {
     if (!result) return null;
