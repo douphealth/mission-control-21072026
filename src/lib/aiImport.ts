@@ -88,3 +88,48 @@ export async function aiAutonomousImport(text: string, fileName?: string): Promi
     expressReady: totalItems > 0,
   };
 }
+
+function buildCategories(cats: Array<{ target: ImportTarget; items: Record<string, any>[] }>) {
+  return cats
+    .map((c) => {
+      const rows = c.items.map(stringifyRow);
+      const sourceFields = Array.from(
+        new Set(rows.flatMap((r: Record<string, string>) => Object.keys(r))),
+      ) as string[];
+      const fieldMap = autoMapFields(sourceFields, c.target);
+      const items = normalizeItems(rows, c.target, fieldMap);
+      return {
+        target: c.target,
+        meta: TARGET_META[c.target],
+        confidence: 'high' as const,
+        items,
+        fieldMap,
+        score: 100,
+      };
+    })
+    .filter((c) => c.items.length > 0)
+    .sort((a, b) => b.items.length - a.items.length);
+}
+
+/**
+ * Vision import: send photos of handwritten notes / whiteboards / screenshots
+ * to the AI, which OCRs the handwriting and classifies every item.
+ */
+export async function aiImageImport(
+  images: string[],
+  fileName?: string,
+  note?: string,
+): Promise<AutonomousImportResult> {
+  const result = (await aiParseImport({ data: { images, fileName, text: note } })) as {
+    categories: Array<{ target: ImportTarget; items: Record<string, any>[] }>;
+  };
+  const categories = buildCategories(result?.categories ?? []);
+  const totalItems = categories.reduce((s: number, c) => s + c.items.length, 0);
+  return {
+    categories,
+    parsedData: { rows: [], sourceFields: [], format: 'text' } as any,
+    totalItems,
+    expressReady: totalItems > 0,
+  };
+}
+
