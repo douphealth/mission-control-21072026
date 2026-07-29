@@ -118,14 +118,20 @@ export function useGoogleCalendar(opts?: {
         setState(s => ({ ...s, syncing: true, error: null }));
         try {
             const allTasks = await db.tasks.toArray();
-            const tasksToPush = allTasks.filter(t => t.dueDate && (!t.gcalEventId || t.gcalEventId.startsWith('mc')));
+            // Every task goes to Google Calendar (undated ones land on today),
+            // and already-pushed ones are re-upserted so overdue flags stay current.
+            const tasksToPush = allTasks.filter(t => !t.gcalEventId || t.gcalEventId.startsWith('mc'));
             if (tasksToPush.length > 0) {
                 const pushed = await pushTasksToGCal(tasksToPush);
                 for (const [taskId, gcalId] of pushed) {
-                    await storeUpdateItem<Task>('tasks', taskId, { gcalEventId: gcalId } as Partial<Task>);
+                    const existing = allTasks.find(t => t.id === taskId);
+                    if (existing?.gcalEventId !== gcalId) {
+                        await storeUpdateItem<Task>('tasks', taskId, { gcalEventId: gcalId } as Partial<Task>);
+                    }
                 }
-                if (pushed.size > 0) console.log(`📤 Pushed ${pushed.size} tasks to Google Calendar`);
+                if (pushed.size > 0) console.log(`📤 Synced ${pushed.size} tasks to Google Calendar`);
             }
+
 
             const { min, max } = getTimeRange();
             const rawEvents = await syncGCalEvents(min, max, force);
@@ -139,16 +145,21 @@ export function useGoogleCalendar(opts?: {
 
             const externalEvents = rawEvents.filter(ev => {
                 const rawSummary = ev.summary || '';
-                const normalizedSummary = rawSummary.replace(/^📋\s*/, '').trim().toLowerCase();
+                const isTaskSummary = /^(📋|✅|⚠️\s*OVERDUE\s*\d+d\s*·)\s*/.test(rawSummary);
+                const normalizedSummary = rawSummary
+                    .replace(/^(📋|✅|⚠️\s*OVERDUE\s*\d+d\s*·)\s*/, '')
+                    .trim()
+                    .toLowerCase();
                 const evDate = ev.start.date || (ev.start.dateTime ? new Date(ev.start.dateTime).toISOString().split('T')[0] : '');
 
-                if (rawSummary.startsWith('📋 ')) {
+                if (isTaskSummary) {
                     if (/^mc[a-v0-9]+$/i.test(ev.id)) return false;
                     const hasExactLocalTask = updatedTasks.some(t =>
                         (t.title || '').trim().toLowerCase() === normalizedSummary && t.dueDate === evDate
                     );
                     if (!hasExactLocalTask) return false;
                 }
+
                 if (pushedGCalIds.has(ev.id)) return false;
                 const fp = `${normalizedSummary}|${evDate}`;
                 if (localTaskFingerprints.has(fp)) {
