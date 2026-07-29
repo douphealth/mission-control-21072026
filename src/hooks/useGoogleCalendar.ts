@@ -118,14 +118,20 @@ export function useGoogleCalendar(opts?: {
         setState(s => ({ ...s, syncing: true, error: null }));
         try {
             const allTasks = await db.tasks.toArray();
-            const tasksToPush = allTasks.filter(t => t.dueDate && (!t.gcalEventId || t.gcalEventId.startsWith('mc')));
+            // Every task goes to Google Calendar (undated ones land on today),
+            // and already-pushed ones are re-upserted so overdue flags stay current.
+            const tasksToPush = allTasks.filter(t => !t.gcalEventId || t.gcalEventId.startsWith('mc'));
             if (tasksToPush.length > 0) {
                 const pushed = await pushTasksToGCal(tasksToPush);
                 for (const [taskId, gcalId] of pushed) {
-                    await storeUpdateItem<Task>('tasks', taskId, { gcalEventId: gcalId } as Partial<Task>);
+                    const existing = allTasks.find(t => t.id === taskId);
+                    if (existing?.gcalEventId !== gcalId) {
+                        await storeUpdateItem<Task>('tasks', taskId, { gcalEventId: gcalId } as Partial<Task>);
+                    }
                 }
-                if (pushed.size > 0) console.log(`📤 Pushed ${pushed.size} tasks to Google Calendar`);
+                if (pushed.size > 0) console.log(`📤 Synced ${pushed.size} tasks to Google Calendar`);
             }
+
 
             const { min, max } = getTimeRange();
             const rawEvents = await syncGCalEvents(min, max, force);
