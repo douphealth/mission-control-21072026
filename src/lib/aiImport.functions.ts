@@ -2,8 +2,12 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 
 const InputSchema = z.object({
-  text: z.string().min(1).max(200_000),
+  text: z.string().max(200_000).optional(),
   fileName: z.string().optional(),
+  // Base64 data URLs of handwriting / screenshot photos
+  images: z.array(z.string().min(16).max(12_000_000)).max(6).optional(),
+}).refine((v) => (v.text && v.text.trim().length > 0) || (v.images && v.images.length > 0), {
+  message: 'Provide text or at least one image',
 });
 
 const VALID_TARGETS = [
