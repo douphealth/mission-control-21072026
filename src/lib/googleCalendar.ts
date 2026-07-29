@@ -1,79 +1,15 @@
-/**
- * Google Calendar — per-user access through Lovable Cloud managed Google OAuth.
- * This avoids the old hardcoded Google OAuth client that caused origin_mismatch.
- */
+/** Google Calendar — server-side connector gateway integration. */
 
 import { lovable } from '@/integrations/lovable';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  createOrUpdateGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
+  fetchGoogleCalendarEvents,
+  listGoogleCalendars,
+} from '@/lib/googleCalendar.functions';
 
-const CALENDAR_SCOPE = 'https://www.googleapis.com/auth/calendar';
-const OAUTH_SCOPES = `openid email profile ${CALENDAR_SCOPE}`;
-const TOKEN_STORAGE_KEY = 'mc_gcal_token_v1';
 const CONFIG_STORAGE_KEY = 'mc_gcal_config';
-
-type StoredToken = { access_token: string; expires_at: number };
-
-function readToken(): StoredToken | null {
-  try {
-    const raw = localStorage.getItem(TOKEN_STORAGE_KEY);
-    if (!raw) return null;
-    const token = JSON.parse(raw) as StoredToken;
-    if (token.expires_at - 30_000 < Date.now()) return null;
-    return token;
-  } catch {
-    return null;
-  }
-}
-
-function saveToken(access_token: string, expiresAt?: number) {
-  const token: StoredToken = {
-    access_token,
-    expires_at: expiresAt || Date.now() + 60 * 60 * 1000,
-  };
-  localStorage.setItem(TOKEN_STORAGE_KEY, JSON.stringify(token));
-}
-
-async function persistProviderTokenFromSession(fallbackToken?: string): Promise<StoredToken | null> {
-  const { data } = await supabase.auth.getSession();
-  const session = data.session;
-  const providerToken = fallbackToken || session?.provider_token;
-  if (!providerToken) return readToken();
-  const expiresAt = session?.expires_at ? session.expires_at * 1000 : Date.now() + 60 * 60 * 1000;
-  saveToken(providerToken, expiresAt);
-  return readToken();
-}
-
-async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = readToken() || await persistProviderTokenFromSession();
-  if (!token) throw new Error('Not signed in to Google Calendar');
-
-  const response = await fetch(`https://www.googleapis.com/calendar/v3/${path.replace(/^\/+/, '')}`, {
-    ...init,
-    headers: {
-      ...(init.headers || {}),
-      Authorization: `Bearer ${token.access_token}`,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (response.status === 401) {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
-    throw new Error('Google Calendar session expired — please sign in again');
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Google Calendar ${response.status}: ${text.slice(0, 300)}`);
-  }
-
-  if (response.status === 204) return undefined as T;
-  return response.json() as Promise<T>;
-}
-
-async function ensureCalendarToken(): Promise<void> {
-  if (readToken() || await persistProviderTokenFromSession()) return;
-  await connectGCal();
-}
 
 export interface GoogleCalendarEvent {
   id: string;
@@ -149,76 +85,52 @@ export function clearGCalConfig(): void {
 }
 
 export function isGCalConnected(): boolean {
-  return readToken() !== null;
+  const config = getGCalConfig();
+  return Boolean(config.connectedEmail || config.lastSync);
 }
 
-export async function connectGCal(): Promise<{ email?: string }> {
+async function ensureAppSession(): Promise<boolean> {
   if (typeof window === 'undefined') throw new Error('Google Calendar sign-in is only available in the browser');
+
+  const current = await supabase.auth.getSession();
+  if (current.data.session) return true;
 
   const result = await lovable.auth.signInWithOAuth('google', {
     redirect_uri: window.location.origin,
     extraParams: {
-      prompt: 'select_account consent',
-      access_type: 'online',
-      include_granted_scopes: 'true',
-      scope: OAUTH_SCOPES,
+      prompt: 'select_account',
     },
   });
 
   if ((result as any).error) {
     const raw = (result as any).error?.message || String((result as any).error);
-    if (/origin_mismatch|origin mismatch/i.test(raw)) {
-      throw new Error('Google rejected the old custom OAuth client. Refresh the app and try again — Google Calendar now uses Lovable Cloud managed Google OAuth.');
-    }
-    throw new Error(raw || 'Google Calendar sign-in failed');
+    throw new Error(raw || 'Google sign-in failed');
   }
 
-  if (!(result as any).redirected) {
-    const fallbackToken = (result as any).tokens?.provider_token || (result as any).provider_token;
-    const token = await persistProviderTokenFromSession(fallbackToken);
-    if (!token) {
-      throw new Error('Google Calendar sign-in finished, but Calendar access was not granted. Please approve Calendar access and try again.');
-    }
-  } else {
-    return {};
-  }
+  if ((result as any).redirected) return false;
+
+  const after = await supabase.auth.getSession();
+  return Boolean(after.data.session);
+}
+
+export async function connectGCal(): Promise<{ email?: string; redirected?: boolean }> {
+  const hasSession = await ensureAppSession();
+  if (!hasSession) return { redirected: true };
 
   const calendars = await listCalendars();
   const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
-  if (primary) setGCalConfig({ connectedEmail: primary.id });
-  return { email: primary?.id };
+  const writable = calendars.find((cal) => cal.id === 'primary' || /@/.test(cal.id));
+  const email = primary?.id || writable?.id;
+  if (email) setGCalConfig({ connectedEmail: email });
+  return { email };
 }
 
 export function disconnectGCal(): void {
-  localStorage.removeItem(TOKEN_STORAGE_KEY);
-  void supabase.auth.signOut();
   clearGCalConfig();
 }
 
 export async function listCalendars(): Promise<GoogleCalendarList[]> {
-  await ensureCalendarToken();
-
-  const calendars: GoogleCalendarList[] = [];
-  let pageToken: string | undefined;
-
-  do {
-    const qs = new URLSearchParams({ maxResults: '250', showHidden: 'true' });
-    if (pageToken) qs.set('pageToken', pageToken);
-    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(`users/me/calendarList?${qs.toString()}`);
-
-    calendars.push(...(data.items || []).map((cal) => ({
-      id: cal.id,
-      summary: cal.summary || cal.id,
-      backgroundColor: cal.backgroundColor,
-      foregroundColor: cal.foregroundColor,
-      primary: cal.primary || false,
-      selected: cal.selected !== false,
-    })));
-
-    pageToken = data.nextPageToken;
-  } while (pageToken);
-
-  return calendars;
+  return listGoogleCalendars() as Promise<GoogleCalendarList[]>;
 }
 
 export async function fetchCalendarEvents(
@@ -227,30 +139,7 @@ export async function fetchCalendarEvents(
   timeMax: string,
   maxResults = 250,
 ): Promise<GoogleCalendarEvent[]> {
-  await ensureCalendarToken();
-
-  const events: GoogleCalendarEvent[] = [];
-  let pageToken: string | undefined;
-
-  do {
-    const qs = new URLSearchParams({
-      timeMin,
-      timeMax,
-      maxResults: String(maxResults),
-      singleEvents: 'true',
-      orderBy: 'startTime',
-    });
-    if (pageToken) qs.set('pageToken', pageToken);
-
-    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(
-      `calendars/${encodeURIComponent(calendarId)}/events?${qs.toString()}`,
-    );
-
-    events.push(...(data.items || []).map((ev) => ({ ...ev, calendarId })));
-    pageToken = data.nextPageToken;
-  } while (pageToken);
-
-  return events;
+  return fetchGoogleCalendarEvents({ data: { calendarId, timeMin, timeMax, maxResults } }) as Promise<GoogleCalendarEvent[]>;
 }
 
 export async function fetchAllEvents(timeMin: string, timeMax: string): Promise<GoogleCalendarEvent[]> {
@@ -267,8 +156,14 @@ export async function fetchAllEvents(timeMin: string, timeMax: string): Promise<
   );
 
   const events: GoogleCalendarEvent[] = [];
+  const failures: string[] = [];
   for (const result of results) {
     if (result.status === 'fulfilled') events.push(...result.value);
+    else failures.push(result.reason?.message || 'Calendar read failed');
+  }
+
+  if (events.length === 0 && failures.length > 0) {
+    throw new Error(failures[0]);
   }
 
   setGCalConfig({ lastSync: new Date().toISOString() });
@@ -293,38 +188,13 @@ export async function createGCalEvent(
   },
   deterministicId?: string,
 ): Promise<GoogleCalendarEvent> {
-  await ensureCalendarToken();
-  const body: any = { ...event };
-  if (deterministicId) body.id = deterministicId;
-
-  try {
-    return await gcalApi<GoogleCalendarEvent>(
-      `calendars/${encodeURIComponent(calendarId)}/events`,
-      { method: 'POST', body: JSON.stringify(body) },
-    );
-  } catch (e: any) {
-    if (deterministicId && /\b409\b/.test(e?.message || '')) {
-      try {
-        return await gcalApi<GoogleCalendarEvent>(
-          `calendars/${encodeURIComponent(calendarId)}/events/${deterministicId}`,
-          { method: 'PUT', body: JSON.stringify({ ...event }) },
-        );
-      } catch {
-        return { id: deterministicId, summary: event.summary, start: event.start, end: event.end } as GoogleCalendarEvent;
-      }
-    }
-    throw e;
-  }
+  return createOrUpdateGoogleCalendarEvent({ data: { calendarId, event, deterministicId } }) as Promise<GoogleCalendarEvent>;
 }
 
 export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): Promise<boolean> {
   if (!eventId) return false;
   try {
-    await ensureCalendarToken();
-    await gcalApi(
-      `calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-      { method: 'DELETE' },
-    );
+    await deleteGoogleCalendarEvent({ data: { calendarId, eventId } });
     return true;
   } catch (e: any) {
     if (/\b404\b/.test(e?.message || '')) return true;
@@ -342,7 +212,7 @@ export async function pushTaskToGCal(task: {
       summary: `📋 ${task.title}`,
       description: task.description || '',
       start: { date: task.dueDate },
-      end: { date: task.dueDate },
+      end: { date: nextDateISO(task.dueDate) },
     });
   } catch (e) {
     console.error('Failed to push task to Google Calendar:', e);
@@ -353,6 +223,12 @@ export async function pushTaskToGCal(task: {
 function localTodayISO(): string {
   const d = new Date();
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
+function nextDateISO(date: string): string {
+  const d = new Date(`${date}T00:00:00`);
+  d.setDate(d.getDate() + 1);
+  return d.toISOString().slice(0, 10);
 }
 
 /** Builds the calendar title for a task, flagging overdue / completed state. */
@@ -414,7 +290,7 @@ export async function pushTasksToGCal(tasks: {
       };
       if (isAllDay) {
         eventBody.start = { date: eventDate };
-        eventBody.end = { date: eventDate };
+        eventBody.end = { date: nextDateISO(eventDate) };
       } else {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         eventBody.start = { dateTime: `${eventDate}T${task.startTime || '09:00'}:00`, timeZone: tz };
@@ -453,14 +329,9 @@ export async function syncGCalEvents(
     return cachedEvents;
   }
 
-  try {
-    cachedEvents = await fetchAllEvents(timeMin, timeMax);
-    cacheTimestamp = Date.now();
-    return cachedEvents;
-  } catch (e) {
-    console.error('Google Calendar sync error:', e);
-    return cachedEvents;
-  }
+  cachedEvents = await fetchAllEvents(timeMin, timeMax);
+  cacheTimestamp = Date.now();
+  return cachedEvents;
 }
 
 export function gCalEventToCalEvent(gev: GoogleCalendarEvent, calColor?: string): {
@@ -486,7 +357,9 @@ export function gCalEventToCalEvent(gev: GoogleCalendarEvent, calColor?: string)
   let endTime: string | undefined;
 
   if (isAllDay) {
-    date = gev.start.date!;
+    const startDate = gev.start.date;
+    if (!startDate) throw new Error('Google Calendar event is missing a start date');
+    date = startDate;
     if (gev.end.date && gev.end.date !== gev.start.date) {
       const endD = new Date(gev.end.date);
       endD.setDate(endD.getDate() - 1);
@@ -494,8 +367,11 @@ export function gCalEventToCalEvent(gev: GoogleCalendarEvent, calColor?: string)
       endDate = ed !== date ? ed : undefined;
     }
   } else {
-    const startDt = new Date(gev.start.dateTime!);
-    const endDt = new Date(gev.end.dateTime!);
+    const startDateTime = gev.start.dateTime;
+    const endDateTime = gev.end.dateTime;
+    if (!startDateTime || !endDateTime) throw new Error('Google Calendar event is missing start or end time');
+    const startDt = new Date(startDateTime);
+    const endDt = new Date(endDateTime);
     date = startDt.toISOString().split('T')[0];
     startTime = startDt.toTimeString().slice(0, 5);
     endTime = endDt.toTimeString().slice(0, 5);
