@@ -84,11 +84,14 @@ function schedulePush() {
     // Always mark local save as done immediately (IndexedDB write already happened)
     notifySaveStatus('saving');
     try { markVersionsDirty(); } catch {}
+    // Account-scoped cloud backup (survives cleared browser data / new devices)
+    try { queueCloudPush(); } catch {}
     if (!isSupabaseConnected()) {
-        // No cloud — still "saved" locally
+        // No legacy cloud target — still "saved" locally (+ cloud backup above)
         notifySaveStatus('saved');
         return;
     }
+
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(() => {
         pushToSupabase().then(r => {
