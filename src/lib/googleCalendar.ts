@@ -348,11 +348,38 @@ export async function pushTaskToGCal(task: {
   }
 }
 
+function localTodayISO(): string {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+}
+
+/** Builds the calendar title for a task, flagging overdue / completed state. */
+export function gcalTaskSummary(task: {
+  title: string;
+  dueDate?: string;
+  status?: string;
+}): string {
+  const today = localTodayISO();
+  if (task.status === 'done') return `✅ ${task.title}`;
+  if (task.dueDate && task.dueDate < today) {
+    const days = Math.max(
+      1,
+      Math.round(
+        (new Date(`${today}T00:00:00`).getTime() - new Date(`${task.dueDate}T00:00:00`).getTime()) /
+          86_400_000,
+      ),
+    );
+    return `⚠️ OVERDUE ${days}d · ${task.title}`;
+  }
+  return `📋 ${task.title}`;
+}
+
 export async function pushTasksToGCal(tasks: {
   id: string;
   title: string;
   description?: string;
-  dueDate: string;
+  dueDate?: string;
+  status?: string;
   startDate?: string;
   startTime?: string;
   endTime?: string;
@@ -367,18 +394,22 @@ export async function pushTasksToGCal(tasks: {
 }[]): Promise<Map<string, string>> {
   const { toRRule } = await import('@/lib/recurrence');
   const results = new Map<string, string>();
+  const today = localTodayISO();
 
   for (const task of tasks) {
     if (task.gcalEventId && !task.gcalEventId.startsWith('mc')) continue;
-    if (!task.dueDate) continue;
 
     try {
+      // Every task lands on the calendar — undated ones are placed on today.
+      const eventDate = task.startDate || task.dueDate || today;
       const isAllDay = task.allDay !== false && !task.startTime;
+      const isOverdue = task.status !== 'done' && !!task.dueDate && task.dueDate < today;
       const eventBody: any = {
-        summary: `📋 ${task.title}`,
+        summary: gcalTaskSummary(task),
         description: task.description || '',
+        // 11 = tomato (overdue), 10 = basil (done), 9 = blueberry (normal)
+        colorId: isOverdue ? '11' : task.status === 'done' ? '10' : '9',
       };
-      const eventDate = task.startDate || task.dueDate;
       if (isAllDay) {
         eventBody.start = { date: eventDate };
         eventBody.end = { date: eventDate };
@@ -401,6 +432,7 @@ export async function pushTasksToGCal(tasks: {
 
   return results;
 }
+
 
 let cachedEvents: GoogleCalendarEvent[] = [];
 let cacheTimestamp = 0;
