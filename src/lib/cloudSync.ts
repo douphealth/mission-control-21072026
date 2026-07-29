@@ -152,12 +152,13 @@ export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; 
 async function pushNow(): Promise<void> {
     if (!userId) return;
     if (pushing) { pushAgain = true; return; }
+    const uid: string = userId;
     pushing = true;
     try {
         setStatus('syncing');
         const snapshot = await localSnapshot();
         const rows = snapshot.map((r) => ({
-            user_id: userId,
+            user_id: uid,
             collection: r.collection,
             record_id: r.record_id,
             data: r.data,
@@ -187,7 +188,7 @@ async function pushNow(): Promise<void> {
             for (const batch of chunk(stale, 300)) {
                 const { error } = await supabase.from(TABLE).upsert(
                     batch.map((r: any) => ({
-                        user_id: userId,
+                        user_id: uid,
                         collection: r.collection,
                         record_id: r.record_id,
                         data: {},
