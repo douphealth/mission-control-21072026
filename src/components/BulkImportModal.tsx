@@ -172,9 +172,85 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     }
   }, []);
 
+  // ── Image (handwriting) import ────────────────────────────────────────────
+  const compressImage = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read image'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Invalid image'));
+        img.onload = () => {
+          const MAX = 1800;
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(reader.result as string); return; }
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const addImages = useCallback(async (files: File[]) => {
+    const imgs = files.filter(f => f.type.startsWith('image/')).slice(0, 6);
+    if (imgs.length === 0) return false;
+    try {
+      const encoded = await Promise.all(imgs.map(compressImage));
+      setImages(prev => [...prev, ...encoded].slice(0, 6));
+      toast.success(`${encoded.length} image${encoded.length > 1 ? 's' : ''} ready — hit "Read Handwriting"`);
+    } catch {
+      toast.error('Could not process that image.');
+    }
+    return true;
+  }, [compressImage]);
+
+  const handleAnalyzeImages = useCallback(async (imgs: string[], note: string) => {
+    if (imgs.length === 0) return;
+    setPhase('analyzing');
+    try {
+      const importResult = await aiImageImport(imgs, undefined, note.trim() || undefined);
+      if (importResult.totalItems === 0) {
+        toast.error('No readable items found in the image. Try a sharper, well-lit photo.');
+        setPhase('input');
+        return;
+      }
+      let totalSkipped = 0;
+      for (const cat of importResult.categories) {
+        const unique = await deduplicateItems(cat.target, cat.items);
+        totalSkipped += cat.items.length - unique.length;
+        cat.items = unique;
+      }
+      importResult.categories = importResult.categories.filter(c => c.items.length > 0);
+      importResult.totalItems = importResult.categories.reduce((s, c) => s + c.items.length, 0);
+      setSkippedDupes(totalSkipped);
+      setResult(importResult);
+      if (importResult.totalItems > 0) {
+        setPhase('review');
+        const catLabels = importResult.categories.map(c => `${c.items.length} ${c.meta.label}`).join(', ');
+        toast.success(`Handwriting recognised: ${catLabels}${totalSkipped > 0 ? ` (${totalSkipped} duplicates filtered)` : ''}`);
+      } else {
+        toast(`Everything in that photo already exists.`, { icon: '🔄' });
+        setPhase('input');
+      }
+    } catch (err: any) {
+      console.error('Image import error:', err);
+      toast.error(err?.message || 'Could not read that image. Try again.');
+      setPhase('input');
+    }
+  }, []);
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    if (file.type.startsWith('image/')) { addImages([file]); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
@@ -182,7 +258,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       handleAnalyze(text, file.name);
     };
     reader.readAsText(file);
-  }, [handleAnalyze]);
+  }, [handleAnalyze, addImages]);
 
   const handlePaste = useCallback(async () => {
     try {
@@ -194,6 +270,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       toast.error('Clipboard access denied. Paste manually into the text area.');
     }
   }, [handleAnalyze]);
+
 
   // Re-target a specific category
   const handleRetarget = useCallback(async (catIndex: number, newTarget: ImportTarget) => {
