@@ -3,6 +3,8 @@ import TopBar from '@/components/TopBar';
 import StatusBar from '@/components/StatusBar';
 import MobileBottomNav from '@/components/MobileBottomNav';
 import DailyBriefingBanner from '@/components/DailyBriefingBanner';
+import CloudBackupBanner from '@/components/CloudBackupBanner';
+
 
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
