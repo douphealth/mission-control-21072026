@@ -562,18 +562,65 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                     </div>
                   </div>
 
+                  {/* Handwriting / photo import */}
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3.5 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
+                        <Camera size={15} className="text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-card-foreground">Snap your handwritten notes</p>
+                        <p className="text-[10px] text-muted-foreground">Photograph a to-do list, ideas, credentials or a whiteboard — AI reads the handwriting and files everything automatically.</p>
+                      </div>
+                    </div>
+
+                    {images.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {images.map((src, i) => (
+                          <div key={i} className="relative shrink-0">
+                            <img src={src} alt={`Note photo ${i + 1}`} className="w-20 h-20 object-cover rounded-xl border border-border/40" />
+                            <button onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center shadow">
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button onClick={() => cameraRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-all">
+                        <Camera size={14} /> Take Photo
+                      </button>
+                      <button onClick={() => imageRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-all">
+                        <ImageIcon size={14} /> Choose Image
+                      </button>
+                      <button onClick={() => handleAnalyzeImages(images, rawText)} disabled={images.length === 0}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/25 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <ScanLine size={14} /> Read Handwriting
+                      </button>
+                    </div>
+                  </div>
+
                   {/* File upload */}
                   <div onClick={() => fileRef.current?.click()}
                     className="border-2 border-dashed border-border/30 rounded-2xl p-6 text-center cursor-pointer hover:border-primary/30 hover:bg-primary/3 transition-all group">
                     <div className="flex items-center justify-center gap-3">
                       <Upload size={20} className="text-muted-foreground group-hover:text-primary transition-colors" />
                       <div className="text-left">
-                        <p className="text-xs font-semibold text-card-foreground group-hover:text-primary transition-colors">Drop a file or click to upload</p>
-                        <p className="text-[10px] text-muted-foreground">.csv, .json, .txt, .tsv, .jsonl, .md, .html</p>
+                        <p className="text-xs font-semibold text-card-foreground group-hover:text-primary transition-colors">Drop a file or image, or click to upload</p>
+                        <p className="text-[10px] text-muted-foreground">.csv, .json, .txt, .tsv, .jsonl, .md, .html, .jpg, .png, .heic</p>
                       </div>
                     </div>
                   </div>
-                  <input ref={fileRef} type="file" accept=".csv,.json,.txt,.tsv,.jsonl,.md,.html,.htm" onChange={handleFile} className="hidden" />
+                  <input ref={fileRef} type="file" accept=".csv,.json,.txt,.tsv,.jsonl,.md,.html,.htm,image/*" onChange={handleFile} className="hidden" />
+                  <input ref={imageRef} type="file" accept="image/*" multiple
+                    onChange={(e) => { addImages(Array.from(e.target.files || [])); e.target.value = ''; }} className="hidden" />
+                  <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+                    onChange={(e) => { addImages(Array.from(e.target.files || [])); e.target.value = ''; }} className="hidden" />
+
 
                   {/* Quick examples — collapsible on mobile */}
                   <details className="group" open={!isMobile}>
