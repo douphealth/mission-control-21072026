@@ -55,7 +55,23 @@ export const aiParseImport = createServerFn({ method: 'POST' })
     const apiKey = process.env.LOVABLE_API_KEY;
     if (!apiKey) throw new Error('LOVABLE_API_KEY is not configured');
 
-    const userContent = `Extract and classify all importable items from the following content${data.fileName ? ` (file: ${data.fileName})` : ''}. Return JSON only.\n\n---\n${data.text}\n---`;
+    const images = data.images ?? [];
+    const hasImages = images.length > 0;
+
+    const instruction = hasImages
+      ? `The user photographed handwritten notes / a to-do list / credentials / ideas${data.fileName ? ` (file: ${data.fileName})` : ''}.
+Carefully read ALL handwriting in the image(s), including messy cursive, bullet lists, arrows, margins, crossed-out items (mark crossed-out tasks as status "done"), checkboxes (ticked = done, empty = todo), dates, times and underlined headings.
+Transcribe faithfully, correct obvious spelling slips, then extract and classify every item.
+Assume a to-do list written "for today" means dueDate ${new Date().toISOString().split('T')[0]}.
+Return JSON only.${data.text ? `\n\nExtra context typed by the user:\n${data.text}` : ''}`
+      : `Extract and classify all importable items from the following content${data.fileName ? ` (file: ${data.fileName})` : ''}. Return JSON only.\n\n---\n${data.text}\n---`;
+
+    const userContent: any = hasImages
+      ? [
+          { type: 'text', text: instruction },
+          ...images.map((url) => ({ type: 'image_url', image_url: { url } })),
+        ]
+      : instruction;
 
     const res = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -64,7 +80,7 @@ export const aiParseImport = createServerFn({ method: 'POST' })
         'Authorization': `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
+        model: hasImages ? 'google/gemini-2.5-pro' : 'google/gemini-2.5-flash',
         messages: [
           { role: 'system', content: SYSTEM_PROMPT },
           { role: 'user', content: userContent },
@@ -79,6 +95,7 @@ export const aiParseImport = createServerFn({ method: 'POST' })
       if (res.status === 402) throw new Error('AI credits exhausted — add credits in workspace settings.');
       throw new Error(`AI import failed [${res.status}]: ${body.slice(0, 400)}`);
     }
+
 
     const json = await res.json();
     const raw = json?.choices?.[0]?.message?.content ?? '{}';
