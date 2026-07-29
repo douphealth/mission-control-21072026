@@ -3,7 +3,7 @@ import {
   Upload, FileText, X, CheckCircle2, Sparkles, Wand2, Globe, Link2, Key, CreditCard,
   FileCode, ExternalLink, Clipboard, RotateCcw, ChevronDown, ChevronRight, AlertTriangle,
   Shield, Lightbulb, Zap, ArrowRight, Download, RefreshCw, Edit3, Check, Layers,
-  Brain, Target, TrendingUp, Hash, Clock, Rocket, Split, Trash2
+  Brain, Target, TrendingUp, Hash, Clock, Rocket, Split, Trash2, Camera, ScanLine, Image as ImageIcon
 } from 'lucide-react';
 import { useBulkAddItems } from '@/hooks/useTableData';
 import { toast } from 'sonner';
@@ -17,7 +17,7 @@ import {
   type TargetMeta,
   generateTemplate,
 } from '@/lib/importEngine';
-import { aiAutonomousImport } from '@/lib/aiImport';
+import { aiAutonomousImport, aiImageImport } from '@/lib/aiImport';
 import { deduplicateItems } from '@/lib/dedup';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -59,6 +59,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
   const isMobile = useIsMobile();
   const [phase, setPhase] = useState<Phase>('input');
   const [rawText, setRawText] = useState('');
+  const [images, setImages] = useState<string[]>([]);
   const [result, setResult] = useState<AutonomousImportResult | null>(null);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [importCount, setImportCount] = useState(0);
@@ -67,11 +68,14 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
   const [autoClipboardDone, setAutoClipboardDone] = useState(false);
   const [removedCategories, setRemovedCategories] = useState<Set<string>>(new Set());
   const fileRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const reset = useCallback(() => {
     setPhase('input');
     setRawText('');
+    setImages([]);
     setResult(null);
     setExpandedItems(new Set());
     setImportCount(0);
@@ -172,9 +176,85 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     }
   }, []);
 
+  // ── Image (handwriting) import ────────────────────────────────────────────
+  const compressImage = useCallback((file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read image'));
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('Invalid image'));
+        img.onload = () => {
+          const MAX = 1800;
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(reader.result as string); return; }
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    });
+  }, []);
+
+  const addImages = useCallback(async (files: File[]) => {
+    const imgs = files.filter(f => f.type.startsWith('image/')).slice(0, 6);
+    if (imgs.length === 0) return false;
+    try {
+      const encoded = await Promise.all(imgs.map(compressImage));
+      setImages(prev => [...prev, ...encoded].slice(0, 6));
+      toast.success(`${encoded.length} image${encoded.length > 1 ? 's' : ''} ready — hit "Read Handwriting"`);
+    } catch {
+      toast.error('Could not process that image.');
+    }
+    return true;
+  }, [compressImage]);
+
+  const handleAnalyzeImages = useCallback(async (imgs: string[], note: string) => {
+    if (imgs.length === 0) return;
+    setPhase('analyzing');
+    try {
+      const importResult = await aiImageImport(imgs, undefined, note.trim() || undefined);
+      if (importResult.totalItems === 0) {
+        toast.error('No readable items found in the image. Try a sharper, well-lit photo.');
+        setPhase('input');
+        return;
+      }
+      let totalSkipped = 0;
+      for (const cat of importResult.categories) {
+        const unique = await deduplicateItems(cat.target, cat.items);
+        totalSkipped += cat.items.length - unique.length;
+        cat.items = unique;
+      }
+      importResult.categories = importResult.categories.filter(c => c.items.length > 0);
+      importResult.totalItems = importResult.categories.reduce((s, c) => s + c.items.length, 0);
+      setSkippedDupes(totalSkipped);
+      setResult(importResult);
+      if (importResult.totalItems > 0) {
+        setPhase('review');
+        const catLabels = importResult.categories.map(c => `${c.items.length} ${c.meta.label}`).join(', ');
+        toast.success(`Handwriting recognised: ${catLabels}${totalSkipped > 0 ? ` (${totalSkipped} duplicates filtered)` : ''}`);
+      } else {
+        toast(`Everything in that photo already exists.`, { icon: '🔄' });
+        setPhase('input');
+      }
+    } catch (err: any) {
+      console.error('Image import error:', err);
+      toast.error(err?.message || 'Could not read that image. Try again.');
+      setPhase('input');
+    }
+  }, []);
+
   const handleFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    if (file.type.startsWith('image/')) { addImages([file]); return; }
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
@@ -182,7 +262,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       handleAnalyze(text, file.name);
     };
     reader.readAsText(file);
-  }, [handleAnalyze]);
+  }, [handleAnalyze, addImages]);
 
   const handlePaste = useCallback(async () => {
     try {
@@ -194,6 +274,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       toast.error('Clipboard access denied. Paste manually into the text area.');
     }
   }, [handleAnalyze]);
+
 
   // Re-target a specific category
   const handleRetarget = useCallback(async (catIndex: number, newTarget: ImportTarget) => {
@@ -318,12 +399,18 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
 
   // Handle paste event on textarea for instant analysis
   const handleTextareaPaste = useCallback((e: React.ClipboardEvent) => {
+    const imgFiles = Array.from(e.clipboardData.files || []).filter(f => f.type.startsWith('image/'));
+    if (imgFiles.length > 0) {
+      e.preventDefault();
+      addImages(imgFiles);
+      return;
+    }
     const text = e.clipboardData.getData('text');
     if (text && text.trim().length > 10) {
       // Let the textarea update first, then auto-analyze
       setTimeout(() => handleAnalyze(text), 100);
     }
-  }, [handleAnalyze]);
+  }, [handleAnalyze, addImages]);
 
   // Handle drag & drop
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -331,8 +418,14 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     e.stopPropagation();
 
     // Handle dropped files
-    const file = e.dataTransfer.files?.[0];
+    const dropped = Array.from(e.dataTransfer.files || []);
+    if (dropped.some(f => f.type.startsWith('image/'))) {
+      addImages(dropped);
+      return;
+    }
+    const file = dropped[0];
     if (file) {
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         const text = ev.target?.result as string;
@@ -349,7 +442,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       setRawText(text);
       handleAnalyze(text);
     }
-  }, [handleAnalyze]);
+  }, [handleAnalyze, addImages]);
 
   const stats = useMemo(() => {
     if (!result) return null;
@@ -469,18 +562,65 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                     </div>
                   </div>
 
+                  {/* Handwriting / photo import */}
+                  <div className="rounded-2xl border border-primary/20 bg-primary/5 p-3.5 space-y-3">
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shrink-0">
+                        <Camera size={15} className="text-white" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-card-foreground">Snap your handwritten notes</p>
+                        <p className="text-[10px] text-muted-foreground">Photograph a to-do list, ideas, credentials or a whiteboard — AI reads the handwriting and files everything automatically.</p>
+                      </div>
+                    </div>
+
+                    {images.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto pb-1">
+                        {images.map((src, i) => (
+                          <div key={i} className="relative shrink-0">
+                            <img src={src} alt={`Note photo ${i + 1}`} className="w-20 h-20 object-cover rounded-xl border border-border/40" />
+                            <button onClick={() => setImages(prev => prev.filter((_, j) => j !== i))}
+                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-white flex items-center justify-center shadow">
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button onClick={() => cameraRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-all">
+                        <Camera size={14} /> Take Photo
+                      </button>
+                      <button onClick={() => imageRef.current?.click()}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80 transition-all">
+                        <ImageIcon size={14} /> Choose Image
+                      </button>
+                      <button onClick={() => handleAnalyzeImages(images, rawText)} disabled={images.length === 0}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-primary to-accent text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/25 disabled:opacity-40 disabled:cursor-not-allowed">
+                        <ScanLine size={14} /> Read Handwriting
+                      </button>
+                    </div>
+                  </div>
+
                   {/* File upload */}
                   <div onClick={() => fileRef.current?.click()}
                     className="border-2 border-dashed border-border/30 rounded-2xl p-6 text-center cursor-pointer hover:border-primary/30 hover:bg-primary/3 transition-all group">
                     <div className="flex items-center justify-center gap-3">
                       <Upload size={20} className="text-muted-foreground group-hover:text-primary transition-colors" />
                       <div className="text-left">
-                        <p className="text-xs font-semibold text-card-foreground group-hover:text-primary transition-colors">Drop a file or click to upload</p>
-                        <p className="text-[10px] text-muted-foreground">.csv, .json, .txt, .tsv, .jsonl, .md, .html</p>
+                        <p className="text-xs font-semibold text-card-foreground group-hover:text-primary transition-colors">Drop a file or image, or click to upload</p>
+                        <p className="text-[10px] text-muted-foreground">.csv, .json, .txt, .tsv, .jsonl, .md, .html, .jpg, .png, .heic</p>
                       </div>
                     </div>
                   </div>
-                  <input ref={fileRef} type="file" accept=".csv,.json,.txt,.tsv,.jsonl,.md,.html,.htm" onChange={handleFile} className="hidden" />
+                  <input ref={fileRef} type="file" accept=".csv,.json,.txt,.tsv,.jsonl,.md,.html,.htm,image/*" onChange={handleFile} className="hidden" />
+                  <input ref={imageRef} type="file" accept="image/*" multiple
+                    onChange={(e) => { addImages(Array.from(e.target.files || [])); e.target.value = ''; }} className="hidden" />
+                  <input ref={cameraRef} type="file" accept="image/*" capture="environment"
+                    onChange={(e) => { addImages(Array.from(e.target.files || [])); e.target.value = ''; }} className="hidden" />
+
 
                   {/* Quick examples — collapsible on mobile */}
                   <details className="group" open={!isMobile}>
