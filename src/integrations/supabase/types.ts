@@ -14,7 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      mc_records: {
+        Row: {
+          collection: string
+          created_at: string
+          data: Json
+          deleted: boolean
+          id: string
+          record_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          collection: string
+          created_at?: string
+          data?: Json
+          deleted?: boolean
+          id?: string
+          record_id: string
+          updated_at?: string
+          user_id?: string
+        }
+        Update: {
+          collection?: string
+          created_at?: string
+          data?: Json
+          deleted?: boolean
+          id?: string
+          record_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
