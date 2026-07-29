@@ -3,7 +3,7 @@ import {
   Upload, FileText, X, CheckCircle2, Sparkles, Wand2, Globe, Link2, Key, CreditCard,
   FileCode, ExternalLink, Clipboard, RotateCcw, ChevronDown, ChevronRight, AlertTriangle,
   Shield, Lightbulb, Zap, ArrowRight, Download, RefreshCw, Edit3, Check, Layers,
-  Brain, Target, TrendingUp, Hash, Clock, Rocket, Split, Trash2
+  Brain, Target, TrendingUp, Hash, Clock, Rocket, Split, Trash2, Camera, ScanLine, Image as ImageIcon
 } from 'lucide-react';
 import { useBulkAddItems } from '@/hooks/useTableData';
 import { toast } from 'sonner';
