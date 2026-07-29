@@ -145,16 +145,21 @@ export function useGoogleCalendar(opts?: {
 
             const externalEvents = rawEvents.filter(ev => {
                 const rawSummary = ev.summary || '';
-                const normalizedSummary = rawSummary.replace(/^📋\s*/, '').trim().toLowerCase();
+                const isTaskSummary = /^(📋|✅|⚠️\s*OVERDUE\s*\d+d\s*·)\s*/.test(rawSummary);
+                const normalizedSummary = rawSummary
+                    .replace(/^(📋|✅|⚠️\s*OVERDUE\s*\d+d\s*·)\s*/, '')
+                    .trim()
+                    .toLowerCase();
                 const evDate = ev.start.date || (ev.start.dateTime ? new Date(ev.start.dateTime).toISOString().split('T')[0] : '');
 
-                if (rawSummary.startsWith('📋 ')) {
+                if (isTaskSummary) {
                     if (/^mc[a-v0-9]+$/i.test(ev.id)) return false;
                     const hasExactLocalTask = updatedTasks.some(t =>
                         (t.title || '').trim().toLowerCase() === normalizedSummary && t.dueDate === evDate
                     );
                     if (!hasExactLocalTask) return false;
                 }
+
                 if (pushedGCalIds.has(ev.id)) return false;
                 const fp = `${normalizedSummary}|${evDate}`;
                 if (localTaskFingerprints.has(fp)) {
