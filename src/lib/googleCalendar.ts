@@ -285,9 +285,11 @@ export async function createGCalEvent(
   event: {
     summary: string;
     description?: string;
+    colorId?: string;
     start: { dateTime?: string; date?: string; timeZone?: string };
     end: { dateTime?: string; date?: string; timeZone?: string };
     recurrence?: string[];
+
   },
   deterministicId?: string,
 ): Promise<GoogleCalendarEvent> {
