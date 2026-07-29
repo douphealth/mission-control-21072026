@@ -6,9 +6,11 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       { title: "Mission Control" },
-      { name: "description", content: "Mission Control dashboard" },
+      { name: "description", content: "Mission Control personal dashboard for tasks, calendars, imports, credentials, and daily work." },
       { property: "og:title", content: "Mission Control" },
-      { property: "og:description", content: "Mission Control dashboard" },
+      { property: "og:description", content: "Mission Control personal dashboard for tasks, calendars, imports, credentials, and daily work." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: Index,

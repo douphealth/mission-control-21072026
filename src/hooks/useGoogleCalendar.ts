@@ -208,6 +208,10 @@ export function useGoogleCalendar(opts?: {
         setState(s => ({ ...s, connecting: true, error: null }));
         try {
             const auth = await connectGCal();
+            if (auth.redirected) {
+                setState(s => ({ ...s, connecting: false }));
+                return { success: true };
+            }
             await fetchCalendars();
             await syncEvents(true);
             syncStateFromConfig();
