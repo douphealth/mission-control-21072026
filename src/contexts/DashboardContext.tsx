@@ -18,6 +18,8 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useDataStore } from '@/stores/dataStore';
 import { deduplicateAll } from '@/lib/dedup';
 import { isSupabaseConnected, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
+import { startCloudSync } from '@/lib/cloudSync';
+
 import { restoreLatestNonEmptyVersion } from '@/lib/versions';
 
 // Re-export types for backward compat with old imports
