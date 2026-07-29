@@ -399,12 +399,18 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
 
   // Handle paste event on textarea for instant analysis
   const handleTextareaPaste = useCallback((e: React.ClipboardEvent) => {
+    const imgFiles = Array.from(e.clipboardData.files || []).filter(f => f.type.startsWith('image/'));
+    if (imgFiles.length > 0) {
+      e.preventDefault();
+      addImages(imgFiles);
+      return;
+    }
     const text = e.clipboardData.getData('text');
     if (text && text.trim().length > 10) {
       // Let the textarea update first, then auto-analyze
       setTimeout(() => handleAnalyze(text), 100);
     }
-  }, [handleAnalyze]);
+  }, [handleAnalyze, addImages]);
 
   // Handle drag & drop
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -412,8 +418,14 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     e.stopPropagation();
 
     // Handle dropped files
-    const file = e.dataTransfer.files?.[0];
+    const dropped = Array.from(e.dataTransfer.files || []);
+    if (dropped.some(f => f.type.startsWith('image/'))) {
+      addImages(dropped);
+      return;
+    }
+    const file = dropped[0];
     if (file) {
+
       const reader = new FileReader();
       reader.onload = (ev) => {
         const text = ev.target?.result as string;
