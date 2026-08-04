@@ -24,6 +24,13 @@ const TABLE = 'mc_records';
 
 const COLLECTIONS: Record<string, any> = {
     websites: db.websites,
+    seoProfiles: db.seoProfiles,
+    seoSnapshots: db.seoSnapshots,
+    seoQueryObservations: db.seoQueryObservations,
+    seoIssues: db.seoIssues,
+    seoActions: db.seoActions,
+    seoChanges: db.seoChanges,
+    seoVisibilityChecks: db.seoVisibilityChecks,
     tasks: db.tasks,
     repos: db.repos,
     buildProjects: db.buildProjects,

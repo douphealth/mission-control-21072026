@@ -54,6 +54,13 @@ interface DataState {
 function getTable(tableName: string) {
     const tables: Record<string, any> = {
         websites: db.websites,
+        seoProfiles: db.seoProfiles,
+        seoSnapshots: db.seoSnapshots,
+        seoQueryObservations: db.seoQueryObservations,
+        seoIssues: db.seoIssues,
+        seoActions: db.seoActions,
+        seoChanges: db.seoChanges,
+        seoVisibilityChecks: db.seoVisibilityChecks,
         tasks: db.tasks,
         repos: db.repos,
         buildProjects: db.buildProjects,
@@ -213,8 +220,15 @@ export const useDataStore = create<DataState>((set, _get) => ({
 
     // ─── Export ────────────────────────────────────────────────────────────────
     exportAllData: async (): Promise<string> => {
-        const [websites, tasks, repos, buildProjects, links, notes, payments, ideas, credentials, customModules, habits, settings] = await Promise.all([
+        const [websites, seoProfiles, seoSnapshots, seoQueryObservations, seoIssues, seoActions, seoChanges, seoVisibilityChecks, tasks, repos, buildProjects, links, notes, payments, ideas, credentials, customModules, habits, settings] = await Promise.all([
             db.websites.toArray(),
+            db.seoProfiles.toArray(),
+            db.seoSnapshots.toArray(),
+            db.seoQueryObservations.toArray(),
+            db.seoIssues.toArray(),
+            db.seoActions.toArray(),
+            db.seoChanges.toArray(),
+            db.seoVisibilityChecks.toArray(),
             db.tasks.toArray(),
             db.repos.toArray(),
             db.buildProjects.toArray(),
@@ -228,18 +242,25 @@ export const useDataStore = create<DataState>((set, _get) => ({
             db.settings.get('default'),
         ]);
         const data = {
-            websites, tasks, repos, buildProjects, links, notes, payments, ideas,
+            websites, seoProfiles, seoSnapshots, seoQueryObservations, seoIssues, seoActions, seoChanges, seoVisibilityChecks,
+            tasks, repos, buildProjects, links, notes, payments, ideas,
             credentials, customModules, habits, settings,
             _meta: {
                 exportedAt: new Date().toISOString(),
                 version: '9.1',
                 counts: {
-                    websites: websites.length, tasks: tasks.length, repos: repos.length,
+                    websites: websites.length,
+                    seoProfiles: seoProfiles.length, seoSnapshots: seoSnapshots.length,
+                    seoQueryObservations: seoQueryObservations.length,
+                    seoIssues: seoIssues.length, seoActions: seoActions.length,
+                    seoChanges: seoChanges.length, seoVisibilityChecks: seoVisibilityChecks.length,
+                    tasks: tasks.length, repos: repos.length,
                     buildProjects: buildProjects.length, links: links.length, notes: notes.length,
                     payments: payments.length, ideas: ideas.length, credentials: credentials.length,
                     customModules: customModules.length, habits: habits.length,
                 },
-                totalItems: websites.length + tasks.length + repos.length + buildProjects.length +
+                totalItems: websites.length + seoProfiles.length + seoSnapshots.length + seoQueryObservations.length + seoIssues.length +
+                    seoActions.length + seoChanges.length + seoVisibilityChecks.length + tasks.length + repos.length + buildProjects.length +
                     links.length + notes.length + payments.length + ideas.length +
                     credentials.length + customModules.length + habits.length,
             },
@@ -257,6 +278,13 @@ export const useDataStore = create<DataState>((set, _get) => ({
         if (!data || typeof data !== 'object') throw new Error('Invalid backup file');
         const tableMap: Record<string, any> = {
             websites: db.websites,
+            seoProfiles: db.seoProfiles,
+            seoSnapshots: db.seoSnapshots,
+            seoQueryObservations: db.seoQueryObservations,
+            seoIssues: db.seoIssues,
+            seoActions: db.seoActions,
+            seoChanges: db.seoChanges,
+            seoVisibilityChecks: db.seoVisibilityChecks,
             tasks: db.tasks,
             repos: db.repos,
             buildProjects: db.buildProjects,
@@ -288,6 +316,13 @@ export const useDataStore = create<DataState>((set, _get) => ({
     updateData: async (partial: Record<string, any>): Promise<void> => {
         const tableMap: Record<string, any> = {
             websites: db.websites,
+            seoProfiles: db.seoProfiles,
+            seoSnapshots: db.seoSnapshots,
+            seoQueryObservations: db.seoQueryObservations,
+            seoIssues: db.seoIssues,
+            seoActions: db.seoActions,
+            seoChanges: db.seoChanges,
+            seoVisibilityChecks: db.seoVisibilityChecks,
             tasks: db.tasks,
             repos: db.repos,
             buildProjects: db.buildProjects,

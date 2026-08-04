@@ -26,6 +26,163 @@ export interface Website {
     tags?: string[];
 }
 
+// ─── Evidence-backed SEO control-plane entities ───────────────────────────────
+// These records intentionally contain optional metrics. An empty value means
+// "not observed", never zero. This keeps the dashboard from presenting demo or
+// inferred data as a real Search Console, analytics, crawl, or AI-visibility
+// result.
+
+export type SEODataSource = 'gsc' | 'bing' | 'ga4' | 'crawl' | 'pagespeed' | 'manual';
+export type SEOProfileStatus = 'not-configured' | 'connected' | 'stale' | 'error';
+export type SEOPriority = 'critical' | 'high' | 'medium' | 'low';
+
+export interface SEOProfile {
+    id: string;
+    websiteId: string;
+    priority: SEOPriority;
+    gscProperty?: string;
+    bingSiteUrl?: string;
+    ga4Property?: string;
+    primaryCountry?: string;
+    targetLanguages?: string[];
+    trackedQueries?: string[];
+    syncStatus: SEOProfileStatus;
+    lastSyncedAt?: string;
+    syncError?: string;
+    notes?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export interface SEOSnapshot {
+    id: string;
+    websiteId: string;
+    date: string;
+    source: SEODataSource;
+    periodDays?: number;
+    clicks?: number;
+    impressions?: number;
+    ctr?: number;
+    avgPosition?: number;
+    sessions?: number;
+    conversions?: number;
+    indexedPages?: number;
+    indexCoverage?: number;
+    schemaValidPages?: number;
+    canonicalIssues?: number;
+    coreWebVitalsPassRate?: number;
+    aiQueriesTracked?: number;
+    aiMentions?: number;
+    aiCitations?: number;
+    sourceRef?: string;
+    notes?: string;
+    importedAt: string;
+}
+
+export type SEOQueryIntent = 'informational' | 'commercial' | 'transactional' | 'navigational' | 'local' | 'unknown';
+
+export interface SEOQueryObservation {
+    id: string;
+    websiteId: string;
+    date: string;
+    source: SEODataSource;
+    query: string;
+    url?: string;
+    clicks?: number;
+    impressions?: number;
+    ctr?: number;
+    avgPosition?: number;
+    intent?: SEOQueryIntent;
+    pageType?: string;
+    serpFeatures?: string[];
+    aeoReady?: boolean;
+    geoRelevant?: boolean;
+    sourceRef?: string;
+    notes?: string;
+    importedAt: string;
+}
+
+export type SEOIssueCategory =
+    | 'indexing' | 'canonical' | 'sitemap' | 'schema' | 'performance'
+    | 'content' | 'internal-links' | 'serp' | 'aeo' | 'geo'
+    | 'ai-visibility' | 'other';
+export type SEOIssueStatus = 'open' | 'in-progress' | 'resolved' | 'ignored';
+
+export interface SEOIssue {
+    id: string;
+    websiteId: string;
+    title: string;
+    category: SEOIssueCategory;
+    severity: SEOPriority;
+    status: SEOIssueStatus;
+    url?: string;
+    observedAt: string;
+    source: SEODataSource;
+    evidence?: string;
+    expectedMechanism?: string;
+    rollback?: string;
+    validation?: string;
+    lastValidatedAt?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+export type SEOActionStatus = 'backlog' | 'ready' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
+
+export interface SEOAction {
+    id: string;
+    websiteId: string;
+    title: string;
+    priority: SEOPriority;
+    status: SEOActionStatus;
+    rationale: string;
+    expectedMechanism: string;
+    rollback: string;
+    validation: string;
+    issueId?: string;
+    source: 'manual' | 'issue' | 'system';
+    dueDate?: string;
+    createdAt: string;
+    updatedAt: string;
+    completedAt?: string;
+}
+
+export type SEOChangeObject = 'page' | 'site' | 'schema' | 'meta' | 'route' | 'internal-link' | 'indexing' | 'other';
+export type SEOChangeStatus = 'observed' | 'validated' | 'reverted';
+
+export interface SEOChange {
+    id: string;
+    websiteId: string;
+    occurredAt: string;
+    source: SEODataSource;
+    objectType: SEOChangeObject;
+    url?: string;
+    field: string;
+    before: string;
+    after: string;
+    impact?: string;
+    evidence?: string;
+    status: SEOChangeStatus;
+    createdAt: string;
+}
+
+export type SEOVisibilityEngine = 'google-ai-overview' | 'bing-copilot' | 'chatgpt' | 'perplexity' | 'gemini' | 'manual';
+
+export interface SEOVisibilityCheck {
+    id: string;
+    websiteId: string;
+    checkedAt: string;
+    engine: SEOVisibilityEngine;
+    query: string;
+    mentioned: boolean;
+    cited: boolean;
+    citedUrl?: string;
+    evidence?: string;
+    sourceRef?: string;
+    status: 'observed' | 'verified';
+    createdAt: string;
+}
+
 export interface Subtask {
     id: string;
     title: string;
@@ -231,6 +388,13 @@ export interface HabitTracker {
 
 class MissionControlDB extends Dexie {
     websites!: Table<Website>;
+    seoProfiles!: Table<SEOProfile>;
+    seoSnapshots!: Table<SEOSnapshot>;
+    seoQueryObservations!: Table<SEOQueryObservation>;
+    seoIssues!: Table<SEOIssue>;
+    seoActions!: Table<SEOAction>;
+    seoChanges!: Table<SEOChange>;
+    seoVisibilityChecks!: Table<SEOVisibilityCheck>;
     tasks!: Table<Task>;
     repos!: Table<GitHubRepo>;
     buildProjects!: Table<BuildProject>;
@@ -263,6 +427,16 @@ class MissionControlDB extends Dexie {
 
         this.version(2).stores({
             tasks: 'id, title, priority, status, dueDate, category, createdAt, gcalEventId',
+        });
+
+        this.version(3).stores({
+            seoProfiles: 'id, websiteId, priority, syncStatus, updatedAt',
+            seoSnapshots: 'id, websiteId, date, source, [websiteId+date]',
+            seoQueryObservations: 'id, websiteId, date, source, query, url, [websiteId+date]',
+            seoIssues: 'id, websiteId, status, severity, category, observedAt',
+            seoActions: 'id, websiteId, status, priority, dueDate, updatedAt',
+            seoChanges: 'id, websiteId, occurredAt, status',
+            seoVisibilityChecks: 'id, websiteId, checkedAt, engine, mentioned, cited',
         });
     }
 }

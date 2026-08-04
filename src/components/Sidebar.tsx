@@ -47,7 +47,7 @@ const navGroups = [
   {
     label: 'PLATFORMS',
     items: [
-      { id: 'seo', label: 'SEO Center', icon: SearchIcon },
+      { id: 'seo', label: 'Portfolio SEO', icon: SearchIcon },
       { id: 'cloudflare', label: 'Cloudflare', icon: Cloud },
       { id: 'vercel', label: 'Vercel', icon: Rocket },
       { id: 'openclaw', label: 'OpenClaw', icon: Bug },

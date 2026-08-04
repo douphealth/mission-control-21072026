@@ -8,12 +8,20 @@ import { db } from '@/lib/db';
 import type {
   Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment,
   Idea, CredentialVault, CustomModule, HabitTracker,
+  SEOProfile, SEOSnapshot, SEOQueryObservation, SEOIssue, SEOAction, SEOChange, SEOVisibilityCheck,
 } from '@/lib/db';
 import { useDataStore } from '@/stores/dataStore';
 
 const EMPTY: readonly any[] = Object.freeze([]);
 
 export const useWebsites      = () => (useLiveQuery(() => db.websites.toArray(), []) ?? (EMPTY as Website[]));
+export const useSEOProfiles  = () => (useLiveQuery(() => db.seoProfiles.toArray(), []) ?? (EMPTY as SEOProfile[]));
+export const useSEOSnapshots = () => (useLiveQuery(() => db.seoSnapshots.toArray(), []) ?? (EMPTY as SEOSnapshot[]));
+export const useSEOQueryObservations = () => (useLiveQuery(() => db.seoQueryObservations.toArray(), []) ?? (EMPTY as SEOQueryObservation[]));
+export const useSEOIssues    = () => (useLiveQuery(() => db.seoIssues.toArray(), []) ?? (EMPTY as SEOIssue[]));
+export const useSEOActions   = () => (useLiveQuery(() => db.seoActions.toArray(), []) ?? (EMPTY as SEOAction[]));
+export const useSEOChanges   = () => (useLiveQuery(() => db.seoChanges.toArray(), []) ?? (EMPTY as SEOChange[]));
+export const useSEOVisibilityChecks = () => (useLiveQuery(() => db.seoVisibilityChecks.toArray(), []) ?? (EMPTY as SEOVisibilityCheck[]));
 export const useTasks         = () => (useLiveQuery(() => db.tasks.toArray(), []) ?? (EMPTY as Task[]));
 export const useRepos         = () => (useLiveQuery(() => db.repos.toArray(), []) ?? (EMPTY as GitHubRepo[]));
 export const useBuildProjects = () => (useLiveQuery(() => db.buildProjects.toArray(), []) ?? (EMPTY as BuildProject[]));

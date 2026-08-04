@@ -1,4 +1,4 @@
-import { useWebsites, useBuildProjects, useTasks, useNotes, usePayments, useIdeas, useHabits } from '@/hooks/useTableData';
+import { useWebsites, useBuildProjects, useTasks, useNotes, usePayments, useIdeas, useHabits, useSEOProfiles, useSEOSnapshots, useSEOIssues, useSEOActions } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { forwardRef, useState, useEffect, useMemo } from 'react';
@@ -7,7 +7,7 @@ import {
   ArrowUpRight, ArrowDownRight, ExternalLink,
   Flame, ChevronRight, BarChart3, ArrowUp, Plus, TrendingUp,
   Cloud, Sparkles, Zap, MoreHorizontal, Play, Pause, Search,
-  Github, Rocket, Bug, Lightbulb, Globe, Bell,
+  Github, Rocket, Bug, Lightbulb, Globe, Bell, ListChecks, Activity,
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -131,6 +131,10 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const payments = usePayments();
   const ideas = useIdeas();
   const habits = useHabits();
+  const seoProfiles = useSEOProfiles();
+  const seoSnapshots = useSEOSnapshots();
+  const seoIssues = useSEOIssues();
+  const seoActions = useSEOActions();
   const { setActiveSection } = useNavigationStore();
   const { userName } = useSettingsStore();
   const [clock, setClock] = useState(new Date());
@@ -161,6 +165,11 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const upcoming = tasks.filter(t => t.status !== 'done' && t.dueDate >= today).sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5);
   const topIdeas = ideas.filter(i => i.status !== 'parked').sort((a, b) => b.votes - a.votes).slice(0, 4);
   const pinnedNotes = notes.filter(n => n.pinned).slice(0, 3);
+  const seoEvidenceSiteIds = new Set(seoSnapshots.map(s => s.websiteId));
+  const seoConnectedProfiles = seoProfiles.filter(p => p.syncStatus === 'connected').length;
+  const seoOpenIssues = seoIssues.filter(i => i.status === 'open' || i.status === 'in-progress');
+  const seoOpenActions = seoActions.filter(a => a.status !== 'done' && a.status !== 'cancelled');
+  const seoNextActions = [...seoOpenActions].sort((a, b) => ({ critical: 4, high: 3, medium: 2, low: 1 }[b.priority] - ({ critical: 4, high: 3, medium: 2, low: 1 }[a.priority]))).slice(0, 3);
   const taskWave = useMemo(() => [4, 6, 5, 8, 7, 9, done.length || 6, 11, 8, 12, open.length + 6, 14], [done.length, open.length]);
   const hour = clock.getHours();
   const greet = hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -538,6 +547,26 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
               )}
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* ═══ PORTFOLIO SEO PULSE ═══ */}
+      <div {...fu(15)} className="enterprise-card rounded-[28px] p-6 sm:p-7">
+        <SectionTitle title="Portfolio SEO pulse" sub={`${seoEvidenceSiteIds.size}/${websites.length} sites have observations · ${seoOpenIssues.length} open issues · ${seoOpenActions.length} open actions`} onAction={() => setActiveSection('seo')} actionLabel="Open control center" />
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: 'Evidence coverage', value: `${seoEvidenceSiteIds.size}/${websites.length}`, detail: 'Sites with imported snapshots', tone: 'sky' as const },
+            { label: 'Connected profiles', value: `${seoConnectedProfiles}`, detail: 'Profiles marked connected', tone: 'emerald' as const },
+            { label: 'Open issues', value: `${seoOpenIssues.length}`, detail: 'Needs triage or validation', tone: 'rose' as const },
+            { label: 'Next actions', value: `${seoOpenActions.length}`, detail: 'Bounded work in queue', tone: 'amber' as const },
+          ].map((metric) => {
+            const h = HUES[metric.tone];
+            return <button key={metric.label} onClick={() => setActiveSection('seo')} className="rounded-2xl border border-border/60 bg-secondary/30 p-4 text-left transition hover:border-primary/25 hover:bg-secondary/50"><div className="text-2xl font-extrabold tabular-nums" style={{ color: h.ink }}>{metric.value}</div><div className="mt-1 text-[11px] font-bold text-foreground">{metric.label}</div><div className="mt-1 text-[10px] text-muted-foreground">{metric.detail}</div></button>;
+          })}
+        </div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-foreground"><ListChecks size={14} className="text-primary" /> Highest-priority next actions</div>{seoNextActions.length === 0 ? <div className="text-[11px] leading-5 text-muted-foreground">No actions have been approved yet. Open the control center to import evidence or define the next bounded test.</div> : <div className="space-y-2">{seoNextActions.map((action) => <button key={action.id} onClick={() => setActiveSection('seo')} className="flex w-full items-center gap-2 rounded-xl bg-background/50 p-2.5 text-left transition hover:bg-background"><span className={`h-2 w-2 rounded-full ${action.priority === 'critical' ? 'bg-rose-500' : action.priority === 'high' ? 'bg-amber-500' : 'bg-sky-500'}`} /><span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-foreground">{action.title}</span><ChevronRight size={12} className="shrink-0 text-muted-foreground" /></button>)}</div>}</div>
+          <div className="rounded-2xl border border-border/60 bg-secondary/20 p-4"><div className="mb-3 flex items-center gap-2 text-xs font-bold text-foreground"><Activity size={14} className="text-emerald-500" /> Evidence discipline</div><p className="text-[11px] leading-5 text-muted-foreground">The pulse never invents clicks, rankings, traffic, or AI citations. It shows what is actually observed, what is stale, and what still needs a connector or verified import.</p><button onClick={() => setActiveSection('seo')} className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline">Review data health <ArrowUpRight size={12} /></button></div>
         </div>
       </div>
 
