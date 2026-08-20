@@ -1,29 +1,53 @@
-# Welcome to your Lovable project
+# Mission Control
 
-This project was built with [Lovable](https://lovable.dev).
+Personal operations dashboard: tasks, calendar, notes, focus and habits — with a
+review loop that keeps the backlog from rotting.
 
-## Build with Lovable
+## Feature freeze (active)
 
-Open your project in the [Lovable editor](https://lovable.dev) and keep building.
+No new modules. The daily path is intentionally six screens:
 
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: connect the project to GitHub and every change made in Lovable is committed straight to your repository.
-- **Full ownership**: this code is yours. Push to your repository and your changes sync back into Lovable, ready for your next prompt.
+| Screen | Purpose |
+| --- | --- |
+| Dashboard | Today at a glance |
+| Tasks | Capture and work |
+| Review | Weekly review, decay triage, priority matrix, daily shutdown |
+| Calendar | Time-blocked commitments |
+| Notes | Reference material |
+| Focus | One locked task at a time |
+| Habits | Streaks |
+
+Everything else (Websites, WP Management, Kanban, Payments, Ideas, Credentials,
+Links, GitHub, Builds, SEO, Cloudflare, Vercel, OpenClaw) is **frozen** and lives
+behind the collapsed **Archive** group in the sidebar. It still works; it is just
+out of the daily path. New feature ideas go into Ideas, not into the sidebar.
+
+## The review loop
+
+- **Graveyard** — anything 30+ days overdue is not happening as written. Archive
+  it in one click (archive ≠ delete; restore any time).
+- **Decide** — anything untouched for 14+ days needs a decision, not another day.
+- **Priority matrix** — open tasks split into Do / Schedule / Delegate / Drop.
+- **Daily shutdown** — pick the three things that matter tomorrow, close the day.
+
+Tasks record `touchedAt` on every update, so staleness is measured by attention,
+not by creation date.
+
+## Data
+
+- Local-first: IndexedDB (Dexie) is the working store.
+- Cloud backup: every mutation is pushed to the account-scoped `mc_records`
+  table, so clearing the browser or switching devices loses nothing.
+- Secrets: never commit `.env`. Credentials stored in the vault are encrypted
+  (AES-256-GCM) before they leave the device.
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
-
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+bun install
+bun run dev
 ```
 
 ## Built with
 
-- TanStack Start
-- TypeScript
-- React
-- Tailwind CSS
+TanStack Start · React · TypeScript · Tailwind CSS · Dexie · Zustand
