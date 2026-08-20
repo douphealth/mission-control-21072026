@@ -1303,9 +1303,9 @@ export default function TasksPage() {
       { id: "done", label: "Done", tone: "text-emerald-400", match: t => t.status === "done" },
     ];
     return defs
-      .map(d => ({ ...d, tasks: collapsedGroups.has(d.id) ? [] : filtered.filter(d.match), count: filtered.filter(d.match).length }))
+      .map(d => ({ ...d, tasks: collapsedGroups.has(d.id) ? [] : listTasks.filter(d.match), count: listTasks.filter(d.match).length }))
       .filter(g => g.count > 0);
-  }, [filtered, collapsedGroups]);
+  }, [listTasks, collapsedGroups]);
 
   const allCategories = useMemo(() => {
     const cats = new Set(tasks.map(t => t.category).filter(Boolean));
@@ -1479,11 +1479,11 @@ export default function TasksPage() {
               <>
                 <button
                   onClick={() => {
-                    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
-                    else setSelectedIds(new Set(filtered.map(t => t.id)));
+                    if (selectedIds.size === listTasks.length) setSelectedIds(new Set());
+                    else setSelectedIds(new Set(listTasks.map(t => t.id)));
                   }}
                   className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-secondary/80 transition-all touch-manipulation">
-                  {selectedIds.size === filtered.length && filtered.length > 0 ? "Deselect all" : "Select all"}
+                  {selectedIds.size === listTasks.length && listTasks.length > 0 ? "Deselect all" : "Select all"}
                 </button>
                 <span className="text-xs text-muted-foreground font-medium">
                   {selectedIds.size} selected
@@ -1514,7 +1514,7 @@ export default function TasksPage() {
               onSetPriority: handleSetPriority,
               onSetStatus: handleSetStatus,
             };
-            if (!grouped) return <VirtualizedList tasks={filtered} {...listHandlers} />;
+            if (!grouped) return <VirtualizedList tasks={listTasks} {...listHandlers} />;
             return (
               <div className="space-y-4">
                 {groups.map(g => (
@@ -1536,10 +1536,10 @@ export default function TasksPage() {
             );
           })()}
 
-          {filtered.length === 0 && (
+          {listTasks.length === 0 && (
             <div className="text-center py-20 text-muted-foreground">
               <CheckSquare size={42} className="mx-auto mb-3 opacity-20" />
-              <p className="font-semibold text-foreground">No tasks match your filters</p>
+              <p className="font-semibold text-foreground">Nothing here — you're clear</p>
               <p className="text-sm mt-1">Clear filters or create a new task</p>
               <button onClick={() => setModal({ open: true, task: null })} className="btn-primary mt-4 text-sm">
                 <Plus size={13} /> New Task
