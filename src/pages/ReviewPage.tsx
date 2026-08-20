@@ -363,6 +363,7 @@ export default function ReviewPage() {
         )}
       </section>
 
+      <TaskQuickEditor task={editing} onClose={() => setEditingId(null)} />
       <ConfirmDialog {...cd.dialogProps} />
     </div>
   );
