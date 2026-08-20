@@ -79,9 +79,30 @@ export default function ReviewPage() {
   const today = todayISO();
   const { lastWeeklyReview, lastShutdown, markWeeklyReview, markShutdown } = useReviewStore();
   const [showArchive, setShowArchive] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
 
   const q = useMemo(() => buildReviewQueues(tasks, today), [tasks, today]);
   const archived = useMemo(() => sortByPriority(tasks.filter(isArchived)), [tasks]);
+  const editing = useMemo(() => tasks.find(t => t.id === editingId) ?? null, [tasks, editingId]);
+
+  const onOpen = useCallback((t: Task) => setEditingId(t.id), []);
+
+  // Drag & drop / tap-to-move between Eisenhower quadrants.
+  // Dropping rewrites urgency (due date) + importance so the task really moves,
+  // and every other view updates instantly through the live query.
+  const moveToQuadrant = useCallback(async (taskId: string, quad: Quadrant) => {
+    const t = tasks.find(x => x.id === taskId);
+    if (!t) return;
+    const plan: Record<Quadrant, Partial<Task>> = {
+      do: { important: true, dueDate: today, priority: t.priority === 'low' ? 'high' : t.priority },
+      schedule: { important: true, dueDate: addDaysISO(7, today) },
+      delegate: { important: false, dueDate: today },
+      later: { important: false, dueDate: addDaysISO(21, today) },
+    } as any;
+    await updateItem<Task>('tasks', taskId, { ...plan[quad], touchedAt: today } as Partial<Task>);
+    toast.success(`Moved to “${QUADRANTS.find(qd => qd.id === quad)?.label}”`);
+  }, [tasks, updateItem, today]);
 
   const onDone = useCallback(async (t: Task) => {
     await updateItem<Task>('tasks', t.id, { status: 'done', completedAt: new Date().toISOString() });
