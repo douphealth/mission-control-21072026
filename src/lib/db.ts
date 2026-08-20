@@ -222,6 +222,13 @@ export interface Task {
     reminders?: string[];
     /** Tracks which reminders have fired (by index or key) */
     remindersFired?: string[];
+    /** Review loop — last time this task was actively touched (YYYY-MM-DD) */
+    touchedAt?: string;
+    /** Parked out of the active list without deleting */
+    archived?: boolean;
+    archivedAt?: string;
+    /** Manual Eisenhower override */
+    important?: boolean;
 }
 
 export interface GitHubRepo {

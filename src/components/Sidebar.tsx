@@ -8,49 +8,21 @@ import {
   Search as SearchIcon, Cloud, Rocket, Bug,
   Settings, Sun, Moon, X, Sparkles,
   DollarSign, Lightbulb, KeyRound, Flame,
-  ChevronLeft, ChevronRight, Plus, Check, Download, Zap
+  ChevronLeft, ChevronRight, Plus, Check, Download, Zap, RefreshCcw, Archive
 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const navGroups = [
   {
-    label: 'MENU',
+    label: 'DAILY',
     items: [
       { id: 'dashboard', label: 'Dashboard', icon: Home },
       { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-      { id: 'google-tasks', label: 'Google Tasks', icon: CheckSquare },
+      { id: 'review', label: 'Review', icon: RefreshCcw },
       { id: 'calendar', label: 'Calendar', icon: Calendar },
       { id: 'notes', label: 'Notes', icon: FileText },
-      { id: 'habits', label: 'Habit Tracker', icon: Flame },
       { id: 'focus', label: 'Focus Timer', icon: Timer },
-    ],
-  },
-  {
-    label: 'TOOLS',
-    items: [
-      { id: 'websites', label: 'My Websites', icon: Globe },
-      { id: 'wp-manage', label: 'WP Management', icon: Zap, indent: true },
-      { id: 'github', label: 'GitHub', icon: Github },
-      { id: 'builds', label: 'Build Projects', icon: Hammer },
-      { id: 'links', label: 'Links Hub', icon: Link2 },
-      { id: 'projects', label: 'Kanban Board', icon: BarChart3 },
-    ],
-  },
-  {
-    label: 'BUSINESS',
-    items: [
-      { id: 'payments', label: 'Payments', icon: DollarSign },
-      { id: 'ideas', label: 'Ideas', icon: Lightbulb },
-      { id: 'credentials', label: 'Credentials', icon: KeyRound },
-    ],
-  },
-  {
-    label: 'PLATFORMS',
-    items: [
-      { id: 'seo', label: 'Portfolio SEO', icon: SearchIcon },
-      { id: 'cloudflare', label: 'Cloudflare', icon: Cloud },
-      { id: 'vercel', label: 'Vercel', icon: Rocket },
-      { id: 'openclaw', label: 'OpenClaw', icon: Bug },
+      { id: 'habits', label: 'Habit Tracker', icon: Flame },
     ],
   },
   {
@@ -59,6 +31,24 @@ const navGroups = [
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
   },
+];
+
+// Frozen modules — still available, but out of the daily path.
+const archivedNav = [
+  { id: 'websites', label: 'My Websites', icon: Globe },
+  { id: 'wp-manage', label: 'WP Management', icon: Zap },
+  { id: 'projects', label: 'Kanban Board', icon: BarChart3 },
+  { id: 'payments', label: 'Payments', icon: DollarSign },
+  { id: 'ideas', label: 'Ideas', icon: Lightbulb },
+  { id: 'credentials', label: 'Credentials', icon: KeyRound },
+  { id: 'links', label: 'Links Hub', icon: Link2 },
+  { id: 'github', label: 'GitHub', icon: Github },
+  { id: 'builds', label: 'Build Projects', icon: Hammer },
+  { id: 'google-tasks', label: 'Google Tasks', icon: CheckSquare },
+  { id: 'seo', label: 'Portfolio SEO', icon: SearchIcon },
+  { id: 'cloudflare', label: 'Cloudflare', icon: Cloud },
+  { id: 'vercel', label: 'Vercel', icon: Rocket },
+  { id: 'openclaw', label: 'OpenClaw', icon: Bug },
 ];
 
 export default function Sidebar() {
@@ -72,6 +62,7 @@ export default function Sidebar() {
   const [addingTo, setAddingTo] = useState<string | null>(null);
   const [newModName, setNewModName] = useState('');
   const [newModEmoji, setNewModEmoji] = useState('📁');
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   const openTaskCount = tasks.filter(t => t.status !== 'done').length;
   const overduePayments = payments.filter(p => p.status === 'overdue').length;
@@ -287,6 +278,38 @@ export default function Sidebar() {
               )}
             </div>
           )}
+          {!isCollapsed && (
+            <div>
+              <button
+                onClick={() => setArchiveOpen(o => !o)}
+                className="w-full flex items-center justify-between px-3 mb-1.5 text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase hover:text-sidebar-foreground/60 transition-colors"
+              >
+                <span className="flex items-center gap-1.5"><Archive size={10} /> Archive · frozen</span>
+                <span>{archiveOpen ? '−' : '+'}</span>
+              </button>
+              {archiveOpen && (
+                <div className="space-y-0.5">
+                  {archivedNav.map(item => {
+                    const active = activeSection === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
+                        className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all
+                          ${active
+                            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35'
+                            : 'text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'}`}
+                      >
+                        <item.icon size={15} strokeWidth={1.5} className="flex-shrink-0" />
+                        <span className="flex-1 text-left truncate">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
         </nav>
 
         {/* Bottom — user area */}

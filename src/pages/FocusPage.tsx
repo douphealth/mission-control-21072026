@@ -1,5 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw, SkipForward, Coffee, Flame, Zap, TreePine } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Play, Pause, RotateCcw, SkipForward, Coffee, Flame, Zap, TreePine, Target, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import type { Task } from "@/lib/db";
+import { useTasks, useUpdateItem } from "@/hooks/useTableData";
+import { todayISO } from "@/lib/overdue";
+import { isOpen, sortByPriority, quadrantOf } from "@/lib/triage";
 
 const PRESETS = [
   { label: "Focus", minutes: 25, icon: Zap, emoji: "🍅", gradient: "from-primary to-accent" },
@@ -13,7 +18,39 @@ export default function FocusPage() {
   const [remaining, setRemaining] = useState(PRESETS[0].minutes * 60);
   const [running, setRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
+  const [lockedId, setLockedId] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  const tasks = useTasks();
+  const updateItem = useUpdateItem();
+  const today = todayISO();
+
+  const candidates = useMemo(() => {
+    const open = tasks.filter(isOpen);
+    const ranked = sortByPriority(open).sort((a, b) => {
+      const rank = (t: Task) => (quadrantOf(t, today) === 'do' ? 0 : quadrantOf(t, today) === 'schedule' ? 1 : 2);
+      return rank(a) - rank(b);
+    });
+    return ranked.slice(0, 12);
+  }, [tasks, today]);
+
+  const locked = tasks.find(t => t.id === lockedId) || null;
+
+  const completeLocked = async () => {
+    if (!locked) return;
+    await updateItem<Task>('tasks', locked.id, { status: 'done', completedAt: new Date().toISOString() });
+    toast.success(`"${locked.title}" done ✓`);
+    setLockedId(null);
+    setRunning(false);
+  };
+
+  const toggleRunning = () => {
+    if (!running && preset === 0 && !locked) {
+      toast.error('Pick the one task you are working on first');
+      return;
+    }
+    setRunning(r => !r);
+  };
 
   useEffect(() => {
     if (running && remaining > 0) {
@@ -73,6 +110,40 @@ export default function FocusPage() {
         <p className="text-xs sm:text-sm text-muted-foreground/60 mt-1">
           Session #{sessions + 1} · {sessions} completed today
         </p>
+      </div>
+
+      {/* Task lock — a focus session must be attached to one real task */}
+      <div className="w-full max-w-xl rounded-2xl border border-border/30 bg-card p-4 shadow-[var(--shadow-sm)]">
+        {locked ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Target size={16} className="text-primary shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{locked.title}</span>
+            <button onClick={completeLocked}
+              className="flex items-center gap-1 rounded-xl bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-500 transition hover:bg-emerald-500/20">
+              <CheckCircle2 size={12} /> Done
+            </button>
+            <button onClick={() => { setLockedId(null); setRunning(false); }}
+              className="rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground">
+              Unlock
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <Target size={14} className="text-primary" /> Lock the session to one task
+            </div>
+            <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+              {candidates.map(t => (
+                <button key={t.id} onClick={() => setLockedId(t.id)}
+                  className="flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2 text-left transition hover:bg-secondary">
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{t.title}</span>
+                  <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{t.priority}</span>
+                </button>
+              ))}
+              {!candidates.length && <p className="py-3 text-center text-xs text-muted-foreground">No open tasks — nothing to focus on. 🎉</p>}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Preset tabs */}
@@ -161,7 +232,7 @@ export default function FocusPage() {
         </button>
 
         <button
-          onClick={() => setRunning(!running)} 
+          onClick={toggleRunning} 
           className="w-16 h-16 sm:w-20 sm:h-20 rounded-[28px] gradient-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-primary)] hover:shadow-[0_8px_32px_-4px_hsl(var(--primary)/0.5)] transition-all touch-manipulation"
         >
           <>

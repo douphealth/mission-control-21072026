@@ -36,6 +36,7 @@ const CloudflarePage = lazy(() => import('@/pages/CloudflarePage'));
 const VercelPage = lazy(() => import('@/pages/VercelPage'));
 const OpenClawPage = lazy(() => import('@/pages/OpenClawPage'));
 const HabitsPage = lazy(() => import('@/pages/HabitsPage'));
+const ReviewPage = lazy(() => import('@/pages/ReviewPage'));
 const CustomModulePage = lazy(() => import('@/pages/CustomModulePage'));
 
 const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
@@ -60,6 +61,7 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   vercel: VercelPage,
   openclaw: OpenClawPage,
   habits: HabitsPage,
+  review: ReviewPage,
 };
 
 function LoadingSkeleton() {
@@ -122,7 +124,7 @@ export default function DashboardLayout() {
         <main className="flex-1 overflow-y-auto pb-28 lg:pb-0 overscroll-contain">
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
             <CloudBackupBanner />
-            {(activeSection === 'dashboard' || activeSection === 'tasks' || activeSection === 'focus') && (
+            {(activeSection === 'dashboard' || activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
               <DailyBriefingBanner />
             )}
 
