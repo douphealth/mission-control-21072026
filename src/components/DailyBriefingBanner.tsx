@@ -12,6 +12,8 @@ import {
 } from '@/lib/overdue';
 import type { Task } from '@/lib/db';
 import { toast } from 'sonner';
+import { useServerFn } from '@tanstack/react-start';
+import { sendOverdueDigest } from '@/lib/digest.functions';
 
 const PRIORITY_STYLE: Record<string, string> = {
   critical: 'bg-rose-500/15 text-rose-500 ring-rose-500/25',
@@ -75,6 +77,8 @@ export default function DailyBriefingBanner() {
   const settings = useSettingsStore() as unknown as Record<string, unknown>;
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [sending, setSending] = useState(false);
+  const sendDigest = useServerFn(sendOverdueDigest);
 
   const briefing = useMemo(() => buildBriefing(tasks as Task[]), [tasks]);
   const today = todayISO();
@@ -167,7 +171,7 @@ export default function DailyBriefingBanner() {
             title="Email digest"
             className="rounded-full border border-border/50 p-2 text-muted-foreground transition active:scale-90"
           >
-            <Mail size={15} />
+            <Mail size={15} className={sending ? 'animate-pulse' : ''} />
           </button>
           <button
             onClick={() => setActiveSection('tasks')}
