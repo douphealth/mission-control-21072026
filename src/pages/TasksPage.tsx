@@ -1126,6 +1126,22 @@ export default function TasksPage() {
       });
   }, [tasks, filterStatus, filterPriority, filterCategory, search, sortBy]);
 
+  // Quick presets only shape the list view (kanban keeps all columns)
+  const listTasks = useMemo(() => {
+    const weekEnd = shiftISO(today, 7);
+    return filtered.filter(t => {
+      switch (preset) {
+        case "all": return true;
+        case "open": return t.status !== "done";
+        case "overdue": return t.status !== "done" && !!t.dueDate && t.dueDate < today;
+        case "today": return t.status !== "done" && (t.dueDate === today || (!!t.dueDate && t.dueDate < today));
+        case "week": return t.status !== "done" && !!t.dueDate && t.dueDate <= weekEnd;
+        case "critical": return t.status !== "done" && (t.priority === "critical" || t.priority === "high");
+        default: return true;
+      }
+    });
+  }, [filtered, preset]);
+
   const tasksByStatus = useMemo(() => {
     const map: Record<string, Task[]> = { todo: [], "in-progress": [], blocked: [], done: [] };
     filtered.forEach(t => { (map[t.status] = map[t.status] || []).push(t); });
