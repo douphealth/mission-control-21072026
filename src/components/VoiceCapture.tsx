@@ -275,7 +275,13 @@ export default function VoiceCapture() {
       // Chrome ends recognition on short pauses — restart while still recording
       // so long, multi-sentence dictation is never truncated.
       if (recognitionRef.current !== recognition) return;
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      if (
+        !stopReasonRef.current &&
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state === 'recording'
+      ) {
+        // A restarted session numbers its results from zero again.
+        lastFinalResultIndexRef.current = 0;
         try { recognition.start(); return; } catch { /* */ }
       }
       recognitionRef.current = null;
