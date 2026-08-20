@@ -96,7 +96,11 @@ async function run(request: Request) {
       dueTomorrow: dueTomorrow.slice(0, 200).map((t) => shape(t, today)),
       completedToday,
     },
-    idempotencyKey: `overdue-digest-cron-${today}`,
+    idempotencyKey: `overdue-digest-cron-${today}${
+      new URL(request.url).searchParams.get('run')
+        ? `-${new URL(request.url).searchParams.get('run')}`
+        : ''
+    }`,
   })
 
   return Response.json({
