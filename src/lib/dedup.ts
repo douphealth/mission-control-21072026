@@ -185,41 +185,119 @@ function getTableRef(tableName: string) {
     return tables[tableName];
 }
 
+// ─── Identity keys (looser than fingerprints) ───────────────────────────────────
+// Fingerprints require *every* identity field to match, so "acme.com" imported
+// twice with different names stayed as two rows. Identity keys match on the one
+// thing that really identifies the record, so near-duplicates get merged.
+
+function identityKey(tableName: string, item: any): string | null {
+    switch (tableName) {
+        case 'websites':
+        case 'links':
+        case 'repos': {
+            const host = normUrl(item?.url).split('/')[0];
+            return host ? `${tableName}|${host}` : (norm(item?.name || item?.title) ? `${tableName}|${norm(item?.name || item?.title)}` : null);
+        }
+        case 'credentials': {
+            const host = normUrl(item?.url).split('/')[0];
+            const svc = norm(item?.service);
+            const user = norm((item as any)?.username);
+            if (host || svc) return `credentials|${host}|${svc}|${user}`;
+            return norm(item?.label) ? `credentials|${norm(item.label)}` : null;
+        }
+        case 'buildProjects':
+            return norm(item?.name) ? `buildProjects|${norm(item.name)}` : null;
+        default: {
+            const fp = FINGERPRINT_MAP[tableName];
+            return fp ? fp(item) : null;
+        }
+    }
+}
+
+const SKIP_MERGE_FIELDS = new Set(['id', 'createdAt']);
+
+function isEmptyValue(v: any): boolean {
+    return v === undefined || v === null || v === '' ||
+        (Array.isArray(v) && v.length === 0) ||
+        (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+}
+
 /**
- * Deduplicate an entire table in-place: remove items that have the same
- * fingerprint as an earlier item (keep the first occurrence by ID sort order).
- * Returns the number of duplicates removed.
+ * Enrich `base` with anything `extra` knows and `base` doesn't.
+ * Never destroys existing data: empty fields get filled, arrays get unioned,
+ * longer text wins only when the base value is blank.
+ */
+export function mergeRecords<T extends Record<string, any>>(base: T, extra: T): { merged: T; changed: boolean } {
+    const merged: any = { ...base };
+    let changed = false;
+
+    for (const [k, v] of Object.entries(extra)) {
+        if (SKIP_MERGE_FIELDS.has(k) || isEmptyValue(v)) continue;
+        const cur = merged[k];
+
+        if (Array.isArray(cur) || Array.isArray(v)) {
+            const a = Array.isArray(cur) ? cur : [];
+            const b = Array.isArray(v) ? v : [];
+            const seen = new Set<string>();
+            const union = [...a, ...b].filter(x => {
+                const key = typeof x === 'object' ? JSON.stringify(x) : String(x);
+                if (seen.has(key)) return false;
+                seen.add(key);
+                return true;
+            });
+            if (union.length !== a.length) { merged[k] = union; changed = true; }
+            continue;
+        }
+
+        if (isEmptyValue(cur)) { merged[k] = v; changed = true; continue; }
+
+        // Prefer the richer note/description text.
+        if (typeof cur === 'string' && typeof v === 'string' &&
+            (k === 'notes' || k === 'description') && v.length > cur.length && !cur.includes(v)) {
+            merged[k] = cur && !v.includes(cur) ? `${cur}\n${v}` : v;
+            changed = true;
+        }
+    }
+
+    return { merged, changed };
+}
+
+/**
+ * Smart-dedup an entire table: near-duplicates are MERGED into the first
+ * occurrence (so any extra info the duplicate carried is preserved) and then
+ * removed. Returns the number of duplicate rows folded away.
  */
 export async function deduplicateTable(tableName: string): Promise<number> {
-    const fp = FINGERPRINT_MAP[tableName];
-    if (!fp) return 0;
-
     const tableRef = getTableRef(tableName);
     if (!tableRef) return 0;
 
     const items = await tableRef.toArray();
-    const seen = new Set<string>();
+    const keepers = new Map<string, any>();
     const toDelete: string[] = [];
+    const toUpdate = new Map<string, any>();
 
     for (const item of items) {
-        const hash = fp(item);
-        if (seen.has(hash)) {
-            toDelete.push(item.id);
-        } else {
-            seen.add(hash);
-        }
+        const key = identityKey(tableName, item);
+        if (!key) continue;
+        const existing = keepers.get(key);
+        if (!existing) { keepers.set(key, item); continue; }
+
+        const { merged, changed } = mergeRecords(existing, item);
+        if (changed) { keepers.set(key, merged); toUpdate.set(merged.id, merged); }
+        toDelete.push(item.id);
     }
 
+    if (toUpdate.size > 0) await tableRef.bulkPut([...toUpdate.values()]);
     if (toDelete.length > 0) {
         await tableRef.bulkDelete(toDelete);
-        console.log(`🧹 Dedup: removed ${toDelete.length} duplicate(s) from "${tableName}"`);
+        console.log(`🧹 Dedup: merged ${toDelete.length} duplicate(s) into existing "${tableName}" records`);
     }
 
     return toDelete.length;
 }
 
 /**
- * Deduplicate ALL tables. Returns total duplicates removed.
+ * Smart-dedup ALL tables. Returns total duplicates merged away.
  */
 export async function deduplicateAll(): Promise<number> {
     const tables = Object.keys(FINGERPRINT_MAP);
@@ -228,7 +306,7 @@ export async function deduplicateAll(): Promise<number> {
         total += await deduplicateTable(table);
     }
     if (total > 0) {
-        console.log(`🧹 Total dedup: removed ${total} duplicate(s) across all tables`);
+        console.log(`🧹 Total dedup: merged ${total} duplicate(s) across all tables`);
     }
     return total;
 }
