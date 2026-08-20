@@ -1226,10 +1226,73 @@ export default function TasksPage() {
     else toast.error("Duplicate task — already exists");
   }, [quickAdd, addItem]);
 
+  // ── Inline single-task edits (no modal needed) ────────────────────────────
+  const handleRename = useCallback(async (id: string, title: string) => {
+    await updateItem<Task>("tasks", id, { title });
+  }, [updateItem]);
+
+  const handleSetDue = useCallback(async (id: string, date: string) => {
+    await updateItem<Task>("tasks", id, { dueDate: date });
+    toast.success(`Due ${date === today ? "today" : date}`);
+  }, [updateItem]);
+
+  const handleSetPriority = useCallback(async (id: string, priority: Task["priority"]) => {
+    await updateItem<Task>("tasks", id, { priority });
+  }, [updateItem]);
+
+  const handleSetStatus = useCallback(async (id: string, status: StatusId) => {
+    await updateItem<Task>("tasks", id, {
+      status,
+      completedAt: status === "done" ? today : undefined,
+    });
+  }, [updateItem]);
+
+  // ── Bulk quick edits ───────────────────────────────────────────────────────
+  const bulkApply = useCallback(async (changes: Partial<Task>, label: string) => {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    for (const id of ids) await updateItem<Task>("tasks", id, changes);
+    toast.success(`${label} · ${ids.length} task${ids.length > 1 ? "s" : ""}`);
+    exitBulk();
+  }, [selectedIds, updateItem, exitBulk]);
+
+  const selectGroup = useCallback((groupTasks: Task[]) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      groupTasks.forEach(t => n.add(t.id));
+      return n;
+    });
+  }, []);
+
+  const toggleGroup = useCallback((id: string) => {
+    setCollapsedGroups(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+
+  // ── Due-date buckets ──────────────────────────────────────────────────────
+  const groups = useMemo(() => {
+    const weekEnd = shiftISO(today, 7);
+    const defs: { id: string; label: string; tone: string; match: (t: Task) => boolean }[] = [
+      { id: "overdue", label: "Overdue", tone: "text-destructive", match: t => t.status !== "done" && !!t.dueDate && t.dueDate < today },
+      { id: "today", label: "Today", tone: "text-amber-400", match: t => t.status !== "done" && t.dueDate === today },
+      { id: "week", label: "Next 7 days", tone: "text-primary", match: t => t.status !== "done" && !!t.dueDate && t.dueDate > today && t.dueDate <= weekEnd },
+      { id: "later", label: "Later", tone: "text-muted-foreground", match: t => t.status !== "done" && !!t.dueDate && t.dueDate > weekEnd },
+      { id: "nodate", label: "No due date", tone: "text-muted-foreground", match: t => t.status !== "done" && !t.dueDate },
+      { id: "done", label: "Done", tone: "text-emerald-400", match: t => t.status === "done" },
+    ];
+    return defs
+      .map(d => ({ ...d, tasks: collapsedGroups.has(d.id) ? [] : filtered.filter(d.match), count: filtered.filter(d.match).length }))
+      .filter(g => g.count > 0);
+  }, [filtered, collapsedGroups]);
+
   const allCategories = useMemo(() => {
     const cats = new Set(tasks.map(t => t.category).filter(Boolean));
     return Array.from(cats);
   }, [tasks]);
+
 
   // ─────────────────────────────────────────────────────────────────────────────
 
