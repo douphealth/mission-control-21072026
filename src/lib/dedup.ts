@@ -126,17 +126,23 @@ export async function getExistingFingerprints(tableName: string): Promise<Set<st
 }
 
 /**
- * Filter out items that already exist (by content fingerprint) in the given table.
- * Returns only the items that are NOT duplicates.
+ * Filter out items that already exist in the given table — but instead of
+ * throwing the duplicate away, fold any extra information it carries into the
+ * record that's already stored. Returns only the genuinely new items.
  */
 export async function deduplicateItems<T>(tableName: string, items: T[]): Promise<T[]> {
     const fp = FINGERPRINT_MAP[tableName];
     if (!fp) return items; // No fingerprint function = no dedup, pass everything through
 
-    const existing = await getExistingFingerprints(tableName);
+    const tableRef = getTableRef(tableName);
+    const stored: any[] = tableRef ? await tableRef.toArray() : [];
+    const byKey = new Map<string, any>();
+    for (const row of stored) {
+        const k = identityKey(tableName, row);
+        if (k && !byKey.has(k)) byKey.set(k, row);
+    }
 
-    // Also dedup within the incoming batch itself
-    const seen = new Set<string>();
+    const enriched = new Map<string, any>();
     const unique: T[] = [];
 
     for (const item of items) {
@@ -144,11 +150,22 @@ export async function deduplicateItems<T>(tableName: string, items: T[]): Promis
             unique.push(item);
             continue;
         }
-        const hash = fp(item);
-        if (!existing.has(hash) && !seen.has(hash)) {
-            seen.add(hash);
-            unique.push(item);
+        const key = identityKey(tableName, item);
+        if (!key) { unique.push(item); continue; }
+
+        const existing = byKey.get(key);
+        if (existing) {
+            const { merged, changed } = mergeRecords(existing, item as any);
+            if (changed) { byKey.set(key, merged); enriched.set(merged.id, merged); }
+            continue;
         }
+        byKey.set(key, item);
+        unique.push(item);
+    }
+
+    if (tableRef && enriched.size > 0) {
+        await tableRef.bulkPut([...enriched.values()]);
+        console.log(`🧠 Dedup: enriched ${enriched.size} existing "${tableName}" record(s) with imported details`);
     }
 
     return unique;
