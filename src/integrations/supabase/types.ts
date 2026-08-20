@@ -14,6 +14,24 @@ export type Database = {
   }
   public: {
     Tables: {
+      mc_cron_tokens: {
+        Row: {
+          created_at: string
+          name: string
+          token: string
+        }
+        Insert: {
+          created_at?: string
+          name: string
+          token?: string
+        }
+        Update: {
+          created_at?: string
+          name?: string
+          token?: string
+        }
+        Relationships: []
+      }
       mc_records: {
         Row: {
           collection: string
