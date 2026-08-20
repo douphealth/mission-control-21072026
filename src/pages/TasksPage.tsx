@@ -1467,8 +1467,31 @@ export default function TasksPage() {
       {/* ── List View ── */}
       {view === "list" && (
         <div className="space-y-1.5">
+          {/* Quick presets + grouping */}
+          <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1 items-center">
+            {([
+              { id: "open", label: "Open", count: stats.open },
+              { id: "overdue", label: "Overdue", count: stats.overdue },
+              { id: "today", label: "Due today", count: stats.todayTask },
+              { id: "week", label: "This week", count: null },
+              { id: "critical", label: "Important", count: stats.critical },
+              { id: "all", label: "Everything", count: stats.total },
+            ] as const).map(p => (
+              <button key={p.id} onClick={() => setPreset(p.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${preset === p.id ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+                {p.label}{p.count != null && p.count > 0 ? ` · ${p.count}` : ""}
+              </button>
+            ))}
+            <button onClick={() => setGrouped(g => !g)}
+              className={`shrink-0 ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${grouped ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
+              title="Group by due date">
+              <Layers size={13} /> Group by date
+            </button>
+          </div>
+
           {/* Bulk action toolbar */}
           <div className="flex items-center gap-2 flex-wrap">
+
             <button
               onClick={() => bulkMode ? exitBulk() : setBulkMode(true)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${bulkMode ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
