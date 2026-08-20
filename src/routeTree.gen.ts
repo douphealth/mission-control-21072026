@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVoiceTranscribeRouteImport } from './routes/api/voice/transcribe'
+import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,48 @@ const ApiVoiceTranscribeRoute = ApiVoiceTranscribeRouteImport.update({
   path: '/api/voice/transcribe',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LovableEmailTransactionalPreviewRoute =
+  LovableEmailTransactionalPreviewRouteImport.update({
+    id: '/lovable/email/transactional/preview',
+    path: '/lovable/email/transactional/preview',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/voice/transcribe': typeof ApiVoiceTranscribeRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/voice/transcribe': typeof ApiVoiceTranscribeRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/voice/transcribe': typeof ApiVoiceTranscribeRoute
+  '/lovable/email/transactional/preview': typeof LovableEmailTransactionalPreviewRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/voice/transcribe'
+  fullPaths:
+    | '/'
+    | '/api/voice/transcribe'
+    | '/lovable/email/transactional/preview'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/voice/transcribe'
-  id: '__root__' | '/' | '/api/voice/transcribe'
+  to: '/' | '/api/voice/transcribe' | '/lovable/email/transactional/preview'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/voice/transcribe'
+    | '/lovable/email/transactional/preview'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiVoiceTranscribeRoute: typeof ApiVoiceTranscribeRoute
+  LovableEmailTransactionalPreviewRoute: typeof LovableEmailTransactionalPreviewRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +83,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiVoiceTranscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/lovable/email/transactional/preview': {
+      id: '/lovable/email/transactional/preview'
+      path: '/lovable/email/transactional/preview'
+      fullPath: '/lovable/email/transactional/preview'
+      preLoaderRoute: typeof LovableEmailTransactionalPreviewRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiVoiceTranscribeRoute: ApiVoiceTranscribeRoute,
+  LovableEmailTransactionalPreviewRoute: LovableEmailTransactionalPreviewRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
