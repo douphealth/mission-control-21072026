@@ -137,11 +137,11 @@ export default function TaskQuickEditor({
             <div className="space-y-1">
               {task.subtasks.map(st => (
                 <button key={st.id} onClick={() => void patch({
-                  subtasks: task.subtasks.map(x => x.id === st.id ? { ...x, completed: !x.completed } : x),
+                  subtasks: task.subtasks.map(x => x.id === st.id ? { ...x, done: !x.done } : x),
                 })}
                   className="flex w-full items-center gap-2 rounded-xl bg-secondary/40 px-2.5 py-2 text-left text-[12px]">
-                  <CheckCircle2 size={13} className={st.completed ? 'text-emerald-500' : 'text-muted-foreground'} />
-                  <span className={st.completed ? 'text-muted-foreground line-through' : 'text-foreground'}>{st.title}</span>
+                  <CheckCircle2 size={13} className={st.done ? 'text-emerald-500' : 'text-muted-foreground'} />
+                  <span className={st.done ? 'text-muted-foreground line-through' : 'text-foreground'}>{st.title}</span>
                 </button>
               ))}
             </div>
