@@ -219,7 +219,7 @@ export default function ReviewPage() {
         <div className="space-y-2">
           {q.rotten.map(t => (
             <TaskRow key={t.id} task={t} today={today} onDone={onDone} onPush={onPush}
-              onArchive={onArchive} onDelete={onDelete} onToday={onToday} />
+              onArchive={onArchive} onDelete={onDelete} onToday={onToday} onOpen={onOpen} />
           ))}
           {!q.rotten.length && <p className="py-4 text-center text-xs text-muted-foreground">Nothing rotting. ✅</p>}
         </div>
@@ -236,7 +236,7 @@ export default function ReviewPage() {
         <div className="space-y-2">
           {q.stale.map(t => (
             <TaskRow key={t.id} task={t} today={today} onDone={onDone} onPush={onPush}
-              onArchive={onArchive} onDelete={onDelete} onToday={onToday} />
+              onArchive={onArchive} onDelete={onDelete} onToday={onToday} onOpen={onOpen} />
           ))}
           {!q.stale.length && <p className="py-4 text-center text-xs text-muted-foreground">Everything active has been touched recently.</p>}
         </div>
