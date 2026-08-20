@@ -139,6 +139,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const { userName } = useSettingsStore();
   const [clock, setClock] = useState(new Date());
   const [timerRunning, setTimerRunning] = useState(false);
+  const [chartRange, setChartRange] = useState<'1W' | '1M' | '3M' | '1Y'>('1W');
   const [timerSec, setTimerSec] = useState(25 * 60);
 
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t); }, []);
