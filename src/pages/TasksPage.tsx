@@ -929,18 +929,26 @@ const ListRow = memo(function ListRow({
 
 // ─── Virtualized List (windowed, only renders visible rows) ──────────────────
 
-function VirtualizedList({
-  tasks, bulkMode, selectedIds, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, onToggleSelect,
-}: {
-  tasks: Task[];
-  bulkMode: boolean;
-  selectedIds: Set<string>;
+export interface TaskListHandlers {
   onEdit: (t: Task) => void;
   onDelete: (id: string) => void;
   onDuplicate: (id: string) => void;
   onToggle: (id: string) => void;
   onToggleSub: (taskId: string, subId: string) => void;
   onToggleSelect: (id: string) => void;
+  onRename: (id: string, title: string) => void;
+  onSetDue: (id: string, date: string) => void;
+  onSetPriority: (id: string, p: Task["priority"]) => void;
+  onSetStatus: (id: string, s: StatusId) => void;
+}
+
+function VirtualizedList({
+  tasks, bulkMode, selectedIds, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, onToggleSelect,
+  onRename, onSetDue, onSetPriority, onSetStatus,
+}: TaskListHandlers & {
+  tasks: Task[];
+  bulkMode: boolean;
+  selectedIds: Set<string>;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
 
@@ -952,24 +960,29 @@ function VirtualizedList({
     measureElement: (el) => el?.getBoundingClientRect().height ?? 76,
   });
 
+  const rowProps = (task: Task, i: number) => ({
+    task,
+    index: i,
+    onEdit: () => onEdit(task),
+    onDelete: () => onDelete(task.id),
+    onDuplicate: () => onDuplicate(task.id),
+    onToggle: () => onToggle(task.id),
+    onToggleSub: (subId: string) => onToggleSub(task.id, subId),
+    onRename: (title: string) => onRename(task.id, title),
+    onSetDue: (date: string) => onSetDue(task.id, date),
+    onSetPriority: (p: Task["priority"]) => onSetPriority(task.id, p),
+    onSetStatus: (s: StatusId) => onSetStatus(task.id, s),
+    bulkMode,
+    selected: selectedIds.has(task.id),
+    onToggleSelect: () => onToggleSelect(task.id),
+  });
+
   // For small lists, skip virtualization overhead
   if (tasks.length <= 30) {
     return (
       <>
         {tasks.map((task, i) => (
-          <ListRow
-            key={task.id}
-            task={task}
-            index={i}
-            onEdit={() => onEdit(task)}
-            onDelete={() => onDelete(task.id)}
-            onDuplicate={() => onDuplicate(task.id)}
-            onToggle={() => onToggle(task.id)}
-            onToggleSub={(subId) => onToggleSub(task.id, subId)}
-            bulkMode={bulkMode}
-            selected={selectedIds.has(task.id)}
-            onToggleSelect={() => onToggleSelect(task.id)}
-          />
+          <ListRow key={task.id} {...rowProps(task, i)} />
         ))}
       </>
     );
@@ -989,18 +1002,7 @@ function VirtualizedList({
               ref={virtualizer.measureElement}
               style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)`, paddingBottom: 6 }}
             >
-              <ListRow
-                task={task}
-                index={v.index}
-                onEdit={() => onEdit(task)}
-                onDelete={() => onDelete(task.id)}
-                onDuplicate={() => onDuplicate(task.id)}
-                onToggle={() => onToggle(task.id)}
-                onToggleSub={(subId) => onToggleSub(task.id, subId)}
-                bulkMode={bulkMode}
-                selected={selectedIds.has(task.id)}
-                onToggleSelect={() => onToggleSelect(task.id)}
-              />
+              <ListRow {...rowProps(task, v.index)} />
             </div>
           );
         })}
