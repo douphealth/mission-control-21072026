@@ -242,28 +242,62 @@ export default function ReviewPage() {
         </div>
       </section>
 
-      {/* ── 3. Eisenhower matrix ── */}
+      {/* ── 3. Eisenhower matrix — drag & drop ── */}
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-          <Target size={15} className="text-primary" /> Priority matrix
-        </h2>
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Target size={15} className="text-primary" /> Priority matrix
+          </h2>
+          <p className="text-[11px] text-muted-foreground">
+            Drag a task into another quadrant to re-decide it — or tap it to edit. Changes apply everywhere instantly.
+          </p>
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {QUADRANTS.map(quad => (
-            <div key={quad.id} className={`rounded-2xl border p-3 ${quad.accent}`}>
+            <div
+              key={quad.id}
+              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(quad.id); }}
+              onDragLeave={() => setDragOver(d => (d === quad.id ? null : d))}
+              onDrop={e => {
+                e.preventDefault();
+                setDragOver(null);
+                const id = e.dataTransfer.getData('text/mc-task');
+                if (id) void moveToQuadrant(id, quad.id);
+              }}
+              className={`rounded-2xl border p-3 transition ${quad.accent} ${
+                dragOver === quad.id ? 'ring-2 ring-primary/60 scale-[1.01]' : ''}`}
+            >
               <div className="flex items-baseline justify-between">
                 <span className="text-xs font-bold uppercase tracking-wide">{quad.label}</span>
                 <span className="text-[10px] opacity-70">{quad.hint}</span>
               </div>
               <div className="mt-2 space-y-1.5">
                 {q.matrix[quad.id].slice(0, 8).map(t => (
-                  <div key={t.id} className="flex items-center gap-2 rounded-xl bg-background/60 px-2.5 py-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">{t.title}</span>
+                  <div
+                    key={t.id}
+                    draggable
+                    onDragStart={e => { e.dataTransfer.setData('text/mc-task', t.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    className="flex cursor-grab items-center gap-2 rounded-xl bg-background/60 px-2.5 py-1.5 active:cursor-grabbing"
+                  >
+                    <button onClick={() => onOpen(t)}
+                      className="min-w-0 flex-1 truncate text-left text-[12px] font-medium text-foreground hover:text-primary">
+                      {t.title}
+                    </button>
+                    {/* Mobile-friendly move menu (no drag needed) */}
+                    <select
+                      aria-label="Move task"
+                      value={quad.id}
+                      onChange={e => void moveToQuadrant(t.id, e.target.value as Quadrant)}
+                      className="max-w-[92px] rounded-lg bg-secondary/70 px-1 py-0.5 text-[10px] font-semibold text-muted-foreground outline-none md:hidden"
+                    >
+                      {QUADRANTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                    </select>
                     <button onClick={() => onDone(t)} className="text-emerald-500 transition hover:scale-110" title="Done">
                       <CheckCircle2 size={13} />
                     </button>
                   </div>
                 ))}
-                {!q.matrix[quad.id].length && <p className="py-2 text-center text-[11px] opacity-60">Empty</p>}
+                {!q.matrix[quad.id].length && <p className="py-2 text-center text-[11px] opacity-60">Drop a task here</p>}
                 {q.matrix[quad.id].length > 8 && (
                   <p className="text-center text-[10px] opacity-70">+{q.matrix[quad.id].length - 8} more</p>
                 )}
