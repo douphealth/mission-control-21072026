@@ -2,12 +2,16 @@ import * as React from 'react'
 
 import {
   Body,
+  Button,
+  Column,
   Container,
   Head,
   Heading,
   Hr,
   Html,
+  Link,
   Preview,
+  Row,
   Section,
   Text,
 } from '@react-email/components'
@@ -30,44 +34,89 @@ interface OverdueDigestProps {
   completedToday?: number
 }
 
-const PRIORITY_COLOR: Record<string, string> = {
-  critical: '#dc2626',
-  high: '#ea580c',
-  medium: '#0f766e',
-  low: '#64748b',
+const APP_URL = 'https://mission-control-001.lovable.app'
+
+const PRIORITY: Record<string, { bg: string; fg: string; bar: string }> = {
+  critical: { bg: '#fee2e2', fg: '#b91c1c', bar: '#dc2626' },
+  high: { bg: '#ffedd5', fg: '#c2410c', bar: '#ea580c' },
+  medium: { bg: '#e0f2fe', fg: '#0369a1', bar: '#0284c7' },
+  low: { bg: '#ecfdf5', fg: '#047857', bar: '#10b981' },
 }
 
-const TaskRow = ({ task }: { task: DigestTask }) => (
-  <Section style={row}>
-    <Text style={taskTitle}>
-      <span
-        style={{
-          ...badge,
-          backgroundColor: PRIORITY_COLOR[task.priority || 'low'] || '#64748b',
-        }}
-      >
-        {(task.priority || 'low').toUpperCase()}
-      </span>
-      {task.title}
-    </Text>
-    <Text style={taskMeta}>
-      {task.dueDate ? `Due ${task.dueDate}` : 'No due date'}
-      {task.startTime ? ` at ${task.startTime}` : ''}
-      {task.daysOverdue
-        ? ` · ${task.daysOverdue} day${task.daysOverdue === 1 ? '' : 's'} overdue`
-        : ''}
-    </Text>
-  </Section>
+const tone = (p?: string) => PRIORITY[(p || 'low').toLowerCase()] || PRIORITY['low']!
+
+const weekday = (iso?: string) => {
+  if (!iso) return ''
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
+}
+
+const Stat = ({
+  value,
+  label,
+  color,
+}: {
+  value: number | string
+  label: string
+  color: string
+}) => (
+  <Column style={statCell}>
+    <Text style={{ ...statValue, color }}>{value}</Text>
+    <Text style={statLabel}>{label}</Text>
+  </Column>
 )
 
-const Group = ({ title, tasks }: { title: string; tasks: DigestTask[] }) =>
+const TaskCard = ({ task, index }: { task: DigestTask; index: number }) => {
+  const t = tone(task.priority)
+  return (
+    <Section style={{ ...card, borderLeft: `4px solid ${t.bar}` }}>
+      <Row>
+        <Column style={numCell}>
+          <Text style={num}>{index}</Text>
+        </Column>
+        <Column>
+          <Text style={taskTitle}>{task.title}</Text>
+          <Text style={metaLine}>
+            <span style={{ ...pill, backgroundColor: t.bg, color: t.fg }}>
+              {(task.priority || 'low').toUpperCase()}
+            </span>
+            <span style={metaText}>
+              {task.dueDate ? weekday(task.dueDate) : 'No due date'}
+              {task.startTime ? ` · ${task.startTime}` : ''}
+            </span>
+            {task.daysOverdue ? (
+              <span style={overduePill}>
+                {task.daysOverdue}d late
+              </span>
+            ) : null}
+          </Text>
+        </Column>
+      </Row>
+    </Section>
+  )
+}
+
+const Group = ({
+  title,
+  hint,
+  tasks,
+  accent,
+}: {
+  title: string
+  hint: string
+  tasks: DigestTask[]
+  accent: string
+}) =>
   tasks.length ? (
     <Section style={group}>
-      <Text style={groupTitle}>
-        {title} ({tasks.length})
+      <Text style={{ ...groupTitle, color: accent }}>
+        {title}
+        <span style={groupCount}>{tasks.length}</span>
       </Text>
+      <Text style={groupHint}>{hint}</Text>
       {tasks.map((t, i) => (
-        <TaskRow key={`${t.title}-${i}`} task={t} />
+        <TaskCard key={`${t.title}-${i}`} task={t} index={i + 1} />
       ))}
     </Section>
   ) : null
@@ -80,44 +129,99 @@ export const OverdueDigestEmail = ({
   completedToday = 0,
 }: OverdueDigestProps) => {
   const clear = overdue.length === 0 && dueToday.length === 0
+  const focus = [...overdue, ...dueToday][0]
+  const headline = clear
+    ? 'You are all clear today'
+    : overdue.length
+      ? `${overdue.length} task${overdue.length === 1 ? '' : 's'} slipped past due`
+      : `${dueToday.length} task${dueToday.length === 1 ? '' : 's'} on deck today`
+
   return (
     <Html lang="en" dir="ltr">
       <Head />
       <Preview>
-        {overdue.length
-          ? `${overdue.length} overdue · ${dueToday.length} due today`
-          : `${dueToday.length} due today`}
+        {clear
+          ? `All clear — ${dueTomorrow.length} lined up for tomorrow`
+          : `${overdue.length} overdue · ${dueToday.length} due today${focus ? ` · start with: ${focus.title}` : ''}`}
       </Preview>
       <Body style={main}>
-        <Container style={container}>
-          <Text style={kicker}>MISSION CONTROL</Text>
-          <Heading style={h1}>Daily task digest</Heading>
-          <Text style={dateLine}>{date}</Text>
-
-          <Section style={statsBox}>
-            <Text style={statLine}>
-              <strong style={{ color: '#dc2626' }}>{overdue.length}</strong> overdue
-              {'   ·   '}
-              <strong>{dueToday.length}</strong> due today
-              {'   ·   '}
-              <strong>{dueTomorrow.length}</strong> due tomorrow
-              {'   ·   '}
-              <strong style={{ color: '#059669' }}>{completedToday}</strong> completed today
-            </Text>
+        <Container style={shell}>
+          {/* Header */}
+          <Section style={header}>
+            <Text style={kicker}>MISSION CONTROL</Text>
+            <Heading style={h1}>{headline}</Heading>
+            <Text style={dateLine}>{weekday(date) || date}</Text>
           </Section>
 
-          {clear ? (
-            <Text style={text}>
-              Nothing overdue and nothing due today. You are clear. ✅
-            </Text>
-          ) : null}
+          {/* Stats */}
+          <Section style={statsBox}>
+            <Row>
+              <Stat value={overdue.length} label="Overdue" color="#dc2626" />
+              <Stat value={dueToday.length} label="Today" color="#0f172a" />
+              <Stat value={dueTomorrow.length} label="Tomorrow" color="#475569" />
+              <Stat value={completedToday} label="Done" color="#059669" />
+            </Row>
+          </Section>
 
-          <Group title="Overdue" tasks={overdue} />
-          <Group title="Due today" tasks={dueToday} />
-          <Group title="Due tomorrow" tasks={dueTomorrow} />
+          {/* Focus */}
+          {focus ? (
+            <Section style={focusBox}>
+              <Text style={focusLabel}>START HERE</Text>
+              <Text style={focusTitle}>{focus.title}</Text>
+              <Text style={focusMeta}>
+                {(focus.priority || 'low').toUpperCase()} priority
+                {focus.dueDate ? ` · ${weekday(focus.dueDate)}` : ''}
+                {focus.daysOverdue ? ` · ${focus.daysOverdue} days late` : ''}
+              </Text>
+              <Button href={`${APP_URL}/?section=focus`} style={cta}>
+                Start a focus session
+              </Button>
+            </Section>
+          ) : (
+            <Section style={clearBox}>
+              <Text style={clearTitle}>Nothing overdue. Nothing due today.</Text>
+              <Text style={clearText}>
+                Perfect moment to plan ahead or take the win and rest.
+              </Text>
+              <Button href={APP_URL} style={cta}>
+                Open Mission Control
+              </Button>
+            </Section>
+          )}
+
+          <Group
+            title="Overdue"
+            hint="Oldest and highest priority first — clear or reschedule these."
+            tasks={overdue}
+            accent="#b91c1c"
+          />
+          <Group
+            title="Due today"
+            hint="Your realistic scope for the day."
+            tasks={dueToday}
+            accent="#0f172a"
+          />
+          <Group
+            title="Coming tomorrow"
+            hint="Preview only — nothing to do yet."
+            tasks={dueTomorrow}
+            accent="#475569"
+          />
+
+          <Section style={{ textAlign: 'center' as const, margin: '4px 0 8px' }}>
+            <Button href={`${APP_URL}/?section=tasks`} style={ctaGhost}>
+              Open all tasks
+            </Button>
+          </Section>
 
           <Hr style={hr} />
-          <Text style={footer}>Sent from Mission Control</Text>
+          <Text style={footer}>
+            Daily digest from{' '}
+            <Link href={APP_URL} style={footerLink}>
+              Mission Control
+            </Link>
+            {' · '}sent every morning at 07:00
+          </Text>
         </Container>
       </Body>
     </Html>
@@ -131,10 +235,13 @@ export const template = {
   subject: (data: Record<string, any>) => {
     const overdue = (data['overdue'] as unknown[] | undefined)?.length ?? 0
     const today = (data['dueToday'] as unknown[] | undefined)?.length ?? 0
-    const date = (data['date'] as string) || ''
-    if (overdue) return `⚠️ ${overdue} overdue task${overdue === 1 ? '' : 's'} — Mission Control ${date}`
-    if (today) return `${today} task${today === 1 ? '' : 's'} due today — Mission Control ${date}`
-    return `All clear — Mission Control ${date}`
+    const first =
+      ((data['overdue'] as DigestTask[] | undefined)?.[0] ??
+        (data['dueToday'] as DigestTask[] | undefined)?.[0])?.title ?? ''
+    if (overdue)
+      return `${overdue} overdue${first ? ` — start with “${first}”` : ''}`
+    if (today) return `${today} task${today === 1 ? '' : 's'} due today${first ? ` — “${first}”` : ''}`
+    return `All clear today — Mission Control`
   },
   displayName: 'Overdue task digest',
   // Fixed recipient — this digest only ever goes to the account owner.
@@ -151,51 +258,162 @@ export const template = {
   },
 } satisfies TemplateEntry
 
-const main = { backgroundColor: '#ffffff', fontFamily: 'Arial, Helvetica, sans-serif' }
-const container = { padding: '24px 28px', maxWidth: '600px' }
+// ─── styles ──────────────────────────────────────────────────────────────────
+const main = {
+  backgroundColor: '#ffffff',
+  fontFamily:
+    "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
+  margin: '0',
+  padding: '0',
+}
+const shell = { maxWidth: '600px', padding: '28px 22px 32px', margin: '0 auto' }
+
+const header = { padding: '0 0 18px' }
 const kicker = {
   fontSize: '11px',
-  letterSpacing: '2px',
+  letterSpacing: '2.5px',
   color: '#059669',
+  fontWeight: 'bold' as const,
+  margin: '0 0 8px',
+}
+const h1 = {
+  fontSize: '26px',
+  lineHeight: '32px',
+  fontWeight: 'bold' as const,
+  color: '#0f172a',
+  margin: '0 0 6px',
+}
+const dateLine = { fontSize: '13px', color: '#64748b', margin: '0' }
+
+const statsBox = {
+  backgroundColor: '#f8fafc',
+  border: '1px solid #e2e8f0',
+  borderRadius: '14px',
+  padding: '16px 8px',
+  margin: '0 0 18px',
+}
+const statCell = { textAlign: 'center' as const, width: '25%' }
+const statValue = { fontSize: '24px', fontWeight: 'bold' as const, margin: '0 0 2px' }
+const statLabel = {
+  fontSize: '10px',
+  letterSpacing: '1px',
+  textTransform: 'uppercase' as const,
+  color: '#94a3b8',
+  margin: '0',
+  fontWeight: 'bold' as const,
+}
+
+const focusBox = {
+  backgroundColor: '#0f172a',
+  borderRadius: '16px',
+  padding: '20px 22px',
+  margin: '0 0 26px',
+}
+const focusLabel = {
+  fontSize: '10px',
+  letterSpacing: '2px',
+  color: '#34d399',
+  fontWeight: 'bold' as const,
+  margin: '0 0 8px',
+}
+const focusTitle = {
+  fontSize: '19px',
+  lineHeight: '26px',
+  color: '#ffffff',
   fontWeight: 'bold' as const,
   margin: '0 0 6px',
 }
-const h1 = { fontSize: '24px', fontWeight: 'bold' as const, color: '#0f172a', margin: '0 0 4px' }
-const dateLine = { fontSize: '13px', color: '#64748b', margin: '0 0 18px' }
-const statsBox = {
-  backgroundColor: '#f1f5f9',
-  borderRadius: '10px',
-  padding: '14px 16px',
-  margin: '0 0 20px',
+const focusMeta = { fontSize: '12px', color: '#94a3b8', margin: '0 0 16px' }
+
+const clearBox = {
+  backgroundColor: '#ecfdf5',
+  border: '1px solid #a7f3d0',
+  borderRadius: '16px',
+  padding: '22px',
+  margin: '0 0 26px',
+  textAlign: 'center' as const,
 }
-const statLine = { fontSize: '13px', color: '#334155', margin: '0' }
-const text = { fontSize: '15px', color: '#334155', lineHeight: '24px' }
-const group = { margin: '0 0 22px' }
-const groupTitle = {
-  fontSize: '12px',
-  letterSpacing: '1px',
-  textTransform: 'uppercase' as const,
-  color: '#0f172a',
+const clearTitle = { fontSize: '17px', color: '#065f46', fontWeight: 'bold' as const, margin: '0 0 6px' }
+const clearText = { fontSize: '13px', color: '#047857', margin: '0 0 16px' }
+
+const cta = {
+  backgroundColor: '#10b981',
+  color: '#ffffff',
+  fontSize: '14px',
   fontWeight: 'bold' as const,
-  borderBottom: '1px solid #e2e8f0',
-  paddingBottom: '6px',
+  borderRadius: '10px',
+  padding: '12px 22px',
+  textDecoration: 'none',
+  display: 'inline-block',
+}
+const ctaGhost = {
+  backgroundColor: '#ffffff',
+  border: '1px solid #cbd5e1',
+  color: '#0f172a',
+  fontSize: '13px',
+  fontWeight: 'bold' as const,
+  borderRadius: '10px',
+  padding: '11px 20px',
+  textDecoration: 'none',
+  display: 'inline-block',
+}
+
+const group = { margin: '0 0 26px' }
+const groupTitle = {
+  fontSize: '13px',
+  letterSpacing: '1.2px',
+  textTransform: 'uppercase' as const,
+  fontWeight: 'bold' as const,
+  margin: '0 0 2px',
+}
+const groupCount = {
+  display: 'inline-block',
+  backgroundColor: '#f1f5f9',
+  color: '#475569',
+  borderRadius: '999px',
+  fontSize: '11px',
+  padding: '1px 8px',
+  marginLeft: '8px',
+}
+const groupHint = { fontSize: '12px', color: '#94a3b8', margin: '0 0 12px' }
+
+const card = {
+  backgroundColor: '#ffffff',
+  border: '1px solid #e2e8f0',
+  borderRadius: '12px',
+  padding: '12px 14px',
   margin: '0 0 10px',
 }
-const row = {
-  borderLeft: '3px solid #e2e8f0',
-  paddingLeft: '12px',
-  margin: '0 0 12px',
-}
-const taskTitle = { fontSize: '15px', color: '#0f172a', margin: '0 0 2px', fontWeight: 'bold' as const }
-const taskMeta = { fontSize: '12px', color: '#64748b', margin: '0' }
-const badge = {
-  display: 'inline-block',
-  color: '#ffffff',
-  fontSize: '10px',
+const numCell = { width: '30px', verticalAlign: 'top' as const }
+const num = { fontSize: '13px', color: '#cbd5e1', fontWeight: 'bold' as const, margin: '0' }
+const taskTitle = {
+  fontSize: '15px',
+  lineHeight: '21px',
+  color: '#0f172a',
   fontWeight: 'bold' as const,
-  borderRadius: '4px',
-  padding: '2px 6px',
+  margin: '0 0 6px',
+}
+const metaLine = { fontSize: '11px', margin: '0' }
+const metaText = { color: '#64748b', marginRight: '8px' }
+const pill = {
+  display: 'inline-block',
+  fontSize: '9px',
+  fontWeight: 'bold' as const,
+  letterSpacing: '0.6px',
+  borderRadius: '999px',
+  padding: '3px 8px',
   marginRight: '8px',
 }
-const hr = { borderColor: '#e2e8f0', margin: '24px 0 12px' }
-const footer = { fontSize: '12px', color: '#94a3b8', margin: '0' }
+const overduePill = {
+  display: 'inline-block',
+  backgroundColor: '#dc2626',
+  color: '#ffffff',
+  fontSize: '9px',
+  fontWeight: 'bold' as const,
+  borderRadius: '999px',
+  padding: '3px 8px',
+}
+
+const hr = { borderColor: '#e2e8f0', margin: '22px 0 12px' }
+const footer = { fontSize: '11px', color: '#94a3b8', margin: '0', textAlign: 'center' as const }
+const footerLink = { color: '#059669', textDecoration: 'none' }
