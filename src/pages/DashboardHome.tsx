@@ -9,6 +9,7 @@ import {
   Cloud, Sparkles, Zap, MoreHorizontal, Play, Pause, Search,
   Github, Rocket, Bug, Lightbulb, Globe, Bell, ListChecks, Activity,
 } from 'lucide-react';
+import TaskQuickEditor from '@/components/TaskQuickEditor';
 
 /* ═══════════════════════════════════════════════════════════════════
    Design tokens — Dribbble "task management" palette (works L + D)
@@ -141,6 +142,8 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const [timerRunning, setTimerRunning] = useState(false);
   const [chartRange, setChartRange] = useState<'1W' | '1M' | '3M' | '1Y'>('1W');
   const [timerSec, setTimerSec] = useState(25 * 60);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [taskSearch, setTaskSearch] = useState('');
 
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => {
@@ -196,12 +199,14 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const timerText = `${String(Math.floor(timerSec / 60)).padStart(2,'0')}:${String(timerSec % 60).padStart(2,'0')}`;
 
   /* ─── kanban buckets from real tasks ─── */
+  const matching = (items: typeof tasks) => items.filter(t => `${t.title} ${t.description ?? ''} ${t.category ?? ''}`.toLowerCase().includes(taskSearch.trim().toLowerCase()));
   const kanban = [
-    { key: 'todo',        title: 'To do',       hue: 'sky' as const,     items: todo.slice(0, 4) },
-    { key: 'in-progress', title: 'In progress', hue: 'amber' as const,   items: inProgress.slice(0, 4) },
-    { key: 'review',      title: 'In review',   hue: 'violet' as const,  items: open.filter(t => t.priority === 'high').slice(0, 3) },
-    { key: 'done',        title: 'Completed',   hue: 'emerald' as const, items: done.slice(0, 3) },
+    { key: 'todo',        title: 'To do',       hue: 'sky' as const,     items: matching(todo).slice(0, 6) },
+    { key: 'in-progress', title: 'In progress', hue: 'amber' as const,   items: matching(inProgress).slice(0, 6) },
+    { key: 'review',      title: 'High priority', hue: 'violet' as const, items: matching(open.filter(t => t.priority === 'high' || t.priority === 'critical')).slice(0, 6) },
+    { key: 'done',        title: 'Completed',   hue: 'emerald' as const, items: matching(done).slice(0, 6) },
   ];
+  const editingTask = tasks.find(t => t.id === editingTaskId) ?? null;
 
   return (
     <div ref={ref} className="flex flex-col gap-5 sm:gap-6 pb-8">
@@ -417,7 +422,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input placeholder="Search tasks..." className="pl-9 pr-3 py-2 rounded-2xl bg-secondary text-[12px] text-foreground placeholder:text-muted-foreground/60 outline-none w-52 focus:ring-2 focus:ring-primary/30" />
+              <input value={taskSearch} onChange={e => setTaskSearch(e.target.value)} placeholder="Search tasks..." className="pl-9 pr-3 py-2 rounded-2xl bg-secondary text-[12px] text-foreground placeholder:text-muted-foreground/60 outline-none w-40 sm:w-52 focus:ring-2 focus:ring-primary/30" />
             </div>
             <button onClick={() => setActiveSection('tasks')} className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-foreground text-background text-[12px] font-bold hover:opacity-90 transition">
               <Plus size={13} /> New task
@@ -449,7 +454,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
                   const ph = HUES[p.hue];
                   const isOverdue = t.dueDate && t.dueDate < today && col.key !== 'done';
                   return (
-                    <button key={t.id} onClick={() => setActiveSection('tasks')}
+                    <button key={t.id} onClick={() => setEditingTaskId(t.id)}
                       className="text-left rounded-2xl p-3.5 border border-border/60 bg-background hover:shadow-md hover:border-primary/30 transition-all group">
                       <div className="flex items-center justify-between mb-2">
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold"
@@ -515,7 +520,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
               const hue: keyof typeof HUES = d <= 0 ? 'rose' : d <= 2 ? 'amber' : 'sky';
               const h = HUES[hue];
               return (
-                <div key={t.id} {...fu(i)} className="flex items-center gap-3 p-3 rounded-2xl hover:bg-secondary/50 transition cursor-pointer" onClick={() => setActiveSection('tasks')}>
+                <button key={t.id} {...fu(i)} className="flex w-full items-center gap-3 p-3 text-left rounded-2xl hover:bg-secondary/50 transition" onClick={() => setEditingTaskId(t.id)}>
                   <div className="w-11 h-11 rounded-2xl flex flex-col items-center justify-center flex-shrink-0"
                     style={{ background: h.soft, color: h.ink }}>
                     <span className="text-[8px] font-bold uppercase leading-none">{new Date(t.dueDate).toLocaleDateString('en', { month: 'short' })}</span>
@@ -526,7 +531,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
                     <div className="text-[10px] text-muted-foreground">{d <= 0 ? 'Due today' : d === 1 ? 'Tomorrow' : `In ${d} days`}</div>
                   </div>
                   <ChevronRight size={14} className="text-muted-foreground" />
-                </div>
+                </button>
               );
             })}
             {upcoming.length === 0 && (
@@ -684,6 +689,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
           </div>
         </div>
       </div>
+      <TaskQuickEditor task={editingTask} onClose={() => setEditingTaskId(null)} />
     </div>
   );
 });

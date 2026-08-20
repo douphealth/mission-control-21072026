@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback } from 'react';
 import {
   RefreshCcw, Archive, CalendarClock, CheckCircle2, Trash2, Moon,
-  AlertTriangle, Target, Sparkles, ArrowRight, Undo2,
+  AlertTriangle, Target, Sparkles, ArrowRight, Undo2, Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { Task } from '@/lib/db';
@@ -83,6 +83,7 @@ export default function ReviewPage() {
   const [showArchive, setShowArchive] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [matrixSearch, setMatrixSearch] = useState('');
 
   const q = useMemo(() => buildReviewQueues(tasks, today), [tasks, today]);
   const archived = useMemo(() => sortByPriority(tasks.filter(isArchived)), [tasks]);
@@ -170,6 +171,13 @@ export default function ReviewPage() {
 
   const reviewDue = !lastWeeklyReview
     || (Date.now() - new Date(`${lastWeeklyReview}T00:00:00`).getTime()) / 86_400_000 >= 7;
+  const visibleMatrix = useMemo(() => {
+    const needle = matrixSearch.trim().toLowerCase();
+    return Object.fromEntries(QUADRANTS.map(quad => [
+      quad.id,
+      q.matrix[quad.id].filter(t => !needle || `${t.title} ${t.description ?? ''} ${t.category ?? ''}`.toLowerCase().includes(needle)),
+    ])) as Record<Quadrant, Task[]>;
+  }, [q.matrix, matrixSearch]);
 
   return (
     <div className="space-y-5">
@@ -244,13 +252,20 @@ export default function ReviewPage() {
 
       {/* ── 3. Eisenhower matrix — drag & drop ── */}
       <section className="space-y-3">
-        <div>
-          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-            <Target size={15} className="text-primary" /> Priority matrix
-          </h2>
-          <p className="text-[11px] text-muted-foreground">
-            Drag a task into another quadrant to re-decide it — or tap it to edit. Changes apply everywhere instantly.
-          </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+              <Target size={15} className="text-primary" /> Priority matrix
+            </h2>
+            <p className="text-[11px] text-muted-foreground">
+              Drag on desktop, use Move on touch devices, or tap any task to fully edit it. Every change is live everywhere.
+            </p>
+          </div>
+          <label className="relative block sm:w-64">
+            <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input value={matrixSearch} onChange={e => setMatrixSearch(e.target.value)} placeholder="Find a task in Review…"
+              className="w-full rounded-xl border border-border/40 bg-secondary/40 py-2 pl-8 pr-3 text-xs text-foreground outline-none focus:border-primary/50" />
+          </label>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {QUADRANTS.map(quad => (
@@ -272,12 +287,12 @@ export default function ReviewPage() {
                 <span className="text-[10px] opacity-70">{quad.hint}</span>
               </div>
               <div className="mt-2 space-y-1.5">
-                {q.matrix[quad.id].slice(0, 8).map(t => (
+                {visibleMatrix[quad.id].map(t => (
                   <div
                     key={t.id}
                     draggable
                     onDragStart={e => { e.dataTransfer.setData('text/mc-task', t.id); e.dataTransfer.effectAllowed = 'move'; }}
-                    className="flex cursor-grab items-center gap-2 rounded-xl bg-background/60 px-2.5 py-1.5 active:cursor-grabbing"
+                    className="flex min-h-11 cursor-grab items-center gap-2 rounded-xl border border-transparent bg-background/60 px-2.5 py-2 transition hover:border-primary/20 hover:shadow-sm active:cursor-grabbing"
                   >
                     <button onClick={() => onOpen(t)}
                       className="min-w-0 flex-1 truncate text-left text-[12px] font-medium text-foreground hover:text-primary">
@@ -288,7 +303,7 @@ export default function ReviewPage() {
                       aria-label="Move task"
                       value={quad.id}
                       onChange={e => void moveToQuadrant(t.id, e.target.value as Quadrant)}
-                      className="max-w-[92px] rounded-lg bg-secondary/70 px-1 py-0.5 text-[10px] font-semibold text-muted-foreground outline-none md:hidden"
+                       className="max-w-[104px] rounded-lg bg-secondary/70 px-1 py-1 text-[10px] font-semibold text-muted-foreground outline-none"
                     >
                       {QUADRANTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
                     </select>
@@ -297,10 +312,7 @@ export default function ReviewPage() {
                     </button>
                   </div>
                 ))}
-                {!q.matrix[quad.id].length && <p className="py-2 text-center text-[11px] opacity-60">Drop a task here</p>}
-                {q.matrix[quad.id].length > 8 && (
-                  <p className="text-center text-[10px] opacity-70">+{q.matrix[quad.id].length - 8} more</p>
-                )}
+                {!visibleMatrix[quad.id].length && <p className="py-4 text-center text-[11px] opacity-60">Drop a task here</p>}
               </div>
             </div>
           ))}
