@@ -1,22 +1,23 @@
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useTasks } from '@/hooks/useTableData';
-import { Home, CheckSquare, FileText, Globe, Grip, DollarSign, Calendar, Timer, Lightbulb, KeyRound, Settings, Search, Flame, Github, Hammer, Link2, PanelsTopLeft } from 'lucide-react';
+import { RefreshCcw, Home, CheckSquare, FileText, Globe, Grip, DollarSign, Calendar, Timer, Lightbulb, KeyRound, Settings, Search, Flame, Github, Hammer, Link2, PanelsTopLeft } from 'lucide-react';
 import { useState } from 'react';
 
 const primaryTabs = [
   { id: 'dashboard', label: 'Home', icon: Home },
   { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-  { id: 'notes', label: 'Notes', icon: FileText },
-  { id: 'websites', label: 'Sites', icon: Globe },
+  { id: 'review', label: 'Review', icon: RefreshCcw },
+  { id: 'focus', label: 'Focus', icon: Timer },
   { id: 'more', label: 'More', icon: Grip },
 ];
 
 const moreItems = [
   { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'notes', label: 'Notes', icon: FileText },
+  { id: 'websites', label: 'Sites', icon: Globe },
   { id: 'habits', label: 'Habits', icon: Flame },
   { id: 'payments', label: 'Payments', icon: DollarSign },
   { id: 'ideas', label: 'Ideas', icon: Lightbulb },
-  { id: 'focus', label: 'Focus', icon: Timer },
   { id: 'credentials', label: 'Vault', icon: KeyRound },
   { id: 'github', label: 'GitHub', icon: Github },
   { id: 'builds', label: 'Builds', icon: Hammer },
