@@ -526,10 +526,18 @@ export default function WebsitesPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={async () => {
+            const n = await deduplicateTable('websites');
+            toast.success(n > 0 ? `Merged ${n} duplicate${n === 1 ? '' : 's'}` : 'No duplicates found');
+          }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20 transition-all">
+            <Layers size={15} /> Merge duplicates
+          </button>
           <button onClick={() => { setBulkMode(!bulkMode); setSelectedIds(new Set()); }}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${bulkMode ? 'bg-destructive/10 text-destructive border border-destructive/20' : 'bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20'}`}>
             <CheckSquare size={15} /> {bulkMode ? 'Cancel' : 'Bulk'}
           </button>
+
           <button onClick={openAdd}
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-blue-600 text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/20">
             <Plus size={16} /> Add Website
