@@ -6,6 +6,8 @@ import {
   Lock, Unlock, Eye, EyeOff, Zap, ArrowLeft, Server, Clock, Gauge, Save
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { deduplicateTable } from '@/lib/dedup';
+
 import { useNavigationStore } from '@/stores/navigationStore';
 import {
   loadCreds, setCred, clearCred, normalizeUrl,
