@@ -329,12 +329,15 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
             <div>
               <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Productivity</div>
               <h3 className="text-[22px] font-extrabold tracking-tight text-foreground">Weekly performance</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Tasks completed vs. planned — last 12 days</p>
+              <p className="text-[12px] text-muted-foreground mt-1">
+                {rangeCompleted} task{rangeCompleted === 1 ? '' : 's'} completed · last {rangeDays} days
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <div className="inline-flex rounded-2xl bg-secondary p-1 text-[11px] font-semibold">
-                {['1W', '1M', '3M', '1Y'].map((v, idx) => (
-                  <button key={v} className={`px-3 py-1.5 rounded-xl transition ${idx === 0 ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
+                {(['1W', '1M', '3M', '1Y'] as const).map(v => (
+                  <button key={v} onClick={() => setChartRange(v)}
+                    className={`px-3 py-1.5 rounded-xl transition ${chartRange === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
                 ))}
               </div>
               <button className="w-9 h-9 rounded-2xl bg-secondary hover:bg-secondary/70 flex items-center justify-center text-muted-foreground"><MoreHorizontal size={16} /></button>
