@@ -1511,6 +1511,30 @@ export default function TasksPage() {
                 <span className="text-xs text-muted-foreground font-medium">
                   {selectedIds.size} selected
                 </span>
+                <button onClick={() => bulkApply({ status: "done", completedAt: today }, "Completed")}
+                  disabled={selectedIds.size === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-40 touch-manipulation">
+                  <CheckCircle2 size={12} /> Done
+                </button>
+                <button onClick={() => bulkApply({ dueDate: today }, "Due today")}
+                  disabled={selectedIds.size === 0}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation">
+                  Due today
+                </button>
+                <button onClick={() => bulkApply({ dueDate: shiftISO(today, 7) }, "Pushed 1 week")}
+                  disabled={selectedIds.size === 0}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation">
+                  Push +1w
+                </button>
+                <select
+                  value=""
+                  onChange={e => { if (e.target.value) bulkApply({ priority: e.target.value as Task["priority"] }, "Priority updated"); }}
+                  disabled={selectedIds.size === 0}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground outline-none disabled:opacity-40 touch-manipulation">
+                  <option value="">Priority…</option>
+                  {PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                </select>
+
                 <button
                   onClick={handleBulkDelete}
                   disabled={selectedIds.size === 0}
