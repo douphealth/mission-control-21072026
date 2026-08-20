@@ -1417,17 +1417,42 @@ export default function TasksPage() {
             )}
           </div>
 
-          <VirtualizedList
-            tasks={filtered}
-            bulkMode={bulkMode}
-            selectedIds={selectedIds}
-            onEdit={(t) => setModal({ open: true, task: t })}
-            onDelete={handleDelete}
-            onDuplicate={handleDuplicate}
-            onToggle={handleToggle}
-            onToggleSub={handleToggleSub}
-            onToggleSelect={toggleSelect}
-          />
+          {(() => {
+            const listHandlers = {
+              bulkMode,
+              selectedIds,
+              onEdit: (t: Task) => setModal({ open: true, task: t }),
+              onDelete: handleDelete,
+              onDuplicate: handleDuplicate,
+              onToggle: handleToggle,
+              onToggleSub: handleToggleSub,
+              onToggleSelect: toggleSelect,
+              onRename: handleRename,
+              onSetDue: handleSetDue,
+              onSetPriority: handleSetPriority,
+              onSetStatus: handleSetStatus,
+            };
+            if (!grouped) return <VirtualizedList tasks={filtered} {...listHandlers} />;
+            return (
+              <div className="space-y-4">
+                {groups.map(g => (
+                  <div key={g.id} className="space-y-1.5">
+                    <button onClick={() => toggleGroup(g.id)}
+                      className="w-full flex items-center gap-2 px-1 py-1 text-left touch-manipulation">
+                      <ChevronDown size={13} className={`text-muted-foreground transition-transform ${collapsedGroups.has(g.id) ? "-rotate-90" : ""}`} />
+                      <span className={`text-xs font-bold uppercase tracking-wide ${g.tone}`}>{g.label}</span>
+                      <span className="text-[11px] font-semibold text-muted-foreground bg-secondary rounded-full px-2 py-0.5">{g.tasks.length}</span>
+                      {bulkMode && g.tasks.length > 0 && (
+                        <span onClick={e => { e.stopPropagation(); selectGroup(g.tasks); }}
+                          className="ml-auto text-[10px] font-semibold text-primary hover:underline">Select group</span>
+                      )}
+                    </button>
+                    <VirtualizedList tasks={g.tasks} {...listHandlers} />
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {filtered.length === 0 && (
             <div className="text-center py-20 text-muted-foreground">
