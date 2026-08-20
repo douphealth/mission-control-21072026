@@ -3,9 +3,9 @@
 Personal operations dashboard: tasks, calendar, notes, focus and habits — with a
 review loop that keeps the backlog from rotting.
 
-## Feature freeze (active)
+## Focused daily path
 
-No new modules. The daily path is intentionally six screens:
+The daily path is intentionally six screens:
 
 | Screen | Purpose |
 | --- | --- |
@@ -18,9 +18,10 @@ No new modules. The daily path is intentionally six screens:
 | Habits | Streaks |
 
 Everything else (Websites, WP Management, Kanban, Payments, Ideas, Credentials,
-Links, GitHub, Builds, SEO, Cloudflare, Vercel, OpenClaw) is **frozen** and lives
-behind the collapsed **Archive** group in the sidebar. It still works; it is just
-out of the daily path. New feature ideas go into Ideas, not into the sidebar.
+Links, GitHub, Builds, SEO, Cloudflare, Vercel, OpenClaw) lives behind the
+collapsed **Archive** group in the sidebar. Those modules are fully usable and
+can be edited, improved or extended at any time — they are simply kept out of
+the default daily path to reduce noise.
 
 ## The review loop
 
