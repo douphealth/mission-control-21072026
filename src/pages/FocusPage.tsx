@@ -112,6 +112,40 @@ export default function FocusPage() {
         </p>
       </div>
 
+      {/* Task lock — a focus session must be attached to one real task */}
+      <div className="w-full max-w-xl rounded-2xl border border-border/30 bg-card p-4 shadow-[var(--shadow-sm)]">
+        {locked ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <Target size={16} className="text-primary shrink-0" />
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{locked.title}</span>
+            <button onClick={completeLocked}
+              className="flex items-center gap-1 rounded-xl bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-500 transition hover:bg-emerald-500/20">
+              <CheckCircle2 size={12} /> Done
+            </button>
+            <button onClick={() => { setLockedId(null); setRunning(false); }}
+              className="rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground">
+              Unlock
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+              <Target size={14} className="text-primary" /> Lock the session to one task
+            </div>
+            <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+              {candidates.map(t => (
+                <button key={t.id} onClick={() => setLockedId(t.id)}
+                  className="flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2 text-left transition hover:bg-secondary">
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{t.title}</span>
+                  <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{t.priority}</span>
+                </button>
+              ))}
+              {!candidates.length && <p className="py-3 text-center text-xs text-muted-foreground">No open tasks — nothing to focus on. 🎉</p>}
+            </div>
+          </>
+        )}
+      </div>
+
       {/* Preset tabs */}
       <div className="flex gap-2 p-1.5 rounded-2xl bg-secondary/50 border border-border/20">
         {PRESETS.map((p, i) => (
