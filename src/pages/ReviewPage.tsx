@@ -11,8 +11,10 @@ import {
   buildReviewQueues, daysSinceTouch, QUADRANTS, addDaysISO, isArchived,
   sortByPriority, STALE_DAYS, ROT_DAYS,
 } from '@/lib/triage';
+import type { Quadrant } from '@/lib/triage';
 import { useReviewStore } from '@/stores/reviewStore';
 import ConfirmDialog, { useConfirmDialog } from '@/components/ConfirmDialog';
+import TaskQuickEditor from '@/components/TaskQuickEditor';
 
 function daysAgoLabel(iso: string | null) {
   if (!iso) return 'never';
