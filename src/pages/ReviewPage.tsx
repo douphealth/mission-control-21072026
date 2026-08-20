@@ -23,17 +23,21 @@ function daysAgoLabel(iso: string | null) {
 }
 
 function TaskRow({
-  task, today, onDone, onPush, onArchive, onDelete, onToday,
+  task, today, onDone, onPush, onArchive, onDelete, onToday, onOpen,
 }: {
   task: Task; today: string;
   onDone: (t: Task) => void; onPush: (t: Task, d: number) => void;
   onArchive: (t: Task) => void; onDelete: (t: Task) => void; onToday: (t: Task) => void;
+  onOpen: (t: Task) => void;
 }) {
   const od = daysOverdue(task, today);
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-border/30 bg-secondary/30 p-3 sm:flex-row sm:items-center sm:gap-3">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-foreground">{task.title}</div>
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.setData('text/mc-task', task.id); e.dataTransfer.effectAllowed = 'move'; }}
+      className="flex cursor-grab flex-col gap-2 rounded-2xl border border-border/30 bg-secondary/30 p-3 active:cursor-grabbing sm:flex-row sm:items-center sm:gap-3">
+      <button onClick={() => onOpen(task)} className="min-w-0 flex-1 text-left">
+        <div className="truncate text-sm font-semibold text-foreground hover:text-primary">{task.title}</div>
         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           <span className="uppercase tracking-wide">{task.priority}</span>
           {task.dueDate && <span>due {task.dueDate}</span>}
