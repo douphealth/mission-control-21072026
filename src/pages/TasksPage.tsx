@@ -710,19 +710,56 @@ function KanbanColumn({
 
 // ─── List Row ─────────────────────────────────────────────────────────────────
 
-const ListRow = memo(function ListRow({ task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, index, bulkMode, selected, onToggleSelect }: {
-  task: Task; onEdit: () => void; onDelete: () => void; onDuplicate: () => void; onToggle: () => void;
-  onToggleSub: (sub: string) => void; index: number;
+export interface RowActions {
+  onEdit: () => void;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onToggle: () => void;
+  onToggleSub: (sub: string) => void;
+  onRename: (title: string) => void;
+  onSetDue: (date: string) => void;
+  onSetPriority: (p: Task["priority"]) => void;
+  onSetStatus: (s: StatusId) => void;
+}
+
+function shiftISO(base: string, days: number) {
+  const d = new Date(`${base || today}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split("T")[0];
+}
+
+const ListRow = memo(function ListRow({
+  task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, onRename, onSetDue, onSetPriority, onSetStatus,
+  index, bulkMode, selected, onToggleSelect,
+}: RowActions & {
+  task: Task; index: number;
   bulkMode?: boolean; selected?: boolean; onToggleSelect?: () => void;
 }) {
   const pr = getPriority(task.priority);
   const st = getStatus(task.status);
   const overdue = isOverdue(task);
   const [expanded, setExpanded] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(task.title);
+  const [menu, setMenu] = useState<null | "priority" | "status" | "due">(null);
   const doneSubs = task.subtasks.filter(s => s.done).length;
 
+  const commit = () => {
+    setEditing(false);
+    const v = draft.trim();
+    if (v && v !== task.title) onRename(v);
+    else setDraft(task.title);
+  };
+
+  const quickDates: { label: string; date: string }[] = [
+    { label: "Today", date: today },
+    { label: "Tomorrow", date: shiftISO(today, 1) },
+    { label: "+3 days", date: shiftISO(today, 3) },
+    { label: "Next week", date: shiftISO(today, 7) },
+  ];
+
   return (
-    <div >
+    <div>
       <div className={`
         rounded-2xl border group transition-all
         hover:border-primary/20 hover:bg-secondary/20 hover:shadow-md
@@ -742,28 +779,90 @@ const ListRow = memo(function ListRow({ task, onEdit, onDelete, onDuplicate, onT
           )}
           {/* Toggle */}
           <button onClick={onToggle}
+            title={task.status === "done" ? "Reopen" : "Mark done"}
             className="shrink-0 transition-all hover:scale-110 touch-manipulation p-1"
             style={{ color: task.status === "done" ? "hsl(var(--success))" : "hsl(var(--muted-foreground))" }}>
             {task.status === "done" ? <CheckCircle2 size={18} /> : <Circle size={18} />}
           </button>
 
           {/* Main content */}
-          <div className="flex-1 min-w-0" onClick={onEdit} role="button" tabIndex={0}>
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className={`text-sm font-semibold truncate ${task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                {task.title}
-              </span>
-            </div>
-            {/* Mobile-visible meta row */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${pr.bg}`}>{pr.label}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold sm:hidden"
+          <div className="flex-1 min-w-0">
+            {editing ? (
+              <input
+                autoFocus value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onBlur={commit}
+                onKeyDown={e => {
+                  if (e.key === "Enter") commit();
+                  if (e.key === "Escape") { setDraft(task.title); setEditing(false); }
+                }}
+                className="w-full text-sm font-semibold bg-secondary/70 rounded-lg px-2 py-1 text-foreground outline-none ring-1 ring-primary/40"
+              />
+            ) : (
+              <div className="flex items-center gap-2 mb-0.5">
+                <span
+                  onClick={() => { setDraft(task.title); setEditing(true); }}
+                  title="Click to rename · double-click for full editor"
+                  onDoubleClick={onEdit}
+                  role="button" tabIndex={0}
+                  className={`text-sm font-semibold truncate cursor-text ${task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                  {task.title}
+                </span>
+              </div>
+            )}
+            {/* Inline meta / quick controls */}
+            <div className="flex items-center gap-1.5 flex-wrap relative">
+              {/* Priority quick menu */}
+              <button onClick={() => setMenu(m => m === "priority" ? null : "priority")}
+                className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${pr.bg} hover:ring-1 hover:ring-primary/30 touch-manipulation`}>
+                {pr.label}
+              </button>
+              {/* Status quick menu */}
+              <button onClick={() => setMenu(m => m === "status" ? null : "status")}
+                className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold hover:ring-1 hover:ring-primary/30 touch-manipulation"
                 style={{ background: st.color + "22", color: st.color }}>
                 {st.label}
-              </span>
+              </button>
+              {/* Due quick menu */}
+              <button onClick={() => setMenu(m => m === "due" ? null : "due")}
+                className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold flex items-center gap-1 bg-secondary/70 hover:ring-1 hover:ring-primary/30 touch-manipulation ${overdue ? "text-destructive" : isToday(task) ? "text-warning" : "text-muted-foreground"}`}>
+                <Calendar size={9} />
+                {task.dueDate ? daysUntil(task.dueDate) : "No date"}
+              </button>
               {task.category && <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">· {task.category}</span>}
               {task.linkedProject && (
                 <span className="text-[10px] text-primary/60 font-medium truncate max-w-[80px] hidden sm:inline">↳ {task.linkedProject}</span>
+              )}
+
+              {menu && (
+                <div className="absolute z-30 top-full left-0 mt-1 p-1 rounded-xl bg-card border border-border/60 shadow-xl flex flex-wrap gap-1 max-w-[280px]">
+                  {menu === "priority" && PRIORITIES.map(p => (
+                    <button key={p.id} onClick={() => { onSetPriority(p.id as Task["priority"]); setMenu(null); }}
+                      className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${p.bg} ${task.priority === p.id ? "ring-1 ring-primary/50" : ""}`}>
+                      {p.label}
+                    </button>
+                  ))}
+                  {menu === "status" && STATUSES.map(s => (
+                    <button key={s.id} onClick={() => { onSetStatus(s.id as StatusId); setMenu(null); }}
+                      className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${task.status === s.id ? "ring-1 ring-primary/50" : ""}`}
+                      style={{ background: s.color + "22", color: s.color }}>
+                      {s.label}
+                    </button>
+                  ))}
+                  {menu === "due" && (
+                    <>
+                      {quickDates.map(q => (
+                        <button key={q.label} onClick={() => { onSetDue(q.date); setMenu(null); }}
+                          className="text-[11px] px-2 py-1 rounded-lg font-semibold bg-secondary text-foreground hover:bg-primary/15 hover:text-primary">
+                          {q.label}
+                        </button>
+                      ))}
+                      <input type="date" value={task.dueDate || ""}
+                        onChange={e => { if (e.target.value) { onSetDue(e.target.value); setMenu(null); } }}
+                        className="text-[11px] px-2 py-1 rounded-lg bg-secondary text-foreground outline-none" />
+                    </>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -778,31 +877,27 @@ const ListRow = memo(function ListRow({ task, onEdit, onDelete, onDuplicate, onT
             </button>
           )}
 
-          {/* Status — desktop only */}
-          <span className="text-[10px] px-2 py-1 rounded-lg font-semibold shrink-0 hidden sm:inline-flex"
-            style={{ background: st.color + "22", color: st.color }}>
-            {st.label}
-          </span>
-
-          {/* Priority — desktop only */}
-          <span className={`text-[10px] px-2 py-1 rounded-lg font-semibold shrink-0 hidden md:inline-flex ${pr.bg}`}>
-            {pr.label}
-          </span>
-
-          {/* Due date */}
-          <span className={`text-[11px] font-semibold shrink-0 ${overdue ? "text-destructive" : isToday(task) ? "text-warning" : "text-muted-foreground/50"}`}>
-            {task.dueDate ? daysUntil(task.dueDate) : "—"}
-          </span>
+          {/* Snooze shortcuts — desktop */}
+          {task.status !== "done" && (
+            <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => onSetDue(today)} title="Due today"
+                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold">Today</button>
+              <button onClick={() => onSetDue(shiftISO(task.dueDate || today, 1))} title="Push 1 day"
+                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold">+1d</button>
+              <button onClick={() => onSetDue(shiftISO(task.dueDate || today, 7))} title="Push 1 week"
+                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold">+1w</button>
+            </div>
+          )}
 
           {/* Actions — always visible on mobile */}
           <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
             <button onClick={onDuplicate} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation" title="Duplicate">
               <Copy size={13} />
             </button>
-            <button onClick={onEdit} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation">
+            <button onClick={onEdit} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation" title="Open editor">
               <Edit2 size={13} />
             </button>
-            <button onClick={onDelete} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation">
+            <button onClick={onDelete} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation" title="Delete">
               <Trash2 size={13} />
             </button>
           </div>
