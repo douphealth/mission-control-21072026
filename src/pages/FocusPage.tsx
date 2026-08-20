@@ -198,7 +198,7 @@ export default function FocusPage() {
         </button>
 
         <button
-          onClick={() => setRunning(!running)} 
+          onClick={toggleRunning} 
           className="w-16 h-16 sm:w-20 sm:h-20 rounded-[28px] gradient-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-primary)] hover:shadow-[0_8px_32px_-4px_hsl(var(--primary)/0.5)] transition-all touch-manipulation"
         >
           <>
