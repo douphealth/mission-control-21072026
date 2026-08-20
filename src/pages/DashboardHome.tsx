@@ -170,7 +170,25 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const seoOpenIssues = seoIssues.filter(i => i.status === 'open' || i.status === 'in-progress');
   const seoOpenActions = seoActions.filter(a => a.status !== 'done' && a.status !== 'cancelled');
   const seoNextActions = [...seoOpenActions].sort((a, b) => ({ critical: 4, high: 3, medium: 2, low: 1 }[b.priority] - ({ critical: 4, high: 3, medium: 2, low: 1 }[a.priority]))).slice(0, 3);
-  const taskWave = useMemo(() => [4, 6, 5, 8, 7, 9, done.length || 6, 11, 8, 12, open.length + 6, 14], [done.length, open.length]);
+  // Real completion history for the selected range (no more placeholder wave).
+  const RANGE_DAYS: Record<string, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 };
+  const rangeDays = RANGE_DAYS[chartRange] ?? 7;
+  const buckets = rangeDays <= 30 ? rangeDays : 12;   // long ranges compress into 12 points
+  const taskWave = useMemo(() => {
+    const span = Math.max(1, Math.round(rangeDays / buckets));
+    const now = new Date(`${today}T00:00:00`).getTime();
+    return Array.from({ length: buckets }, (_, i) => {
+      const end = now - (buckets - 1 - i) * span * 86_400_000;
+      const start = end - (span - 1) * 86_400_000;
+      return tasks.filter(t => {
+        const stamp = (t.completedAt || '').slice(0, 10);
+        if (!stamp) return false;
+        const ts = new Date(`${stamp}T00:00:00`).getTime();
+        return ts >= start && ts <= end;
+      }).length;
+    });
+  }, [tasks, rangeDays, buckets, today]);
+  const rangeCompleted = taskWave.reduce((s, n) => s + n, 0);
   const hour = clock.getHours();
   const greet = hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const dateLabel = clock.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
