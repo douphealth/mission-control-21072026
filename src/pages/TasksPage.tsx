@@ -1010,6 +1010,7 @@ export default function TasksPage() {
   const filtered = useMemo(() => {
     const PORD: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     return tasks
+      .filter(t => t.archived !== true) // archived lives in Review, not here
       .filter(t => filterStatus === "all" || t.status === filterStatus)
       .filter(t => filterPriority === "all" || t.priority === filterPriority)
       .filter(t => filterCategory === "all" || t.category === filterCategory)
