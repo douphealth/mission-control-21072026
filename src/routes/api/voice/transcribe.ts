@@ -24,10 +24,12 @@ function json(body: unknown, status = 200) {
 }
 
 const SYSTEM_PROMPT = `You are the capture brain of "Mission Control", a personal work dashboard.
-You receive a raw voice transcript. Clean it up and turn it into one structured item.
+You receive a raw voice transcript in ANY language. Clean it up and turn it into one structured item.
 
 Rules:
-- Fix obvious speech-recognition errors, punctuation, casing and de-duplicate stuttered/repeated phrases.
+- ALWAYS keep the speaker's original language for title and cleanedTranscript. Never translate.
+- Fix obvious speech-recognition errors, punctuation, casing, diacritics and de-duplicate stuttered/repeated phrases.
+- Set language to the BCP-47 code of the detected spoken language (e.g. en, el, de, fr).
 - NEVER invent content that was not said.
 - Classify into exactly one of: tasks | notes | ideas | links.
 - title: a short, human, imperative summary (max 80 chars, no trailing period).
@@ -48,6 +50,7 @@ const TOOL = {
       type: 'object',
       properties: {
         type: { type: 'string', enum: ['tasks', 'notes', 'ideas', 'links'] },
+        language: { type: 'string' },
         title: { type: 'string' },
         cleanedTranscript: { type: 'string' },
         priority: { type: 'string', enum: ['critical', 'high', 'medium', 'low'] },
@@ -64,18 +67,39 @@ const TOOL = {
   },
 } as const;
 
-async function transcribe(apiKey: string, file: File): Promise<string> {
+const STT_PROMPT =
+  'Personal productivity voice memo. Transcribe verbatim in the spoken language, with correct punctuation. ' +
+  'Keep proper nouns, product names, URLs, dates and times exact. Do not translate, summarize or add words.';
+
+async function transcribe(apiKey: string, file: File, language?: string): Promise<string> {
   const mime = (file.type || 'audio/webm').split(';')[0];
   const ext = EXT_BY_MIME[mime] ?? 'webm';
-  const form = new FormData();
-  form.append('model', STT_MODEL);
-  form.append('file', file, `recording.${ext}`);
 
-  const res = await fetch(`${AI_BASE}/audio/transcriptions`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form,
-  });
+  const buildForm = () => {
+    const form = new FormData();
+    form.append('model', STT_MODEL);
+    form.append('file', file, `recording.${ext}`);
+    form.append('prompt', STT_PROMPT);
+    form.append('temperature', '0');
+    if (language && language !== 'auto') form.append('language', language);
+    return form;
+  };
+
+  let res!: globalThis.Response;
+  // Bounded retry: only transient failures (429 / 5xx) are retried.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch(`${AI_BASE}/audio/transcriptions`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: buildForm(),
+    });
+    if (res.ok || (res.status !== 429 && res.status < 500)) break;
+    const retryAfter = Number(res.headers.get('retry-after'));
+    const waitMs = Number.isFinite(retryAfter) && retryAfter > 0
+      ? retryAfter * 1000
+      : 800 * Math.pow(2, attempt) + Math.random() * 400;
+    if (attempt < 2) await new Promise((r) => setTimeout(r, waitMs));
+  }
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
@@ -138,6 +162,10 @@ export const Route = createFileRoute('/api/voice/transcribe')({
         const form = await request.formData();
         const file = form.get('audio');
         const browserTranscript = String(form.get('browserTranscript') ?? '').trim();
+        const rawLanguage = String(form.get('language') ?? 'auto').trim();
+        const language = /^[a-z]{2}(-[A-Za-z0-9]{2,8})?$/.test(rawLanguage)
+          ? rawLanguage.slice(0, 2)
+          : undefined;
 
         if (!(file instanceof File) || file.size === 0) {
           if (browserTranscript) {
@@ -149,7 +177,7 @@ export const Route = createFileRoute('/api/voice/transcribe')({
         if (file.size > MAX_BYTES) return json({ error: 'Recording is too large.' }, 413);
 
         try {
-          let transcript = await transcribe(apiKey, file);
+          let transcript = await transcribe(apiKey, file, language);
           let source: 'ai' | 'browser' = 'ai';
 
           // If the model heard nothing useful, fall back to the browser transcript.

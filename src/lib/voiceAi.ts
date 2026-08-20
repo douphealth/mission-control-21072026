@@ -10,6 +10,7 @@ export interface SmartCaptureResult extends VoiceCaptureResult {
   tags?: string[];
   startTime?: string;
   endTime?: string;
+  language?: string;
 }
 
 interface ServerResponse {
@@ -26,6 +27,7 @@ interface ServerResponse {
     url?: string;
     subtasks?: string[];
     tags?: string[];
+    language?: string;
   } | null;
   error?: string;
 }
@@ -35,6 +37,7 @@ const VALID_TYPES = new Set(['tasks', 'notes', 'ideas', 'links']);
 export async function smartCapture(
   audio: Blob | null,
   browserTranscript: string,
+  language = 'auto',
 ): Promise<SmartCaptureResult> {
   const form = new FormData();
   if (audio && audio.size > 0) {
@@ -43,6 +46,7 @@ export async function smartCapture(
     form.append('audio', audio, `recording.${ext}`);
   }
   form.append('browserTranscript', browserTranscript ?? '');
+  form.append('language', language || 'auto');
 
   try {
     const res = await fetch('/api/voice/transcribe', { method: 'POST', body: form });
@@ -69,6 +73,7 @@ export async function smartCapture(
       source: data.source ?? 'ai',
       subtasks: Array.isArray(s.subtasks) ? s.subtasks.filter(Boolean).slice(0, 20) : undefined,
       tags: Array.isArray(s.tags) ? s.tags.filter(Boolean).slice(0, 6) : undefined,
+      language: typeof s.language === 'string' ? s.language : undefined,
     };
 
     if (s.type === 'tasks') {

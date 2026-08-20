@@ -34,6 +34,25 @@ const SILENCE_HANG_MS = 2400;        // auto-stop after this much continuous sil
 const MAX_RECORD_MS = 180_000;       // hard cap
 const MIN_RECORD_MS = 600;           // ignore taps shorter than this
 
+const LANG_KEY = 'mc:voiceLang';
+const LANGUAGES: { id: string; label: string }[] = [
+  { id: 'auto', label: 'Auto detect' },
+  { id: 'en', label: 'English' },
+  { id: 'el', label: 'Ελληνικά' },
+  { id: 'de', label: 'Deutsch' },
+  { id: 'fr', label: 'Français' },
+  { id: 'es', label: 'Español' },
+  { id: 'it', label: 'Italiano' },
+  { id: 'pt', label: 'Português' },
+  { id: 'nl', label: 'Nederlands' },
+  { id: 'ro', label: 'Română' },
+  { id: 'ru', label: 'Русский' },
+  { id: 'ar', label: 'العربية' },
+  { id: 'hi', label: 'हिन्दी' },
+  { id: 'zh', label: '中文' },
+  { id: 'ja', label: '日本語' },
+];
+
 type Phase = 'idle' | 'starting' | 'listening' | 'hearing' | 'processing' | 'ready' | 'error';
 
 type BrowserSpeechRecognitionEvent = Event & {
@@ -93,6 +112,23 @@ export default function VoiceCapture() {
   const [aiResult, setAiResult] = useState<SmartCaptureResult | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [language, setLanguage] = useState<string>('auto');
+  const languageRef = useRef('auto');
+
+  useEffect(() => {
+    if (typeof localStorage === 'undefined') return;
+    const stored = localStorage.getItem(LANG_KEY);
+    if (stored && LANGUAGES.some(l => l.id === stored)) {
+      setLanguage(stored);
+      languageRef.current = stored;
+    }
+  }, []);
+
+  const changeLanguage = useCallback((id: string) => {
+    setLanguage(id);
+    languageRef.current = id;
+    try { localStorage.setItem(LANG_KEY, id); } catch { /* */ }
+  }, []);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -112,11 +148,12 @@ export default function VoiceCapture() {
 
   // Browser support check (MediaRecorder + getUserMedia)
   useEffect(() => {
+    // Server-side AI transcription is the primary path, so the browser
+    // SpeechRecognition API is a bonus (live preview) — never a requirement.
     const ok =
       typeof window !== 'undefined' &&
       !!navigator.mediaDevices?.getUserMedia &&
-      typeof MediaRecorder !== 'undefined' &&
-      !!getSpeechRecognition();
+      typeof MediaRecorder !== 'undefined';
     setSupported(ok);
   }, []);
 
@@ -210,18 +247,13 @@ export default function VoiceCapture() {
     streamRef.current = stream;
 
     const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      cleanupAudio();
-      setErrorMsg('Speech recognition is not supported in this browser.');
-      setPhase('error');
-      setAudioLevel(0);
-      return;
-    }
-
-    const recognition = new Recognition();
+    const recognition = Recognition ? new Recognition() : null;
+    if (recognition) {
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = navigator.language || 'en-US';
+    recognition.lang = languageRef.current !== 'auto'
+      ? languageRef.current
+      : (navigator.language || 'en-US');
     recognition.maxAlternatives = 1;
     recognition.onresult = (event) => {
       const snapshot = buildRecognitionSnapshot(
@@ -240,11 +272,22 @@ export default function VoiceCapture() {
       console.warn('speech recognition error', message);
     };
     recognition.onend = () => {
-      if (recognitionRef.current === recognition) {
-        recognitionRef.current = null;
+      // Chrome ends recognition on short pauses — restart while still recording
+      // so long, multi-sentence dictation is never truncated.
+      if (recognitionRef.current !== recognition) return;
+      if (
+        !stopReasonRef.current &&
+        mediaRecorderRef.current &&
+        mediaRecorderRef.current.state === 'recording'
+      ) {
+        // A restarted session numbers its results from zero again.
+        lastFinalResultIndexRef.current = 0;
+        try { recognition.start(); return; } catch { /* */ }
       }
+      recognitionRef.current = null;
     };
     recognitionRef.current = recognition;
+    }
 
     const mimeType = pickMimeType();
     let mr: MediaRecorder;
@@ -291,6 +334,7 @@ export default function VoiceCapture() {
         const result = await smartCapture(
           blob,
           liveTranscriptRef.current || committedTranscriptRef.current,
+          languageRef.current,
         );
         setTranscript(result.transcript);
         setAiResult(result);
@@ -366,7 +410,7 @@ export default function VoiceCapture() {
     hasSpokenRef.current = false;
     try {
       mr.start(250);
-      recognition.start();
+      try { recognition?.start(); } catch { /* live preview is optional */ }
       setPhase('listening');
     } catch (err) {
       console.error('mr.start failed', err);
@@ -585,8 +629,9 @@ export default function VoiceCapture() {
                       const h = Math.max(4, audioLevel * 40 * (1 - distance * 0.5) * (0.6 + Math.random() * 0.4));
                       return (
                         <div
-                          key={i} 
-                          className="w-1 rounded-full bg-gradient-to-t from-primary/60 to-primary"
+                          key={i}
+                          style={{ height: `${h}px` }}
+                          className="w-1 rounded-full bg-gradient-to-t from-primary/60 to-primary transition-[height] duration-75"
                         />
                       );
                     })}
@@ -598,7 +643,13 @@ export default function VoiceCapture() {
               <div className="px-5 sm:px-6 pb-4">
                 <div className="min-h-[100px] max-h-[180px] overflow-y-auto bg-secondary/40 rounded-2xl p-4 text-[14px] leading-relaxed text-foreground border border-border/30">
                   {transcript ? (
-                    <span>{transcript}</span>
+                    <textarea
+                      value={transcript}
+                      onChange={(e) => setTranscript(e.target.value)}
+                      rows={4}
+                      className="w-full bg-transparent outline-none resize-none text-[14px] leading-relaxed text-foreground"
+                      aria-label="Transcript"
+                    />
                   ) : phase === 'processing' ? (
                     <span className="text-muted-foreground italic flex items-center gap-2">
                       <Sparkles size={14} className="animate-pulse" />
@@ -621,10 +672,26 @@ export default function VoiceCapture() {
                     {aiResult && (
                       <span className="text-[10px] text-primary/80 font-medium flex items-center gap-1">
                         <Sparkles size={10} /> AI-classified as {aiResult.type}
+                        {aiResult.language ? ` · ${aiResult.language.toUpperCase()}` : ''}
                       </span>
                     )}
                   </div>
                 )}
+              </div>
+
+              {/* Language */}
+              <div className="px-5 sm:px-6 pb-3 flex items-center justify-between gap-3">
+                <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest">Language</span>
+                <select
+                  value={language}
+                  onChange={(e) => changeLanguage(e.target.value)}
+                  className="text-xs bg-secondary/50 border border-border/40 rounded-xl px-3 py-2 text-foreground outline-none"
+                  aria-label="Spoken language"
+                >
+                  {LANGUAGES.map(l => (
+                    <option key={l.id} value={l.id}>{l.label}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Type selector */}
