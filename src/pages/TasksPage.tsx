@@ -1031,6 +1031,9 @@ export default function TasksPage() {
   const [quickAdd, setQuickAdd] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"priority" | "dueDate" | "created">("priority");
+  const [grouped, setGrouped] = useState(true);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["done"]));
+  const [preset, setPreset] = useState<"open" | "all" | "overdue" | "today" | "week" | "critical">("open");
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const toggleSelect = useCallback((id: string) => {
