@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiVoiceTranscribeRouteImport } from './routes/api/voice/transcribe'
+import { Route as ApiPublicDigestRouteImport } from './routes/api/public/digest'
 import { Route as LovableEmailTransactionalPreviewRouteImport } from './routes/lovable/email/transactional/preview'
 import { Route as LovableEmailAuthWebhookRouteImport } from './routes/lovable/email/auth/webhook'
 import { Route as LovableEmailAuthPreviewRouteImport } from './routes/lovable/email/auth/preview'
@@ -23,6 +24,11 @@ const IndexRoute = IndexRouteImport.update({
 const ApiVoiceTranscribeRoute = ApiVoiceTranscribeRouteImport.update({
   id: '/api/voice/transcribe',
   path: '/api/voice/transcribe',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicDigestRoute = ApiPublicDigestRouteImport.update({
+  id: '/api/public/digest',
+  path: '/api/public/digest',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LovableEmailTransactionalPreviewRoute =
@@ -44,6 +50,7 @@ const LovableEmailAuthPreviewRoute = LovableEmailAuthPreviewRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/public/digest': typeof ApiPublicDigestRoute
   '/api/voice/transcribe': typeof ApiVoiceTranscribeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -51,6 +58,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/public/digest': typeof ApiPublicDigestRoute
   '/api/voice/transcribe': typeof ApiVoiceTranscribeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -59,6 +67,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/public/digest': typeof ApiPublicDigestRoute
   '/api/voice/transcribe': typeof ApiVoiceTranscribeRoute
   '/lovable/email/auth/preview': typeof LovableEmailAuthPreviewRoute
   '/lovable/email/auth/webhook': typeof LovableEmailAuthWebhookRoute
@@ -68,6 +77,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/api/public/digest'
     | '/api/voice/transcribe'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -75,6 +85,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/api/public/digest'
     | '/api/voice/transcribe'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -82,6 +93,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/api/public/digest'
     | '/api/voice/transcribe'
     | '/lovable/email/auth/preview'
     | '/lovable/email/auth/webhook'
@@ -90,6 +102,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiPublicDigestRoute: typeof ApiPublicDigestRoute
   ApiVoiceTranscribeRoute: typeof ApiVoiceTranscribeRoute
   LovableEmailAuthPreviewRoute: typeof LovableEmailAuthPreviewRoute
   LovableEmailAuthWebhookRoute: typeof LovableEmailAuthWebhookRoute
@@ -110,6 +123,13 @@ declare module '@tanstack/react-router' {
       path: '/api/voice/transcribe'
       fullPath: '/api/voice/transcribe'
       preLoaderRoute: typeof ApiVoiceTranscribeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/digest': {
+      id: '/api/public/digest'
+      path: '/api/public/digest'
+      fullPath: '/api/public/digest'
+      preLoaderRoute: typeof ApiPublicDigestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/lovable/email/transactional/preview': {
@@ -138,6 +158,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiPublicDigestRoute: ApiPublicDigestRoute,
   ApiVoiceTranscribeRoute: ApiVoiceTranscribeRoute,
   LovableEmailAuthPreviewRoute: LovableEmailAuthPreviewRoute,
   LovableEmailAuthWebhookRoute: LovableEmailAuthWebhookRoute,
