@@ -1,5 +1,10 @@
-import { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw, SkipForward, Coffee, Flame, Zap, TreePine } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { Play, Pause, RotateCcw, SkipForward, Coffee, Flame, Zap, TreePine, Target, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import type { Task } from "@/lib/db";
+import { useTasks, useUpdateItem } from "@/hooks/useTableData";
+import { todayISO } from "@/lib/overdue";
+import { isOpen, sortByPriority, quadrantOf } from "@/lib/triage";
 
 const PRESETS = [
   { label: "Focus", minutes: 25, icon: Zap, emoji: "🍅", gradient: "from-primary to-accent" },
@@ -13,7 +18,39 @@ export default function FocusPage() {
   const [remaining, setRemaining] = useState(PRESETS[0].minutes * 60);
   const [running, setRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
+  const [lockedId, setLockedId] = useState<string | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  const tasks = useTasks();
+  const updateItem = useUpdateItem();
+  const today = todayISO();
+
+  const candidates = useMemo(() => {
+    const open = tasks.filter(isOpen);
+    const ranked = sortByPriority(open).sort((a, b) => {
+      const rank = (t: Task) => (quadrantOf(t, today) === 'do' ? 0 : quadrantOf(t, today) === 'schedule' ? 1 : 2);
+      return rank(a) - rank(b);
+    });
+    return ranked.slice(0, 12);
+  }, [tasks, today]);
+
+  const locked = tasks.find(t => t.id === lockedId) || null;
+
+  const completeLocked = async () => {
+    if (!locked) return;
+    await updateItem<Task>('tasks', locked.id, { status: 'done', completedAt: new Date().toISOString() });
+    toast.success(`"${locked.title}" done ✓`);
+    setLockedId(null);
+    setRunning(false);
+  };
+
+  const toggleRunning = () => {
+    if (!running && preset === 0 && !locked) {
+      toast.error('Pick the one task you are working on first');
+      return;
+    }
+    setRunning(r => !r);
+  };
 
   useEffect(() => {
     if (running && remaining > 0) {
