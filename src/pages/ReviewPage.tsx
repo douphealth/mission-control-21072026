@@ -44,7 +44,7 @@ function TaskRow({
           {od > 0 && <span className="font-semibold text-red-500">{od}d overdue</span>}
           <span>untouched {daysSinceTouch(task, today)}d</span>
         </div>
-      </div>
+      </button>
       <div className="flex flex-wrap items-center gap-1.5">
         <button onClick={() => onDone(task)} title="Mark done"
           className="flex items-center gap-1 rounded-xl bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-500 transition hover:bg-emerald-500/20">
