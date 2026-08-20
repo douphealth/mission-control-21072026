@@ -245,12 +245,24 @@ export default function WordPressManagementPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={checkAllSites}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90"
-        >
-          <Activity size={14} /> Check All Sites
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={async () => {
+              const n = await deduplicateTable('websites');
+              toast.success(n > 0 ? `Merged ${n} duplicate site${n === 1 ? '' : 's'}` : 'No duplicates found');
+            }}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary text-muted-foreground hover:text-foreground text-xs font-semibold"
+          >
+            <Activity size={14} /> Merge duplicates
+          </button>
+          <button
+            onClick={checkAllSites}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90"
+          >
+            <Activity size={14} /> Check All Sites
+          </button>
+        </div>
+
       </div>
 
       <div className="grid grid-cols-12 gap-5">
