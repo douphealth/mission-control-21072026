@@ -284,7 +284,7 @@ export default function Sidebar() {
                 onClick={() => setArchiveOpen(o => !o)}
                 className="w-full flex items-center justify-between px-3 mb-1.5 text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase hover:text-sidebar-foreground/60 transition-colors"
               >
-                <span className="flex items-center gap-1.5"><Archive size={10} /> Archive · frozen</span>
+                <span className="flex items-center gap-1.5"><Archive size={10} /> Archive</span>
                 <span>{archiveOpen ? '−' : '+'}</span>
               </button>
               {archiveOpen && (

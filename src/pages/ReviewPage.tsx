@@ -11,8 +11,10 @@ import {
   buildReviewQueues, daysSinceTouch, QUADRANTS, addDaysISO, isArchived,
   sortByPriority, STALE_DAYS, ROT_DAYS,
 } from '@/lib/triage';
+import type { Quadrant } from '@/lib/triage';
 import { useReviewStore } from '@/stores/reviewStore';
 import ConfirmDialog, { useConfirmDialog } from '@/components/ConfirmDialog';
+import TaskQuickEditor from '@/components/TaskQuickEditor';
 
 function daysAgoLabel(iso: string | null) {
   if (!iso) return 'never';
@@ -23,24 +25,28 @@ function daysAgoLabel(iso: string | null) {
 }
 
 function TaskRow({
-  task, today, onDone, onPush, onArchive, onDelete, onToday,
+  task, today, onDone, onPush, onArchive, onDelete, onToday, onOpen,
 }: {
   task: Task; today: string;
   onDone: (t: Task) => void; onPush: (t: Task, d: number) => void;
   onArchive: (t: Task) => void; onDelete: (t: Task) => void; onToday: (t: Task) => void;
+  onOpen: (t: Task) => void;
 }) {
   const od = daysOverdue(task, today);
   return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-border/30 bg-secondary/30 p-3 sm:flex-row sm:items-center sm:gap-3">
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-foreground">{task.title}</div>
+    <div
+      draggable
+      onDragStart={e => { e.dataTransfer.setData('text/mc-task', task.id); e.dataTransfer.effectAllowed = 'move'; }}
+      className="flex cursor-grab flex-col gap-2 rounded-2xl border border-border/30 bg-secondary/30 p-3 active:cursor-grabbing sm:flex-row sm:items-center sm:gap-3">
+      <button onClick={() => onOpen(task)} className="min-w-0 flex-1 text-left">
+        <div className="truncate text-sm font-semibold text-foreground hover:text-primary">{task.title}</div>
         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
           <span className="uppercase tracking-wide">{task.priority}</span>
           {task.dueDate && <span>due {task.dueDate}</span>}
           {od > 0 && <span className="font-semibold text-red-500">{od}d overdue</span>}
           <span>untouched {daysSinceTouch(task, today)}d</span>
         </div>
-      </div>
+      </button>
       <div className="flex flex-wrap items-center gap-1.5">
         <button onClick={() => onDone(task)} title="Mark done"
           className="flex items-center gap-1 rounded-xl bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-500 transition hover:bg-emerald-500/20">
@@ -75,9 +81,30 @@ export default function ReviewPage() {
   const today = todayISO();
   const { lastWeeklyReview, lastShutdown, markWeeklyReview, markShutdown } = useReviewStore();
   const [showArchive, setShowArchive] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
 
   const q = useMemo(() => buildReviewQueues(tasks, today), [tasks, today]);
   const archived = useMemo(() => sortByPriority(tasks.filter(isArchived)), [tasks]);
+  const editing = useMemo(() => tasks.find(t => t.id === editingId) ?? null, [tasks, editingId]);
+
+  const onOpen = useCallback((t: Task) => setEditingId(t.id), []);
+
+  // Drag & drop / tap-to-move between Eisenhower quadrants.
+  // Dropping rewrites urgency (due date) + importance so the task really moves,
+  // and every other view updates instantly through the live query.
+  const moveToQuadrant = useCallback(async (taskId: string, quad: Quadrant) => {
+    const t = tasks.find(x => x.id === taskId);
+    if (!t) return;
+    const plan: Record<Quadrant, Partial<Task>> = {
+      do: { important: true, dueDate: today, priority: t.priority === 'low' ? 'high' : t.priority },
+      schedule: { important: true, dueDate: addDaysISO(7, today) },
+      delegate: { important: false, dueDate: today },
+      later: { important: false, dueDate: addDaysISO(21, today) },
+    } as any;
+    await updateItem<Task>('tasks', taskId, { ...plan[quad], touchedAt: today } as Partial<Task>);
+    toast.success(`Moved to “${QUADRANTS.find(qd => qd.id === quad)?.label}”`);
+  }, [tasks, updateItem, today]);
 
   const onDone = useCallback(async (t: Task) => {
     await updateItem<Task>('tasks', t.id, { status: 'done', completedAt: new Date().toISOString() });
@@ -192,7 +219,7 @@ export default function ReviewPage() {
         <div className="space-y-2">
           {q.rotten.map(t => (
             <TaskRow key={t.id} task={t} today={today} onDone={onDone} onPush={onPush}
-              onArchive={onArchive} onDelete={onDelete} onToday={onToday} />
+              onArchive={onArchive} onDelete={onDelete} onToday={onToday} onOpen={onOpen} />
           ))}
           {!q.rotten.length && <p className="py-4 text-center text-xs text-muted-foreground">Nothing rotting. ✅</p>}
         </div>
@@ -209,34 +236,68 @@ export default function ReviewPage() {
         <div className="space-y-2">
           {q.stale.map(t => (
             <TaskRow key={t.id} task={t} today={today} onDone={onDone} onPush={onPush}
-              onArchive={onArchive} onDelete={onDelete} onToday={onToday} />
+              onArchive={onArchive} onDelete={onDelete} onToday={onToday} onOpen={onOpen} />
           ))}
           {!q.stale.length && <p className="py-4 text-center text-xs text-muted-foreground">Everything active has been touched recently.</p>}
         </div>
       </section>
 
-      {/* ── 3. Eisenhower matrix ── */}
+      {/* ── 3. Eisenhower matrix — drag & drop ── */}
       <section className="space-y-3">
-        <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-          <Target size={15} className="text-primary" /> Priority matrix
-        </h2>
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Target size={15} className="text-primary" /> Priority matrix
+          </h2>
+          <p className="text-[11px] text-muted-foreground">
+            Drag a task into another quadrant to re-decide it — or tap it to edit. Changes apply everywhere instantly.
+          </p>
+        </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
           {QUADRANTS.map(quad => (
-            <div key={quad.id} className={`rounded-2xl border p-3 ${quad.accent}`}>
+            <div
+              key={quad.id}
+              onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOver(quad.id); }}
+              onDragLeave={() => setDragOver(d => (d === quad.id ? null : d))}
+              onDrop={e => {
+                e.preventDefault();
+                setDragOver(null);
+                const id = e.dataTransfer.getData('text/mc-task');
+                if (id) void moveToQuadrant(id, quad.id);
+              }}
+              className={`rounded-2xl border p-3 transition ${quad.accent} ${
+                dragOver === quad.id ? 'ring-2 ring-primary/60 scale-[1.01]' : ''}`}
+            >
               <div className="flex items-baseline justify-between">
                 <span className="text-xs font-bold uppercase tracking-wide">{quad.label}</span>
                 <span className="text-[10px] opacity-70">{quad.hint}</span>
               </div>
               <div className="mt-2 space-y-1.5">
                 {q.matrix[quad.id].slice(0, 8).map(t => (
-                  <div key={t.id} className="flex items-center gap-2 rounded-xl bg-background/60 px-2.5 py-1.5">
-                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-foreground">{t.title}</span>
+                  <div
+                    key={t.id}
+                    draggable
+                    onDragStart={e => { e.dataTransfer.setData('text/mc-task', t.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    className="flex cursor-grab items-center gap-2 rounded-xl bg-background/60 px-2.5 py-1.5 active:cursor-grabbing"
+                  >
+                    <button onClick={() => onOpen(t)}
+                      className="min-w-0 flex-1 truncate text-left text-[12px] font-medium text-foreground hover:text-primary">
+                      {t.title}
+                    </button>
+                    {/* Mobile-friendly move menu (no drag needed) */}
+                    <select
+                      aria-label="Move task"
+                      value={quad.id}
+                      onChange={e => void moveToQuadrant(t.id, e.target.value as Quadrant)}
+                      className="max-w-[92px] rounded-lg bg-secondary/70 px-1 py-0.5 text-[10px] font-semibold text-muted-foreground outline-none md:hidden"
+                    >
+                      {QUADRANTS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+                    </select>
                     <button onClick={() => onDone(t)} className="text-emerald-500 transition hover:scale-110" title="Done">
                       <CheckCircle2 size={13} />
                     </button>
                   </div>
                 ))}
-                {!q.matrix[quad.id].length && <p className="py-2 text-center text-[11px] opacity-60">Empty</p>}
+                {!q.matrix[quad.id].length && <p className="py-2 text-center text-[11px] opacity-60">Drop a task here</p>}
                 {q.matrix[quad.id].length > 8 && (
                   <p className="text-center text-[10px] opacity-70">+{q.matrix[quad.id].length - 8} more</p>
                 )}
@@ -302,6 +363,7 @@ export default function ReviewPage() {
         )}
       </section>
 
+      <TaskQuickEditor task={editing} onClose={() => setEditingId(null)} />
       <ConfirmDialog {...cd.dialogProps} />
     </div>
   );

@@ -139,6 +139,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const { userName } = useSettingsStore();
   const [clock, setClock] = useState(new Date());
   const [timerRunning, setTimerRunning] = useState(false);
+  const [chartRange, setChartRange] = useState<'1W' | '1M' | '3M' | '1Y'>('1W');
   const [timerSec, setTimerSec] = useState(25 * 60);
 
   useEffect(() => { const t = setInterval(() => setClock(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -170,7 +171,25 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const seoOpenIssues = seoIssues.filter(i => i.status === 'open' || i.status === 'in-progress');
   const seoOpenActions = seoActions.filter(a => a.status !== 'done' && a.status !== 'cancelled');
   const seoNextActions = [...seoOpenActions].sort((a, b) => ({ critical: 4, high: 3, medium: 2, low: 1 }[b.priority] - ({ critical: 4, high: 3, medium: 2, low: 1 }[a.priority]))).slice(0, 3);
-  const taskWave = useMemo(() => [4, 6, 5, 8, 7, 9, done.length || 6, 11, 8, 12, open.length + 6, 14], [done.length, open.length]);
+  // Real completion history for the selected range (no more placeholder wave).
+  const RANGE_DAYS: Record<string, number> = { '1W': 7, '1M': 30, '3M': 90, '1Y': 365 };
+  const rangeDays = RANGE_DAYS[chartRange] ?? 7;
+  const buckets = rangeDays <= 30 ? rangeDays : 12;   // long ranges compress into 12 points
+  const taskWave = useMemo(() => {
+    const span = Math.max(1, Math.round(rangeDays / buckets));
+    const now = new Date(`${today}T00:00:00`).getTime();
+    return Array.from({ length: buckets }, (_, i) => {
+      const end = now - (buckets - 1 - i) * span * 86_400_000;
+      const start = end - (span - 1) * 86_400_000;
+      return tasks.filter(t => {
+        const stamp = (t.completedAt || '').slice(0, 10);
+        if (!stamp) return false;
+        const ts = new Date(`${stamp}T00:00:00`).getTime();
+        return ts >= start && ts <= end;
+      }).length;
+    });
+  }, [tasks, rangeDays, buckets, today]);
+  const rangeCompleted = taskWave.reduce((s, n) => s + n, 0);
   const hour = clock.getHours();
   const greet = hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const dateLabel = clock.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -310,12 +329,15 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
             <div>
               <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Productivity</div>
               <h3 className="text-[22px] font-extrabold tracking-tight text-foreground">Weekly performance</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">Tasks completed vs. planned — last 12 days</p>
+              <p className="text-[12px] text-muted-foreground mt-1">
+                {rangeCompleted} task{rangeCompleted === 1 ? '' : 's'} completed · last {rangeDays} days
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <div className="inline-flex rounded-2xl bg-secondary p-1 text-[11px] font-semibold">
-                {['1W', '1M', '3M', '1Y'].map((v, idx) => (
-                  <button key={v} className={`px-3 py-1.5 rounded-xl transition ${idx === 0 ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
+                {(['1W', '1M', '3M', '1Y'] as const).map(v => (
+                  <button key={v} onClick={() => setChartRange(v)}
+                    className={`px-3 py-1.5 rounded-xl transition ${chartRange === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
                 ))}
               </div>
               <button className="w-9 h-9 rounded-2xl bg-secondary hover:bg-secondary/70 flex items-center justify-center text-muted-foreground"><MoreHorizontal size={16} /></button>
