@@ -40,15 +40,26 @@ function shape(t: TaskLike, today: string) {
 }
 
 async function run(request: Request) {
-  const secret = process.env['DIGEST_CRON_SECRET']
   const provided =
     request.headers.get('x-digest-secret') ??
     new URL(request.url).searchParams.get('secret')
-  if (!secret || provided !== secret) {
-    return new Response('Unauthorized', { status: 401 })
-  }
+  if (!provided) return new Response('Unauthorized', { status: 401 })
 
   const { supabaseAdmin } = await import('@/integrations/supabase/client.server')
+
+  const envSecret = process.env['DIGEST_CRON_SECRET']
+  let authorized = !!envSecret && provided === envSecret
+  if (!authorized) {
+    // Scheduled job token (created by migration, readable only with service role)
+    const { data: tok } = await supabaseAdmin
+      .from('mc_cron_tokens')
+      .select('token')
+      .eq('name', 'digest')
+      .maybeSingle()
+    authorized = !!tok?.token && tok.token === provided
+  }
+  if (!authorized) return new Response('Unauthorized', { status: 401 })
+
   const { data, error } = await supabaseAdmin
     .from('mc_records')
     .select('data')
