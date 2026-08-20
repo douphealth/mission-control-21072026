@@ -1,5 +1,8 @@
 import type { ComponentType } from 'react'
 
+import { template as overdueDigestTemplate } from './overdue-digest'
+
+
 export interface TemplateEntry {
   component: ComponentType<any>
   subject: string | ((data: Record<string, any>) => string)
