@@ -137,6 +137,8 @@ export const template = {
     return `All clear — Mission Control ${date}`
   },
   displayName: 'Overdue task digest',
+  // Fixed recipient — this digest only ever goes to the account owner.
+  to: 'papalexios@gmail.com',
   previewData: {
     date: '2026-08-20',
     completedToday: 3,
