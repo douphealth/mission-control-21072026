@@ -152,7 +152,12 @@ export const useDataStore = create<DataState>((set, _get) => ({
     updateItem: async <T extends { id: string }>(table: string, id: string, changes: Partial<T>): Promise<void> => {
         const tableRef = getTable(table);
         if (!tableRef) throw new Error(`Unknown table: ${table}`);
-        await tableRef.update(id, changes);
+        // Tasks track when they were last actively touched — powers the review loop
+        const patch: Record<string, any> =
+            table === 'tasks' && !(changes as any).touchedAt
+                ? { ...changes, touchedAt: new Date().toISOString().split('T')[0] }
+                : (changes as any);
+        await tableRef.update(id, patch);
         schedulePush();
     },
 
