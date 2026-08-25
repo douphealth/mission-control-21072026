@@ -304,13 +304,30 @@ export const useDataStore = create<DataState>((set, _get) => ({
             customModules: db.customModules,
             habits: db.habits,
         };
-        // Use a transaction for atomicity
+        // ── Validate EVERYTHING before touching a single row ──────────────
+        // A corrupt backup must never be able to wipe existing data.
+        const staged: [string, any, any[]][] = [];
+        const problems: string[] = [];
+        for (const [key, table] of Object.entries(tableMap)) {
+            const rows = data[key];
+            if (rows === undefined || rows === null) continue;
+            if (!Array.isArray(rows)) { problems.push(`"${key}" is not a list`); continue; }
+            const bad = rows.findIndex((r: any) => !r || typeof r !== 'object' || typeof r.id !== 'string' || !r.id);
+            if (bad !== -1) { problems.push(`"${key}" row #${bad + 1} is missing a valid id`); continue; }
+            staged.push([key, table, rows]);
+        }
+        if (problems.length) {
+            throw new Error(`Backup rejected — nothing was changed. Problems: ${problems.join('; ')}`);
+        }
+        if (!staged.length) {
+            throw new Error('Backup rejected — no recognisable Mission Control data found.');
+        }
+
+        // Single transaction: any failure rolls the whole import back.
         await db.transaction('rw', Object.values(tableMap), async () => {
-            for (const [key, table] of Object.entries(tableMap)) {
-                if (data[key] && Array.isArray(data[key])) {
-                    await table.clear();
-                    if (data[key].length > 0) await table.bulkPut(data[key]);
-                }
+            for (const [, table, rows] of staged) {
+                await table.clear();
+                if (rows.length > 0) await table.bulkPut(rows);
             }
         });
         if (data.settings) await db.settings.put({ ...data.settings, id: 'default' });
