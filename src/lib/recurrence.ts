@@ -35,41 +35,39 @@ export function expandRecurringTask(
     ? task.recurringEndCount
     : null;
 
-  let count = 0;
-  let current = new Date(baseDate);
+  // Counts *actual* occurrences (weekend days skipped by a "weekdays" rule are
+  // not occurrences, so they must not consume the end-count budget).
+  let occurrenceCount = 0;
+  let steps = 0;
+  const current = new Date(baseDate);
+  const baseDayOfMonth = baseDate.getDate();
 
   // Safety: don't loop forever
   const hardLimit = Math.min(maxOccurrences, 1000);
+  const stepLimit = hardLimit * 8;
 
-  while (count < hardLimit) {
-    const dateStr = fmtDate(current);
+  while (occurrenceCount < hardLimit && steps < stepLimit) {
+    steps++;
     const d = new Date(current);
 
     // Check end conditions
     if (endByDate && d > endByDate) break;
-    if (endByCount && count >= endByCount) break;
+    if (endByCount && occurrenceCount >= endByCount) break;
     if (d > rEnd) break;
 
-    // Weekday filter for 'weekdays' interval
     const isWeekday = d.getDay() >= 1 && d.getDay() <= 5;
+    const isOccurrence = task.recurringInterval !== 'weekdays' || isWeekday;
 
-    if (d >= rStart) {
-      if (task.recurringInterval === 'weekdays') {
-        if (isWeekday) {
-          instances.push({ date: dateStr, occurrenceIndex: count });
-        }
-      } else {
-        instances.push({ date: dateStr, occurrenceIndex: count });
+    if (isOccurrence) {
+      if (d >= rStart) {
+        instances.push({ date: fmtDate(d), occurrenceIndex: occurrenceCount });
       }
+      occurrenceCount++;
     }
 
-    count++;
-
-    // Advance to next occurrence
+    // Advance to next candidate date
     switch (task.recurringInterval) {
       case 'daily':
-        current.setDate(current.getDate() + 1);
-        break;
       case 'weekdays':
         current.setDate(current.getDate() + 1);
         break;
@@ -80,10 +78,10 @@ export function expandRecurringTask(
         current.setDate(current.getDate() + 14);
         break;
       case 'monthly':
-        current.setMonth(current.getMonth() + 1);
+        advanceMonths(current, 1, baseDayOfMonth);
         break;
       case 'yearly':
-        current.setFullYear(current.getFullYear() + 1);
+        advanceYears(current, 1, baseDayOfMonth, baseDate.getMonth());
         break;
       case 'custom':
         current.setDate(current.getDate() + (task.recurringCustomDays || 1));
@@ -94,6 +92,22 @@ export function expandRecurringTask(
   }
 
   return instances;
+}
+
+/** Add months without day drift: Jan 31 → Feb 28 → Mar 31 (clamped, not shifted). */
+function advanceMonths(d: Date, months: number, anchorDay: number): void {
+  const targetMonth = d.getMonth() + months;
+  const year = d.getFullYear() + Math.floor(targetMonth / 12);
+  const month = ((targetMonth % 12) + 12) % 12;
+  const lastDay = new Date(year, month + 1, 0).getDate();
+  d.setFullYear(year, month, Math.min(anchorDay, lastDay));
+}
+
+/** Add years, clamping Feb 29 → Feb 28 on non-leap years (never Mar 1). */
+function advanceYears(d: Date, years: number, anchorDay: number, anchorMonth: number): void {
+  const year = d.getFullYear() + years;
+  const lastDay = new Date(year, anchorMonth + 1, 0).getDate();
+  d.setFullYear(year, anchorMonth, Math.min(anchorDay, lastDay));
 }
 
 function fmtDate(d: Date): string {
