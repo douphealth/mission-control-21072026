@@ -445,6 +445,11 @@ class MissionControlDB extends Dexie {
             seoChanges: 'id, websiteId, occurredAt, status',
             seoVisibilityChecks: 'id, websiteId, checkedAt, engine, mentioned, cited',
         });
+
+        // Review loop reads tasks by staleness and archive state — index both.
+        this.version(4).stores({
+            tasks: 'id, title, priority, status, dueDate, category, createdAt, gcalEventId, touchedAt',
+        });
     }
 }
 
@@ -492,6 +497,17 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
 
 // ─── ID Generator ─────────────────────────────────────────────────────────────
 
+let idCounter = 0;
+
 export function genId(): string {
-    return crypto.randomUUID?.() || Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+    // Collision-safe fallback: 12 bytes of CSPRNG + time + monotonic counter.
+    const bytes = new Uint8Array(12);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(bytes);
+    else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    const rand = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    idCounter = (idCounter + 1) % 0xffff;
+    return `${Date.now().toString(36)}-${rand}-${idCounter.toString(36)}`;
 }

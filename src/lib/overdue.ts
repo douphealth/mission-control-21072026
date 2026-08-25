@@ -11,10 +11,23 @@ export const PRIORITY_RANK: Record<string, number> = {
   low: 3,
 };
 
+/** Format a Date as YYYY-MM-DD in *local* time (never via toISOString). */
+export function fmtLocal(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Add days to a YYYY-MM-DD string, staying in local time. */
+export function addDaysLocal(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return fmtLocal(d);
+}
+
 export function todayISO(): string {
-  const d = new Date();
-  const off = d.getTimezoneOffset();
-  return new Date(d.getTime() - off * 60_000).toISOString().slice(0, 10);
+  return fmtLocal(new Date());
 }
 
 export function daysOverdue(task: Task, today = todayISO()): number {
@@ -41,9 +54,7 @@ export interface DailyBriefing {
 }
 
 export function buildBriefing(tasks: Task[], today = todayISO()): DailyBriefing {
-  const tomorrow = new Date(new Date(`${today}T00:00:00`).getTime() + 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const tomorrow = addDaysLocal(today, 1);
 
   const open = tasks.filter((t) => t.status !== 'done');
   const overdue = sortTasks(open.filter((t) => t.dueDate && t.dueDate < today));

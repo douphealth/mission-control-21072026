@@ -3,7 +3,7 @@
 // the archive (instead of an ever-growing overdue graveyard).
 
 import type { Task } from '@/lib/db';
-import { todayISO, daysOverdue, PRIORITY_RANK } from '@/lib/overdue';
+import { todayISO, daysOverdue, addDaysLocal, PRIORITY_RANK } from '@/lib/overdue';
 
 export const STALE_DAYS = 14;
 export const ROT_DAYS = 30;
@@ -75,9 +75,7 @@ export function sortByPriority(tasks: Task[]): Task[] {
 }
 
 export function addDaysISO(days: number, from = todayISO()): string {
-  return new Date(new Date(`${from}T00:00:00`).getTime() + days * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  return addDaysLocal(from, days);
 }
 
 export interface ReviewQueues {

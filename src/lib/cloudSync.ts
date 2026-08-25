@@ -117,6 +117,32 @@ function chunk<T>(arr: T[], size: number): T[][] {
     return out;
 }
 
+// ─── Validation ──────────────────────────────────────────────────────────────
+// A corrupt cloud row must never be written into the local database.
+
+const REQUIRED_FIELDS: Record<string, string[]> = {
+    tasks: ['title'],
+    websites: ['name'],
+    notes: ['title'],
+    links: ['title'],
+    repos: ['name'],
+    buildProjects: ['name'],
+    ideas: ['title'],
+    credentials: ['label'],
+    customModules: ['name'],
+    habits: ['name'],
+};
+
+function isValidRecord(collection: string, data: any, recordId: string): boolean {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    if (typeof data.id !== 'string' || !data.id) return false;
+    if (recordId && data.id !== recordId) return false;
+    for (const field of REQUIRED_FIELDS[collection] ?? []) {
+        if (typeof data[field] !== 'string') return false;
+    }
+    return true;
+}
+
 // ─── Pull: cloud → local ─────────────────────────────────────────────────────
 
 export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; error?: string }> {
@@ -136,13 +162,19 @@ export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; 
         }
 
         let restored = 0;
+        let skipped = 0;
         for (const [collection, table] of Object.entries(COLLECTIONS)) {
             const mine = rows.filter((r) => r.collection === collection);
-            const alive = mine.filter((r) => !r.deleted).map((r) => r.data).filter(Boolean);
+            const alive: any[] = [];
+            for (const r of mine.filter((x) => !x.deleted)) {
+                if (isValidRecord(collection, r.data, r.record_id)) alive.push(r.data);
+                else skipped++;
+            }
             const dead = mine.filter((r) => r.deleted).map((r) => r.record_id);
             if (alive.length) { await table.bulkPut(alive); restored += alive.length; }
             if (dead.length) { await table.bulkDelete(dead); }
         }
+        if (skipped) console.warn(`☁️ Skipped ${skipped} corrupt cloud record(s) during restore`);
 
         hydrated = true;
         try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()); } catch { }

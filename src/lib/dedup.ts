@@ -327,3 +327,20 @@ export async function deduplicateAll(): Promise<number> {
     }
     return total;
 }
+
+/**
+ * Find the id of an existing record that is a content duplicate of `item`.
+ * Used so callers never receive an empty id when an add is folded into an
+ * existing record.
+ */
+export async function findDuplicateId(tableName: string, item: any): Promise<string | null> {
+    const fp = FINGERPRINT_MAP[tableName];
+    if (!fp) return null;
+    if (!hasMeaningfulFingerprint(tableName, item)) return null;
+    const tableRef = getTableRef(tableName);
+    if (!tableRef) return null;
+    const target = fp(item);
+    const rows: any[] = await tableRef.toArray();
+    const match = rows.find((r) => fp(r) === target);
+    return match?.id ?? null;
+}
