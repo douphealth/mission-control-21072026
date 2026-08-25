@@ -3,7 +3,7 @@
 // the archive (instead of an ever-growing overdue graveyard).
 
 import type { Task } from '@/lib/db';
-import { todayISO, daysOverdue, PRIORITY_RANK } from '@/lib/overdue';
+import { todayISO, daysOverdue, addDaysLocal, PRIORITY_RANK } from '@/lib/overdue';
 
 export const STALE_DAYS = 14;
 export const ROT_DAYS = 30;
