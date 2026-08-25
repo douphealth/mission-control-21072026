@@ -58,6 +58,7 @@ export default function SnapCapture() {
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressFired = useRef(false);
 
   const bulkAddItems = useBulkAddItems();
 
@@ -155,18 +156,25 @@ export default function SnapCapture() {
     if (files.length > 0) processImages(files);
   }, [processImages]);
 
-  const handleFABDown = useCallback(() => {
-    longPressTimer.current = setTimeout(() => setShowActions(true), 400);
+  const handleFABDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if ('button' in e && e.button !== 0) return;          // ignore right/middle click
+    longPressFired.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressFired.current = true;
+      longPressTimer.current = null;                       // mark as fired
+      setShowActions(true);
+    }, 400);
   }, []);
 
-  const handleFABUp = useCallback(() => {
-    if (longPressTimer.current) {
+  const handleFABUp = useCallback((e: React.MouseEvent | React.TouchEvent) => {
+    if ('button' in e && e.button !== 0) return;
+    if (longPressTimer.current) {                          // still pending = short tap
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
+      cameraRef.current?.click();
     }
-    if (!showActions) cameraRef.current?.click();
-    else setShowActions(false);
-  }, [showActions]);
+    // long press already fired → do nothing, menu stays open
+  }, []);
 
   const pasteFromClipboard = useCallback(async () => {
     setShowActions(false);
@@ -190,6 +198,8 @@ export default function SnapCapture() {
   // Global paste (Ctrl+V an image anywhere)
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'TEXTAREA' || t.tagName === 'INPUT' || t.isContentEditable)) return;
       const items = Array.from(e.clipboardData?.items || []);
       const files = items
         .filter(i => i.type.startsWith('image/'))
@@ -207,28 +217,31 @@ export default function SnapCapture() {
   return (
     <>
       {phase === 'idle' && (
-        <div className="fixed bottom-24 right-4 sm:bottom-20 sm:right-6 z-[90] flex flex-col items-end gap-2">
+        <div className="fixed bottom-40 right-4 lg:bottom-28 lg:right-8 z-[90] flex flex-col items-end gap-2">
           {showActions && (
-            <div className="flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-              <button
-                onClick={() => { setShowActions(false); cameraRef.current?.click(); }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
-              >
-                <Camera className="w-4 h-4" /> Take Photo
-              </button>
-              <button
-                onClick={() => { setShowActions(false); galleryRef.current?.click(); }}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
-              >
-                <ImageIcon className="w-4 h-4" /> Choose from Gallery
-              </button>
-              <button
-                onClick={pasteFromClipboard}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
-              >
-                <Clipboard className="w-4 h-4" /> Paste Image
-              </button>
-            </div>
+            <>
+              <div className="fixed inset-0 z-[89]" onClick={() => setShowActions(false)} />
+              <div className="flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
+                <button
+                  onClick={() => { setShowActions(false); cameraRef.current?.click(); }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
+                >
+                  <Camera className="w-4 h-4" /> Take Photo
+                </button>
+                <button
+                  onClick={() => { setShowActions(false); galleryRef.current?.click(); }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
+                >
+                  <ImageIcon className="w-4 h-4" /> Choose from Gallery
+                </button>
+                <button
+                  onClick={pasteFromClipboard}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
+                >
+                  <Clipboard className="w-4 h-4" /> Paste Image
+                </button>
+              </div>
+            </>
           )}
 
           <button
@@ -236,7 +249,7 @@ export default function SnapCapture() {
             onMouseUp={handleFABUp}
             onMouseLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
             onTouchStart={handleFABDown}
-            onTouchEnd={(e) => { e.preventDefault(); handleFABUp(); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleFABUp(e); }}
             onContextMenu={(e) => { e.preventDefault(); setShowActions(true); }}
             className="w-14 h-14 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-150"
             title="Tap: camera · Long-press / right-click: more options"
