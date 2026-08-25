@@ -13,7 +13,7 @@ import type {
 import { isSupabaseConnected, pushToSupabase } from '@/lib/supabase';
 import { queueCloudPush } from '@/lib/cloudSync';
 
-import { isDuplicate, deduplicateItems } from '@/lib/dedup';
+import { isDuplicate, deduplicateItems, findDuplicateId } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
