@@ -136,13 +136,19 @@ export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; 
         }
 
         let restored = 0;
+        let skipped = 0;
         for (const [collection, table] of Object.entries(COLLECTIONS)) {
             const mine = rows.filter((r) => r.collection === collection);
-            const alive = mine.filter((r) => !r.deleted).map((r) => r.data).filter(Boolean);
+            const alive: any[] = [];
+            for (const r of mine.filter((x) => !x.deleted)) {
+                if (isValidRecord(collection, r.data, r.record_id)) alive.push(r.data);
+                else skipped++;
+            }
             const dead = mine.filter((r) => r.deleted).map((r) => r.record_id);
             if (alive.length) { await table.bulkPut(alive); restored += alive.length; }
             if (dead.length) { await table.bulkDelete(dead); }
         }
+        if (skipped) console.warn(`☁️ Skipped ${skipped} corrupt cloud record(s) during restore`);
 
         hydrated = true;
         try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()); } catch { }
