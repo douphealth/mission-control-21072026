@@ -75,9 +75,7 @@ export function sortByPriority(tasks: Task[]): Task[] {
 }
 
 export function addDaysISO(days: number, from = todayISO()): string {
-  return new Date(new Date(`${from}T00:00:00`).getTime() + days * 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  return addDaysLocal(from, days);
 }
 
 export interface ReviewQueues {
