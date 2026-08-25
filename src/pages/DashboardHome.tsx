@@ -369,18 +369,25 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
               { hue: 'emerald' as const, lbl: 'Completed', val: rangeCompleted, delta: `${completionChange >= 0 ? '+' : ''}${completionChange}% vs prior`, icon: CheckSquare },
               { hue: 'sky' as const, lbl: 'In motion', val: inProgress.length, delta: `${open.length} total open`, icon: Zap },
               { hue: 'rose' as const, lbl: 'Needs attention', val: overdue, delta: overdue ? 'Overdue now' : 'All clear', icon: Bell },
-            ].map(m => (
+            ].map(m => {
+              const iconTone = m.hue === 'emerald'
+                ? 'bg-primary/10 text-primary'
+                : m.hue === 'rose'
+                  ? 'bg-destructive/10 text-destructive'
+                  : 'bg-info/10 text-info';
+              return (
               <div key={m.lbl} className="group rounded-2xl border border-border/60 bg-secondary/35 p-4 transition hover:-translate-y-0.5 hover:bg-secondary/55 hover:shadow-sm">
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-muted-foreground">{m.lbl}</span>
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg bg-${m.hue === 'emerald' ? 'primary' : m.hue === 'rose' ? 'destructive' : 'info'}/10 text-${m.hue === 'emerald' ? 'primary' : m.hue === 'rose' ? 'destructive' : 'info'}`}><m.icon size={13} /></span>
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconTone}`}><m.icon size={13} /></span>
                 </div>
                 <div className="flex items-end justify-between gap-2">
                   <span className="text-[30px] font-extrabold leading-none tabular-nums text-foreground">{m.val}</span>
                   <span className={`text-right text-[10px] font-bold ${m.hue === 'rose' && overdue ? 'text-destructive' : 'text-muted-foreground'}`}>{m.delta}</span>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-secondary/20 px-2 pt-6">

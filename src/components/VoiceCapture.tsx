@@ -390,7 +390,7 @@ export default function VoiceCapture() {
       setErrorMsg('Could not start recording. Try again.');
       setPhase('error');
     }
-  }, [cleanupAudio, cleanupRecognition, stopRecording, typeAuto]);
+  }, [cleanupAudio, cleanupRecognition, stopRecording]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -498,7 +498,7 @@ export default function VoiceCapture() {
   };
 
   const isRecording = phase === 'listening' || phase === 'hearing' || phase === 'starting';
-  const activeOpt = TYPE_OPTIONS.find(o => o.id === type)!;
+  const activeOpt = TYPE_OPTIONS.find(o => o.id === type) ?? TYPE_OPTIONS[0];
   const statusText =
     !supported
       ? 'Voice capture not supported in this browser'
