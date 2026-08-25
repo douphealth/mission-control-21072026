@@ -16,6 +16,7 @@ import { useAddItem } from '@/hooks/useTableData';
 import type { Task, Note, Idea, LinkItem } from '@/lib/db';
 import { smartCapture, type SmartCaptureResult } from '@/lib/voiceAi';
 import { buildRecognitionSnapshot, type RecognitionResultLike } from '@/lib/speechTranscript';
+import { encodePcmAsWav } from '@/lib/wavRecorder';
 import { toast } from 'sonner';
 
 type CaptureType = 'tasks' | 'notes' | 'ideas' | 'links';
@@ -84,22 +85,6 @@ function getSpeechRecognition(): BrowserSpeechRecognitionConstructor | null {
     ?? null;
 }
 
-function pickMimeType(): string {
-  const candidates = [
-    'audio/webm;codecs=opus',
-    'audio/webm',
-    'audio/ogg;codecs=opus',
-    'audio/mp4',
-  ];
-  if (typeof MediaRecorder === 'undefined') return 'audio/webm';
-  for (const c of candidates) {
-    try {
-      if (MediaRecorder.isTypeSupported(c)) return c;
-    } catch { /* ignore */ }
-  }
-  return '';
-}
-
 export default function VoiceCapture() {
   const addItem = useAddItem();
   const [open, setOpen] = useState(false);
@@ -130,14 +115,17 @@ export default function VoiceCapture() {
     try { localStorage.setItem(LANG_KEY, id); } catch { /* */ }
   }, []);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingRef = useRef(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const processorRef = useRef<ScriptProcessorNode | null>(null);
+  const silentGainRef = useRef<GainNode | null>(null);
   const rafRef = useRef<number | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const pcmChunksRef = useRef<Float32Array[]>([]);
+  const sampleRateRef = useRef(48_000);
   const startedAtRef = useRef<number>(0);
   const lastVoiceAtRef = useRef<number>(0);
   const hasSpokenRef = useRef<boolean>(false);
@@ -153,7 +141,7 @@ export default function VoiceCapture() {
     const ok =
       typeof window !== 'undefined' &&
       !!navigator.mediaDevices?.getUserMedia &&
-      typeof MediaRecorder !== 'undefined';
+      typeof AudioContext !== 'undefined';
     setSupported(ok);
   }, []);
 
@@ -183,9 +171,13 @@ export default function VoiceCapture() {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
     try { sourceRef.current?.disconnect(); } catch { /* */ }
+    try { processorRef.current?.disconnect(); } catch { /* */ }
+    try { silentGainRef.current?.disconnect(); } catch { /* */ }
     try { analyserRef.current?.disconnect(); } catch { /* */ }
     try { audioCtxRef.current?.close(); } catch { /* */ }
     sourceRef.current = null;
+    processorRef.current = null;
+    silentGainRef.current = null;
     analyserRef.current = null;
     audioCtxRef.current = null;
     if (streamRef.current) {
@@ -195,20 +187,46 @@ export default function VoiceCapture() {
   }, []);
 
   const stopRecording = useCallback((reason: 'manual' | 'silence' | 'maxlen') => {
-    const mr = mediaRecorderRef.current;
-    if (!mr) return;
+    if (!recordingRef.current) return;
     stopReasonRef.current = reason;
+    recordingRef.current = false;
     const recognition = recognitionRef.current;
     if (recognition) {
       try { recognition.stop(); } catch { /* */ }
     }
-    if (mr.state !== 'inactive') {
-      try { mr.stop(); } catch { /* */ }
+    const elapsed = Date.now() - startedAtRef.current;
+    const heardSomething = hasSpokenRef.current || !!(liveTranscriptRef.current || committedTranscriptRef.current);
+    const blob = encodePcmAsWav(pcmChunksRef.current, sampleRateRef.current);
+    cleanupRecognition();
+    cleanupAudio();
+
+    if (!heardSomething || elapsed < MIN_RECORD_MS || blob.size < 2048) {
+      setPhase('idle');
+      setAudioLevel(0);
+      if (reason !== 'silence') toast.error("I didn't catch any speech. Try again.");
+      return;
     }
-  }, []);
+
+    setPhase('processing');
+    setAudioLevel(0);
+    void smartCapture(blob, liveTranscriptRef.current || committedTranscriptRef.current, languageRef.current)
+      .then((result) => {
+        setTranscript(result.transcript);
+        setAiResult(result);
+        if (typeAuto) setType(result.type);
+        setPhase('ready');
+      })
+      .catch((err: unknown) => {
+        console.error('transcribe failed', err);
+        const message = err instanceof Error ? err.message : 'Transcription failed';
+        setErrorMsg(message);
+        toast.error(message);
+        setPhase('error');
+      });
+  }, [cleanupAudio, cleanupRecognition, typeAuto]);
 
   const startRecording = useCallback(async () => {
-    if (mediaRecorderRef.current) return;
+    if (recordingRef.current) return;
     setErrorMsg(null);
     setTranscript('');
     setAiResult(null);
@@ -277,8 +295,7 @@ export default function VoiceCapture() {
       if (recognitionRef.current !== recognition) return;
       if (
         !stopReasonRef.current &&
-        mediaRecorderRef.current &&
-        mediaRecorderRef.current.state === 'recording'
+         recordingRef.current
       ) {
         // A restarted session numbers its results from zero again.
         lastFinalResultIndexRef.current = 0;
@@ -289,78 +306,31 @@ export default function VoiceCapture() {
     recognitionRef.current = recognition;
     }
 
-    const mimeType = pickMimeType();
-    let mr: MediaRecorder;
-    try {
-      mr = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-    } catch (err) {
-      console.error('MediaRecorder init failed', err);
-      cleanupAudio();
-      setErrorMsg('Recording is not supported in this browser.');
-      setPhase('error');
-      return;
-    }
-
-    chunksRef.current = [];
-    mr.ondataavailable = (ev) => {
-      if (ev.data && ev.data.size > 0) chunksRef.current.push(ev.data);
-    };
-
-    mr.onstop = async () => {
-      cleanupRecognition();
-      cleanupAudio();
-      const blob = new Blob(chunksRef.current, { type: mr.mimeType || mimeType || 'audio/webm' });
-      mediaRecorderRef.current = null;
-
-      const elapsed = Date.now() - startedAtRef.current;
-      const reason = stopReasonRef.current;
-      stopReasonRef.current = null;
-
-      const heardSomething = hasSpokenRef.current || !!(liveTranscriptRef.current || committedTranscriptRef.current);
-      if (!heardSomething || elapsed < MIN_RECORD_MS || (blob.size < 1500 && !liveTranscriptRef.current)) {
-        setPhase('idle');
-        setAudioLevel(0);
-        if (reason === 'silence') {
-          // silently reset; nothing was said
-          return;
-        }
-        toast.error("I didn't catch any speech. Try again.");
-        return;
-      }
-
-      setPhase('processing');
-      setAudioLevel(0);
-      try {
-        const result = await smartCapture(
-          blob,
-          liveTranscriptRef.current || committedTranscriptRef.current,
-          languageRef.current,
-        );
-        setTranscript(result.transcript);
-        setAiResult(result);
-        if (typeAuto) setType(result.type);
-        setPhase('ready');
-      } catch (err) {
-        console.error('transcribe failed', err);
-        const message = err instanceof Error ? err.message : 'Transcription failed';
-        setErrorMsg(message);
-        toast.error('Transcription failed. ' + message);
-        setPhase('error');
-      }
-    };
-
     // Audio level + VAD via WebAudio
     try {
       const Ctx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const silentGain = ctx.createGain();
+      silentGain.gain.value = 0;
       analyser.fftSize = 1024;
       analyser.smoothingTimeConstant = 0.6;
       source.connect(analyser);
+      source.connect(processor);
+      processor.connect(silentGain);
+      silentGain.connect(ctx.destination);
+      processor.onaudioprocess = (event) => {
+        if (!recordingRef.current) return;
+        pcmChunksRef.current.push(new Float32Array(event.inputBuffer.getChannelData(0)));
+      };
       audioCtxRef.current = ctx;
       sourceRef.current = source;
       analyserRef.current = analyser;
+      processorRef.current = processor;
+      silentGainRef.current = silentGain;
+      sampleRateRef.current = ctx.sampleRate;
 
       const buffer = new Float32Array(analyser.fftSize);
       const tick = () => {
@@ -404,19 +374,19 @@ export default function VoiceCapture() {
       console.warn('audio meter init failed', err);
     }
 
-    mediaRecorderRef.current = mr;
+    pcmChunksRef.current = [];
+    recordingRef.current = true;
     startedAtRef.current = Date.now();
     lastVoiceAtRef.current = Date.now();
     hasSpokenRef.current = false;
     try {
-      mr.start(250);
       try { recognition?.start(); } catch { /* live preview is optional */ }
       setPhase('listening');
     } catch (err) {
-      console.error('mr.start failed', err);
+      console.error('recording start failed', err);
       cleanupRecognition();
       cleanupAudio();
-      mediaRecorderRef.current = null;
+      recordingRef.current = false;
       setErrorMsg('Could not start recording. Try again.');
       setPhase('error');
     }
@@ -425,17 +395,16 @@ export default function VoiceCapture() {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      try { mediaRecorderRef.current?.stop(); } catch { /* */ }
+      recordingRef.current = false;
       cleanupRecognition();
       cleanupAudio();
     };
   }, [cleanupAudio, cleanupRecognition]);
 
   const handleClose = useCallback(() => {
-    try { mediaRecorderRef.current?.stop(); } catch { /* */ }
+    recordingRef.current = false;
     cleanupRecognition();
     cleanupAudio();
-    mediaRecorderRef.current = null;
     setOpen(false);
     setPhase('idle');
     setErrorMsg(null);
