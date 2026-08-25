@@ -117,6 +117,32 @@ function chunk<T>(arr: T[], size: number): T[][] {
     return out;
 }
 
+// ─── Validation ──────────────────────────────────────────────────────────────
+// A corrupt cloud row must never be written into the local database.
+
+const REQUIRED_FIELDS: Record<string, string[]> = {
+    tasks: ['title'],
+    websites: ['name'],
+    notes: ['title'],
+    links: ['title'],
+    repos: ['name'],
+    buildProjects: ['name'],
+    ideas: ['title'],
+    credentials: ['label'],
+    customModules: ['name'],
+    habits: ['name'],
+};
+
+function isValidRecord(collection: string, data: any, recordId: string): boolean {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+    if (typeof data.id !== 'string' || !data.id) return false;
+    if (recordId && data.id !== recordId) return false;
+    for (const field of REQUIRED_FIELDS[collection] ?? []) {
+        if (typeof data[field] !== 'string') return false;
+    }
+    return true;
+}
+
 // ─── Pull: cloud → local ─────────────────────────────────────────────────────
 
 export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; error?: string }> {
