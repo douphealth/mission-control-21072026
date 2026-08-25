@@ -7,7 +7,7 @@ import {
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect } from "@/components/FormModal";
 import type { CredentialVault } from "@/lib/db";
 import { toast } from "sonner";
-import { encrypt, decrypt } from "@/lib/encryption";
+import { encrypt, decryptOrNull } from "@/lib/encryption";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
