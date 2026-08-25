@@ -249,7 +249,7 @@ export default function SnapCapture() {
             onMouseUp={handleFABUp}
             onMouseLeave={() => { if (longPressTimer.current) clearTimeout(longPressTimer.current); }}
             onTouchStart={handleFABDown}
-            onTouchEnd={(e) => { e.preventDefault(); handleFABUp(); }}
+            onTouchEnd={(e) => { e.preventDefault(); handleFABUp(e); }}
             onContextMenu={(e) => { e.preventDefault(); setShowActions(true); }}
             className="w-14 h-14 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-150"
             title="Tap: camera · Long-press / right-click: more options"
