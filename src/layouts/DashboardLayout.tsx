@@ -142,6 +142,8 @@ export default function DashboardLayout() {
       </div>
       {/* Mobile bottom navigation */}
       <MobileBottomNav />
+      {/* Instant photo capture → AI import */}
+      <SnapCapture />
       {/* Voice capture — lazy-loaded floating mic */}
       <Suspense fallback={null}>
         <VoiceCapture />
