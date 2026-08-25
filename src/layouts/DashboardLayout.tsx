@@ -13,6 +13,7 @@ import { useNavigationStore } from '@/stores/navigationStore';
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import GoogleTasksPage from '@/pages/GoogleTasksPage';
+import SnapCapture from '@/components/SnapCapture';
 
 const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
 
@@ -142,6 +143,8 @@ export default function DashboardLayout() {
       </div>
       {/* Mobile bottom navigation */}
       <MobileBottomNav />
+      {/* Instant photo capture → AI import */}
+      <SnapCapture />
       {/* Voice capture — lazy-loaded floating mic */}
       <Suspense fallback={null}>
         <VoiceCapture />
