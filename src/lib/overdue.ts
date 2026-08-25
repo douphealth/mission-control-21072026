@@ -54,9 +54,7 @@ export interface DailyBriefing {
 }
 
 export function buildBriefing(tasks: Task[], today = todayISO()): DailyBriefing {
-  const tomorrow = new Date(new Date(`${today}T00:00:00`).getTime() + 86_400_000)
-    .toISOString()
-    .slice(0, 10);
+  const tomorrow = addDaysLocal(today, 1);
 
   const open = tasks.filter((t) => t.status !== 'done');
   const overdue = sortTasks(open.filter((t) => t.dueDate && t.dueDate < today));
