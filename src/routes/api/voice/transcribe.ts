@@ -4,6 +4,7 @@ const AI_BASE = 'https://ai.gateway.lovable.dev/v1';
 const STT_MODEL = 'openai/gpt-4o-transcribe';
 const CLASSIFY_MODEL = 'google/gemini-2.5-flash';
 const MAX_BYTES = 20 * 1024 * 1024;
+const ACCEPTED_AUDIO = new Set(['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/wave']);
 
 const EXT_BY_MIME: Record<string, string> = {
   'audio/webm': 'webm',
@@ -103,8 +104,13 @@ async function transcribe(apiKey: string, file: File, language?: string): Promis
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
+    let message = detail;
+    try {
+      const parsed = JSON.parse(detail) as { error?: { message?: string } | string; message?: string };
+      message = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || parsed.message || detail;
+    } catch { /* keep upstream text */ }
     throw new Response(
-      JSON.stringify({ error: `Transcription failed (${res.status})`, detail: detail.slice(0, 500) }),
+      JSON.stringify({ error: message.slice(0, 500) || `Transcription failed (${res.status})` }),
       { status: res.status, headers: { 'Content-Type': 'application/json' } },
     );
   }
@@ -175,6 +181,8 @@ export const Route = createFileRoute('/api/voice/transcribe')({
           return json({ error: 'No audio received.' }, 400);
         }
         if (file.size > MAX_BYTES) return json({ error: 'Recording is too large.' }, 413);
+        const mime = (file.type || '').split(';')[0];
+        if (!ACCEPTED_AUDIO.has(mime)) return json({ error: 'Unsupported audio format. Please record again.' }, 400);
 
         try {
           let transcript = await transcribe(apiKey, file, language);

@@ -53,7 +53,7 @@ export async function smartCapture(
     const data = (await res.json().catch(() => ({}))) as ServerResponse;
 
     if (!res.ok || !data.transcript) {
-      if (browserTranscript.trim()) {
+      if (!audio && browserTranscript.trim()) {
         return { ...classifyTranscript(browserTranscript), source: 'local' };
       }
       throw new Error(data.error || 'Could not transcribe the recording.');
@@ -90,7 +90,7 @@ export async function smartCapture(
 
     return result;
   } catch (err) {
-    if (browserTranscript.trim()) {
+    if (!audio && browserTranscript.trim()) {
       return { ...classifyTranscript(browserTranscript), source: 'local' };
     }
     throw err instanceof Error ? err : new Error('Transcription failed');
