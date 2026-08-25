@@ -448,7 +448,7 @@ class MissionControlDB extends Dexie {
 
         // Review loop reads tasks by staleness and archive state — index both.
         this.version(4).stores({
-            tasks: 'id, title, priority, status, dueDate, category, createdAt, gcalEventId, touchedAt, archived',
+            tasks: 'id, title, priority, status, dueDate, category, createdAt, gcalEventId, touchedAt',
         });
     }
 }

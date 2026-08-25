@@ -88,10 +88,11 @@ export default function CredentialsPage() {
     if (masterLocked) { toast.error("Unlock the vault first"); return; }
     if (credential && !decryptedCache[id]) {
       const [password, apiKey] = await Promise.all([
-        credential.password ? decrypt(credential.password) : Promise.resolve(""),
-        credential.apiKey ? decrypt(credential.apiKey) : Promise.resolve(""),
+        credential.password ? decryptOrNull(credential.password) : Promise.resolve(""),
+        credential.apiKey ? decryptOrNull(credential.apiKey) : Promise.resolve(""),
       ]);
-      setDecryptedCache(prev => ({ ...prev, [id]: { password, apiKey } }));
+      if (password === null || apiKey === null) toast.error("Some secrets could not be decrypted with this vault key");
+      setDecryptedCache(prev => ({ ...prev, [id]: { password: password ?? "\u26a0\ufe0f unable to decrypt", apiKey: apiKey ?? "\u26a0\ufe0f unable to decrypt" } }));
     }
     setRevealed(prev => {
       const n = new Set(prev);
@@ -105,7 +106,8 @@ export default function CredentialsPage() {
 
   const copySecret = async (rawValue: string, label: string) => {
     if (masterLocked) { toast.error("Unlock the vault first"); return; }
-    const decrypted = await decrypt(rawValue);
+    const decrypted = await decryptOrNull(rawValue);
+    if (decrypted === null) { toast.error(`${label} could not be decrypted with this vault key`); return; }
     navigator.clipboard.writeText(decrypted);
     toast.success(`${label} copied to clipboard`);
   };
@@ -114,9 +116,10 @@ export default function CredentialsPage() {
   const openEdit = async (c: CredentialVault) => {
     setEditId(c.id);
     const { id, ...rest } = c;
-    const decPassword = rest.password ? await decrypt(rest.password) : "";
-    const decApiKey = rest.apiKey ? await decrypt(rest.apiKey) : "";
-    setForm({ ...rest, password: decPassword, apiKey: decApiKey });
+    const decPassword = rest.password ? await decryptOrNull(rest.password) : "";
+    const decApiKey = rest.apiKey ? await decryptOrNull(rest.apiKey) : "";
+    if (decPassword === null || decApiKey === null) toast.error("Some secrets could not be decrypted — editing will not overwrite them unless you change the field");
+    setForm({ ...rest, password: decPassword ?? "", apiKey: decApiKey ?? "" });
     setModalOpen(true);
   };
 
