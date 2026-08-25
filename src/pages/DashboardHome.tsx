@@ -193,6 +193,22 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
     });
   }, [tasks, rangeDays, buckets, today]);
   const rangeCompleted = taskWave.reduce((s, n) => s + n, 0);
+  const previousRangeCompleted = useMemo(() => {
+    const end = new Date(`${today}T00:00:00`).getTime() - rangeDays * 86_400_000;
+    const start = end - (rangeDays - 1) * 86_400_000;
+    return tasks.filter(task => {
+      const stamp = (task.completedAt || '').slice(0, 10);
+      if (!stamp) return false;
+      const completed = new Date(`${stamp}T00:00:00`).getTime();
+      return completed >= start && completed <= end;
+    }).length;
+  }, [tasks, rangeDays, today]);
+  const completionChange = previousRangeCompleted > 0
+    ? Math.round(((rangeCompleted - previousRangeCompleted) / previousRangeCompleted) * 100)
+    : rangeCompleted > 0 ? 100 : 0;
+  const maxWave = Math.max(...taskWave, 1);
+  const peakIndex = taskWave.indexOf(maxWave);
+  const periodLabel = chartRange === '1W' ? '7 days' : chartRange === '1M' ? '30 days' : chartRange === '3M' ? '90 days' : '12 months';
   const hour = clock.getHours();
   const greet = hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const dateLabel = clock.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
@@ -329,47 +345,55 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
       {/* ═══ ANALYTICS (7) + POMODORO (5) ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Performance chart */}
-        <div {...fu(6)} className="lg:col-span-8 enterprise-card rounded-[28px] p-6 sm:p-7">
-          <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
+        <div {...fu(6)} className="lg:col-span-8 relative overflow-hidden rounded-[28px] border border-border/70 bg-card p-5 shadow-[var(--shadow-md)] sm:p-7">
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-info to-violet" />
+          <div className="pointer-events-none absolute right-0 top-0 h-48 w-64 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.14),transparent_68%)]" />
+          <div className="relative flex items-start justify-between flex-wrap gap-4 mb-6">
             <div>
-              <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Productivity</div>
-              <h3 className="text-[22px] font-extrabold tracking-tight text-foreground">Weekly performance</h3>
-              <p className="text-[12px] text-muted-foreground mt-1">
-                {rangeCompleted} task{rangeCompleted === 1 ? '' : 's'} completed · last {rangeDays} days
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="inline-flex rounded-2xl bg-secondary p-1 text-[11px] font-semibold">
-                {(['1W', '1M', '3M', '1Y'] as const).map(v => (
-                  <button key={v} onClick={() => setChartRange(v)}
-                    className={`px-3 py-1.5 rounded-xl transition ${chartRange === v ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
-                ))}
+              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase text-primary">
+                <Activity size={11} /> Productivity pulse
               </div>
-              <button className="w-9 h-9 rounded-2xl bg-secondary hover:bg-secondary/70 flex items-center justify-center text-muted-foreground"><MoreHorizontal size={16} /></button>
+              <h3 className="text-[22px] font-extrabold text-foreground sm:text-[26px]">Weekly performance</h3>
+              <p className="mt-1 text-[12px] text-muted-foreground">A live view of momentum across the last {periodLabel}</p>
+            </div>
+            <div className="inline-flex rounded-xl border border-border/70 bg-secondary/70 p-1 text-[11px] font-semibold shadow-inner" role="group" aria-label="Performance range">
+                {(['1W', '1M', '3M', '1Y'] as const).map(v => (
+                  <button key={v} type="button" onClick={() => setChartRange(v)} aria-pressed={chartRange === v}
+                    className={`min-w-10 rounded-lg px-2.5 py-2 transition-all ${chartRange === v ? 'bg-card text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-card/60 hover:text-foreground'}`}>{v}</button>
+                ))}
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-5">
+          <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-3 mb-5">
             {[
-              { hue: 'emerald' as const, lbl: 'Completed', val: done.length, delta: '+18%' },
-              { hue: 'amber'   as const, lbl: 'Active',    val: inProgress.length, delta: '+4%' },
-              { hue: 'rose'    as const, lbl: 'Overdue',   val: overdue, delta: overdue ? '⚠️' : 'clear' },
+              { hue: 'emerald' as const, lbl: 'Completed', val: rangeCompleted, delta: `${completionChange >= 0 ? '+' : ''}${completionChange}% vs prior`, icon: CheckSquare },
+              { hue: 'sky' as const, lbl: 'In motion', val: inProgress.length, delta: `${open.length} total open`, icon: Zap },
+              { hue: 'rose' as const, lbl: 'Needs attention', val: overdue, delta: overdue ? 'Overdue now' : 'All clear', icon: Bell },
             ].map(m => (
-              <div key={m.lbl} className="rounded-2xl p-4 border border-border/60 bg-secondary/40">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full" style={{ background: HUES[m.hue].grad }} />
+              <div key={m.lbl} className="group rounded-2xl border border-border/60 bg-secondary/35 p-4 transition hover:-translate-y-0.5 hover:bg-secondary/55 hover:shadow-sm">
+                <div className="mb-3 flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-muted-foreground">{m.lbl}</span>
+                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg bg-${m.hue === 'emerald' ? 'primary' : m.hue === 'rose' ? 'destructive' : 'info'}/10 text-${m.hue === 'emerald' ? 'primary' : m.hue === 'rose' ? 'destructive' : 'info'}`}><m.icon size={13} /></span>
                 </div>
-                <div className="flex items-end justify-between">
-                  <span className="text-2xl font-extrabold tabular-nums text-foreground">{m.val}</span>
-                  <span className="text-[10px] font-bold text-muted-foreground">{m.delta}</span>
+                <div className="flex items-end justify-between gap-2">
+                  <span className="text-[30px] font-extrabold leading-none tabular-nums text-foreground">{m.val}</span>
+                  <span className={`text-right text-[10px] font-bold ${m.hue === 'rose' && overdue ? 'text-destructive' : 'text-muted-foreground'}`}>{m.delta}</span>
                 </div>
               </div>
             ))}
           </div>
 
-          <div className="h-[180px] -mx-2">
-            <AreaChart data={taskWave} tone="emerald" />
+          <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-secondary/20 px-2 pt-6">
+            <div className="absolute left-4 top-3 flex items-center gap-2 text-[10px] font-semibold text-muted-foreground">
+              <TrendingUp size={12} className="text-primary" /> Peak output: {maxWave} task{maxWave === 1 ? '' : 's'} in period {peakIndex + 1}
+            </div>
+            <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-border/50" />
+            <div className="h-[180px] -mx-2">
+              <AreaChart data={taskWave} tone="emerald" />
+            </div>
+            <div className="flex items-center justify-between border-t border-border/50 px-3 py-3 text-[10px] font-semibold text-muted-foreground">
+              <span>Earlier</span><span className="text-primary">{rangeCompleted} completed</span><span>Today</span>
+            </div>
           </div>
         </div>
 
