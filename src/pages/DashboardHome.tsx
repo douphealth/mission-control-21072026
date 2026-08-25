@@ -206,8 +206,8 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   const completionChange = previousRangeCompleted > 0
     ? Math.round(((rangeCompleted - previousRangeCompleted) / previousRangeCompleted) * 100)
     : rangeCompleted > 0 ? 100 : 0;
-  const maxWave = Math.max(...taskWave, 1);
-  const peakIndex = taskWave.indexOf(maxWave);
+  const maxWave = Math.max(...taskWave, 0);
+  const peakIndex = maxWave > 0 ? taskWave.indexOf(maxWave) : -1;
   const periodLabel = chartRange === '1W' ? '7 days' : chartRange === '1M' ? '30 days' : chartRange === '3M' ? '90 days' : '12 months';
   const hour = clock.getHours();
   const greet = hour < 5 ? 'Working late' : hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
@@ -392,7 +392,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
 
           <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-secondary/20 px-2 pt-6">
             <div className="absolute left-4 top-3 flex items-center gap-2 text-[10px] font-semibold text-muted-foreground">
-              <TrendingUp size={12} className="text-primary" /> Peak output: {maxWave} task{maxWave === 1 ? '' : 's'} in period {peakIndex + 1}
+              <TrendingUp size={12} className="text-primary" /> {peakIndex >= 0 ? `Peak output: ${maxWave} task${maxWave === 1 ? '' : 's'} in period ${peakIndex + 1}` : 'Complete a task to start your momentum curve'}
             </div>
             <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-border/50" />
             <div className="h-[180px] -mx-2">
