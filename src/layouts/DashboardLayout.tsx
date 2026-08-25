@@ -13,6 +13,7 @@ import { useNavigationStore } from '@/stores/navigationStore';
 import React, { lazy, Suspense } from 'react';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import GoogleTasksPage from '@/pages/GoogleTasksPage';
+import SnapCapture from '@/components/SnapCapture';
 
 const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
 
