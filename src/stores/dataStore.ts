@@ -140,9 +140,12 @@ export const useDataStore = create<DataState>((set, _get) => ({
         const tableRef = getTable(table);
         if (!tableRef) throw new Error(`Unknown table: ${table}`);
         // ─── Duplicate check ───────────────────────────────────────────────
+        // Never return an empty id: callers use it to navigate/select. If the
+        // record already exists we hand back the *existing* row's id.
         if (await isDuplicate(table, item)) {
-            console.warn(`⚠️ Duplicate detected in "${table}", skipping:`, item);
-            return '';
+            const existingId = await findDuplicateId(table, item);
+            console.warn(`⚠️ Duplicate detected in "${table}", reusing existing record:`, existingId);
+            if (existingId) return existingId;
         }
         await tableRef.put({ ...item, id });
         schedulePush();
