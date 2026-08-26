@@ -77,18 +77,58 @@ export function onCloudStatus(cb: (s: CloudStatus, err: string | null) => void) 
 
 // ─── Auth helpers ────────────────────────────────────────────────────────────
 
+async function waitForSession(ms = 8000): Promise<boolean> {
+    const deadline = Date.now() + ms;
+    while (Date.now() < deadline) {
+        const { data } = await supabase.auth.getSession();
+        if (data.session) return true;
+        await new Promise((r) => setTimeout(r, 400));
+    }
+    return false;
+}
+
 export async function signInToCloud() {
     try {
         setStatus('connecting');
-        const res: any = await lovable.auth.signInWithOAuth('google', {
-            redirect_uri: window.location.origin,
-        });
-        if (res?.error) throw res.error;
+
+        // Already signed in? Skip the popup entirely.
+        const existing = await supabase.auth.getSession();
+        if (existing.data.session) { await startCloudSync(true); return; }
+
+        let res: any = null;
+        let popupError: any = null;
+        try {
+            res = await lovable.auth.signInWithOAuth('google', {
+                redirect_uri: window.location.origin,
+            });
+        } catch (e) {
+            popupError = e;
+        }
+
+        // Full-page redirect flow — the browser is navigating away.
+        if (res?.redirected) return;
+
+        // The popup may report "cancelled" even when the session landed
+        // (window closed right after the token was delivered) — verify first.
+        if (popupError || res?.error) {
+            if (await waitForSession(2500)) { await startCloudSync(true); return; }
+            const msg = String(popupError?.message ?? res?.error?.message ?? res?.error ?? '');
+            if (/cancel|closed|popup/i.test(msg)) {
+                throw new Error('Google sign-in window was closed before finishing. Allow pop-ups for this site and try again.');
+            }
+            throw new Error(msg || 'Sign-in failed');
+        }
+
+        if (!(await waitForSession())) {
+            throw new Error('Google sign-in did not complete. Allow pop-ups for this site, then retry.');
+        }
+
         await startCloudSync(true);
     } catch (e: any) {
         setStatus('error', e?.message ?? 'Sign-in failed');
     }
 }
+
 
 export async function signOutOfCloud() {
     try { await supabase.auth.signOut(); } catch { }
