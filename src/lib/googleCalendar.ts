@@ -205,12 +205,14 @@ export async function createGCalEvent(
   },
   deterministicId?: string,
 ): Promise<GoogleCalendarEvent> {
+  await requireAppSession();
   return createOrUpdateGoogleCalendarEvent({ data: { calendarId, event, deterministicId } }) as Promise<GoogleCalendarEvent>;
 }
 
 export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): Promise<boolean> {
   if (!eventId) return false;
   try {
+    await requireAppSession();
     await deleteGoogleCalendarEvent({ data: { calendarId, eventId } });
     return true;
   } catch (e: any) {
@@ -218,6 +220,7 @@ export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): 
     return false;
   }
 }
+
 
 export async function pushTaskToGCal(task: {
   title: string;
