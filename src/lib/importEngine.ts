@@ -376,10 +376,45 @@ function extractCurrency(text: string): string {
 }
 
 function extractAmount(text: string): number {
-  const m = text.match(/[$€£¥₹]?\s*([\d,]+(?:\.\d{1,2})?)/);
-  if (m) return parseFloat(m[1].replace(/,/g, ''));
+  const m = text.match(/[$€£¥₹]?\s*(\d[\d.,\s]*\d|\d)/);
+  if (m) return parseMoney(m[1]) ?? 0;
   return 0;
 }
+
+/** Parses "1.234,56", "1,234.56", "1234,56 €", "€ 89,30" → number */
+function parseMoney(raw: string): number | null {
+  if (!raw) return null;
+  let s = String(raw).replace(/[^\d.,\-]/g, '').trim();
+  if (!s) return null;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma > -1 && lastDot > -1) {
+    // whichever comes last is the decimal separator
+    if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (lastComma > -1) {
+    const decimals = s.length - lastComma - 1;
+    s = decimals === 3 && !/,\d{3}$/.test(s.replace(/^.*(,\d{3})$/, '$1')) === false
+      ? s.replace(/,/g, '')      // thousands grouping like 1,234
+      : s.replace(',', '.');     // decimal comma like 89,30
+  }
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Maps free-form / multilingual payment status text to paid | pending | overdue | cancelled */
+function normalizePaymentStatus(raw: string | undefined, context: string): string {
+  const t = `${raw || ''}`.toLowerCase().trim();
+  if (/^(paid|settled|complete[d]?|cleared|εξοφλ|πληρωμ)/.test(t) || t === 'true' || t === 'yes') return 'paid';
+  if (/^(overdue|late|past.?due|ληξιπρ)/.test(t)) return 'overdue';
+  if (/^(cancel|void|ακυρ)/.test(t)) return 'cancelled';
+  if (/^(pending|unpaid|due|open|outstanding|απλήρωτ|εκκρεμ|οφειλ)/.test(t)) return 'pending';
+  const c = context.toLowerCase();
+  if (/\b(paid|εξοφλήθηκε|εξοφληση|εξοφλημένο|πληρώθηκε)\b/.test(c)) return 'paid';
+  if (/\b(unpaid|outstanding|απλήρωτο|εκκρεμεί|οφειλή|πληρωτέο)\b/.test(c)) return 'pending';
+  return 'pending';
+}
+
 
 // ─── NLP Task Extraction (from natural language sentences) ────────────────────
 
