@@ -1237,20 +1237,29 @@ export function normalizeItems(
       case 'payments': {
         const amountStr = get(row, 'amount');
         const allVals = Object.values(row).join(' ');
-        const amount = amountStr ? (parseFloat(amountStr.replace(/[^0-9.\-]/g, '')) || 0) : extractAmount(allVals);
+        const amount = amountStr ? (parseMoney(amountStr) ?? extractAmount(allVals)) : extractAmount(allVals);
         const rawDueDate = get(row, 'dueDate');
+        const rawPaidDate = get(row, 'paidDate');
+        const status = normalizePaymentStatus(get(row, 'status'), allVals);
+        const dueDate = rawDueDate ? (parseNaturalDate(rawDueDate) || rawDueDate) : now;
+        const paidDate = rawPaidDate
+          ? (parseNaturalDate(rawPaidDate) || rawPaidDate)
+          : (status === 'paid' ? (dueDate || now) : '');
+        const isOverdue = status === 'pending' && !!dueDate && dueDate < now;
         return {
           title: get(row, 'title') || 'Untitled', amount,
           currency: get(row, 'currency') || extractCurrency(allVals),
           type: get(row, 'type') || extractPaymentType(allVals) || 'expense',
-          status: get(row, 'status') || 'pending', category: get(row, 'category') || 'Other',
+          status: isOverdue ? 'overdue' : status,
+          category: get(row, 'category') || 'Other',
           from: get(row, 'from'), to: get(row, 'to'),
-          dueDate: rawDueDate ? (parseNaturalDate(rawDueDate) || rawDueDate) : now,
-          paidDate: '', linkedProject: '',
+          dueDate,
+          paidDate, linkedProject: '',
           recurring: toBool(get(row, 'recurring')), recurringInterval: '',
           notes: get(row, 'notes'), createdAt: now,
         };
       }
+
       case 'notes':
         return {
           title: get(row, 'title') || Object.values(row).find(v => v?.trim()) || 'Untitled',
