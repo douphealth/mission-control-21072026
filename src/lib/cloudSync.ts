@@ -399,8 +399,12 @@ export async function startCloudSync(force = false): Promise<{ signedIn: boolean
         return { signedIn: false, restored: 0 };
     }
 
+    // Flush journaled local edits first. If the request fails, pullFromCloud
+    // preserves those dirty records and cannot roll them back.
+    const hadPendingChanges = Object.keys(readDirtyRecords()).length > 0;
+    if (hadPendingChanges) await pushNow();
     const pulled = await pullFromCloud();
-    await pushNow();
+    if (!hadPendingChanges) await pushNow();
     bindRealtime();
 
     if (!force) {
@@ -411,7 +415,7 @@ export async function startCloudSync(force = false): Promise<{ signedIn: boolean
             hydrated = false;
             realtimeBound = false;
             if (!userId) { setStatus('signed-out'); return; }
-            void (async () => { await pullFromCloud(); await pushNow(); bindRealtime(); })();
+            void (async () => { await pushNow(); await pullFromCloud(); bindRealtime(); })();
         });
 
         window.addEventListener('online', () => { if (userId) void forceCloudSync(); });

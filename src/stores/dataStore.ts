@@ -373,8 +373,13 @@ export const useDataStore = create<DataState>((set, _get) => ({
                 const { useSettingsStore } = await import('@/stores/settingsStore');
                 await useSettingsStore.getState().updateSettings({ [key]: value } as any);
             } else if (tableMap[key] && Array.isArray(value)) {
+                const previousIds = (await tableMap[key].toArray()).map((row: any) => row.id as string);
                 await tableMap[key].clear();
                 if (value.length > 0) await tableMap[key].bulkPut(value);
+                const nextIds = value.map((row: any) => row.id as string).filter(Boolean);
+                markCloudRecordsDirty(key, nextIds);
+                const nextIdSet = new Set(nextIds);
+                markCloudRecordsDirty(key, previousIds.filter(id => !nextIdSet.has(id)), 'delete');
             }
         }
         schedulePush();
