@@ -146,7 +146,9 @@ export async function deleteGoogleCalendarEventServer(input: { calendarId: strin
     );
     return { deleted: true };
   } catch (error: any) {
-    if (/\(404\)/.test(error?.message || '')) return { deleted: true };
+    // Google returns 404 when the event is absent and 410 when it exists only
+    // as a deleted tombstone. Both mean the requested end state is satisfied.
+    if (/\((?:404|410)\)/.test(error?.message || '')) return { deleted: true };
     throw error;
   }
 }
