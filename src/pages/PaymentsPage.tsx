@@ -65,7 +65,10 @@ export default function PaymentsPage() {
     toast.success("Marked as paid");
   };
   const uf = (field: keyof typeof form, val: any) => setForm(f => ({ ...f, [field]: val }));
-  const fmt = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+  const fmt = (n: number, currency = "USD") => {
+    try { return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "USD" }).format(n); }
+    catch { return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n); }
+  };
 
   const bulkDelete = useCallback(() => {
     if (bulk.selectedCount === 0) return;
@@ -184,9 +187,13 @@ export default function PaymentsPage() {
             <div className="flex items-center justify-between sm:justify-end gap-3">
               <div className="text-left sm:text-right flex-shrink-0">
                 <div className={`text-sm font-bold ${payment.type === "income" || payment.type === "invoice" ? "text-success" : "text-card-foreground"}`}>
-                  {payment.type === "income" || payment.type === "invoice" ? "+" : "-"}{fmt(payment.amount)}
+                  {payment.type === "income" || payment.type === "invoice" ? "+" : "-"}{fmt(payment.amount, payment.currency)}
                 </div>
-                <div className="text-[10px] text-muted-foreground">{payment.dueDate || payment.paidDate}</div>
+                <div className="text-[10px] text-muted-foreground">
+                  {payment.status === "paid"
+                    ? `Paid ${payment.paidDate || payment.dueDate || ""}`
+                    : payment.dueDate ? `Due ${payment.dueDate}` : ""}
+                </div>
               </div>
               <span className={`${statusBadge[payment.status]} text-[10px] flex-shrink-0`}>{payment.status}</span>
               {!bulk.bulkMode && (
