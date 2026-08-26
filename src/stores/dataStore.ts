@@ -11,7 +11,7 @@ import type {
     UserSettings, WidgetLayout,
 } from '@/lib/db';
 import { isSupabaseConnected, pushToSupabase } from '@/lib/supabase';
-import { queueCloudPush } from '@/lib/cloudSync';
+import { markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from '@/lib/cloudSync';
 
 import { isDuplicate, deduplicateItems, findDuplicateId } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
@@ -148,6 +148,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
             if (existingId) return existingId;
         }
         await tableRef.put({ ...item, id });
+        markCloudRecordDirty(table, id);
         schedulePush();
         return id;
     },
@@ -161,6 +162,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
                 ? { ...changes, touchedAt: new Date().toISOString().split('T')[0] }
                 : (changes as any);
         await tableRef.update(id, patch);
+        markCloudRecordDirty(table, id);
         schedulePush();
     },
 
@@ -168,6 +170,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         const tableRef = getTable(table);
         if (!tableRef) throw new Error(`Unknown table: ${table}`);
         await tableRef.delete(id);
+        markCloudRecordDirty(table, id, 'delete');
         schedulePush();
     },
 
@@ -190,6 +193,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         if (clone.lastUpdated && !overrides.lastUpdated) clone.lastUpdated = now;
         if (clone.updatedAt && !overrides.updatedAt) clone.updatedAt = now;
         await tableRef.put(clone);
+        markCloudRecordDirty(table, newId);
         schedulePush();
         return newId;
     },
@@ -208,6 +212,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         }
         const withIds = unique.map(item => ({ ...item, id: genId() }));
         await tableRef.bulkPut(withIds);
+        markCloudRecordsDirty(table, withIds.map(item => item.id));
         schedulePush();
     },
 
@@ -331,6 +336,9 @@ export const useDataStore = create<DataState>((set, _get) => ({
             }
         });
         if (data.settings) await db.settings.put({ ...data.settings, id: 'default' });
+        for (const [key, , rows] of staged) {
+            markCloudRecordsDirty(key, rows.map((row: any) => row.id));
+        }
         // Reload settings
         const { useSettingsStore } = await import('@/stores/settingsStore');
         await useSettingsStore.getState().loadSettings();
