@@ -139,7 +139,7 @@ export const TARGET_META: Record<ImportTarget, TargetMeta> = {
   payments: {
     label: 'Payments', emoji: '💰',
     requiredFields: ['title', 'amount'],
-    optionalFields: ['currency', 'type', 'status', 'category', 'from', 'to', 'dueDate', 'recurring', 'notes'],
+    optionalFields: ['currency', 'type', 'status', 'category', 'from', 'to', 'dueDate', 'paidDate', 'recurring', 'notes'],
     aliases: {
       title: ['name', 'description', 'item', 'payment', 'invoice', 'label', 'memo', 'transaction'],
       amount: ['price', 'cost', 'value', 'total', 'sum', 'fee', 'charge', 'subtotal'],
@@ -149,7 +149,8 @@ export const TARGET_META: Record<ImportTarget, TargetMeta> = {
       category: ['group', 'cat'],
       from: ['sender', 'payer', 'source', 'client', 'buyer'],
       to: ['receiver', 'payee', 'recipient', 'vendor', 'seller'],
-      dueDate: ['due', 'deadline', 'due_date', 'date', 'invoice_date', 'payment_date'],
+      dueDate: ['due', 'deadline', 'due_date', 'date', 'invoice_date', 'payment_deadline'],
+      paidDate: ['paid_date', 'paid_on', 'payment_date', 'settled_on'],
       recurring: ['repeat', 'auto', 'subscription', 'recur'],
       notes: ['note', 'comment', 'memo', 'desc'],
     },
