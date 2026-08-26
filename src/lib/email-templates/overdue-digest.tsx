@@ -49,13 +49,17 @@ interface OverdueDigestProps {
 
 const APP_URL = 'https://mission-control-001.lovable.app'
 
-const PRIORITY: Record<string, { bg: string; fg: string; bar: string }> = {
-  critical: { bg: '#fee2e2', fg: '#b91c1c', bar: '#dc2626' },
-  high: { bg: '#ffedd5', fg: '#c2410c', bar: '#ea580c' },
-  medium: { bg: '#e0f2fe', fg: '#0369a1', bar: '#0284c7' },
-  low: { bg: '#ecfdf5', fg: '#047857', bar: '#10b981' },
-}
+const INK = '#0b1220'
+const MUTED = '#6b7c93'
+const LINE = '#e6ebf2'
+const EMERALD = '#0f9d76'
 
+const PRIORITY: Record<string, { bg: string; fg: string; bar: string }> = {
+  critical: { bg: '#fee2e2', fg: '#b42318', bar: '#e0342a' },
+  high: { bg: '#ffedd5', fg: '#b54708', bar: '#f07c1a' },
+  medium: { bg: '#e0f2fe', fg: '#026aa2', bar: '#2e90fa' },
+  low: { bg: '#ecfdf5', fg: '#067a5c', bar: '#12b886' },
+}
 const tone = (p?: string) => PRIORITY[(p || 'low').toLowerCase()] || PRIORITY['low']!
 
 const weekday = (iso?: string) => {
@@ -64,49 +68,101 @@ const weekday = (iso?: string) => {
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })
 }
+const shortDate = (iso?: string) => {
+  if (!iso) return ''
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+}
+const greeting = () => 'Good morning'
 
-const Stat = ({
+/** Simple table-based progress bar — renders everywhere, no CSS tricks. */
+const Meter = ({ pct, color }: { pct: number; color: string }) => {
+  const p = Math.max(2, Math.min(100, Math.round(pct)))
+  return (
+    <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={meterOuter}>
+      <tbody>
+        <tr>
+          <td
+            style={{
+              width: `${p}%`,
+              backgroundColor: color,
+              height: '8px',
+              borderRadius: '999px',
+              fontSize: '1px',
+              lineHeight: '8px',
+            }}
+          >
+            &nbsp;
+          </td>
+          <td style={{ height: '8px', fontSize: '1px', lineHeight: '8px' }}>&nbsp;</td>
+        </tr>
+      </tbody>
+    </table>
+  )
+}
+
+const StatTile = ({
   value,
   label,
   color,
+  bg,
 }: {
   value: number | string
   label: string
   color: string
+  bg: string
 }) => (
-  <Column style={statCell}>
-    <Text style={{ ...statValue, color }}>{value}</Text>
-    <Text style={statLabel}>{label}</Text>
+  <Column style={tileWrap}>
+    <table width="100%" cellPadding={0} cellSpacing={0} role="presentation">
+      <tbody>
+        <tr>
+          <td style={{ ...tile, backgroundColor: bg }}>
+            <Text style={{ ...tileValue, color }}>{value}</Text>
+            <Text style={tileLabel}>{label}</Text>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </Column>
 )
 
 const TaskCard = ({ task, index }: { task: DigestTask; index: number }) => {
   const t = tone(task.priority)
   return (
-    <Section style={{ ...card, borderLeft: `4px solid ${t.bar}` }}>
-      <Row>
-        <Column style={numCell}>
-          <Text style={num}>{index}</Text>
-        </Column>
-        <Column>
-          <Text style={taskTitle}>{task.title}</Text>
-          <Text style={metaLine}>
-            <span style={{ ...pill, backgroundColor: t.bg, color: t.fg }}>
-              {(task.priority || 'low').toUpperCase()}
-            </span>
-            <span style={metaText}>
-              {task.dueDate ? weekday(task.dueDate) : 'No due date'}
-              {task.startTime ? ` · ${task.startTime}` : ''}
-            </span>
-            {task.daysOverdue ? (
-              <span style={overduePill}>
-                {task.daysOverdue}d late
-              </span>
-            ) : null}
-          </Text>
-        </Column>
-      </Row>
-    </Section>
+    <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={cardTable}>
+      <tbody>
+        <tr>
+          <td style={{ ...accentCol, backgroundColor: t.bar }}>&nbsp;</td>
+          <td style={cardBody}>
+            <table width="100%" cellPadding={0} cellSpacing={0} role="presentation">
+              <tbody>
+                <tr>
+                  <td style={numCell}>
+                    <span style={{ ...numBadge, backgroundColor: t.bg, color: t.fg }}>{index}</span>
+                  </td>
+                  <td>
+                    <Text style={taskTitle}>{task.title}</Text>
+                    <Text style={metaLine}>
+                      <span style={{ ...pill, backgroundColor: t.bg, color: t.fg }}>
+                        {(task.priority || 'low').toUpperCase()}
+                      </span>
+                      <span style={metaText}>
+                        {task.dueDate ? shortDate(task.dueDate) : 'No due date'}
+                        {task.startTime ? ` · ${task.startTime}` : ''}
+                      </span>
+                      {task.daysOverdue ? (
+                        <span style={overduePill}>{task.daysOverdue}d late</span>
+                      ) : null}
+                    </Text>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
   )
 }
 
@@ -115,15 +171,18 @@ const Group = ({
   hint,
   tasks,
   accent,
+  emoji,
 }: {
   title: string
   hint: string
   tasks: DigestTask[]
   accent: string
+  emoji: string
 }) =>
   tasks.length ? (
     <Section style={group}>
       <Text style={{ ...groupTitle, color: accent }}>
+        <span style={groupEmoji}>{emoji}</span>
         {title}
         <span style={groupCount}>{tasks.length}</span>
       </Text>
@@ -134,49 +193,59 @@ const Group = ({
     </Section>
   ) : null
 
-const SEVERITY: Record<string, { bg: string; border: string; fg: string; tag: string }> = {
-  high: { bg: '#fef2f2', border: '#fecaca', fg: '#991b1b', tag: '#dc2626' },
-  medium: { bg: '#fffbeb', border: '#fde68a', fg: '#92400e', tag: '#d97706' },
-  low: { bg: '#f0fdf4', border: '#bbf7d0', fg: '#166534', tag: '#16a34a' },
+const SEVERITY: Record<string, { bg: string; border: string; fg: string; tag: string; icon: string }> = {
+  high: { bg: '#fff5f4', border: '#fecdca', fg: '#912018', tag: '#e0342a', icon: '▲' },
+  medium: { bg: '#fffaeb', border: '#fedf89', fg: '#93370d', tag: '#dc6803', icon: '●' },
+  low: { bg: '#f2fdf8', border: '#a6f4d0', fg: '#05603a', tag: '#12b886', icon: '✓' },
 }
 
 const IssueRow = ({ issue }: { issue: DigestIssue }) => {
   const s = SEVERITY[issue.severity || 'low'] || SEVERITY['low']!
   return (
-    <Section
-      style={{
-        backgroundColor: s.bg,
-        border: `1px solid ${s.border}`,
-        borderRadius: '12px',
-        padding: '12px 14px',
-        margin: '0 0 10px',
-      }}
-    >
-      <Text style={{ ...issueLabel, color: s.fg }}>
-        <span style={{ ...dot, backgroundColor: s.tag }} />
-        {issue.label}
-      </Text>
-      {issue.detail ? <Text style={{ ...issueDetail, color: s.fg }}>{issue.detail}</Text> : null}
-    </Section>
+    <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ margin: '0 0 10px' }}>
+      <tbody>
+        <tr>
+          <td
+            style={{
+              backgroundColor: s.bg,
+              border: `1px solid ${s.border}`,
+              borderRadius: '14px',
+              padding: '13px 16px',
+            }}
+          >
+            <Text style={{ ...issueLabel, color: s.fg }}>
+              <span style={{ color: s.tag, marginRight: '8px' }}>{s.icon}</span>
+              {issue.label}
+            </Text>
+            {issue.detail ? (
+              <Text style={{ ...issueDetail, color: s.fg }}>{issue.detail}</Text>
+            ) : null}
+          </td>
+        </tr>
+      </tbody>
+    </table>
   )
 }
 
 const DoneList = ({ tasks }: { tasks: DigestTask[] }) =>
   tasks.length ? (
     <Section style={group}>
-      <Text style={{ ...groupTitle, color: '#047857' }}>
-        Completed today
+      <Text style={{ ...groupTitle, color: '#05603a' }}>
+        <span style={groupEmoji}>🏆</span>
+        Completed
         <span style={groupCount}>{tasks.length}</span>
       </Text>
       <Text style={groupHint}>Wins from the last 24 hours — momentum you already earned.</Text>
-      <Section style={doneBox}>
-        {tasks.map((t, i) => (
-          <Text key={`${t.title}-${i}`} style={doneItem}>
-            <span style={check}>✓</span>
-            <span style={doneText}>{t.title}</span>
-          </Text>
-        ))}
-      </Section>
+      <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={doneBox}>
+        <tbody>
+          {tasks.map((t, i) => (
+            <tr key={`${t.title}-${i}`}>
+              <td style={doneCheckCell}>✓</td>
+              <td style={doneTextCell}>{t.title}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </Section>
   ) : null
 
@@ -196,11 +265,20 @@ export const OverdueDigestEmail = ({
 }: OverdueDigestProps) => {
   const clear = overdue.length === 0 && dueToday.length === 0
   const focus = [...overdue, ...dueToday][0]
+  const load = overdue.length + dueToday.length
+  const settled = completedToday + load
+  const clearedPct = settled ? (completedToday / settled) * 100 : 100
+  const healthColor = overdue.length >= 5 ? '#e0342a' : overdue.length ? '#f07c1a' : EMERALD
+
   const headline = clear
     ? 'You are all clear today'
     : overdue.length
       ? `${overdue.length} task${overdue.length === 1 ? '' : 's'} slipped past due`
       : `${dueToday.length} task${dueToday.length === 1 ? '' : 's'} on deck today`
+
+  const subline = clear
+    ? `Nothing overdue, nothing due. ${dueTomorrow.length} lined up for tomorrow.`
+    : `Clear ${load} item${load === 1 ? '' : 's'} today and you end the day at zero.`
 
   return (
     <Html lang="en" dir="ltr">
@@ -212,59 +290,96 @@ export const OverdueDigestEmail = ({
       </Preview>
       <Body style={main}>
         <Container style={shell}>
-          {/* Header */}
-          <Section style={header}>
-            <Text style={kicker}>MISSION CONTROL</Text>
-            <Heading style={h1}>{headline}</Heading>
-            <Text style={dateLine}>{weekday(date) || date}</Text>
+          {/* ── Hero ─────────────────────────────────────────────── */}
+          <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={heroTable}>
+            <tbody>
+              <tr>
+                <td style={hero}>
+                  <Text style={kicker}>◆ MISSION CONTROL · DAILY BRIEFING</Text>
+                  <Heading style={h1}>
+                    {greeting()}. {headline}.
+                  </Heading>
+                  <Text style={dateLine}>{weekday(date) || date}</Text>
+                  <Text style={subLine}>{subline}</Text>
+
+                  <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ marginTop: '18px' }}>
+                    <tbody>
+                      <tr>
+                        <td>
+                          <Text style={meterLabel}>
+                            DAY CLEARED · {Math.round(clearedPct)}%
+                          </Text>
+                          <Meter pct={clearedPct} color={healthColor} />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {/* ── Scoreboard ───────────────────────────────────────── */}
+          <Section style={statsWrap}>
+            <Row>
+              <StatTile value={overdue.length} label="Overdue" color="#b42318" bg="#fff5f4" />
+              <StatTile value={dueToday.length} label="Today" color={INK} bg="#f4f7fb" />
+              <StatTile value={completedToday} label="Done today" color="#05603a" bg="#f2fdf8" />
+              <StatTile value={totalOpen} label="Open" color="#344054" bg="#f4f7fb" />
+            </Row>
+            <Row>
+              <StatTile value={inProgress} label="In progress" color="#026aa2" bg="#f0f9ff" />
+              <StatTile value={dueTomorrow.length} label="Tomorrow" color="#344054" bg="#f4f7fb" />
+              <StatTile value={upcoming.length} label="Next 7 days" color="#344054" bg="#f4f7fb" />
+              <StatTile value={completedWeek} label="Done / week" color="#05603a" bg="#f2fdf8" />
+            </Row>
           </Section>
 
-          {/* Stats */}
-          <Section style={statsBox}>
-            <Row>
-              <Stat value={overdue.length} label="Overdue" color="#dc2626" />
-              <Stat value={dueToday.length} label="Today" color="#0f172a" />
-              <Stat value={completedToday} label="Done today" color="#059669" />
-              <Stat value={totalOpen} label="Open" color="#475569" />
-            </Row>
-            <Hr style={statsDivider} />
-            <Row>
-              <Stat value={inProgress} label="In progress" color="#0284c7" />
-              <Stat value={dueTomorrow.length} label="Tomorrow" color="#475569" />
-              <Stat value={upcoming.length} label="Next 7 days" color="#475569" />
-              <Stat value={completedWeek} label="Done / week" color="#059669" />
-            </Row>
-          </Section>
-
-          {/* Focus */}
+          {/* ── Focus ────────────────────────────────────────────── */}
           {focus ? (
-            <Section style={focusBox}>
-              <Text style={focusLabel}>START HERE</Text>
-              <Text style={focusTitle}>{focus.title}</Text>
-              <Text style={focusMeta}>
-                {(focus.priority || 'low').toUpperCase()} priority
-                {focus.dueDate ? ` · ${weekday(focus.dueDate)}` : ''}
-                {focus.daysOverdue ? ` · ${focus.daysOverdue} days late` : ''}
-              </Text>
-              <Button href={`${APP_URL}/?section=focus`} style={cta}>
-                Start a focus session
-              </Button>
-            </Section>
+            <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ margin: '0 0 28px' }}>
+              <tbody>
+                <tr>
+                  <td style={focusBox}>
+                    <Text style={focusLabel}>⚡ START HERE — THE ONE THAT MATTERS MOST</Text>
+                    <Text style={focusTitle}>{focus.title}</Text>
+                    <Text style={focusMeta}>
+                      {(focus.priority || 'low').toUpperCase()} priority
+                      {focus.dueDate ? ` · ${weekday(focus.dueDate)}` : ''}
+                      {focus.daysOverdue ? ` · ${focus.daysOverdue} days late` : ''}
+                    </Text>
+                    <Button href={`${APP_URL}/?section=focus`} style={cta}>
+                      Start a 25-minute focus session →
+                    </Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           ) : (
-            <Section style={clearBox}>
-              <Text style={clearTitle}>Nothing overdue. Nothing due today.</Text>
-              <Text style={clearText}>
-                Perfect moment to plan ahead or take the win and rest.
-              </Text>
-              <Button href={APP_URL} style={cta}>
-                Open Mission Control
-              </Button>
-            </Section>
+            <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ margin: '0 0 28px' }}>
+              <tbody>
+                <tr>
+                  <td style={clearBox}>
+                    <Text style={clearEmoji}>🌤️</Text>
+                    <Text style={clearTitle}>Inbox zero for your day.</Text>
+                    <Text style={clearText}>
+                      Nothing overdue, nothing due today. Perfect moment to plan ahead — or take the
+                      win and rest.
+                    </Text>
+                    <Button href={APP_URL} style={cta}>
+                      Open Mission Control →
+                    </Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           )}
 
+          {/* ── Issues ───────────────────────────────────────────── */}
           {issues.length ? (
             <Section style={group}>
-              <Text style={{ ...groupTitle, color: '#0f172a' }}>
+              <Text style={{ ...groupTitle, color: INK }}>
+                <span style={groupEmoji}>🚨</span>
                 Major points &amp; issues
                 <span style={groupCount}>{issues.length}</span>
               </Text>
@@ -279,48 +394,68 @@ export const OverdueDigestEmail = ({
             title="Overdue"
             hint="Oldest and highest priority first — clear or reschedule these."
             tasks={overdue}
-            accent="#b91c1c"
+            accent="#b42318"
+            emoji="🔥"
           />
           <Group
             title="Due today"
             hint="Your realistic scope for the day."
             tasks={dueToday}
-            accent="#0f172a"
+            accent={INK}
+            emoji="🎯"
           />
           <Group
             title="Coming tomorrow"
             hint="Preview only — nothing to do yet."
             tasks={dueTomorrow}
-            accent="#475569"
+            accent="#344054"
+            emoji="🌅"
           />
           <Group
             title="Rest of the week"
             hint="Scheduled within the next 7 days."
             tasks={upcoming}
-            accent="#475569"
+            accent="#344054"
+            emoji="🗓️"
           />
           <DoneList tasks={completed} />
           <Group
             title="Unscheduled backlog"
             hint="Open work with no date — give the important ones a due date."
             tasks={backlog}
-            accent="#7c3aed"
+            accent="#6941c6"
+            emoji="📥"
           />
 
-          <Section style={{ textAlign: 'center' as const, margin: '4px 0 8px' }}>
-            <Button href={`${APP_URL}/?section=tasks`} style={ctaGhost}>
-              Open all tasks
-            </Button>
-          </Section>
+          {/* ── Quick actions ────────────────────────────────────── */}
+          <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={actionsBox}>
+            <tbody>
+              <tr>
+                <td style={{ textAlign: 'center' as const, padding: '18px 16px' }}>
+                  <Text style={actionsTitle}>Jump straight in</Text>
+                  <Button href={`${APP_URL}/?section=tasks`} style={ctaGhost}>
+                    All tasks
+                  </Button>
+                  <Button href={`${APP_URL}/?section=review`} style={ctaGhost}>
+                    Review
+                  </Button>
+                  <Button href={`${APP_URL}/?section=calendar`} style={ctaGhost}>
+                    Calendar
+                  </Button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
           <Hr style={hr} />
           <Text style={footer}>
-            Daily digest from{' '}
+            Daily briefing from{' '}
             <Link href={APP_URL} style={footerLink}>
               Mission Control
             </Link>
-            {' · '}sent every morning at 07:00
+            {' · '}delivered every morning at 07:00
           </Text>
+          <Text style={footerFine}>You receive this because you own this workspace.</Text>
         </Container>
       </Body>
     </Html>
@@ -349,164 +484,209 @@ export const template = {
   // Fixed recipient — this digest only ever goes to the account owner.
   to: 'papalexios@gmail.com',
   previewData: {
-    date: '2026-08-20',
+    date: '2026-08-26',
     completedToday: 3,
     completedWeek: 11,
     totalOpen: 14,
     inProgress: 2,
     issues: [
       { label: '1 critical task overdue', detail: 'Renew SSL certificate', severity: 'high' },
-      { label: '2 bills due this week', detail: 'Electricity €84.20 · Κοινόχρηστα €45.00', severity: 'medium' },
+      {
+        label: '2 bills due this week',
+        detail: 'Electricity €84.20 · Κοινόχρηστα €45.00',
+        severity: 'medium',
+      },
     ],
     completed: [{ title: 'Ship dashboard redesign' }, { title: 'Reply to hosting support' }],
-    upcoming: [{ title: 'Client call prep', priority: 'high', dueDate: '2026-08-24' }],
+    upcoming: [{ title: 'Client call prep', priority: 'high', dueDate: '2026-08-29' }],
     backlog: [{ title: 'Refactor import engine', priority: 'medium' }],
     overdue: [
-      { title: 'Renew SSL certificate', priority: 'critical', dueDate: '2026-08-11', daysOverdue: 9 },
-      { title: 'Send invoice to client', priority: 'high', dueDate: '2026-08-18', daysOverdue: 2 },
+      { title: 'Renew SSL certificate', priority: 'critical', dueDate: '2026-08-17', daysOverdue: 9 },
+      { title: 'Send invoice to client', priority: 'high', dueDate: '2026-08-24', daysOverdue: 2 },
     ],
-    dueToday: [{ title: 'Publish blog post', priority: 'medium', dueDate: '2026-08-20', startTime: '15:00' }],
-    dueTomorrow: [{ title: 'Weekly review', priority: 'low', dueDate: '2026-08-21' }],
+    dueToday: [
+      { title: 'Publish blog post', priority: 'medium', dueDate: '2026-08-26', startTime: '15:00' },
+    ],
+    dueTomorrow: [{ title: 'Weekly review', priority: 'low', dueDate: '2026-08-27' }],
   },
 } satisfies TemplateEntry
 
 // ─── styles ──────────────────────────────────────────────────────────────────
 const main = {
-  backgroundColor: '#ffffff',
+  backgroundColor: '#eef2f7',
   fontFamily:
     "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif",
   margin: '0',
-  padding: '0',
+  padding: '24px 0 32px',
 }
-const shell = { maxWidth: '600px', padding: '28px 22px 32px', margin: '0 auto' }
+const shell = {
+  maxWidth: '620px',
+  width: '100%',
+  backgroundColor: '#ffffff',
+  borderRadius: '22px',
+  padding: '10px 22px 26px',
+  margin: '0 auto',
+}
 
-const header = { padding: '0 0 18px' }
+const heroTable = { margin: '0 0 20px' }
+const hero = {
+  backgroundColor: '#0b1220',
+  backgroundImage: 'linear-gradient(135deg, #0b1220 0%, #10312b 100%)',
+  borderRadius: '20px',
+  padding: '26px 24px 24px',
+}
 const kicker = {
-  fontSize: '11px',
-  letterSpacing: '2.5px',
-  color: '#059669',
+  fontSize: '10px',
+  letterSpacing: '2.6px',
+  color: '#5eead4',
   fontWeight: 'bold' as const,
-  margin: '0 0 8px',
+  margin: '0 0 12px',
 }
 const h1 = {
-  fontSize: '26px',
-  lineHeight: '32px',
+  fontSize: '27px',
+  lineHeight: '34px',
   fontWeight: 'bold' as const,
-  color: '#0f172a',
-  margin: '0 0 6px',
+  color: '#ffffff',
+  margin: '0 0 8px',
+  letterSpacing: '-0.5px',
 }
-const dateLine = { fontSize: '13px', color: '#64748b', margin: '0' }
-
-const statsBox = {
-  backgroundColor: '#f8fafc',
-  border: '1px solid #e2e8f0',
-  borderRadius: '14px',
-  padding: '16px 8px',
-  margin: '0 0 18px',
-}
-const statCell = { textAlign: 'center' as const, width: '25%' }
-const statValue = { fontSize: '24px', fontWeight: 'bold' as const, margin: '0 0 2px' }
-const statLabel = {
+const dateLine = { fontSize: '12px', color: '#8ba3b8', margin: '0 0 10px' }
+const subLine = { fontSize: '14px', lineHeight: '21px', color: '#cbd8e4', margin: '0' }
+const meterLabel = {
   fontSize: '10px',
-  letterSpacing: '1px',
+  letterSpacing: '1.8px',
+  fontWeight: 'bold' as const,
+  color: '#8ba3b8',
+  margin: '0 0 7px',
+}
+const meterOuter = {
+  backgroundColor: 'rgba(255,255,255,0.14)',
+  borderRadius: '999px',
+  height: '8px',
+}
+
+const statsWrap = { margin: '0 0 22px' }
+const tileWrap = { width: '25%', padding: '0 4px 8px' }
+const tile = {
+  borderRadius: '14px',
+  border: `1px solid ${LINE}`,
+  padding: '13px 6px',
+  textAlign: 'center' as const,
+}
+const tileValue = { fontSize: '25px', fontWeight: 'bold' as const, margin: '0 0 3px', lineHeight: '28px' }
+const tileLabel = {
+  fontSize: '9px',
+  letterSpacing: '1.1px',
   textTransform: 'uppercase' as const,
-  color: '#94a3b8',
+  color: MUTED,
   margin: '0',
   fontWeight: 'bold' as const,
 }
 
 const focusBox = {
-  backgroundColor: '#0f172a',
-  borderRadius: '16px',
-  padding: '20px 22px',
-  margin: '0 0 26px',
+  backgroundColor: '#0b1220',
+  backgroundImage: 'linear-gradient(135deg, #101a2c 0%, #0b1220 100%)',
+  borderRadius: '18px',
+  padding: '22px 24px',
 }
 const focusLabel = {
   fontSize: '10px',
-  letterSpacing: '2px',
-  color: '#34d399',
+  letterSpacing: '1.8px',
+  color: '#5eead4',
   fontWeight: 'bold' as const,
-  margin: '0 0 8px',
+  margin: '0 0 10px',
 }
 const focusTitle = {
-  fontSize: '19px',
-  lineHeight: '26px',
+  fontSize: '20px',
+  lineHeight: '27px',
   color: '#ffffff',
   fontWeight: 'bold' as const,
-  margin: '0 0 6px',
+  margin: '0 0 7px',
 }
-const focusMeta = { fontSize: '12px', color: '#94a3b8', margin: '0 0 16px' }
+const focusMeta = { fontSize: '12px', color: '#8ba3b8', margin: '0 0 18px' }
 
 const clearBox = {
-  backgroundColor: '#ecfdf5',
-  border: '1px solid #a7f3d0',
-  borderRadius: '16px',
-  padding: '22px',
-  margin: '0 0 26px',
+  backgroundColor: '#f2fdf8',
+  border: '1px solid #a6f4d0',
+  borderRadius: '18px',
+  padding: '26px 22px',
   textAlign: 'center' as const,
 }
-const clearTitle = { fontSize: '17px', color: '#065f46', fontWeight: 'bold' as const, margin: '0 0 6px' }
-const clearText = { fontSize: '13px', color: '#047857', margin: '0 0 16px' }
+const clearEmoji = { fontSize: '30px', margin: '0 0 6px' }
+const clearTitle = { fontSize: '18px', color: '#05603a', fontWeight: 'bold' as const, margin: '0 0 6px' }
+const clearText = { fontSize: '13px', lineHeight: '20px', color: '#067a5c', margin: '0 0 18px' }
 
 const cta = {
-  backgroundColor: '#10b981',
+  backgroundColor: EMERALD,
   color: '#ffffff',
   fontSize: '14px',
   fontWeight: 'bold' as const,
-  borderRadius: '10px',
-  padding: '12px 22px',
+  borderRadius: '12px',
+  padding: '13px 24px',
   textDecoration: 'none',
   display: 'inline-block',
 }
 const ctaGhost = {
   backgroundColor: '#ffffff',
-  border: '1px solid #cbd5e1',
-  color: '#0f172a',
-  fontSize: '13px',
+  border: `1px solid ${LINE}`,
+  color: INK,
+  fontSize: '12px',
   fontWeight: 'bold' as const,
   borderRadius: '10px',
-  padding: '11px 20px',
+  padding: '10px 16px',
   textDecoration: 'none',
   display: 'inline-block',
+  margin: '0 4px',
 }
 
-const group = { margin: '0 0 26px' }
+const group = { margin: '0 0 28px' }
 const groupTitle = {
   fontSize: '13px',
-  letterSpacing: '1.2px',
+  letterSpacing: '1.3px',
   textTransform: 'uppercase' as const,
   fontWeight: 'bold' as const,
-  margin: '0 0 2px',
+  margin: '0 0 3px',
 }
+const groupEmoji = { marginRight: '8px' }
 const groupCount = {
   display: 'inline-block',
   backgroundColor: '#f1f5f9',
   color: '#475569',
   borderRadius: '999px',
   fontSize: '11px',
-  padding: '1px 8px',
+  padding: '1px 9px',
   marginLeft: '8px',
 }
-const groupHint = { fontSize: '12px', color: '#94a3b8', margin: '0 0 12px' }
+const groupHint = { fontSize: '12px', color: MUTED, margin: '0 0 13px' }
 
-const card = {
-  backgroundColor: '#ffffff',
-  border: '1px solid #e2e8f0',
-  borderRadius: '12px',
-  padding: '12px 14px',
+const cardTable = {
   margin: '0 0 10px',
+  borderRadius: '14px',
+  border: `1px solid ${LINE}`,
+  overflow: 'hidden' as const,
+  backgroundColor: '#ffffff',
 }
-const numCell = { width: '30px', verticalAlign: 'top' as const }
-const num = { fontSize: '13px', color: '#cbd5e1', fontWeight: 'bold' as const, margin: '0' }
+const accentCol = { width: '5px', fontSize: '1px', lineHeight: '1px' }
+const cardBody = { padding: '13px 16px' }
+const numCell = { width: '34px', verticalAlign: 'top' as const, paddingTop: '2px' }
+const numBadge = {
+  display: 'inline-block',
+  minWidth: '20px',
+  textAlign: 'center' as const,
+  borderRadius: '999px',
+  fontSize: '11px',
+  fontWeight: 'bold' as const,
+  padding: '3px 6px',
+}
 const taskTitle = {
   fontSize: '15px',
   lineHeight: '21px',
-  color: '#0f172a',
+  color: INK,
   fontWeight: 'bold' as const,
-  margin: '0 0 6px',
+  margin: '0 0 7px',
 }
 const metaLine = { fontSize: '11px', margin: '0' }
-const metaText = { color: '#64748b', marginRight: '8px' }
+const metaText = { color: MUTED, marginRight: '8px' }
 const pill = {
   display: 'inline-block',
   fontSize: '9px',
@@ -518,7 +698,7 @@ const pill = {
 }
 const overduePill = {
   display: 'inline-block',
-  backgroundColor: '#dc2626',
+  backgroundColor: '#e0342a',
   color: '#ffffff',
   fontSize: '9px',
   fontWeight: 'bold' as const,
@@ -526,26 +706,46 @@ const overduePill = {
   padding: '3px 8px',
 }
 
-const statsDivider = { borderColor: '#e2e8f0', margin: '14px 8px' }
 const issueLabel = { fontSize: '14px', fontWeight: 'bold' as const, margin: '0 0 4px' }
-const issueDetail = { fontSize: '12px', margin: '0', opacity: 0.85 }
-const dot = {
-  display: 'inline-block',
-  width: '8px',
-  height: '8px',
-  borderRadius: '999px',
-  marginRight: '8px',
-}
-const doneBox = {
-  backgroundColor: '#f0fdf4',
-  border: '1px solid #bbf7d0',
-  borderRadius: '12px',
-  padding: '12px 14px',
-}
-const doneItem = { fontSize: '14px', margin: '0 0 6px', color: '#065f46' }
-const check = { color: '#16a34a', fontWeight: 'bold' as const, marginRight: '8px' }
-const doneText = { textDecoration: 'line-through', opacity: 0.8 }
+const issueDetail = { fontSize: '12px', lineHeight: '18px', margin: '0', opacity: 0.85 }
 
-const hr = { borderColor: '#e2e8f0', margin: '22px 0 12px' }
-const footer = { fontSize: '11px', color: '#94a3b8', margin: '0', textAlign: 'center' as const }
-const footerLink = { color: '#059669', textDecoration: 'none' }
+const doneBox = {
+  backgroundColor: '#f2fdf8',
+  border: '1px solid #a6f4d0',
+  borderRadius: '14px',
+  padding: '6px 14px',
+}
+const doneCheckCell = {
+  width: '20px',
+  color: '#12b886',
+  fontWeight: 'bold' as const,
+  fontSize: '13px',
+  padding: '6px 0',
+  verticalAlign: 'top' as const,
+}
+const doneTextCell = {
+  fontSize: '14px',
+  color: '#05603a',
+  padding: '6px 0',
+  textDecoration: 'line-through',
+}
+
+const actionsBox = {
+  backgroundColor: '#f7f9fc',
+  border: `1px solid ${LINE}`,
+  borderRadius: '16px',
+  margin: '0 0 6px',
+}
+const actionsTitle = {
+  fontSize: '10px',
+  letterSpacing: '1.8px',
+  textTransform: 'uppercase' as const,
+  color: MUTED,
+  fontWeight: 'bold' as const,
+  margin: '0 0 12px',
+}
+
+const hr = { borderColor: LINE, margin: '22px 0 12px' }
+const footer = { fontSize: '11px', color: MUTED, margin: '0 0 4px', textAlign: 'center' as const }
+const footerFine = { fontSize: '10px', color: '#9aa8b8', margin: '0', textAlign: 'center' as const }
+const footerLink = { color: EMERALD, textDecoration: 'none' }
