@@ -394,10 +394,10 @@ function parseMoney(raw: string): number | null {
     else s = s.replace(/,/g, '');
   } else if (lastComma > -1) {
     const decimals = s.length - lastComma - 1;
-    s = decimals === 3 && !/,\d{3}$/.test(s.replace(/^.*(,\d{3})$/, '$1')) === false
-      ? s.replace(/,/g, '')      // thousands grouping like 1,234
-      : s.replace(',', '.');     // decimal comma like 89,30
+    // 1,234 → thousands grouping; 89,30 / 89,3 → decimal comma
+    s = decimals === 3 ? s.replace(/,/g, '') : s.replace(',', '.');
   }
+
   const n = parseFloat(s);
   return Number.isFinite(n) ? n : null;
 }
