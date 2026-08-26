@@ -216,7 +216,7 @@ export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): 
     await deleteGoogleCalendarEvent({ data: { calendarId, eventId } });
     return true;
   } catch (e: any) {
-    if (/\b404\b/.test(e?.message || '')) return true;
+    if (/\b(?:404|410)\b/.test(e?.message || '')) return true;
     return false;
   }
 }
