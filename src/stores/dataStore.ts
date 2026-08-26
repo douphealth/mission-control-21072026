@@ -379,7 +379,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
                 const nextIds = value.map((row: any) => row.id as string).filter(Boolean);
                 markCloudRecordsDirty(key, nextIds);
                 const nextIdSet = new Set(nextIds);
-                markCloudRecordsDirty(key, previousIds.filter(id => !nextIdSet.has(id)), 'delete');
+                markCloudRecordsDirty(key, previousIds.filter((id: string) => !nextIdSet.has(id)), 'delete');
             }
         }
         schedulePush();
