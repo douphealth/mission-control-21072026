@@ -17,7 +17,6 @@ import type {
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useDataStore } from '@/stores/dataStore';
 import { deduplicateAll } from '@/lib/dedup';
-import { isSupabaseConnected, replaceLocalWithSupabaseSnapshot, startRealtimeSync } from '@/lib/supabase';
 import { startCloudSync } from '@/lib/cloudSync';
 
 import { restoreLatestNonEmptyVersion } from '@/lib/versions';
@@ -150,19 +149,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
           console.warn('Cloud sync unavailable:', e);
         }
 
-        const shouldHydrateFromCloud = isSupabaseConnected();
-        if (shouldHydrateFromCloud) {
-          const cloudSnapshot = await replaceLocalWithSupabaseSnapshot();
-          if (!cloudSnapshot.success || !cloudSnapshot.populated) {
-            const [t, w, r, b] = await Promise.all([
-              db.tasks.count(), db.websites.count(), db.repos.count(), db.buildProjects.count(),
-            ]);
-            if (t + w + r + b === 0) {
-              const restored = await restoreLatestNonEmptyVersion();
-              if (!restored.restored) await seedDefaults();
-            }
-          }
-        } else if (cloudRestored === 0) {
+        // The account-scoped mc_records store is the single cloud authority.
+        // Never hydrate again from the legacy mc_* snapshot tables: that second
+        // restore was replacing freshly edited tasks with an older full snapshot.
+        if (cloudRestored === 0) {
           const [t, w, r, b] = await Promise.all([
             db.tasks.count(), db.websites.count(), db.repos.count(), db.buildProjects.count(),
           ]);
@@ -175,11 +165,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
         await deduplicateAll();
         await loadSettings();
-
-        if (shouldHydrateFromCloud) {
-          // Per-row deltas applied inside startRealtimeSync — no snapshot replace needed.
-          startRealtimeSync();
-        }
 
         const settings = await db.settings.get('default');
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);

@@ -20,7 +20,12 @@ export type CloudStatus =
     | 'error';
 
 const LAST_SYNC_KEY = 'mc-cloud-last-sync';
+const DIRTY_RECORDS_KEY = 'mc-cloud-dirty-records-v1';
 const TABLE = 'mc_records';
+
+type DirtyOperation = 'put' | 'delete';
+type DirtyRecord = { operation: DirtyOperation; changedAt: string };
+type DirtyRecordMap = Record<string, DirtyRecord>;
 
 const COLLECTIONS: Record<string, any> = {
     websites: db.websites,
@@ -55,6 +60,54 @@ let realtimeBound = false;
 let started = false;
 
 const listeners = new Set<(s: CloudStatus, err: string | null) => void>();
+
+function recordKey(collection: string, recordId: string) {
+    return `${collection}::${recordId}`;
+}
+
+function readDirtyRecords(): DirtyRecordMap {
+    try {
+        const parsed = JSON.parse(localStorage.getItem(DIRTY_RECORDS_KEY) ?? '{}');
+        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+        return {};
+    }
+}
+
+function writeDirtyRecords(records: DirtyRecordMap) {
+    try {
+        if (Object.keys(records).length) localStorage.setItem(DIRTY_RECORDS_KEY, JSON.stringify(records));
+        else localStorage.removeItem(DIRTY_RECORDS_KEY);
+    } catch { }
+}
+
+/** Persisted before the debounced request so a reload can never lose the edit. */
+export function markCloudRecordDirty(collection: string, recordId: string, operation: DirtyOperation = 'put') {
+    if (!COLLECTIONS[collection] || !recordId) return;
+    const records = readDirtyRecords();
+    records[recordKey(collection, recordId)] = { operation, changedAt: new Date().toISOString() };
+    writeDirtyRecords(records);
+}
+
+export function markCloudRecordsDirty(collection: string, recordIds: string[], operation: DirtyOperation = 'put') {
+    if (!COLLECTIONS[collection] || !recordIds.length) return;
+    const records = readDirtyRecords();
+    const changedAt = new Date().toISOString();
+    for (const recordId of recordIds) {
+        if (recordId) records[recordKey(collection, recordId)] = { operation, changedAt };
+    }
+    writeDirtyRecords(records);
+}
+
+function clearSyncedDirtyRecords(captured: DirtyRecordMap) {
+    const current = readDirtyRecords();
+    for (const [key, value] of Object.entries(captured)) {
+        if (current[key]?.changedAt === value.changedAt && current[key]?.operation === value.operation) {
+            delete current[key];
+        }
+    }
+    writeDirtyRecords(current);
+}
 
 function setStatus(next: CloudStatus, err: string | null = null) {
     status = next;
@@ -201,16 +254,22 @@ export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; 
             if (!data || data.length < pageSize) break;
         }
 
+        const dirty = readDirtyRecords();
         let restored = 0;
         let skipped = 0;
         for (const [collection, table] of Object.entries(COLLECTIONS)) {
             const mine = rows.filter((r) => r.collection === collection);
             const alive: any[] = [];
             for (const r of mine.filter((x) => !x.deleted)) {
+                // A local edit that has not reached the cloud is authoritative.
+                // This journal survives reloads, unlike the old in-memory debounce.
+                if (dirty[recordKey(collection, r.record_id)]) continue;
                 if (isValidRecord(collection, r.data, r.record_id)) alive.push(r.data);
                 else skipped++;
             }
-            const dead = mine.filter((r) => r.deleted).map((r) => r.record_id);
+            const dead = mine
+                .filter((r) => r.deleted && !dirty[recordKey(collection, r.record_id)])
+                .map((r) => r.record_id);
             if (alive.length) { await table.bulkPut(alive); restored += alive.length; }
             if (dead.length) { await table.bulkDelete(dead); }
         }
@@ -235,6 +294,7 @@ async function pushNow(): Promise<void> {
     pushing = true;
     try {
         setStatus('syncing');
+        const capturedDirty = readDirtyRecords();
         const snapshot = await localSnapshot();
         const rows = snapshot.map((r) => ({
             user_id: uid,
@@ -281,6 +341,7 @@ async function pushNow(): Promise<void> {
         }
 
         try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()); } catch { }
+        clearSyncedDirtyRecords(capturedDirty);
         setStatus('synced');
     } catch (e: any) {
         setStatus(navigator.onLine ? 'error' : 'offline', e?.message ?? 'Backup failed');
@@ -299,8 +360,10 @@ export function queueCloudPush(delay = 1200) {
 
 export async function forceCloudSync(): Promise<void> {
     if (!userId) return;
-    await pullFromCloud();
+    // Preserve this device's pending work before accepting remote changes.
+    // pullFromCloud also skips anything still journaled if this push fails.
     await pushNow();
+    await pullFromCloud();
 }
 
 // ─── Realtime + lifecycle ────────────────────────────────────────────────────
@@ -336,8 +399,12 @@ export async function startCloudSync(force = false): Promise<{ signedIn: boolean
         return { signedIn: false, restored: 0 };
     }
 
+    // Flush journaled local edits first. If the request fails, pullFromCloud
+    // preserves those dirty records and cannot roll them back.
+    const hadPendingChanges = Object.keys(readDirtyRecords()).length > 0;
+    if (hadPendingChanges) await pushNow();
     const pulled = await pullFromCloud();
-    await pushNow();
+    if (!hadPendingChanges) await pushNow();
     bindRealtime();
 
     if (!force) {
@@ -348,7 +415,7 @@ export async function startCloudSync(force = false): Promise<{ signedIn: boolean
             hydrated = false;
             realtimeBound = false;
             if (!userId) { setStatus('signed-out'); return; }
-            void (async () => { await pullFromCloud(); await pushNow(); bindRealtime(); })();
+            void (async () => { await pushNow(); await pullFromCloud(); bindRealtime(); })();
         });
 
         window.addEventListener('online', () => { if (userId) void forceCloudSync(); });
