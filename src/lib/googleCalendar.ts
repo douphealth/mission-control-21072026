@@ -129,7 +129,22 @@ export function disconnectGCal(): void {
   clearGCalConfig();
 }
 
+export class GCalAuthError extends Error {
+  constructor() {
+    super('Google Calendar is not connected. Open Settings → Google Calendar and connect your account.');
+    this.name = 'GCalAuthError';
+  }
+}
+
+/** Server functions require a Supabase bearer token; bail out cleanly when signed out. */
+async function requireAppSession(): Promise<void> {
+  if (typeof window === 'undefined') throw new GCalAuthError();
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) throw new GCalAuthError();
+}
+
 export async function listCalendars(): Promise<GoogleCalendarList[]> {
+  await requireAppSession();
   return listGoogleCalendars() as Promise<GoogleCalendarList[]>;
 }
 
@@ -139,8 +154,10 @@ export async function fetchCalendarEvents(
   timeMax: string,
   maxResults = 250,
 ): Promise<GoogleCalendarEvent[]> {
+  await requireAppSession();
   return fetchGoogleCalendarEvents({ data: { calendarId, timeMin, timeMax, maxResults } }) as Promise<GoogleCalendarEvent[]>;
 }
+
 
 export async function fetchAllEvents(timeMin: string, timeMax: string): Promise<GoogleCalendarEvent[]> {
   const cfg = getGCalConfig();
@@ -188,12 +205,14 @@ export async function createGCalEvent(
   },
   deterministicId?: string,
 ): Promise<GoogleCalendarEvent> {
+  await requireAppSession();
   return createOrUpdateGoogleCalendarEvent({ data: { calendarId, event, deterministicId } }) as Promise<GoogleCalendarEvent>;
 }
 
 export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): Promise<boolean> {
   if (!eventId) return false;
   try {
+    await requireAppSession();
     await deleteGoogleCalendarEvent({ data: { calendarId, eventId } });
     return true;
   } catch (e: any) {
@@ -201,6 +220,7 @@ export async function deleteGCalEvent(eventId: string, calendarId = 'primary'): 
     return false;
   }
 }
+
 
 export async function pushTaskToGCal(task: {
   title: string;
