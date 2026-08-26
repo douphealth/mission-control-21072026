@@ -139,7 +139,7 @@ export const TARGET_META: Record<ImportTarget, TargetMeta> = {
   payments: {
     label: 'Payments', emoji: '💰',
     requiredFields: ['title', 'amount'],
-    optionalFields: ['currency', 'type', 'status', 'category', 'from', 'to', 'dueDate', 'recurring', 'notes'],
+    optionalFields: ['currency', 'type', 'status', 'category', 'from', 'to', 'dueDate', 'paidDate', 'recurring', 'notes'],
     aliases: {
       title: ['name', 'description', 'item', 'payment', 'invoice', 'label', 'memo', 'transaction'],
       amount: ['price', 'cost', 'value', 'total', 'sum', 'fee', 'charge', 'subtotal'],
@@ -149,7 +149,8 @@ export const TARGET_META: Record<ImportTarget, TargetMeta> = {
       category: ['group', 'cat'],
       from: ['sender', 'payer', 'source', 'client', 'buyer'],
       to: ['receiver', 'payee', 'recipient', 'vendor', 'seller'],
-      dueDate: ['due', 'deadline', 'due_date', 'date', 'invoice_date', 'payment_date'],
+      dueDate: ['due', 'deadline', 'due_date', 'date', 'invoice_date', 'payment_deadline'],
+      paidDate: ['paid_date', 'paid_on', 'payment_date', 'settled_on'],
       recurring: ['repeat', 'auto', 'subscription', 'recur'],
       notes: ['note', 'comment', 'memo', 'desc'],
     },
@@ -376,10 +377,45 @@ function extractCurrency(text: string): string {
 }
 
 function extractAmount(text: string): number {
-  const m = text.match(/[$€£¥₹]?\s*([\d,]+(?:\.\d{1,2})?)/);
-  if (m) return parseFloat(m[1].replace(/,/g, ''));
+  const m = text.match(/[$€£¥₹]?\s*(\d[\d.,\s]*\d|\d)/);
+  if (m) return parseMoney(m[1]) ?? 0;
   return 0;
 }
+
+/** Parses "1.234,56", "1,234.56", "1234,56 €", "€ 89,30" → number */
+function parseMoney(raw: string): number | null {
+  if (!raw) return null;
+  let s = String(raw).replace(/[^\d.,\-]/g, '').trim();
+  if (!s) return null;
+  const lastComma = s.lastIndexOf(',');
+  const lastDot = s.lastIndexOf('.');
+  if (lastComma > -1 && lastDot > -1) {
+    // whichever comes last is the decimal separator
+    if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
+    else s = s.replace(/,/g, '');
+  } else if (lastComma > -1) {
+    const decimals = s.length - lastComma - 1;
+    // 1,234 → thousands grouping; 89,30 / 89,3 → decimal comma
+    s = decimals === 3 ? s.replace(/,/g, '') : s.replace(',', '.');
+  }
+
+  const n = parseFloat(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Maps free-form / multilingual payment status text to paid | pending | overdue | cancelled */
+function normalizePaymentStatus(raw: string | undefined, context: string): string {
+  const t = `${raw || ''}`.toLowerCase().trim();
+  if (/^(paid|settled|complete[d]?|cleared|εξοφλ|πληρωμ)/.test(t) || t === 'true' || t === 'yes') return 'paid';
+  if (/^(overdue|late|past.?due|ληξιπρ)/.test(t)) return 'overdue';
+  if (/^(cancel|void|ακυρ)/.test(t)) return 'cancelled';
+  if (/^(pending|unpaid|due|open|outstanding|απλήρωτ|εκκρεμ|οφειλ)/.test(t)) return 'pending';
+  const c = context.toLowerCase();
+  if (/\b(paid|εξοφλήθηκε|εξοφληση|εξοφλημένο|πληρώθηκε)\b/.test(c)) return 'paid';
+  if (/\b(unpaid|outstanding|απλήρωτο|εκκρεμεί|οφειλή|πληρωτέο)\b/.test(c)) return 'pending';
+  return 'pending';
+}
+
 
 // ─── NLP Task Extraction (from natural language sentences) ────────────────────
 
@@ -1237,20 +1273,29 @@ export function normalizeItems(
       case 'payments': {
         const amountStr = get(row, 'amount');
         const allVals = Object.values(row).join(' ');
-        const amount = amountStr ? (parseFloat(amountStr.replace(/[^0-9.\-]/g, '')) || 0) : extractAmount(allVals);
+        const amount = amountStr ? (parseMoney(amountStr) ?? extractAmount(allVals)) : extractAmount(allVals);
         const rawDueDate = get(row, 'dueDate');
+        const rawPaidDate = get(row, 'paidDate');
+        const status = normalizePaymentStatus(get(row, 'status'), allVals);
+        const dueDate = rawDueDate ? (parseNaturalDate(rawDueDate) || rawDueDate) : now;
+        const paidDate = rawPaidDate
+          ? (parseNaturalDate(rawPaidDate) || rawPaidDate)
+          : (status === 'paid' ? (dueDate || now) : '');
+        const isOverdue = status === 'pending' && !!dueDate && dueDate < now;
         return {
           title: get(row, 'title') || 'Untitled', amount,
           currency: get(row, 'currency') || extractCurrency(allVals),
           type: get(row, 'type') || extractPaymentType(allVals) || 'expense',
-          status: get(row, 'status') || 'pending', category: get(row, 'category') || 'Other',
+          status: isOverdue ? 'overdue' : status,
+          category: get(row, 'category') || 'Other',
           from: get(row, 'from'), to: get(row, 'to'),
-          dueDate: rawDueDate ? (parseNaturalDate(rawDueDate) || rawDueDate) : now,
-          paidDate: '', linkedProject: '',
+          dueDate,
+          paidDate, linkedProject: '',
           recurring: toBool(get(row, 'recurring')), recurringInterval: '',
           notes: get(row, 'notes'), createdAt: now,
         };
       }
+
       case 'notes':
         return {
           title: get(row, 'title') || Object.values(row).find(v => v?.trim()) || 'Untitled',

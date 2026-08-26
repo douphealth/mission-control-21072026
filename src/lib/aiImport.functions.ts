@@ -26,7 +26,7 @@ CATEGORIES (target -> fields):
 - repos: name, url, description, language, stars, forks, status, demoUrl, progress, topics[], devPlatformUrl, deploymentUrl
 - buildProjects: name, platform, projectUrl, deployedUrl, description, techStack[], status, nextSteps, githubRepo
 - credentials: label, service, url, username, password, apiKey, notes, category, tags[]
-- payments: title, amount(number), currency, type(income|expense|subscription), status(paid|pending|overdue), category, from, to, dueDate(YYYY-MM-DD), recurring(bool), notes
+- payments: title, amount(number), currency, type(income|expense|subscription), status(paid|pending|overdue), category, from, to, dueDate(YYYY-MM-DD), paidDate(YYYY-MM-DD), recurring(bool), notes
 - notes: title, content, color, pinned, tags[]
 - ideas: title, description, category, priority, status, tags[], linkedProject, votes
 - habits: name, icon, frequency(daily|weekly|monthly), color
@@ -40,7 +40,17 @@ RULES:
 6. For credentials of WordPress sites, prefer the "websites" target (with wpUsername/wpPassword/wpAdminUrl filled) over "credentials".
 7. Use "credentials" only for infrastructure/service accounts (CyberPanel, FTP, Cloudflare, RackNerd, hosting panels, API providers, etc.).
 8. Never invent data — leave a field empty if unknown.
-9. Return STRICT JSON matching the schema. No prose, no code fences.
+9. BILLS, INVOICES & RECEIPTS (electricity, water, gas, internet, phone, rent, κοινόχρηστα/building-maintenance, taxes, insurance) ALWAYS map to "payments" — never to notes/tasks/ideas. For each bill produce exactly ONE payments item:
+   - title: short human label, e.g. "Electricity bill – <provider/month>" or "Κοινόχρηστα – <month>".
+   - amount: the FINAL total payable (ΣΥΝΟΛΟ / ΠΛΗΡΩΤΕΟ ΠΟΣΟ / "Total due"), as a plain number using a dot decimal (convert "89,30" → 89.30, "1.234,56" → 1234.56). Never include the currency symbol.
+   - currency: EUR for €, else the symbol/code shown.
+   - type: "expense" (or "subscription" if it is clearly a recurring plan).
+   - status: "paid" if the document shows it is settled (ΕΞΟΦΛΗΘΗΚΕ / ΠΛΗΡΩΜΕΝΟ / PAID / receipt of payment / zero balance) — then also set paidDate. Otherwise "pending" (outstanding bill to be paid) and set dueDate to the payment deadline (ΗΜΕΡΟΜΗΝΙΑ ΛΗΞΗΣ / Πληρωτέο έως). If the deadline has already passed, use "overdue".
+   - category: "Utilities" for electricity/water/gas/internet, "Housing" for κοινόχρηστα/rent, else the best fit.
+   - to: the issuer/provider name (ΔΕΗ, ΠΡΟΤΕΣΤΑ, ΕΥΔΑΠ, property manager, etc.).
+   - notes: bill/account number, billing period, consumption details.
+   Greek documents: ΠΟΣΟ ΠΛΗΡΩΜΗΣ/ΣΥΝΟΛΟ = amount, ΛΗΞΗ ΠΡΟΘΕΣΜΙΑΣ = dueDate. Dates like 12/09/2026 are DD/MM/YYYY → 2026-09-12.
+10. Return STRICT JSON matching the schema. No prose, no code fences.
 
 OUTPUT SCHEMA:
 {
@@ -59,9 +69,10 @@ export const aiParseImport = createServerFn({ method: 'POST' })
     const hasImages = images.length > 0;
 
     const instruction = hasImages
-      ? `The user photographed handwritten notes / a to-do list / credentials / ideas${data.fileName ? ` (file: ${data.fileName})` : ''}.
+      ? `The user photographed handwritten notes / a to-do list / credentials / ideas / bills, invoices or receipts (possibly in Greek)${data.fileName ? ` (file: ${data.fileName})` : ''}.
 Carefully read ALL handwriting in the image(s), including messy cursive, bullet lists, arrows, margins, crossed-out items (mark crossed-out tasks as status "done"), checkboxes (ticked = done, empty = todo), dates, times and underlined headings.
 Transcribe faithfully, correct obvious spelling slips, then extract and classify every item.
+If an image is a utility bill, invoice or receipt (λογαριασμός ρεύματος/ΔΕΗ, κοινόχρηστα, νερό, internet, ενοίκιο), you MUST emit it as a "payments" item following rule 9 — one item per bill, with the exact total, currency, due date and paid/pending status. Do not turn a bill into a note or a task.
 Assume a to-do list written "for today" means dueDate ${new Date().toISOString().split('T')[0]}.
 Return JSON only.${data.text ? `\n\nExtra context typed by the user:\n${data.text}` : ''}`
       : `Extract and classify all importable items from the following content${data.fileName ? ` (file: ${data.fileName})` : ''}. Return JSON only.\n\n---\n${data.text}\n---`;
