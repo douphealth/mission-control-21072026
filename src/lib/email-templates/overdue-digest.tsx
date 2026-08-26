@@ -26,12 +26,25 @@ export interface DigestTask {
   daysOverdue?: number
 }
 
+export interface DigestIssue {
+  label: string
+  detail?: string
+  severity?: 'high' | 'medium' | 'low'
+}
+
 interface OverdueDigestProps {
   date?: string
   overdue?: DigestTask[]
   dueToday?: DigestTask[]
   dueTomorrow?: DigestTask[]
+  upcoming?: DigestTask[]
+  backlog?: DigestTask[]
+  completed?: DigestTask[]
   completedToday?: number
+  completedWeek?: number
+  totalOpen?: number
+  inProgress?: number
+  issues?: DigestIssue[]
 }
 
 const APP_URL = 'https://mission-control-001.lovable.app'
@@ -121,12 +134,65 @@ const Group = ({
     </Section>
   ) : null
 
+const SEVERITY: Record<string, { bg: string; border: string; fg: string; tag: string }> = {
+  high: { bg: '#fef2f2', border: '#fecaca', fg: '#991b1b', tag: '#dc2626' },
+  medium: { bg: '#fffbeb', border: '#fde68a', fg: '#92400e', tag: '#d97706' },
+  low: { bg: '#f0fdf4', border: '#bbf7d0', fg: '#166534', tag: '#16a34a' },
+}
+
+const IssueRow = ({ issue }: { issue: DigestIssue }) => {
+  const s = SEVERITY[issue.severity || 'low'] || SEVERITY['low']!
+  return (
+    <Section
+      style={{
+        backgroundColor: s.bg,
+        border: `1px solid ${s.border}`,
+        borderRadius: '12px',
+        padding: '12px 14px',
+        margin: '0 0 10px',
+      }}
+    >
+      <Text style={{ ...issueLabel, color: s.fg }}>
+        <span style={{ ...dot, backgroundColor: s.tag }} />
+        {issue.label}
+      </Text>
+      {issue.detail ? <Text style={{ ...issueDetail, color: s.fg }}>{issue.detail}</Text> : null}
+    </Section>
+  )
+}
+
+const DoneList = ({ tasks }: { tasks: DigestTask[] }) =>
+  tasks.length ? (
+    <Section style={group}>
+      <Text style={{ ...groupTitle, color: '#047857' }}>
+        Completed today
+        <span style={groupCount}>{tasks.length}</span>
+      </Text>
+      <Text style={groupHint}>Wins from the last 24 hours — momentum you already earned.</Text>
+      <Section style={doneBox}>
+        {tasks.map((t, i) => (
+          <Text key={`${t.title}-${i}`} style={doneItem}>
+            <span style={check}>✓</span>
+            <span style={doneText}>{t.title}</span>
+          </Text>
+        ))}
+      </Section>
+    </Section>
+  ) : null
+
 export const OverdueDigestEmail = ({
   date = '',
   overdue = [],
   dueToday = [],
   dueTomorrow = [],
+  upcoming = [],
+  backlog = [],
+  completed = [],
   completedToday = 0,
+  completedWeek = 0,
+  totalOpen = 0,
+  inProgress = 0,
+  issues = [],
 }: OverdueDigestProps) => {
   const clear = overdue.length === 0 && dueToday.length === 0
   const focus = [...overdue, ...dueToday][0]
@@ -158,8 +224,15 @@ export const OverdueDigestEmail = ({
             <Row>
               <Stat value={overdue.length} label="Overdue" color="#dc2626" />
               <Stat value={dueToday.length} label="Today" color="#0f172a" />
+              <Stat value={completedToday} label="Done today" color="#059669" />
+              <Stat value={totalOpen} label="Open" color="#475569" />
+            </Row>
+            <Hr style={statsDivider} />
+            <Row>
+              <Stat value={inProgress} label="In progress" color="#0284c7" />
               <Stat value={dueTomorrow.length} label="Tomorrow" color="#475569" />
-              <Stat value={completedToday} label="Done" color="#059669" />
+              <Stat value={upcoming.length} label="Next 7 days" color="#475569" />
+              <Stat value={completedWeek} label="Done / week" color="#059669" />
             </Row>
           </Section>
 
@@ -189,6 +262,19 @@ export const OverdueDigestEmail = ({
             </Section>
           )}
 
+          {issues.length ? (
+            <Section style={group}>
+              <Text style={{ ...groupTitle, color: '#0f172a' }}>
+                Major points &amp; issues
+                <span style={groupCount}>{issues.length}</span>
+              </Text>
+              <Text style={groupHint}>What actually needs a decision from you today.</Text>
+              {issues.map((issue, i) => (
+                <IssueRow key={`${issue.label}-${i}`} issue={issue} />
+              ))}
+            </Section>
+          ) : null}
+
           <Group
             title="Overdue"
             hint="Oldest and highest priority first — clear or reschedule these."
@@ -206,6 +292,19 @@ export const OverdueDigestEmail = ({
             hint="Preview only — nothing to do yet."
             tasks={dueTomorrow}
             accent="#475569"
+          />
+          <Group
+            title="Rest of the week"
+            hint="Scheduled within the next 7 days."
+            tasks={upcoming}
+            accent="#475569"
+          />
+          <DoneList tasks={completed} />
+          <Group
+            title="Unscheduled backlog"
+            hint="Open work with no date — give the important ones a due date."
+            tasks={backlog}
+            accent="#7c3aed"
           />
 
           <Section style={{ textAlign: 'center' as const, margin: '4px 0 8px' }}>
@@ -235,20 +334,33 @@ export const template = {
   subject: (data: Record<string, any>) => {
     const overdue = (data['overdue'] as unknown[] | undefined)?.length ?? 0
     const today = (data['dueToday'] as unknown[] | undefined)?.length ?? 0
+    const done = (data['completedToday'] as number | undefined) ?? 0
     const first =
       ((data['overdue'] as DigestTask[] | undefined)?.[0] ??
         (data['dueToday'] as DigestTask[] | undefined)?.[0])?.title ?? ''
-    if (overdue)
-      return `${overdue} overdue${first ? ` — start with “${first}”` : ''}`
-    if (today) return `${today} task${today === 1 ? '' : 's'} due today${first ? ` — “${first}”` : ''}`
-    return `All clear today — Mission Control`
+    const head = overdue
+      ? `${overdue} overdue · ${today} due today`
+      : today
+        ? `${today} due today`
+        : 'All clear today'
+    return `Daily briefing — ${head}${done ? ` · ${done} done` : ''}${first ? ` — start with “${first}”` : ''}`
   },
-  displayName: 'Overdue task digest',
+  displayName: 'Daily briefing',
   // Fixed recipient — this digest only ever goes to the account owner.
   to: 'papalexios@gmail.com',
   previewData: {
     date: '2026-08-20',
     completedToday: 3,
+    completedWeek: 11,
+    totalOpen: 14,
+    inProgress: 2,
+    issues: [
+      { label: '1 critical task overdue', detail: 'Renew SSL certificate', severity: 'high' },
+      { label: '2 bills due this week', detail: 'Electricity €84.20 · Κοινόχρηστα €45.00', severity: 'medium' },
+    ],
+    completed: [{ title: 'Ship dashboard redesign' }, { title: 'Reply to hosting support' }],
+    upcoming: [{ title: 'Client call prep', priority: 'high', dueDate: '2026-08-24' }],
+    backlog: [{ title: 'Refactor import engine', priority: 'medium' }],
     overdue: [
       { title: 'Renew SSL certificate', priority: 'critical', dueDate: '2026-08-11', daysOverdue: 9 },
       { title: 'Send invoice to client', priority: 'high', dueDate: '2026-08-18', daysOverdue: 2 },
@@ -413,6 +525,26 @@ const overduePill = {
   borderRadius: '999px',
   padding: '3px 8px',
 }
+
+const statsDivider = { borderColor: '#e2e8f0', margin: '14px 8px' }
+const issueLabel = { fontSize: '14px', fontWeight: 'bold' as const, margin: '0 0 4px' }
+const issueDetail = { fontSize: '12px', margin: '0', opacity: 0.85 }
+const dot = {
+  display: 'inline-block',
+  width: '8px',
+  height: '8px',
+  borderRadius: '999px',
+  marginRight: '8px',
+}
+const doneBox = {
+  backgroundColor: '#f0fdf4',
+  border: '1px solid #bbf7d0',
+  borderRadius: '12px',
+  padding: '12px 14px',
+}
+const doneItem = { fontSize: '14px', margin: '0 0 6px', color: '#065f46' }
+const check = { color: '#16a34a', fontWeight: 'bold' as const, marginRight: '8px' }
+const doneText = { textDecoration: 'line-through', opacity: 0.8 }
 
 const hr = { borderColor: '#e2e8f0', margin: '22px 0 12px' }
 const footer = { fontSize: '11px', color: '#94a3b8', margin: '0', textAlign: 'center' as const }
