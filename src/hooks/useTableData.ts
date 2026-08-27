@@ -8,6 +8,7 @@ import { db } from '@/lib/db';
 import type {
   Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment,
   Idea, CredentialVault, CustomModule, HabitTracker,
+  FeedSource, StreamItem, WatchTerm, AudienceAccount, AudienceReading, Reminder,
   SEOProfile, SEOSnapshot, SEOQueryObservation, SEOIssue, SEOAction, SEOChange, SEOVisibilityCheck,
 } from '@/lib/db';
 import { useDataStore } from '@/stores/dataStore';
@@ -32,6 +33,12 @@ export const useIdeas         = () => (useLiveQuery(() => db.ideas.toArray(), []
 export const useCredentials   = () => (useLiveQuery(() => db.credentials.toArray(), []) ?? (EMPTY as CredentialVault[]));
 export const useCustomModules = () => (useLiveQuery(() => db.customModules.toArray(), []) ?? (EMPTY as CustomModule[]));
 export const useHabits        = () => (useLiveQuery(() => db.habits.toArray(), []) ?? (EMPTY as HabitTracker[]));
+export const useFeedSources      = () => (useLiveQuery(() => db.feedSources.toArray(), []) ?? (EMPTY as FeedSource[]));
+export const useStreamItems      = () => (useLiveQuery(() => db.streamItems.toArray(), []) ?? (EMPTY as StreamItem[]));
+export const useWatchTerms       = () => (useLiveQuery(() => db.watchTerms.toArray(), []) ?? (EMPTY as WatchTerm[]));
+export const useAudienceAccounts = () => (useLiveQuery(() => db.audienceAccounts.toArray(), []) ?? (EMPTY as AudienceAccount[]));
+export const useAudienceReadings = () => (useLiveQuery(() => db.audienceReadings.toArray(), []) ?? (EMPTY as AudienceReading[]));
+export const useReminders        = () => (useLiveQuery(() => db.reminders.toArray(), []) ?? (EMPTY as Reminder[]));
 
 // ─── Indexed / paginated query hooks (use these for >500-row tables) ──────────
 export const useTasksByStatus = (status: Task['status']) =>

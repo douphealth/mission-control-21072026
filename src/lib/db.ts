@@ -391,6 +391,87 @@ export interface HabitTracker {
     color?: string;
 }
 
+// ─── Control Center (industry news, mentions, audience, reminders) ────────────
+
+export interface FeedSource {
+    id: string;
+    name: string;
+    url: string;              // homepage or feed url
+    feedUrl?: string;         // resolved feed
+    topics?: string[];        // optional topic phrases
+    enabled: boolean;
+    lastCheckedAt?: string;
+    lastError?: string;
+    createdAt: string;
+}
+
+export type StreamKind = 'industry' | 'mention' | 'newsletter';
+export type StreamStatus = 'active' | 'archived';
+
+export interface StreamItem {
+    id: string;
+    kind: StreamKind;
+    title: string;
+    url: string;
+    source: string;           // source name / domain
+    sourceId?: string;        // feedSources.id or watch term id
+    summary?: string;
+    aiSummary?: string;
+    publishedAt: string;      // ISO
+    discoveredAt: string;     // ISO
+    score: number;            // 0-100 importance
+    status: StreamStatus;
+    matchedTerm?: string;
+    read?: boolean;
+}
+
+export type WatchTermType = 'name' | 'brand' | 'handle' | 'domain';
+
+export interface WatchTerm {
+    id: string;
+    term: string;
+    type: WatchTermType;
+    anchors?: string[];       // identity anchors that must co-occur
+    negatives?: string[];     // false-positive contexts
+    enabled: boolean;
+    lastCheckedAt?: string;
+    createdAt: string;
+}
+
+export type AudiencePlatform = 'youtube' | 'x' | 'instagram' | 'facebook' | 'linkedin' | 'threads' | 'tiktok';
+
+export interface AudienceAccount {
+    id: string;
+    platform: AudiencePlatform;
+    handle: string;
+    url: string;
+    label?: string;
+    createdAt: string;
+    lastCheckedAt?: string;
+    lastStatus?: 'ok' | 'unavailable' | 'limited';
+}
+
+export interface AudienceReading {
+    id: string;
+    accountId: string;
+    capturedAt: string;       // ISO
+    followers: number | null; // null = unavailable (never a false zero)
+    posts?: number | null;
+    status: 'ok' | 'unavailable' | 'limited';
+}
+
+export interface Reminder {
+    id: string;
+    title: string;
+    notes?: string;
+    remindAt: string;         // ISO datetime
+    recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
+    status: 'pending' | 'done' | 'snoozed';
+    sourceUrl?: string;
+    createdAt: string;
+}
+
+
 // ─── Database Class ─────────────────────────────────────────────────────────────
 
 class MissionControlDB extends Dexie {
@@ -413,6 +494,13 @@ class MissionControlDB extends Dexie {
     settings!: Table<UserSettings>;
     customModules!: Table<CustomModule>;
     habits!: Table<HabitTracker>;
+    feedSources!: Table<FeedSource>;
+    streamItems!: Table<StreamItem>;
+    watchTerms!: Table<WatchTerm>;
+    audienceAccounts!: Table<AudienceAccount>;
+    audienceReadings!: Table<AudienceReading>;
+    reminders!: Table<Reminder>;
+
 
     constructor() {
         super('MissionControlDB');
@@ -450,8 +538,19 @@ class MissionControlDB extends Dexie {
         this.version(4).stores({
             tasks: 'id, title, priority, status, dueDate, category, createdAt, gcalEventId, touchedAt',
         });
+
+        // Control Center: industry news, brand mentions, audience, reminders.
+        this.version(5).stores({
+            feedSources: 'id, name, url, enabled, createdAt',
+            streamItems: 'id, kind, status, publishedAt, discoveredAt, score, url, sourceId, [kind+status]',
+            watchTerms: 'id, term, type, enabled, createdAt',
+            audienceAccounts: 'id, platform, handle, createdAt',
+            audienceReadings: 'id, accountId, capturedAt, [accountId+capturedAt]',
+            reminders: 'id, status, remindAt, createdAt',
+        });
     }
 }
+
 
 export const db = new MissionControlDB();
 
