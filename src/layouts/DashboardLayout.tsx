@@ -39,6 +39,11 @@ const VercelPage = lazy(() => import('@/pages/VercelPage'));
 const OpenClawPage = lazy(() => import('@/pages/OpenClawPage'));
 const HabitsPage = lazy(() => import('@/pages/HabitsPage'));
 const ReviewPage = lazy(() => import('@/pages/ReviewPage'));
+const ControlCenterPage = lazy(() => import('@/pages/ControlCenterPage'));
+const IndustryPage = lazy(() => import('@/pages/IndustryPage'));
+const MentionsPage = lazy(() => import('@/pages/MentionsPage'));
+const AudiencePage = lazy(() => import('@/pages/AudiencePage'));
+const RemindersPage = lazy(() => import('@/pages/RemindersPage'));
 const CustomModulePage = lazy(() => import('@/pages/CustomModulePage'));
 
 const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
@@ -64,6 +69,11 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   openclaw: OpenClawPage,
   habits: HabitsPage,
   review: ReviewPage,
+  'control-center': ControlCenterPage,
+  industry: IndustryPage,
+  mentions: MentionsPage,
+  audience: AudiencePage,
+  reminders: RemindersPage,
 };
 
 function LoadingSkeleton() {

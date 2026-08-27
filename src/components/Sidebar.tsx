@@ -8,7 +8,8 @@ import {
   Search as SearchIcon, Cloud, Rocket, Bug,
   Settings, Sun, Moon, X, Sparkles,
   DollarSign, Lightbulb, KeyRound, Flame,
-  ChevronLeft, ChevronRight, Plus, Check, Download, Zap, RefreshCcw, Archive
+  ChevronLeft, ChevronRight, Plus, Check, Download, Zap, RefreshCcw, Archive,
+  Radar, Newspaper, AtSign, Users, Bell
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,6 +24,16 @@ const navGroups = [
       { id: 'notes', label: 'Notes', icon: FileText },
       { id: 'focus', label: 'Focus Timer', icon: Timer },
       { id: 'habits', label: 'Habit Tracker', icon: Flame },
+    ],
+  },
+  {
+    label: 'CONTROL CENTER',
+    items: [
+      { id: 'control-center', label: 'Command Hub', icon: Radar },
+      { id: 'industry', label: 'Industry News', icon: Newspaper },
+      { id: 'mentions', label: 'Brand Mentions', icon: AtSign },
+      { id: 'audience', label: 'Audience', icon: Users },
+      { id: 'reminders', label: 'Reminders', icon: Bell },
     ],
   },
   {
