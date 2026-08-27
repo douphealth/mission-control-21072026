@@ -402,3 +402,69 @@
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--hairline-color); border-radius: 999px; border: 2px solid transparent; background-clip: padding-box; }
 ::-webkit-scrollbar-thumb:hover { background: hsl(var(--primary) / 0.35); background-clip: padding-box; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY & INCLUSIVITY — driven by the a11y settings panel
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.a11y-skip-link {
+  position: absolute;
+  left: 12px;
+  top: -100px;
+  z-index: 10000;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  transition: top 120ms ease;
+}
+.a11y-skip-link:focus { top: 12px; }
+
+/* Reduced motion — user choice, plus honour the OS setting */
+.a11y-reduce-motion *,
+.a11y-reduce-motion *::before,
+.a11y-reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Always-visible focus rings for keyboard-friendly navigation */
+.a11y-focus-always a:focus,
+.a11y-focus-always button:focus,
+.a11y-focus-always input:focus,
+.a11y-focus-always select:focus,
+.a11y-focus-always textarea:focus,
+.a11y-focus-always [tabindex]:focus,
+.a11y-focus-always [role="button"]:focus {
+  outline: 3px solid hsl(var(--ring)) !important;
+  outline-offset: 2px !important;
+}
+
+/* Baseline: keyboard users always get a ring, even without the toggle */
+:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.a11y-underline-links a { text-decoration: underline; text-underline-offset: 3px; }
+
+/* High contrast: solid surfaces, stronger hairlines, brighter text */
+.a11y-contrast {
+  --hairline-color: hsl(var(--foreground) / 0.45);
+}
+.a11y-contrast * { backdrop-filter: none !important; }
+.a11y-contrast .glass,
+.a11y-contrast .card-elevated,
+.a11y-contrast .stat-card {
+  background: hsl(var(--card)) !important;
+  border-color: hsl(var(--foreground) / 0.35) !important;
+}
+.a11y-contrast .text-muted-foreground { color: hsl(var(--foreground) / 0.85) !important; }
+.a11y-contrast .border-border\/60,
+.a11y-contrast .border-border\/50,
+.a11y-contrast .border-border\/40 { border-color: hsl(var(--foreground) / 0.35) !important; }
+.a11y-contrast :is(button, a):focus-visible { outline-width: 3px; }

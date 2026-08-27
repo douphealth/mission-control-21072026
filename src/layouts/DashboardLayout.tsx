@@ -10,7 +10,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
+import { useA11yStore } from '@/stores/a11yStore';
 import { lazyWithRetry as lazy } from '@/lib/lazyWithRetry';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import GoogleTasksPage from '@/pages/GoogleTasksPage';
@@ -95,6 +96,8 @@ function LoadingSkeleton() {
 
 export default function DashboardLayout() {
   const dashboard = useDashboardOptional();
+  const applyA11y = useA11yStore((s) => s.apply);
+  useEffect(() => { applyA11y(); }, [applyA11y]);
 
   if (!dashboard) {
     return (
@@ -127,13 +130,14 @@ export default function DashboardLayout() {
 
   return (
     <div className="enterprise-shell flex h-screen overflow-hidden bg-background">
+      <a href="#main-content" className="a11y-skip-link">Skip to content</a>
       {/* Hide sidebar on mobile — use bottom nav instead */}
       <div className="hidden lg:block">
         <Sidebar />
       </div>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-y-auto pb-28 lg:pb-0 overscroll-contain">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto pb-28 lg:pb-0 overscroll-contain">
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
             <CloudBackupBanner />
             {(activeSection === 'dashboard' || activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
