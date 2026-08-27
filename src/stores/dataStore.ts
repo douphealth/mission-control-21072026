@@ -71,6 +71,12 @@ function getTable(tableName: string) {
         credentials: db.credentials,
         customModules: db.customModules,
         habits: db.habits,
+        feedSources: db.feedSources,
+        streamItems: db.streamItems,
+        watchTerms: db.watchTerms,
+        audienceAccounts: db.audienceAccounts,
+        audienceReadings: db.audienceReadings,
+        reminders: db.reminders,
     };
     return tables[tableName];
 }

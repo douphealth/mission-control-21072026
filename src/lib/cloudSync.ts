@@ -46,6 +46,12 @@ const COLLECTIONS: Record<string, any> = {
     credentials: db.credentials,
     customModules: db.customModules,
     habits: db.habits,
+    feedSources: db.feedSources,
+    streamItems: db.streamItems,
+    watchTerms: db.watchTerms,
+    audienceAccounts: db.audienceAccounts,
+    audienceReadings: db.audienceReadings,
+    reminders: db.reminders,
     settings: db.settings,
 };
 
@@ -224,6 +230,11 @@ const REQUIRED_FIELDS: Record<string, string[]> = {
     credentials: ['label'],
     customModules: ['name'],
     habits: ['name'],
+    feedSources: ['name'],
+    streamItems: ['title'],
+    watchTerms: ['term'],
+    audienceAccounts: ['platform'],
+    reminders: ['title'],
 };
 
 function isValidRecord(collection: string, data: any, recordId: string): boolean {
