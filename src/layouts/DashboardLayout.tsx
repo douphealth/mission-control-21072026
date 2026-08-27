@@ -96,6 +96,8 @@ function LoadingSkeleton() {
 
 export default function DashboardLayout() {
   const dashboard = useDashboardOptional();
+  const applyA11y = useA11yStore((s) => s.apply);
+  useEffect(() => { applyA11y(); }, [applyA11y]);
 
   if (!dashboard) {
     return (
