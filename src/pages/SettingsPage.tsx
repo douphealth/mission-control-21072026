@@ -5,7 +5,7 @@ import {
   Moon, Sun, Download, Upload, Trash2, AlertTriangle, Database, Palette,
   User, Shield, Info, Cloud, Copy, CheckCircle2, XCircle, RefreshCw,
   Loader2, Key, ExternalLink, ChevronRight, Terminal, ArrowUpDown, Sliders,
-  Plug, ArrowDown, ArrowUp, Monitor, Calendar, CloudOff, Check, X
+  Accessibility, Plug, ArrowDown, ArrowUp, Monitor, Calendar, CloudOff, Check, X
 } from "lucide-react";
 import {
   getSupabaseConfig, setSupabaseConfig, clearSupabaseConfig,
@@ -16,12 +16,16 @@ import { generateStrongKey, setEncryptionKey, hasCustomEncryptionKey } from "@/l
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { setGCalConfig } from "@/lib/googleCalendar";
 import SupabaseSyncConsole from "@/components/SupabaseSyncConsole";
+import AccessibilityPanel from "@/components/AccessibilityPanel";
+import ConnectionsPanel from "@/components/ConnectionsPanel";
 
 import { toast } from "sonner";
 
 const tabs = [
   { id: "profile", label: "Profile", icon: User },
   { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "accessibility", label: "Accessibility", icon: Accessibility },
+  { id: "connections", label: "Connections", icon: Plug },
   { id: "google-calendar", label: "Google Calendar", icon: Calendar },
   { id: "supabase", label: "Cloud Sync", icon: Cloud },
   { id: "security", label: "Security", icon: Shield },
@@ -324,6 +328,18 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === "accessibility" && (
+              <div key="accessibility" {...fadeIn}>
+                <AccessibilityPanel />
+              </div>
+            )}
+
+            {activeTab === "connections" && (
+              <div key="connections" {...fadeIn}>
+                <ConnectionsPanel />
               </div>
             )}
 
