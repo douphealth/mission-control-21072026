@@ -137,7 +137,7 @@ export default function DashboardLayout() {
       </div>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-y-auto pb-28 lg:pb-0 overscroll-contain">
+        <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto pb-28 lg:pb-0 overscroll-contain">
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
             <CloudBackupBanner />
             {(activeSection === 'dashboard' || activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
