@@ -10,7 +10,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
 
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
+import { useA11yStore } from '@/stores/a11yStore';
 import { lazyWithRetry as lazy } from '@/lib/lazyWithRetry';
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 import GoogleTasksPage from '@/pages/GoogleTasksPage';
