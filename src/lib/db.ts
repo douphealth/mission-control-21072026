@@ -494,6 +494,13 @@ class MissionControlDB extends Dexie {
     settings!: Table<UserSettings>;
     customModules!: Table<CustomModule>;
     habits!: Table<HabitTracker>;
+    feedSources!: Table<FeedSource>;
+    streamItems!: Table<StreamItem>;
+    watchTerms!: Table<WatchTerm>;
+    audienceAccounts!: Table<AudienceAccount>;
+    audienceReadings!: Table<AudienceReading>;
+    reminders!: Table<Reminder>;
+
 
     constructor() {
         super('MissionControlDB');
