@@ -130,6 +130,7 @@ export default function DashboardLayout() {
 
   return (
     <div className="enterprise-shell flex h-screen overflow-hidden bg-background">
+      <a href="#main-content" className="a11y-skip-link">Skip to content</a>
       {/* Hide sidebar on mobile — use bottom nav instead */}
       <div className="hidden lg:block">
         <Sidebar />
