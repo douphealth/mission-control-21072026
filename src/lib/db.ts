@@ -538,8 +538,19 @@ class MissionControlDB extends Dexie {
         this.version(4).stores({
             tasks: 'id, title, priority, status, dueDate, category, createdAt, gcalEventId, touchedAt',
         });
+
+        // Control Center: industry news, brand mentions, audience, reminders.
+        this.version(5).stores({
+            feedSources: 'id, name, url, enabled, createdAt',
+            streamItems: 'id, kind, status, publishedAt, discoveredAt, score, url, sourceId, [kind+status]',
+            watchTerms: 'id, term, type, enabled, createdAt',
+            audienceAccounts: 'id, platform, handle, createdAt',
+            audienceReadings: 'id, accountId, capturedAt, [accountId+capturedAt]',
+            reminders: 'id, status, remindAt, createdAt',
+        });
     }
 }
+
 
 export const db = new MissionControlDB();
 
