@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { useFeedSources, useStreamItems, genId } from '@/hooks/useTableData';
 import { db } from '@/lib/db';
 import { markCloudRecordDirty, queueCloudPush } from '@/lib/cloudSync';
-import { runIndustryCollector, relTimeSafe } from '@/lib/controlCenterClientHelpers';
+import { runIndustryCollector } from '@/lib/controlCenter';
 import { CCHeader, EmptyState, Panel, StreamRow, relTime } from '@/components/controlcenter/ui';
 
 export default function IndustryPage() {
@@ -181,6 +181,3 @@ export default function IndustryPage() {
     </div>
   );
 }
-
-// re-exported for convenience in other Control Center pages
-export { relTimeSafe };
