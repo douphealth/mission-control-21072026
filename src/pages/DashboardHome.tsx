@@ -310,7 +310,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
 
 
       {/* ═══ STAT CARDS — 4 distinct colored tiles ═══ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { hue: 'emerald' as const, label: 'Total projects', value: websites.length + buildProjects.length, delta: '+5.4%', Icon: BarChart3, nav: 'websites', sub: 'across all workspaces' },
           { hue: 'violet'  as const, label: 'Completed',      value: done.length,                            delta: '+3.2%', Icon: CheckSquare, nav: 'tasks', sub: 'tasks this month' },
@@ -320,20 +320,20 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
           const h = HUES[s.hue];
           return (
             <button key={s.label} onClick={() => setActiveSection(s.nav)} {...fu(i + 1)}
-              className="group relative text-left rounded-[28px] p-6 overflow-hidden text-white transition-transform hover:-translate-y-1"
+              className="group relative text-left rounded-[22px] sm:rounded-[28px] p-4 sm:p-6 overflow-hidden text-white transition-transform hover:-translate-y-1 active:scale-[0.98]"
               style={{ background: h.grad, boxShadow: `0 20px 50px -20px ${h.soft.replace('0.12','0.55').replace('0.14','0.55')}` }}>
               <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-30" style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.6), transparent 65%)' }} />
               <div className="relative">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
                     <s.Icon size={18} className="text-white" />
                   </div>
                   <ArrowUpRight size={16} className="text-white/70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
-                <div className="text-[36px] font-extrabold tracking-tighter leading-none tabular-nums">{s.value}</div>
-                <div className="mt-2 text-[13px] font-semibold text-white/90">{s.label}</div>
-                <div className="mt-1 text-[11px] text-white/65">{s.sub}</div>
-                <div className="mt-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold">
+                <div className="font-display text-[26px] sm:text-[36px] font-extrabold tracking-tighter leading-none tabular-nums">{s.value}</div>
+                <div className="mt-1.5 sm:mt-2 text-[12px] sm:text-[13px] font-semibold text-white/90">{s.label}</div>
+                <div className="mt-1 hidden sm:block text-[11px] text-white/65">{s.sub}</div>
+                <div className="mt-3 sm:mt-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold">
                   <ArrowUp size={10} /> {s.delta}
                 </div>
               </div>
