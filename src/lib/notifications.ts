@@ -4,6 +4,7 @@
 import { db } from '@/lib/db';
 import type { Task } from '@/lib/db';
 import { toast } from 'sonner';
+import { markCloudRecordDirty, queueCloudPush } from '@/lib/cloudSync';
 
 const REMINDER_OFFSETS: Record<string, number> = {
   'at-time': 0,
@@ -176,6 +177,8 @@ const check = async () => {
 
         if (newFired) {
           await db.tasks.update(task.id, { remindersFired: Array.from(fired) });
+          markCloudRecordDirty('tasks', task.id);
+          queueCloudPush();
         }
         continue;
       }
@@ -192,6 +195,8 @@ const check = async () => {
       if (now >= triggerAt) {
         fireNotification(task, REMINDER_LABELS[task.reminder] || task.reminder);
         await db.tasks.update(task.id, { reminderFired: true });
+        markCloudRecordDirty('tasks', task.id);
+        queueCloudPush();
       }
     }
   } catch (e) {
