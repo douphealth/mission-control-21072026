@@ -50,7 +50,8 @@
   --color-violet-foreground: hsl(var(--violet-foreground));
   --color-rose: hsl(var(--rose));
   --color-rose-foreground: hsl(var(--rose-foreground));
-  --font-sans: "Inter", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-sans: "Manrope", system-ui, -apple-system, sans-serif;
+  --font-display: "Sora", "Manrope", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
