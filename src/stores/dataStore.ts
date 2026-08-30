@@ -11,7 +11,7 @@ import type {
     UserSettings, WidgetLayout,
 } from '@/lib/db';
 import { isSupabaseConnected, pushToSupabase } from '@/lib/supabase';
-import { markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from '@/lib/cloudSync';
+import { flushCloudChanges, markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from '@/lib/cloudSync';
 
 import { isDuplicate, deduplicateItems, findDuplicateId } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
@@ -156,6 +156,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         await tableRef.put({ ...item, id });
         markCloudRecordDirty(table, id);
         schedulePush();
+        await flushCloudChanges();
         return id;
     },
 
@@ -170,6 +171,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         await tableRef.update(id, patch);
         markCloudRecordDirty(table, id);
         schedulePush();
+        await flushCloudChanges();
     },
 
     deleteItem: async (table: string, id: string): Promise<void> => {
@@ -178,6 +180,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         await tableRef.delete(id);
         markCloudRecordDirty(table, id, 'delete');
         schedulePush();
+        await flushCloudChanges();
     },
 
     duplicateItem: async (table: string, id: string, overrides: Record<string, any> = {}): Promise<string> => {
@@ -201,6 +204,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         await tableRef.put(clone);
         markCloudRecordDirty(table, newId);
         schedulePush();
+        await flushCloudChanges();
         return newId;
     },
 
@@ -220,6 +224,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
         await tableRef.bulkPut(withIds);
         markCloudRecordsDirty(table, withIds.map(item => item.id));
         schedulePush();
+        await flushCloudChanges();
     },
 
     // ─── Settings ─────────────────────────────────────────────────────────────
