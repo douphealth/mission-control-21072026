@@ -102,6 +102,84 @@ const AreaChart = ({ data, tone = 'emerald' }: { data: number[]; tone?: keyof ty
   );
 };
 
+/* ─── Momentum chart: smooth curve, gradient glow, hover readout ─── */
+const MomentumChart = ({ data }: { data: number[] }) => {
+  const [hover, setHover] = useState<number | null>(null);
+  const w = 720, h = 220, padX = 14, padTop = 22, padBottom = 26;
+  const pts = data.length ? data : [0, 0];
+  const max = Math.max(...pts, 1);
+  const stepX = pts.length > 1 ? (w - padX * 2) / (pts.length - 1) : 0;
+  const xy = pts.map((v, i) => [padX + i * stepX, h - padBottom - (v / max) * (h - padTop - padBottom)] as const);
+
+  // Catmull-Rom → cubic bezier for a silky curve
+  let line = `M${xy[0][0]},${xy[0][1]}`;
+  for (let i = 0; i < xy.length - 1; i++) {
+    const p0 = xy[i - 1] ?? xy[i], p1 = xy[i], p2 = xy[i + 1], p3 = xy[i + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    line += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+  }
+  const area = `${line} L${xy[xy.length - 1][0]},${h - padBottom} L${xy[0][0]},${h - padBottom} Z`;
+  const active = hover != null ? xy[hover] : xy[xy.length - 1];
+  const activeVal = pts[hover != null ? hover : pts.length - 1];
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-[200px] w-full overflow-visible"
+        onMouseLeave={() => setHover(null)}>
+        <defs>
+          <linearGradient id="mcStroke" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="hsl(var(--info))" />
+            <stop offset="55%" stopColor="hsl(var(--primary))" />
+            <stop offset="100%" stopColor="hsl(var(--violet))" />
+          </linearGradient>
+          <linearGradient id="mcFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.34} />
+            <stop offset="60%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </linearGradient>
+          <filter id="mcGlow" x="-20%" y="-40%" width="140%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        {/* grid */}
+        {[0.25, 0.5, 0.75].map(g => (
+          <line key={g} x1={padX} x2={w - padX} y1={padTop + g * (h - padTop - padBottom)} y2={padTop + g * (h - padTop - padBottom)}
+            stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="2 8" opacity={0.7} />
+        ))}
+
+        <path d={area} fill="url(#mcFill)" style={{ animation: 'mcFade 0.9s ease-out both' }} />
+        <path d={line} fill="none" stroke="url(#mcStroke)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"
+          filter="url(#mcGlow)" pathLength={1} style={{ strokeDasharray: 1, animation: 'mcDraw 1.4s cubic-bezier(0.22,1,0.36,1) both' }} />
+
+        {/* hover crosshair */}
+        {active && (
+          <>
+            <line x1={active[0]} x2={active[0]} y1={padTop - 8} y2={h - padBottom} stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="3 4" opacity={0.5} />
+            <circle cx={active[0]} cy={active[1]} r={9} fill="hsl(var(--primary))" opacity={0.16} />
+            <circle cx={active[0]} cy={active[1]} r={4.5} fill="hsl(var(--card))" stroke="hsl(var(--primary))" strokeWidth={3} />
+          </>
+        )}
+
+        {/* hit zones */}
+        {xy.map((p, i) => (
+          <rect key={i} x={p[0] - stepX / 2} y={0} width={stepX || w} height={h} fill="transparent"
+            onMouseEnter={() => setHover(i)} />
+        ))}
+      </svg>
+
+      {active && (
+        <div className="pointer-events-none absolute -top-1 rounded-lg border border-border/60 bg-card/95 px-2 py-1 text-[10px] font-bold text-foreground shadow-[var(--shadow-md)] backdrop-blur"
+          style={{ left: `calc(${(active[0] / w) * 100}% - 26px)` }}>
+          {activeVal} done
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AvatarStack = ({ names, size = 28 }: { names: string[]; size?: number }) => {
   const colors = ['#f59e0b', '#8b5cf6', '#10b981', '#0ea5e9', '#f43f5e'];
   return (
@@ -228,7 +306,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
     <div ref={ref} className="flex flex-col gap-5 sm:gap-6 pb-8">
 
       {/* Anim keyframes */}
-      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}`}</style>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes mcDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}@keyframes mcFade{from{opacity:0}to{opacity:1}}`}</style>
 
       {/* ═══ HERO ═══ */}
       <div {...fu(0)} className="relative overflow-hidden rounded-[26px] p-5 sm:rounded-[32px] sm:p-10"
@@ -345,64 +423,82 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
       {/* ═══ ANALYTICS (7) + POMODORO (5) ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Performance chart */}
-        <div {...fu(6)} className="lg:col-span-8 relative overflow-hidden rounded-[28px] border border-border/70 bg-card p-5 shadow-[var(--shadow-md)] sm:p-7">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-info to-violet" />
-          <div className="pointer-events-none absolute right-0 top-0 h-48 w-64 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.14),transparent_68%)]" />
-          <div className="relative flex items-start justify-between flex-wrap gap-4 mb-6">
-            <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase text-primary">
-                <Activity size={11} /> Productivity pulse
+        <div {...fu(6)} className="lg:col-span-8 relative overflow-hidden rounded-[28px] border border-border/60 bg-card p-5 shadow-[var(--shadow-lg)] sm:p-7">
+          {/* ambient light */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[radial-gradient(circle,hsl(var(--primary)/0.18),transparent_65%)] blur-2xl" />
+          <div className="pointer-events-none absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-[radial-gradient(circle,hsl(var(--info)/0.12),transparent_65%)] blur-2xl" />
+
+          <div className="relative mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                </span>
+                Productivity pulse
               </div>
-              <h3 className="text-[22px] font-extrabold text-foreground sm:text-[26px]">Weekly performance</h3>
-              <p className="mt-1 text-[12px] text-muted-foreground">A live view of momentum across the last {periodLabel}</p>
+              <h3 className="font-display text-[24px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[30px]">
+                Momentum, <span className="bg-gradient-to-r from-primary via-info to-violet bg-clip-text text-transparent">visualised</span>
+              </h3>
+              <p className="mt-1 text-[12px] text-muted-foreground">Live output across the last {periodLabel}</p>
             </div>
-            <div className="inline-flex rounded-xl border border-border/70 bg-secondary/70 p-1 text-[11px] font-semibold shadow-inner" role="group" aria-label="Performance range">
-                {(['1W', '1M', '3M', '1Y'] as const).map(v => (
-                  <button key={v} type="button" onClick={() => setChartRange(v)} aria-pressed={chartRange === v}
-                    className={`min-w-10 rounded-lg px-2.5 py-2 transition-all ${chartRange === v ? 'bg-card text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-card/60 hover:text-foreground'}`}>{v}</button>
-                ))}
+            <div className="inline-flex shrink-0 rounded-2xl border border-border/60 bg-secondary/60 p-1 text-[11px] font-semibold backdrop-blur" role="group" aria-label="Performance range">
+              {(['1W', '1M', '3M', '1Y'] as const).map(v => (
+                <button key={v} type="button" onClick={() => setChartRange(v)} aria-pressed={chartRange === v}
+                  className={`min-w-10 rounded-xl px-2.5 py-2 transition-all duration-300 ${chartRange === v ? 'bg-card text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.7)] ring-1 ring-primary/30' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
+              ))}
             </div>
           </div>
 
-          <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-3 mb-5">
+          {/* KPI trio */}
+          <div className="relative mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
-              { hue: 'emerald' as const, lbl: 'Completed', val: rangeCompleted, delta: `${completionChange >= 0 ? '+' : ''}${completionChange}% vs prior`, icon: CheckSquare },
-              { hue: 'sky' as const, lbl: 'In motion', val: inProgress.length, delta: `${open.length} total open`, icon: Zap },
-              { hue: 'rose' as const, lbl: 'Needs attention', val: overdue, delta: overdue ? 'Overdue now' : 'All clear', icon: Bell },
-            ].map(m => {
-              const iconTone = m.hue === 'emerald'
-                ? 'bg-primary/10 text-primary'
-                : m.hue === 'rose'
-                  ? 'bg-destructive/10 text-destructive'
-                  : 'bg-info/10 text-info';
-              return (
-              <div key={m.lbl} className="group rounded-2xl border border-border/60 bg-secondary/35 p-4 transition hover:-translate-y-0.5 hover:bg-secondary/55 hover:shadow-sm">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-muted-foreground">{m.lbl}</span>
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconTone}`}><m.icon size={13} /></span>
+              { key: 'done', lbl: 'Completed', val: rangeCompleted, delta: `${completionChange >= 0 ? '+' : ''}${completionChange}% vs prior`, icon: CheckSquare, tone: 'primary', up: completionChange >= 0, bar: Math.min(100, rangeCompleted ? 100 : 0) },
+              { key: 'motion', lbl: 'In motion', val: inProgress.length, delta: `${open.length} total open`, icon: Zap, tone: 'info', up: true, bar: open.length ? (inProgress.length / open.length) * 100 : 0 },
+              { key: 'attn', lbl: 'Needs attention', val: overdue, delta: overdue ? 'Overdue now' : 'All clear', icon: Bell, tone: overdue ? 'destructive' : 'primary', up: !overdue, bar: open.length ? (overdue / open.length) * 100 : 0 },
+            ].map((m, i) => (
+              <div key={m.key}
+                style={{ animation: `fadeUp 0.6s ${300 + i * 90}ms cubic-bezier(0.22,1,0.36,1) both` }}
+                className="group relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary/50 to-secondary/20 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[0_20px_40px_-24px_hsl(var(--primary)/0.55)]">
+                <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                  style={{ background: `radial-gradient(120% 80% at 50% 0%, hsl(var(--${m.tone})/0.14), transparent 70%)` }} />
+                <div className="relative mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{m.lbl}</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110"
+                    style={{ background: `hsl(var(--${m.tone})/0.12)`, color: `hsl(var(--${m.tone}))` }}><m.icon size={14} /></span>
                 </div>
-                <div className="flex items-end justify-between gap-2">
-                  <span className="text-[30px] font-extrabold leading-none tabular-nums text-foreground">{m.val}</span>
-                  <span className={`text-right text-[10px] font-bold ${m.hue === 'rose' && overdue ? 'text-destructive' : 'text-muted-foreground'}`}>{m.delta}</span>
+                <div className="relative flex items-end justify-between gap-2">
+                  <span className="font-display text-[34px] font-extrabold leading-none tabular-nums text-foreground">{m.val}</span>
+                  <span className="inline-flex items-center gap-1 text-right text-[10px] font-bold"
+                    style={{ color: m.up ? 'hsl(var(--muted-foreground))' : 'hsl(var(--destructive))' }}>
+                    {m.key === 'done' && (m.up ? <ArrowUpRight size={11} className="text-primary" /> : <ArrowDownRight size={11} className="text-destructive" />)}
+                    {m.delta}
+                  </span>
+                </div>
+                <div className="relative mt-3 h-1 overflow-hidden rounded-full bg-border/60">
+                  <div className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${Math.max(6, Math.min(100, m.bar))}%`, background: `linear-gradient(90deg, hsl(var(--${m.tone})/0.5), hsl(var(--${m.tone})))` }} />
                 </div>
               </div>
-              );
-            })}
+            ))}
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-secondary/20 px-2 pt-6">
-            <div className="absolute left-4 top-3 flex items-center gap-2 text-[10px] font-semibold text-muted-foreground">
-              <TrendingUp size={12} className="text-primary" /> {peakIndex >= 0 ? `Peak output: ${maxWave} task${maxWave === 1 ? '' : 's'} in period ${peakIndex + 1}` : 'Complete a task to start your momentum curve'}
+          {/* Chart */}
+          <div className="relative overflow-hidden rounded-[22px] border border-border/50 bg-gradient-to-b from-secondary/25 to-transparent p-4 sm:p-5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">
+                <TrendingUp size={11} /> {peakIndex >= 0 ? `Peak ${maxWave} task${maxWave === 1 ? '' : 's'}` : 'Complete a task to start your curve'}
+              </span>
+              <span className="text-[10px] font-semibold text-muted-foreground">{rangeCompleted} completed · {periodLabel}</span>
             </div>
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-border/50" />
-            <div className="h-[180px] -mx-2">
-              <AreaChart data={taskWave} tone="emerald" />
-            </div>
-            <div className="flex items-center justify-between border-t border-border/50 px-3 py-3 text-[10px] font-semibold text-muted-foreground">
-              <span>Earlier</span><span className="text-primary">{rangeCompleted} completed</span><span>Today</span>
+            <MomentumChart data={taskWave} />
+            <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span>Earlier</span><span>Today</span>
             </div>
           </div>
         </div>
+
 
         {/* Pomodoro / Focus */}
         <div {...fu(7)} className="lg:col-span-4 rounded-[28px] p-6 sm:p-7 text-white relative overflow-hidden"
