@@ -345,64 +345,82 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
       {/* ═══ ANALYTICS (7) + POMODORO (5) ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Performance chart */}
-        <div {...fu(6)} className="lg:col-span-8 relative overflow-hidden rounded-[28px] border border-border/70 bg-card p-5 shadow-[var(--shadow-md)] sm:p-7">
-          <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-info to-violet" />
-          <div className="pointer-events-none absolute right-0 top-0 h-48 w-64 bg-[radial-gradient(circle_at_top_right,hsl(var(--primary)/0.14),transparent_68%)]" />
-          <div className="relative flex items-start justify-between flex-wrap gap-4 mb-6">
-            <div>
-              <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase text-primary">
-                <Activity size={11} /> Productivity pulse
+        <div {...fu(6)} className="lg:col-span-8 relative overflow-hidden rounded-[28px] border border-border/60 bg-card p-5 shadow-[var(--shadow-lg)] sm:p-7">
+          {/* ambient light */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/70 to-transparent" />
+          <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[radial-gradient(circle,hsl(var(--primary)/0.18),transparent_65%)] blur-2xl" />
+          <div className="pointer-events-none absolute -left-24 bottom-0 h-64 w-64 rounded-full bg-[radial-gradient(circle,hsl(var(--info)/0.12),transparent_65%)] blur-2xl" />
+
+          <div className="relative mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-start gap-4">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/25 bg-primary/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-70" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-primary" />
+                </span>
+                Productivity pulse
               </div>
-              <h3 className="text-[22px] font-extrabold text-foreground sm:text-[26px]">Weekly performance</h3>
-              <p className="mt-1 text-[12px] text-muted-foreground">A live view of momentum across the last {periodLabel}</p>
+              <h3 className="font-display text-[24px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[30px]">
+                Momentum, <span className="bg-gradient-to-r from-primary via-info to-violet bg-clip-text text-transparent">visualised</span>
+              </h3>
+              <p className="mt-1 text-[12px] text-muted-foreground">Live output across the last {periodLabel}</p>
             </div>
-            <div className="inline-flex rounded-xl border border-border/70 bg-secondary/70 p-1 text-[11px] font-semibold shadow-inner" role="group" aria-label="Performance range">
-                {(['1W', '1M', '3M', '1Y'] as const).map(v => (
-                  <button key={v} type="button" onClick={() => setChartRange(v)} aria-pressed={chartRange === v}
-                    className={`min-w-10 rounded-lg px-2.5 py-2 transition-all ${chartRange === v ? 'bg-card text-foreground shadow-sm ring-1 ring-border' : 'text-muted-foreground hover:bg-card/60 hover:text-foreground'}`}>{v}</button>
-                ))}
+            <div className="inline-flex shrink-0 rounded-2xl border border-border/60 bg-secondary/60 p-1 text-[11px] font-semibold backdrop-blur" role="group" aria-label="Performance range">
+              {(['1W', '1M', '3M', '1Y'] as const).map(v => (
+                <button key={v} type="button" onClick={() => setChartRange(v)} aria-pressed={chartRange === v}
+                  className={`min-w-10 rounded-xl px-2.5 py-2 transition-all duration-300 ${chartRange === v ? 'bg-card text-foreground shadow-[0_6px_18px_-8px_hsl(var(--primary)/0.7)] ring-1 ring-primary/30' : 'text-muted-foreground hover:text-foreground'}`}>{v}</button>
+              ))}
             </div>
           </div>
 
-          <div className="relative grid grid-cols-1 gap-3 sm:grid-cols-3 mb-5">
+          {/* KPI trio */}
+          <div className="relative mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
             {[
-              { hue: 'emerald' as const, lbl: 'Completed', val: rangeCompleted, delta: `${completionChange >= 0 ? '+' : ''}${completionChange}% vs prior`, icon: CheckSquare },
-              { hue: 'sky' as const, lbl: 'In motion', val: inProgress.length, delta: `${open.length} total open`, icon: Zap },
-              { hue: 'rose' as const, lbl: 'Needs attention', val: overdue, delta: overdue ? 'Overdue now' : 'All clear', icon: Bell },
-            ].map(m => {
-              const iconTone = m.hue === 'emerald'
-                ? 'bg-primary/10 text-primary'
-                : m.hue === 'rose'
-                  ? 'bg-destructive/10 text-destructive'
-                  : 'bg-info/10 text-info';
-              return (
-              <div key={m.lbl} className="group rounded-2xl border border-border/60 bg-secondary/35 p-4 transition hover:-translate-y-0.5 hover:bg-secondary/55 hover:shadow-sm">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-[11px] font-semibold text-muted-foreground">{m.lbl}</span>
-                  <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${iconTone}`}><m.icon size={13} /></span>
+              { key: 'done', lbl: 'Completed', val: rangeCompleted, delta: `${completionChange >= 0 ? '+' : ''}${completionChange}% vs prior`, icon: CheckSquare, tone: 'primary', up: completionChange >= 0, bar: Math.min(100, rangeCompleted ? 100 : 0) },
+              { key: 'motion', lbl: 'In motion', val: inProgress.length, delta: `${open.length} total open`, icon: Zap, tone: 'info', up: true, bar: open.length ? (inProgress.length / open.length) * 100 : 0 },
+              { key: 'attn', lbl: 'Needs attention', val: overdue, delta: overdue ? 'Overdue now' : 'All clear', icon: Bell, tone: overdue ? 'destructive' : 'primary', up: !overdue, bar: open.length ? (overdue / open.length) * 100 : 0 },
+            ].map((m, i) => (
+              <div key={m.key}
+                style={{ animation: `fadeUp 0.6s ${300 + i * 90}ms cubic-bezier(0.22,1,0.36,1) both` }}
+                className="group relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-b from-secondary/50 to-secondary/20 p-4 transition-all duration-300 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[0_20px_40px_-24px_hsl(var(--primary)/0.55)]">
+                <div className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+                  style={{ background: `radial-gradient(120% 80% at 50% 0%, hsl(var(--${m.tone})/0.14), transparent 70%)` }} />
+                <div className="relative mb-3 flex items-center justify-between">
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{m.lbl}</span>
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-110"
+                    style={{ background: `hsl(var(--${m.tone})/0.12)`, color: `hsl(var(--${m.tone}))` }}><m.icon size={14} /></span>
                 </div>
-                <div className="flex items-end justify-between gap-2">
-                  <span className="text-[30px] font-extrabold leading-none tabular-nums text-foreground">{m.val}</span>
-                  <span className={`text-right text-[10px] font-bold ${m.hue === 'rose' && overdue ? 'text-destructive' : 'text-muted-foreground'}`}>{m.delta}</span>
+                <div className="relative flex items-end justify-between gap-2">
+                  <span className="font-display text-[34px] font-extrabold leading-none tabular-nums text-foreground">{m.val}</span>
+                  <span className="inline-flex items-center gap-1 text-right text-[10px] font-bold"
+                    style={{ color: m.up ? 'hsl(var(--muted-foreground))' : 'hsl(var(--destructive))' }}>
+                    {m.key === 'done' && (m.up ? <ArrowUpRight size={11} className="text-primary" /> : <ArrowDownRight size={11} className="text-destructive" />)}
+                    {m.delta}
+                  </span>
+                </div>
+                <div className="relative mt-3 h-1 overflow-hidden rounded-full bg-border/60">
+                  <div className="h-full rounded-full transition-all duration-700"
+                    style={{ width: `${Math.max(6, Math.min(100, m.bar))}%`, background: `linear-gradient(90deg, hsl(var(--${m.tone})/0.5), hsl(var(--${m.tone})))` }} />
                 </div>
               </div>
-              );
-            })}
+            ))}
           </div>
 
-          <div className="relative overflow-hidden rounded-2xl border border-border/50 bg-secondary/20 px-2 pt-6">
-            <div className="absolute left-4 top-3 flex items-center gap-2 text-[10px] font-semibold text-muted-foreground">
-              <TrendingUp size={12} className="text-primary" /> {peakIndex >= 0 ? `Peak output: ${maxWave} task${maxWave === 1 ? '' : 's'} in period ${peakIndex + 1}` : 'Complete a task to start your momentum curve'}
+          {/* Chart */}
+          <div className="relative overflow-hidden rounded-[22px] border border-border/50 bg-gradient-to-b from-secondary/25 to-transparent p-4 sm:p-5">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary">
+                <TrendingUp size={11} /> {peakIndex >= 0 ? `Peak ${maxWave} task${maxWave === 1 ? '' : 's'}` : 'Complete a task to start your curve'}
+              </span>
+              <span className="text-[10px] font-semibold text-muted-foreground">{rangeCompleted} completed · {periodLabel}</span>
             </div>
-            <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-dashed border-border/50" />
-            <div className="h-[180px] -mx-2">
-              <AreaChart data={taskWave} tone="emerald" />
-            </div>
-            <div className="flex items-center justify-between border-t border-border/50 px-3 py-3 text-[10px] font-semibold text-muted-foreground">
-              <span>Earlier</span><span className="text-primary">{rangeCompleted} completed</span><span>Today</span>
+            <MomentumChart data={taskWave} />
+            <div className="mt-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+              <span>Earlier</span><span>Today</span>
             </div>
           </div>
         </div>
+
 
         {/* Pomodoro / Focus */}
         <div {...fu(7)} className="lg:col-span-4 rounded-[28px] p-6 sm:p-7 text-white relative overflow-hidden"
