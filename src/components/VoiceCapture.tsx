@@ -523,7 +523,7 @@ export default function VoiceCapture() {
           setOpen(true);
           if (supported && phase === 'idle') void startRecording();
         }} 
-        className="fixed z-40 bottom-24 right-4 lg:bottom-8 lg:right-8 w-14 h-14 lg:w-16 lg:h-16 rounded-full gradient-primary text-primary-foreground shadow-[0_10px_40px_-8px_hsl(var(--primary)/0.6)] flex items-center justify-center group"
+        className="fixed z-40 bottom-[calc(env(safe-area-inset-bottom)+92px)] right-4 lg:bottom-8 lg:right-8 w-[52px] h-[52px] lg:w-16 lg:h-16 rounded-full gradient-primary text-primary-foreground shadow-[0_10px_40px_-8px_hsl(var(--primary)/0.6)] flex items-center justify-center group"
         title="Voice capture (⌘⇧V)"
         aria-label="Voice capture"
       >
