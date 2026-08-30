@@ -5,7 +5,6 @@ import MobileBottomNav from '@/components/MobileBottomNav';
 import DailyBriefingBanner from '@/components/DailyBriefingBanner';
 import CloudBackupBanner from '@/components/CloudBackupBanner';
 
-
 import { useIsMobile } from '@/hooks/use-mobile';
 import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
 import { useNavigationStore } from '@/stores/navigationStore';
@@ -19,6 +18,7 @@ import SnapCapture from '@/components/SnapCapture';
 
 const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
 
+const DecisionCenterPage = lazy(() => import('@/pages/DecisionCenterPage'));
 const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
 const TasksPage = lazy(() => import('@/pages/TasksPage'));
 const WebsitesPage = lazy(() => import('@/pages/WebsitesPage'));
@@ -48,7 +48,8 @@ const RemindersPage = lazy(() => import('@/pages/RemindersPage'));
 const CustomModulePage = lazy(() => import('@/pages/CustomModulePage'));
 
 const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
-  dashboard: DashboardHome,
+  dashboard: DecisionCenterPage,
+  'legacy-dashboard': DashboardHome,
   tasks: TasksPage,
   'google-tasks': GoogleTasksPage,
   websites: WebsitesPage,
@@ -110,7 +111,7 @@ export default function DashboardLayout() {
   const { isLoading } = dashboard;
   const { activeSection } = useNavigationStore();
   const isMobile = useIsMobile();
-  const Section = activeSection.startsWith('custom-') ? CustomModulePage : (sectionMap[activeSection] || DashboardHome);
+  const Section = activeSection.startsWith('custom-') ? CustomModulePage : (sectionMap[activeSection] || DecisionCenterPage);
 
   if (isLoading) {
     return (
@@ -127,11 +128,9 @@ export default function DashboardLayout() {
     );
   }
 
-
   return (
     <div className="enterprise-shell flex h-screen overflow-hidden bg-background">
       <a href="#main-content" className="a11y-skip-link">Skip to content</a>
-      {/* Hide sidebar on mobile — use bottom nav instead */}
       <div className="hidden lg:block">
         <Sidebar />
       </div>
@@ -139,14 +138,12 @@ export default function DashboardLayout() {
         <TopBar />
         <main id="main-content" tabIndex={-1} className="mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain">
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
-
             <CloudBackupBanner />
-            {(activeSection === 'dashboard' || activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
+            {(activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
               <DailyBriefingBanner />
             )}
 
             <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
-
               <Suspense fallback={<LoadingSkeleton />}>
                 <div key={activeSection} className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
                   <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />
@@ -157,11 +154,8 @@ export default function DashboardLayout() {
         </main>
         {!isMobile && <StatusBar />}
       </div>
-      {/* Mobile bottom navigation */}
       <MobileBottomNav />
-      {/* Instant photo capture → AI import */}
       <SnapCapture />
-      {/* Voice capture — lazy-loaded floating mic */}
       <Suspense fallback={null}>
         <VoiceCapture />
       </Suspense>
