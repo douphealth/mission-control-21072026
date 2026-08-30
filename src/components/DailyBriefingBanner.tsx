@@ -136,25 +136,25 @@ export default function DailyBriefingBanner() {
 
   const shown = expanded
     ? [...briefing.overdue, ...briefing.dueToday]
-    : [...briefing.overdue, ...briefing.dueToday].slice(0, 3);
+    : [...briefing.overdue, ...briefing.dueToday].slice(0, 2);
 
   return (
     <section className="mb-4 overflow-hidden rounded-3xl border border-border/50 bg-card/80 shadow-[0_18px_45px_-38px_hsl(var(--foreground)/0.6)] backdrop-blur">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border/40 px-4 py-3 sm:px-5">
+      <div className="flex items-center gap-2.5 border-b border-border/40 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
         <div
-          className={`flex h-9 w-9 items-center justify-center rounded-2xl ${
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl sm:h-9 sm:w-9 ${
             briefing.overdue.length ? 'bg-rose-500/15 text-rose-500' : 'bg-sky-500/15 text-sky-500'
           }`}
         >
           {briefing.overdue.length ? <AlertTriangle size={18} /> : <CalendarClock size={18} />}
         </div>
         <div className="min-w-0 flex-1">
-          <h2 className="text-[14px] font-extrabold tracking-tight text-foreground">
+          <h2 className="truncate text-[13px] font-extrabold tracking-tight text-foreground sm:text-[14px]">
             {briefing.overdue.length
               ? `${briefing.overdue.length} overdue · ${briefing.dueToday.length} due today`
               : `${briefing.dueToday.length} task${briefing.dueToday.length === 1 ? '' : 's'} due today`}
           </h2>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="truncate text-[10px] text-muted-foreground sm:text-[11px]">
             Daily briefing · {today} · {briefing.completedToday} completed today
           </p>
         </div>
@@ -162,31 +162,31 @@ export default function DailyBriefingBanner() {
           <button
             onClick={copyDigest}
             title="Copy digest"
-            className="rounded-full border border-border/50 p-2 text-muted-foreground transition active:scale-90"
+            className="hidden rounded-full border border-border/50 p-2 sm:block text-muted-foreground transition active:scale-90"
           >
             {copied ? <Check size={15} /> : <Copy size={15} />}
           </button>
           <button
             onClick={emailDigest}
             title="Email digest"
-            className="rounded-full border border-border/50 p-2 text-muted-foreground transition active:scale-90"
+            className="hidden rounded-full border border-border/50 p-2 sm:block text-muted-foreground transition active:scale-90"
           >
             <Mail size={15} className={sending ? 'animate-pulse' : ''} />
           </button>
           <button
             onClick={() => setActiveSection('tasks')}
-            className="rounded-full bg-primary px-3 py-1.5 text-[11px] font-bold text-primary-foreground transition active:scale-95"
+            className="shrink-0 rounded-full bg-primary px-3 py-2 text-[11px] font-bold text-primary-foreground transition active:scale-95"
           >
             Open tasks
           </button>
         </div>
       </div>
 
-      <div className="space-y-2 px-3 py-3 sm:px-4">
+      <div className="space-y-2 px-2.5 py-2.5 sm:px-4 sm:py-3">
         {shown.map((t) => (
           <TaskRow key={t.id} task={t} overdue={t.dueDate < today} />
         ))}
-        {briefing.total > 3 && (
+        {briefing.total > 2 && (
           <button
             onClick={() => setExpanded((e) => !e)}
             className="flex w-full items-center justify-center gap-1 rounded-2xl py-2 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
