@@ -217,7 +217,7 @@ export default function SnapCapture() {
   return (
     <>
       {phase === 'idle' && (
-        <div className="fixed bottom-40 right-4 lg:bottom-28 lg:right-8 z-[90] flex flex-col items-end gap-2">
+        <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+152px)] right-4 lg:bottom-28 lg:right-8 z-[90] flex flex-col items-end gap-2">
           {showActions && (
             <>
               <div className="fixed inset-0 z-[89]" onClick={() => setShowActions(false)} />

@@ -86,9 +86,9 @@ export default function MobileBottomNav() {
         </>
       )}
 
-      <nav className="fixed bottom-0 left-0 right-0 z-40 px-2 pb-2 lg:hidden">
-        <div className="mobile-liquid-bar rounded-[28px] px-1.5 pb-[calc(env(safe-area-inset-bottom)+0.25rem)] pt-1.5">
-          <div className="flex h-[66px] items-center justify-around gap-1">
+      <nav className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)*0.5+0.5rem)] lg:hidden">
+        <div className="mobile-liquid-bar rounded-[26px] px-1.5 py-1.5">
+          <div className="flex h-[60px] items-stretch justify-around gap-1">
             {primaryTabs.map(tab => {
               const isActive = tab.id === 'more' ? moreOpen : activeSection === tab.id;
               const Icon = tab.icon;
@@ -96,32 +96,31 @@ export default function MobileBottomNav() {
                 <button
                   key={tab.id}
                   onClick={() => handleTab(tab.id)}
-                  className={`relative flex h-full flex-1 flex-col items-center justify-center gap-1 rounded-3xl transition-all duration-200 touch-manipulation active:scale-[0.88]
-                    ${isActive ? 'text-primary' : 'text-muted-foreground/60'}`}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`relative flex flex-1 flex-col items-center justify-center gap-1 rounded-[20px] transition-all duration-200 touch-manipulation active:scale-[0.9]
+                    ${isActive ? 'text-primary' : 'text-muted-foreground/65'}`}
                 >
                   {isActive && (
-                    <div className="absolute inset-y-1.5 inset-x-0 rounded-3xl bg-primary/10 ring-1 ring-primary/14" />
+                    <span className="absolute inset-0 rounded-[20px] bg-primary/12 ring-1 ring-primary/20 shadow-[0_10px_28px_-18px_hsl(var(--primary)/0.9)]" />
                   )}
                   <div className="relative">
-                    <Icon size={21} strokeWidth={isActive ? 2.55 : 1.65} />
+                    <Icon size={20} strokeWidth={isActive ? 2.5 : 1.7} />
                     {tab.id === 'tasks' && openTasks > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[18px] h-[18px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-1 shadow-sm">
-                        {openTasks > 9 ? '9+' : openTasks}
+                      <span className="absolute -top-1.5 -right-2.5 min-w-[17px] h-[17px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-1 ring-2 ring-background/70">
+                        {openTasks > 99 ? '99+' : openTasks}
                       </span>
                     )}
                   </div>
-                  <span className={`text-[10px] font-semibold leading-none transition-colors ${isActive ? 'text-primary' : ''}`}>
+                  <span className={`relative text-[10px] font-semibold leading-none tracking-tight ${isActive ? 'text-primary' : ''}`}>
                     {tab.label}
                   </span>
-                  {isActive && tab.id !== 'more' && (
-                    <div className="absolute top-1 left-1/2 h-[3px] w-8 -translate-x-1/2 rounded-full bg-primary shadow-[0_4px_16px_hsl(var(--primary)/0.5)]" />
-                  )}
                 </button>
               );
             })}
           </div>
         </div>
       </nav>
+
     </>
   );
 }

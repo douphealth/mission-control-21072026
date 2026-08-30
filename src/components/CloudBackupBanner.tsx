@@ -55,29 +55,28 @@ export default function CloudBackupBanner() {
   const isError = status === 'error';
 
   return (
-    <div className={`enterprise-panel mb-4 flex flex-col gap-3 rounded-2xl border p-4 sm:flex-row sm:items-center sm:justify-between ${isError ? 'border-destructive/40' : 'border-primary/30'}`}>
-      <div className="flex items-start gap-3">
-        <div className={`mt-0.5 rounded-xl p-2 ${isError ? 'bg-destructive/15 text-destructive' : 'bg-primary/15 text-primary'}`}>
-          {isError ? <AlertTriangle size={16} /> : <CloudOff size={16} />}
-        </div>
-        <div>
-          <p className="text-sm font-semibold text-foreground">
-            {isError ? 'Cloud backup problem' : 'Your data is only on this device'}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {isError
-              ? (err ?? 'Sync failed. Try again.')
-              : 'Sign in to back everything up automatically and restore it on any device — even after clearing your browser.'}
-          </p>
-        </div>
+    <div className={`enterprise-panel mb-3 flex items-center gap-3 rounded-2xl border p-3 sm:mb-4 sm:p-4 ${isError ? 'border-destructive/40' : 'border-primary/30'}`}>
+      <div className={`shrink-0 rounded-xl p-2 ${isError ? 'bg-destructive/15 text-destructive' : 'bg-primary/15 text-primary'}`}>
+        {isError ? <AlertTriangle size={16} /> : <CloudOff size={16} />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-semibold text-foreground sm:text-sm">
+          {isError ? 'Cloud backup problem' : 'Data is only on this device'}
+        </p>
+        <p className="line-clamp-2 text-[11px] text-muted-foreground sm:text-xs">
+          {isError
+            ? (err ?? 'Sync failed. Try again.')
+            : 'Sign in to back up and restore on any device.'}
+        </p>
       </div>
       <button
         type="button"
         onClick={() => (isError ? void forceCloudSync() : void signInToCloud())}
-        className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
+        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2 text-[12px] font-semibold text-primary-foreground transition-opacity active:opacity-80 sm:px-4 sm:text-sm"
       >
-        {isError ? <><RefreshCw size={14} /> Retry sync</> : <><Cloud size={14} /> Turn on cloud backup</>}
+        {isError ? <><RefreshCw size={14} /> <span className="hidden sm:inline">Retry sync</span></> : <><Cloud size={14} /> <span className="hidden sm:inline">Turn on cloud backup</span><span className="sm:hidden">Back up</span></>}
       </button>
     </div>
   );
 }
+

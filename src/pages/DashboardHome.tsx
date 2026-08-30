@@ -231,7 +231,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
       <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}`}</style>
 
       {/* ═══ HERO ═══ */}
-      <div {...fu(0)} className="relative overflow-hidden rounded-[32px] p-6 sm:p-10"
+      <div {...fu(0)} className="relative overflow-hidden rounded-[26px] p-5 sm:rounded-[32px] sm:p-10"
         style={{
           background: 'linear-gradient(135deg, #0b1220 0%, #0f172a 45%, #052e2b 100%)',
           boxShadow: '0 40px 90px -40px rgba(15,23,42,0.55)',
@@ -243,52 +243,53 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
         <div className="absolute inset-0 pointer-events-none opacity-[0.12]"
           style={{ backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.6) 1px, transparent 1px)', backgroundSize: '22px 22px' }} />
 
-        <div className="relative flex flex-col lg:flex-row gap-8 lg:items-end justify-between">
+        <div className="relative flex flex-col lg:flex-row gap-6 lg:gap-8 lg:items-end justify-between">
           <div className="flex-1 min-w-0">
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/15 text-[11px] font-semibold text-white/85 mb-5">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/15 text-[10px] sm:text-[11px] font-semibold text-white/85 mb-4 sm:mb-5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Mission Control · {dateLabel}
+              <span className="truncate">{dateLabel}</span>
             </div>
-            <h1 className="text-white font-extrabold tracking-tighter leading-[0.95] text-[40px] sm:text-[56px] lg:text-[68px]">
-              {greet},<br />
+            <h1 className="font-display text-white font-extrabold tracking-tighter leading-[0.98] text-[30px] min-[380px]:text-[34px] sm:text-[56px] lg:text-[68px]">
+              {greet},{' '}
               <span className="bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(90deg,#6ee7b7,#38bdf8 55%,#a78bfa)' }}>
-                {userName}.
+                {userName}
               </span>
             </h1>
-            <p className="mt-4 text-white/60 text-[14px] sm:text-[15px] max-w-xl">
-              You have <strong className="text-white">{open.length} open tasks</strong>, {dueToday} due today
-              {overdue > 0 && <> and <strong className="text-rose-300">{overdue} overdue</strong></>}. Let's crush the day.
+            <p className="mt-3 sm:mt-4 text-white/60 text-[13px] sm:text-[15px] max-w-xl">
+              <strong className="text-white">{open.length} open</strong> · {dueToday} due today
+              {overdue > 0 && <> · <strong className="text-rose-300">{overdue} overdue</strong></>}
             </p>
 
-            <div className="mt-6 flex flex-wrap items-center gap-2.5">
+            {/* mobile: swipeable action rail — desktop: wrapped buttons */}
+            <div className="mobile-rail mt-5 sm:mt-6 sm:flex-wrap sm:items-center sm:gap-2.5 sm:overflow-visible sm:mx-0 sm:px-0">
               <button onClick={() => setActiveSection('tasks')}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white text-slate-900 text-[13px] font-bold hover:scale-[1.02] active:scale-[0.98] transition shadow-lg">
+                className="inline-flex items-center gap-2 px-4 py-3 sm:px-5 rounded-2xl bg-white text-slate-900 text-[13px] font-bold active:scale-[0.97] transition shadow-lg">
                 <Plus size={15} /> New task
               </button>
               <button onClick={() => setActiveSection('focus')}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-white/10 border border-white/15 text-white text-[13px] font-semibold hover:bg-white/15 backdrop-blur transition">
+                className="inline-flex items-center gap-2 px-4 py-3 sm:px-5 rounded-2xl bg-white/10 border border-white/15 text-white text-[13px] font-semibold active:scale-[0.97] backdrop-blur transition">
                 <Zap size={15} /> Start focus
               </button>
               <button onClick={() => setActiveSection('calendar')}
-                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl text-white/75 hover:text-white text-[13px] font-medium transition">
-                <Calendar size={15} /> Today's schedule
+                className="inline-flex items-center gap-2 px-4 py-3 rounded-2xl bg-white/5 border border-white/10 sm:border-transparent sm:bg-transparent text-white/80 text-[13px] font-medium transition">
+                <Calendar size={15} /> Schedule
               </button>
             </div>
           </div>
 
           {/* Hero side — floating summary card */}
           <div className="relative w-full lg:w-[320px] shrink-0">
-            <div className="rounded-3xl p-5 backdrop-blur-xl border border-white/15"
+            <div className="rounded-3xl p-4 sm:p-5 backdrop-blur-xl border border-white/15"
               style={{ background: 'linear-gradient(160deg,rgba(255,255,255,0.14),rgba(255,255,255,0.05))' }}>
               <div className="flex items-center justify-between mb-4">
-                <div className="text-[11px] text-white/60 font-semibold uppercase tracking-widest">Today's progress</div>
+                <div className="text-[10px] sm:text-[11px] text-white/60 font-semibold uppercase tracking-widest">Today's progress</div>
                 <MoreHorizontal size={16} className="text-white/50" />
               </div>
-              <div className="flex items-center gap-5">
-                <div className="relative">
-                  <Ring pct={pct} size={92} stroke={9} />
+              <div className="flex items-center gap-4 sm:gap-5">
+                <div className="relative shrink-0">
+                  <Ring pct={pct} size={84} stroke={9} />
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-white text-xl font-extrabold tabular-nums">{Math.round(pct)}%</span>
+                    <span className="text-white text-lg sm:text-xl font-extrabold tabular-nums">{Math.round(pct)}%</span>
                     <span className="text-[9px] text-white/50">done</span>
                   </div>
                 </div>
@@ -298,19 +299,18 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
                   <div className="flex items-center justify-between text-[12px]"><span className="text-white/60">Overdue</span><span className={`font-bold tabular-nums ${overdue ? 'text-rose-300' : 'text-white'}`}>{overdue}</span></div>
                 </div>
               </div>
-              <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between">
-                <AvatarStack names={[userName, 'Alex', 'Jamie', 'Sam', 'Riley']} />
-                <button onClick={() => setActiveSection('tasks')} className="text-[11px] text-white/70 hover:text-white font-semibold inline-flex items-center gap-1">
-                  View team <ArrowUpRight size={12} />
-                </button>
-              </div>
+              <button onClick={() => setActiveSection('tasks')}
+                className="mt-4 w-full rounded-2xl bg-white/10 border border-white/15 py-2.5 text-[12px] font-semibold text-white/85 active:scale-[0.98] transition inline-flex items-center justify-center gap-1.5">
+                Open task list <ArrowUpRight size={13} />
+              </button>
             </div>
           </div>
         </div>
       </div>
 
+
       {/* ═══ STAT CARDS — 4 distinct colored tiles ═══ */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
           { hue: 'emerald' as const, label: 'Total projects', value: websites.length + buildProjects.length, delta: '+5.4%', Icon: BarChart3, nav: 'websites', sub: 'across all workspaces' },
           { hue: 'violet'  as const, label: 'Completed',      value: done.length,                            delta: '+3.2%', Icon: CheckSquare, nav: 'tasks', sub: 'tasks this month' },
@@ -320,20 +320,20 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
           const h = HUES[s.hue];
           return (
             <button key={s.label} onClick={() => setActiveSection(s.nav)} {...fu(i + 1)}
-              className="group relative text-left rounded-[28px] p-6 overflow-hidden text-white transition-transform hover:-translate-y-1"
+              className="group relative text-left rounded-[22px] sm:rounded-[28px] p-4 sm:p-6 overflow-hidden text-white transition-transform hover:-translate-y-1 active:scale-[0.98]"
               style={{ background: h.grad, boxShadow: `0 20px 50px -20px ${h.soft.replace('0.12','0.55').replace('0.14','0.55')}` }}>
               <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full opacity-30" style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.6), transparent 65%)' }} />
               <div className="relative">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
+                <div className="flex items-center justify-between mb-4 sm:mb-6">
+                  <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-2xl bg-white/20 backdrop-blur flex items-center justify-center">
                     <s.Icon size={18} className="text-white" />
                   </div>
                   <ArrowUpRight size={16} className="text-white/70 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
-                <div className="text-[36px] font-extrabold tracking-tighter leading-none tabular-nums">{s.value}</div>
-                <div className="mt-2 text-[13px] font-semibold text-white/90">{s.label}</div>
-                <div className="mt-1 text-[11px] text-white/65">{s.sub}</div>
-                <div className="mt-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold">
+                <div className="font-display text-[26px] sm:text-[36px] font-extrabold tracking-tighter leading-none tabular-nums">{s.value}</div>
+                <div className="mt-1.5 sm:mt-2 text-[12px] sm:text-[13px] font-semibold text-white/90">{s.label}</div>
+                <div className="mt-1 hidden sm:block text-[11px] text-white/65">{s.sub}</div>
+                <div className="mt-3 sm:mt-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold">
                   <ArrowUp size={10} /> {s.delta}
                 </div>
               </div>
