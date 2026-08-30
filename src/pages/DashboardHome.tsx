@@ -306,7 +306,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
     <div ref={ref} className="flex flex-col gap-5 sm:gap-6 pb-8">
 
       {/* Anim keyframes */}
-      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}`}</style>
+      <style>{`@keyframes fadeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}@keyframes mcDraw{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}@keyframes mcFade{from{opacity:0}to{opacity:1}}`}</style>
 
       {/* ═══ HERO ═══ */}
       <div {...fu(0)} className="relative overflow-hidden rounded-[26px] p-5 sm:rounded-[32px] sm:p-10"
