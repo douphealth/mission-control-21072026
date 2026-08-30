@@ -102,6 +102,84 @@ const AreaChart = ({ data, tone = 'emerald' }: { data: number[]; tone?: keyof ty
   );
 };
 
+/* ─── Momentum chart: smooth curve, gradient glow, hover readout ─── */
+const MomentumChart = ({ data }: { data: number[] }) => {
+  const [hover, setHover] = useState<number | null>(null);
+  const w = 720, h = 220, padX = 14, padTop = 22, padBottom = 26;
+  const pts = data.length ? data : [0, 0];
+  const max = Math.max(...pts, 1);
+  const stepX = pts.length > 1 ? (w - padX * 2) / (pts.length - 1) : 0;
+  const xy = pts.map((v, i) => [padX + i * stepX, h - padBottom - (v / max) * (h - padTop - padBottom)] as const);
+
+  // Catmull-Rom → cubic bezier for a silky curve
+  let line = `M${xy[0][0]},${xy[0][1]}`;
+  for (let i = 0; i < xy.length - 1; i++) {
+    const p0 = xy[i - 1] ?? xy[i], p1 = xy[i], p2 = xy[i + 1], p3 = xy[i + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6, c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6, c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    line += ` C${c1x},${c1y} ${c2x},${c2y} ${p2[0]},${p2[1]}`;
+  }
+  const area = `${line} L${xy[xy.length - 1][0]},${h - padBottom} L${xy[0][0]},${h - padBottom} Z`;
+  const active = hover != null ? xy[hover] : xy[xy.length - 1];
+  const activeVal = pts[hover != null ? hover : pts.length - 1];
+
+  return (
+    <div className="relative">
+      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-[200px] w-full overflow-visible"
+        onMouseLeave={() => setHover(null)}>
+        <defs>
+          <linearGradient id="mcStroke" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="hsl(var(--info))" />
+            <stop offset="55%" stopColor="hsl(var(--primary))" />
+            <stop offset="100%" stopColor="hsl(var(--violet))" />
+          </linearGradient>
+          <linearGradient id="mcFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.34} />
+            <stop offset="60%" stopColor="hsl(var(--primary))" stopOpacity={0.08} />
+            <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+          </linearGradient>
+          <filter id="mcGlow" x="-20%" y="-40%" width="140%" height="200%">
+            <feGaussianBlur stdDeviation="6" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        {/* grid */}
+        {[0.25, 0.5, 0.75].map(g => (
+          <line key={g} x1={padX} x2={w - padX} y1={padTop + g * (h - padTop - padBottom)} y2={padTop + g * (h - padTop - padBottom)}
+            stroke="hsl(var(--border))" strokeWidth={1} strokeDasharray="2 8" opacity={0.7} />
+        ))}
+
+        <path d={area} fill="url(#mcFill)" style={{ animation: 'mcFade 0.9s ease-out both' }} />
+        <path d={line} fill="none" stroke="url(#mcStroke)" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round"
+          filter="url(#mcGlow)" pathLength={1} style={{ strokeDasharray: 1, animation: 'mcDraw 1.4s cubic-bezier(0.22,1,0.36,1) both' }} />
+
+        {/* hover crosshair */}
+        {active && (
+          <>
+            <line x1={active[0]} x2={active[0]} y1={padTop - 8} y2={h - padBottom} stroke="hsl(var(--primary))" strokeWidth={1} strokeDasharray="3 4" opacity={0.5} />
+            <circle cx={active[0]} cy={active[1]} r={9} fill="hsl(var(--primary))" opacity={0.16} />
+            <circle cx={active[0]} cy={active[1]} r={4.5} fill="hsl(var(--card))" stroke="hsl(var(--primary))" strokeWidth={3} />
+          </>
+        )}
+
+        {/* hit zones */}
+        {xy.map((p, i) => (
+          <rect key={i} x={p[0] - stepX / 2} y={0} width={stepX || w} height={h} fill="transparent"
+            onMouseEnter={() => setHover(i)} />
+        ))}
+      </svg>
+
+      {active && (
+        <div className="pointer-events-none absolute -top-1 rounded-lg border border-border/60 bg-card/95 px-2 py-1 text-[10px] font-bold text-foreground shadow-[var(--shadow-md)] backdrop-blur"
+          style={{ left: `calc(${(active[0] / w) * 100}% - 26px)` }}>
+          {activeVal} done
+        </div>
+      )}
+    </div>
+  );
+};
+
 const AvatarStack = ({ names, size = 28 }: { names: string[]; size?: number }) => {
   const colors = ['#f59e0b', '#8b5cf6', '#10b981', '#0ea5e9', '#f43f5e'];
   return (
