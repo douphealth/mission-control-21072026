@@ -323,6 +323,7 @@ async function pushNow(): Promise<void> {
     if (pushing) { pushAgain = true; return; }
     const uid: string = userId;
     pushing = true;
+    let pullAfterConflict = false;
     try {
         setStatus('syncing');
         const capturedDirty = readDirtyRecords();
@@ -371,6 +372,7 @@ async function pushNow(): Promise<void> {
             const remote = remoteUpdatedAt.get(recordKey(row.collection, row.record_id));
             return !remote || new Date(row.updated_at).getTime() >= new Date(remote).getTime();
         });
+        pullAfterConflict = newestRows.length !== rows.length;
 
         for (const batch of chunk(newestRows, 300)) {
             const { error } = await supabase
@@ -387,6 +389,7 @@ async function pushNow(): Promise<void> {
     } finally {
         pushing = false;
         if (pushAgain) { pushAgain = false; void pushNow(); }
+        else if (pullAfterConflict) void pullFromCloud();
     }
 }
 
