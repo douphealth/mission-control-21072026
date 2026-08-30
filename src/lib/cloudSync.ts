@@ -20,7 +20,8 @@ export type CloudStatus =
     | 'error';
 
 const LAST_SYNC_KEY = 'mc-cloud-last-sync';
-const DIRTY_RECORDS_KEY = 'mc-cloud-dirty-records-v1';
+const DIRTY_RECORDS_KEY = 'mc-cloud-dirty-records-v2';
+const LEGACY_DIRTY_RECORDS_KEY = 'mc-cloud-dirty-records-v1';
 const TABLE = 'mc_records';
 
 type DirtyOperation = 'put' | 'delete';
@@ -71,9 +72,13 @@ function recordKey(collection: string, recordId: string) {
     return `${collection}::${recordId}`;
 }
 
+function dirtyStorageKey(scope = userId ?? 'pending') {
+    return `${DIRTY_RECORDS_KEY}:${scope}`;
+}
+
 function readDirtyRecords(): DirtyRecordMap {
     try {
-        const parsed = JSON.parse(localStorage.getItem(DIRTY_RECORDS_KEY) ?? '{}');
+        const parsed = JSON.parse(localStorage.getItem(dirtyStorageKey()) ?? '{}');
         return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     } catch {
         return {};
@@ -82,8 +87,23 @@ function readDirtyRecords(): DirtyRecordMap {
 
 function writeDirtyRecords(records: DirtyRecordMap) {
     try {
-        if (Object.keys(records).length) localStorage.setItem(DIRTY_RECORDS_KEY, JSON.stringify(records));
-        else localStorage.removeItem(DIRTY_RECORDS_KEY);
+        const key = dirtyStorageKey();
+        if (Object.keys(records).length) localStorage.setItem(key, JSON.stringify(records));
+        else localStorage.removeItem(key);
+    } catch { }
+}
+
+function claimPendingDirtyRecords() {
+    if (!userId) return;
+    try {
+        const targetKey = dirtyStorageKey(userId);
+        const current = JSON.parse(localStorage.getItem(targetKey) ?? '{}') as DirtyRecordMap;
+        const pending = JSON.parse(localStorage.getItem(dirtyStorageKey('pending')) ?? '{}') as DirtyRecordMap;
+        const legacy = JSON.parse(localStorage.getItem(LEGACY_DIRTY_RECORDS_KEY) ?? '{}') as DirtyRecordMap;
+        const merged = { ...current, ...legacy, ...pending };
+        if (Object.keys(merged).length) localStorage.setItem(targetKey, JSON.stringify(merged));
+        localStorage.removeItem(dirtyStorageKey('pending'));
+        localStorage.removeItem(LEGACY_DIRTY_RECORDS_KEY);
     } catch { }
 }
 
@@ -249,8 +269,8 @@ function isValidRecord(collection: string, data: any, recordId: string): boolean
 
 // ─── Pull: cloud → local ─────────────────────────────────────────────────────
 
-export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; error?: string }> {
-    if (!userId) return { ok: false, restored: 0, error: 'Not signed in' };
+export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; remoteRows: number; error?: string }> {
+    if (!userId) return { ok: false, restored: 0, remoteRows: 0, error: 'Not signed in' };
     try {
         setStatus('syncing');
         const rows: any[] = [];
@@ -289,10 +309,10 @@ export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; 
         hydrated = true;
         try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()); } catch { }
         setStatus('synced');
-        return { ok: true, restored };
+        return { ok: true, restored, remoteRows: rows.length };
     } catch (e: any) {
         setStatus('error', e?.message ?? 'Restore failed');
-        return { ok: false, restored: 0, error: e?.message };
+        return { ok: false, restored: 0, remoteRows: 0, error: e?.message };
     }
 }
 
@@ -306,49 +326,38 @@ async function pushNow(): Promise<void> {
     try {
         setStatus('syncing');
         const capturedDirty = readDirtyRecords();
-        const snapshot = await localSnapshot();
-        const rows = snapshot.map((r) => ({
-            user_id: uid,
-            collection: r.collection,
-            record_id: r.record_id,
-            data: r.data,
-            deleted: false,
-            updated_at: new Date().toISOString(),
-        }));
+        const dirtyEntries = Object.entries(capturedDirty);
+        if (!dirtyEntries.length) {
+            setStatus('synced');
+            return;
+        }
+
+        // Upload only records changed on this device. Uploading a full local
+        // snapshot here lets an older device overwrite newer cloud records.
+        const rows: Array<Record<string, any>> = [];
+        for (const [key, change] of dirtyEntries) {
+            const separator = key.indexOf('::');
+            if (separator < 1) continue;
+            const collection = key.slice(0, separator);
+            const recordId = key.slice(separator + 2);
+            const table = COLLECTIONS[collection];
+            if (!table || !recordId) continue;
+            const local = change.operation === 'put' ? await table.get(recordId) : null;
+            rows.push({
+                user_id: uid,
+                collection,
+                record_id: recordId,
+                data: local ?? {},
+                deleted: change.operation === 'delete' || !local,
+                updated_at: change.changedAt,
+            });
+        }
 
         for (const batch of chunk(rows, 300)) {
             const { error } = await supabase
                 .from(TABLE)
                 .upsert(batch, { onConflict: 'user_id,collection,record_id' });
             if (error) throw error;
-        }
-
-        // Tombstone anything the cloud still has but the device deleted.
-        // Only safe once this session has hydrated from the cloud.
-        if (hydrated) {
-            const alive = new Set(snapshot.map((r) => `${r.collection}::${r.record_id}`));
-            const { data: remote, error: remoteErr } = await supabase
-                .from(TABLE)
-                .select('collection, record_id')
-                .eq('deleted', false);
-            if (remoteErr) throw remoteErr;
-            const stale = (remote ?? []).filter(
-                (r: any) => !alive.has(`${r.collection}::${r.record_id}`),
-            );
-            for (const batch of chunk(stale, 300)) {
-                const { error } = await supabase.from(TABLE).upsert(
-                    batch.map((r: any) => ({
-                        user_id: uid,
-                        collection: r.collection,
-                        record_id: r.record_id,
-                        data: {},
-                        deleted: true,
-                        updated_at: new Date().toISOString(),
-                    })),
-                    { onConflict: 'user_id,collection,record_id' },
-                );
-                if (error) throw error;
-            }
         }
 
         try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()); } catch { }
@@ -369,11 +378,21 @@ export function queueCloudPush(delay = 1200) {
     pushTimer = setTimeout(() => { void pushNow(); }, delay);
 }
 
+/** Flush pending edits now. Local writes remain safe when offline and retry later. */
+export async function flushCloudChanges(): Promise<void> {
+    if (!userId) return;
+    if (pushTimer) {
+        clearTimeout(pushTimer);
+        pushTimer = null;
+    }
+    await pushNow();
+}
+
 export async function forceCloudSync(): Promise<void> {
     if (!userId) return;
-    // Preserve this device's pending work before accepting remote changes.
-    // pullFromCloud also skips anything still journaled if this push fails.
-    await pushNow();
+    // Only pending local edits are pushed; unchanged stale rows never overwrite
+    // a newer device. Dirty records are also protected during the following pull.
+    await flushCloudChanges();
     await pullFromCloud();
 }
 
@@ -410,12 +429,20 @@ export async function startCloudSync(force = false): Promise<{ signedIn: boolean
         return { signedIn: false, restored: 0 };
     }
 
+    claimPendingDirtyRecords();
+
     // Flush journaled local edits first. If the request fails, pullFromCloud
     // preserves those dirty records and cannot roll them back.
     const hadPendingChanges = Object.keys(readDirtyRecords()).length > 0;
     if (hadPendingChanges) await pushNow();
     const pulled = await pullFromCloud();
-    if (!hadPendingChanges) await pushNow();
+    // On an entirely new account, preserve existing local data as the initial
+    // cloud baseline. Existing accounts always treat cloud as authoritative.
+    if (!hadPendingChanges && pulled.ok && pulled.remoteRows === 0) {
+        const snapshot = await localSnapshot();
+        for (const item of snapshot) markCloudRecordDirty(item.collection, item.record_id);
+        await pushNow();
+    }
     bindRealtime();
 
     if (!force) {
@@ -426,7 +453,13 @@ export async function startCloudSync(force = false): Promise<{ signedIn: boolean
             hydrated = false;
             realtimeBound = false;
             if (!userId) { setStatus('signed-out'); return; }
-            void (async () => { await pushNow(); await pullFromCloud(); bindRealtime(); })();
+            claimPendingDirtyRecords();
+            void (async () => {
+                const hasPending = Object.keys(readDirtyRecords()).length > 0;
+                if (hasPending) await pushNow();
+                await pullFromCloud();
+                bindRealtime();
+            })();
         });
 
         window.addEventListener('online', () => { if (userId) void forceCloudSync(); });
