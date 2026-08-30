@@ -469,3 +469,65 @@
 .a11y-contrast .border-border\/50,
 .a11y-contrast .border-border\/40 { border-color: hsl(var(--foreground) / 0.35) !important; }
 .a11y-contrast :is(button, a):focus-visible { outline-width: 3px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TYPOGRAPHY — Sora display / Manrope body
+   ═══════════════════════════════════════════════════════════════════════════ */
+html { -webkit-text-size-adjust: 100%; }
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.011em;
+}
+h1, h2, h3, .font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.03em;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   MOBILE POLISH — safe areas, tap targets, no rubber-band jank
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 1023px) {
+  html, body { overscroll-behavior-y: none; }
+
+  /* Nothing sits under the floating nav */
+  .mobile-content-pad { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 128px); }
+
+  /* Comfortable minimum tap targets */
+  button, [role="button"], a.btn, select { min-height: 40px; }
+
+  /* Tighter hero + heading rhythm so nothing clips on a phone */
+  h1 { line-height: 1.02; }
+
+  /* Horizontal quick-action rails */
+  .mobile-rail {
+    display: flex; gap: 0.5rem; overflow-x: auto;
+    scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch;
+    margin-inline: -0.75rem; padding-inline: 0.75rem;
+  }
+  .mobile-rail::-webkit-scrollbar { display: none; }
+  .mobile-rail > * { scroll-snap-align: start; flex: 0 0 auto; }
+}
+
+/* Floating bottom nav — liquid glass */
+.mobile-liquid-bar {
+  background: var(--surface-panel);
+  backdrop-filter: blur(28px) saturate(1.6);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  border: 1px solid var(--hairline-color);
+  box-shadow: var(--shadow-lg), inset 0 1px 0 hsl(0 0% 100% / 0.08);
+}
+.mobile-sheet-luxe {
+  background: var(--surface-panel);
+  backdrop-filter: blur(32px) saturate(1.6);
+  -webkit-backdrop-filter: blur(32px) saturate(1.6);
+  border: 1px solid var(--hairline-color);
+  box-shadow: var(--shadow-lg);
+}
+.mobile-top-glass {
+  background: var(--surface-1);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border-bottom: 1px solid var(--hairline-color);
+}
