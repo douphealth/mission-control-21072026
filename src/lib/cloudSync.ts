@@ -334,7 +334,14 @@ async function pushNow(): Promise<void> {
 
         // Upload only records changed on this device. Uploading a full local
         // snapshot here lets an older device overwrite newer cloud records.
-        const rows: Array<Record<string, any>> = [];
+        const rows: Array<{
+            user_id: string;
+            collection: string;
+            record_id: string;
+            data: any;
+            deleted: boolean;
+            updated_at: string;
+        }> = [];
         for (const [key, change] of dirtyEntries) {
             const separator = key.indexOf('::');
             if (separator < 1) continue;
@@ -353,7 +360,19 @@ async function pushNow(): Promise<void> {
             });
         }
 
-        for (const batch of chunk(rows, 300)) {
+        const { data: remoteVersions, error: versionsError } = await supabase
+            .from(TABLE)
+            .select('collection, record_id, updated_at');
+        if (versionsError) throw versionsError;
+        const remoteUpdatedAt = new Map(
+            (remoteVersions ?? []).map((row) => [recordKey(row.collection, row.record_id), row.updated_at]),
+        );
+        const newestRows = rows.filter((row) => {
+            const remote = remoteUpdatedAt.get(recordKey(row.collection, row.record_id));
+            return !remote || new Date(row.updated_at).getTime() >= new Date(remote).getTime();
+        });
+
+        for (const batch of chunk(newestRows, 300)) {
             const { error } = await supabase
                 .from(TABLE)
                 .upsert(batch, { onConflict: 'user_id,collection,record_id' });
