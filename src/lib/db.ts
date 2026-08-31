@@ -664,6 +664,12 @@ class MissionControlDB extends Dexie {
             auditLog: 'id, at, action, collection, recordId',
             syncHealth: 'id, status, lastSuccessAt',
         });
+
+        // Validation ledger: proof that shipped changes actually worked.
+        this.version(7).stores({
+            validations: 'id, status, entityId, actionId, reviewAt, startedAt, updatedAt',
+        });
+
     }
 
 }
