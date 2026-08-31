@@ -15,6 +15,12 @@ import { flushCloudChanges, markCloudRecordDirty, markCloudRecordsDirty, queueCl
 
 import { isDuplicate, deduplicateItems, findDuplicateId } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
+import { logAudit } from '@/lib/audit';
+
+const AUDIT_SKIP = new Set(['auditLog', 'syncHealth', 'audienceReadings', 'streamItems']);
+function labelOf(item: any): string {
+    return item?.title || item?.name || item?.label || item?.service || item?.term || item?.id || 'record';
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────────────
 
@@ -157,6 +163,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
             if (existingId) return existingId;
         }
         await tableRef.put({ ...item, id });
+        if (!AUDIT_SKIP.has(table)) logAudit({ action: 'create', collection: table, recordId: id, label: `${labelOf(item)} (${table})` });
         markCloudRecordDirty(table, id);
         schedulePush();
         await flushCloudChanges();
@@ -171,7 +178,14 @@ export const useDataStore = create<DataState>((set, _get) => ({
             table === 'tasks' && !(changes as any).touchedAt
                 ? { ...changes, touchedAt: new Date().toISOString().split('T')[0] }
                 : (changes as any);
+        const previous = AUDIT_SKIP.has(table) ? null : await tableRef.get(id);
         await tableRef.update(id, patch);
+        if (previous) logAudit({
+            action: 'update', collection: table, recordId: id,
+            label: `${labelOf(previous)} (${table})`,
+            detail: Object.keys(patch).slice(0, 6).join(', '),
+            before: previous,
+        });
         markCloudRecordDirty(table, id);
         schedulePush();
         await flushCloudChanges();
@@ -180,7 +194,9 @@ export const useDataStore = create<DataState>((set, _get) => ({
     deleteItem: async (table: string, id: string): Promise<void> => {
         const tableRef = getTable(table);
         if (!tableRef) throw new Error(`Unknown table: ${table}`);
+        const removed = AUDIT_SKIP.has(table) ? null : await tableRef.get(id);
         await tableRef.delete(id);
+        if (removed) logAudit({ action: 'delete', collection: table, recordId: id, label: `${labelOf(removed)} (${table})`, before: removed });
         markCloudRecordDirty(table, id, 'delete');
         schedulePush();
         await flushCloudChanges();
