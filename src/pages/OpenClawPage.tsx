@@ -19,10 +19,17 @@ interface ServiceEntry {
   lastChecked: string;
 }
 
-const defaultServices: ServiceEntry[] = [
-  { id: "oc1", name: "OpenClaw API", url: "https://openclaw.io", status: "operational", category: "API", notes: "Main API endpoint", lastChecked: "2026-02-26" },
-  { id: "oc2", name: "OpenClaw Dashboard", url: "https://app.openclaw.io", status: "operational", category: "Dashboard", notes: "", lastChecked: "2026-02-26" },
-];
+const STORAGE_KEY = "mc-services";
+
+function loadServices(): ServiceEntry[] {
+  try {
+    const raw = typeof window === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ServiceEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 
 const emptyForm: Omit<ServiceEntry, "id"> = {
   name: "", url: "", status: "operational", category: "API", notes: "",
