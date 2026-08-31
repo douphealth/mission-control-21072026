@@ -92,7 +92,11 @@ const CIPHERTEXT_VALUE = /^(wcapi:|mcenc:)/;
 /** Credentials embedded in a URI, e.g. postgres://user:pass@host/db */
 const URI_CREDENTIAL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/gi;
 
-function isBackupUnsafeKey(key: string): boolean {
+/** Container keys that name a collection, not a credential value. */
+const CONTAINER_KEYS = new Set(['credentials', 'credentialVault', 'vaults']);
+
+function isBackupUnsafeKey(key: string, value: unknown): boolean {
+  if (CONTAINER_KEYS.has(key) && (Array.isArray(value) || value === null)) return false;
   // `secretRef` is a pointer, never a credential — it must survive a backup.
   if (/^secretRef$|SecretRef$/.test(key)) return false;
   return isSecretKey(key) || CIPHERTEXT_KEY.test(key);
@@ -115,7 +119,7 @@ export function stripSecretsForExport<T>(input: T, depth = 0): T {
 
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
-    if (isBackupUnsafeKey(key)) continue;
+    if (isBackupUnsafeKey(key, value)) continue;
     out[key] = stripSecretsForExport(value, depth + 1);
   }
   return out as unknown as T;
