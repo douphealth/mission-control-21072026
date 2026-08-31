@@ -400,9 +400,11 @@ async function pushNow(): Promise<void> {
 
         try { localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString()); } catch { }
         clearSyncedDirtyRecords(capturedDirty);
+        retryAttempt = 0;
         setStatus('synced');
     } catch (e: any) {
         setStatus(navigator.onLine ? 'error' : 'offline', e?.message ?? 'Backup failed');
+        scheduleRetry();
     } finally {
         pushing = false;
         if (pushAgain) { pushAgain = false; void pushNow(); }
@@ -410,9 +412,32 @@ async function pushNow(): Promise<void> {
     }
 }
 
-/** Debounced backup — called after every local mutation. */
+/** How many local edits are still waiting to reach the cloud. */
+export function getPendingCloudCount(): number {
+    return Object.keys(readDirtyRecords()).length;
+}
+
+/**
+ * Bounded exponential retry. A failed push never loses the edit: the journal
+ * stays on disk and the next attempt (or a reload) picks it up again.
+ */
+function scheduleRetry() {
+    if (!userId) return;
+    if (retryAttempt >= MAX_RETRY_ATTEMPTS) return;
+    const delay = Math.min(RETRY_BASE_MS * 2 ** retryAttempt, MAX_RETRY_MS);
+    retryAttempt += 1;
+    if (pushTimer) clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => { void pushNow(); }, delay);
+}
+
+/**
+ * Debounced backup — the default path after every local mutation. The Dexie
+ * write already happened, so the UI is saved; the network call is batched so
+ * a burst of rapid edits produces one request, not one per keystroke.
+ */
 export function queueCloudPush(delay = 1200) {
     if (!userId) return;
+    retryAttempt = 0;
     if (pushTimer) clearTimeout(pushTimer);
     pushTimer = setTimeout(() => { void pushNow(); }, delay);
 }
