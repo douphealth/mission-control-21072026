@@ -459,6 +459,7 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(f
         </div>
       </div>
 
+      {!highlightsOnly && (<>
       {/* ═══ KANBAN — the centerpiece from the Dribbble reference ═══ */}
       <div {...fu(8)} className="enterprise-card rounded-[28px] p-6 sm:p-7">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
