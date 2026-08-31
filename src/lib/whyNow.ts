@@ -99,12 +99,12 @@ export function buildAttention(input: {
   for (const src of SYNC_SOURCES) {
     const row = input.health.find((h) => h.id === src.id);
     const status = effectiveStatus(row);
-    if (status === 'failing' || status === 'stale') {
+    if (status === 'error' || status === 'stale') {
       out.push({
         id: `attn:sync:${src.id}`,
-        title: `${src.label} ${status === 'failing' ? 'is failing' : 'data is stale'}`,
+        title: `${src.label} ${status === 'error' ? 'is failing' : 'data is stale'}`,
         detail: row?.error || `Last successful sync ${ageLabel(row?.lastSuccessAt)}`,
-        severity: status === 'failing' ? 'critical' : 'warning',
+        severity: status === 'error' ? 'critical' : 'warning',
         section: 'settings',
         actionLabel: 'Inspect',
         provenance: `${src.label} · ${ageLabel(row?.lastSuccessAt)}`,
