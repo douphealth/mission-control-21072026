@@ -179,6 +179,10 @@ export function useDailyOps() {
     commitments,
     upNext,
     attention,
+    sitePulse,
+    validationPulse,
+    intelligence,
+
     briefing,
     agenda,
     waiting,
