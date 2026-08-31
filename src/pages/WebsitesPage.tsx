@@ -53,7 +53,11 @@ const fadeUp = (i: number) => ({
 
 export default function WebsitesPage() {
   const websites = useWebsites();
-  const updateData = useUpdateData();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
+  const bulkPatch = useBulkPatch();
+  const bulkDeleteItems = useBulkDeleteItems();
   const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
