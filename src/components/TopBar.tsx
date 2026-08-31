@@ -39,6 +39,10 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
+  const shortcutLabel = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || '')
+    ? '⌘K'
+    : 'Ctrl K';
+
   const today = new Date().toISOString().split('T')[0];
   const overdueTasks = tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today);
   const dueTodayTasks = tasks.filter(t => t.status !== 'done' && t.dueDate === today);
@@ -90,9 +94,9 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           className="flex items-center gap-2 sm:gap-2.5 flex-1 max-w-xl h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
         >
           <Search size={14} className="text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0 sm:w-4 sm:h-4" />
-          <span className="text-xs sm:text-sm text-muted-foreground/40 flex-1 text-left truncate">Search...</span>
+          <span className="text-xs sm:text-sm text-muted-foreground/50 flex-1 text-left truncate">Search or jump to…</span>
           <div className="hidden md:flex items-center gap-1">
-            <kbd className="text-[10px] text-muted-foreground/30 bg-card px-2 py-1 rounded-lg font-mono border border-border/30 shadow-sm">⌘ F</kbd>
+            <kbd className="text-[10px] text-muted-foreground/50 bg-card px-2 py-1 rounded-lg font-medium border border-border/40">{shortcutLabel}</kbd>
           </div>
         </button>
 
@@ -213,7 +217,6 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
             </div>
             <div className="hidden lg:block min-w-0 mr-2">
               <div className="text-sm font-semibold text-foreground truncate">{userName}</div>
-              <div className="text-[10px] text-muted-foreground/50 truncate">{userName.toLowerCase().replace(/\s/g, '')}@email.com</div>
             </div>
           </div>
 
@@ -221,9 +224,10 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <div className="relative">
             <button
               onClick={() => setQuickAddOpen(!quickAddOpen)}
-              className="w-10 h-10 rounded-2xl gradient-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-primary)] hover:shadow-[0_8px_30px_-6px_hsl(var(--primary)/0.5)] transition-shadow touch-manipulation"
+              className="h-10 px-3 sm:px-4 rounded-xl bg-primary text-primary-foreground flex items-center gap-2 text-sm font-medium hover:opacity-90 transition touch-manipulation"
             >
               <Plus size={16} className={`transition-transform duration-200 ${quickAddOpen ? 'rotate-45' : ''}`} />
+              <span className="hidden sm:inline">Capture</span>
             </button>
 
                           {quickAddOpen && (
