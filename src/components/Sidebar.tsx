@@ -15,50 +15,65 @@ import { toast } from 'sonner';
 
 const navGroups = [
   {
-    label: 'DAILY',
+    label: 'TODAY',
     items: [
       { id: 'now', label: 'Now / Today', icon: Crosshair },
-      { id: 'dashboard', label: 'Dashboard', icon: Home },
-      { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-      { id: 'review', label: 'Review', icon: RefreshCcw },
-      { id: 'calendar', label: 'Calendar', icon: Calendar },
-      { id: 'notes', label: 'Notes', icon: FileText },
-      { id: 'focus', label: 'Focus Timer', icon: Timer },
-      { id: 'habits', label: 'Habit Tracker', icon: Flame },
     ],
   },
   {
-    label: 'CONTROL CENTER',
+    label: 'INBOX',
     items: [
-      { id: 'control-center', label: 'Command Hub', icon: Radar },
-      { id: 'industry', label: 'Industry News', icon: Newspaper },
-      { id: 'mentions', label: 'Brand Mentions', icon: AtSign },
-      { id: 'audience', label: 'Audience', icon: Users },
+      { id: 'control-center', label: 'Captures', icon: Radar },
+      { id: 'decisions', label: 'Findings', icon: Scale },
       { id: 'reminders', label: 'Reminders', icon: Bell },
-      { id: 'decisions', label: 'Decision Center', icon: Scale },
+    ],
+  },
+  {
+    label: 'WORK',
+    items: [
+      { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+      { id: 'projects', label: 'Projects', icon: BarChart3 },
+      { id: 'review', label: 'Review', icon: RefreshCcw },
+    ],
+  },
+  {
+    label: 'SITES',
+    items: [
+      { id: 'websites', label: 'Websites', icon: Globe },
+      { id: 'wp-manage', label: 'WordPress', icon: Zap },
+      { id: 'seo', label: 'SEO', icon: SearchIcon },
+    ],
+  },
+  {
+    label: 'INTELLIGENCE',
+    items: [
+      { id: 'industry', label: 'Trends', icon: Newspaper },
+      { id: 'mentions', label: 'Mentions', icon: AtSign },
+      { id: 'audience', label: 'Audience', icon: Users },
     ],
   },
   {
     label: 'GENERAL',
     items: [
+      { id: 'calendar', label: 'Calendar', icon: Calendar },
+      { id: 'notes', label: 'Notes', icon: FileText },
+      { id: 'payments', label: 'Finance', icon: DollarSign },
+      { id: 'focus', label: 'Focus', icon: Timer },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
   },
 ];
 
-// Frozen modules — still available, but out of the daily path.
+// Specialized modules — one click away under "More", never deleted.
 const archivedNav = [
-  { id: 'websites', label: 'My Websites', icon: Globe },
-  { id: 'wp-manage', label: 'WP Management', icon: Zap },
-  { id: 'projects', label: 'Kanban Board', icon: BarChart3 },
-  { id: 'payments', label: 'Payments', icon: DollarSign },
+  { id: 'dashboard', label: 'Dashboard', icon: Home },
+  { id: 'habits', label: 'Habits', icon: Flame },
   { id: 'ideas', label: 'Ideas', icon: Lightbulb },
   { id: 'credentials', label: 'Credentials', icon: KeyRound },
   { id: 'links', label: 'Links Hub', icon: Link2 },
   { id: 'github', label: 'GitHub', icon: Github },
   { id: 'builds', label: 'Build Projects', icon: Hammer },
   { id: 'google-tasks', label: 'Google Tasks', icon: CheckSquare },
-  { id: 'seo', label: 'Portfolio SEO', icon: SearchIcon },
   { id: 'cloudflare', label: 'Cloudflare', icon: Cloud },
   { id: 'vercel', label: 'Vercel', icon: Rocket },
   { id: 'openclaw', label: 'OpenClaw', icon: Bug },
