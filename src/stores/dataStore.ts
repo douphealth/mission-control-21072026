@@ -16,6 +16,7 @@ import { markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from '@/l
 import { isDuplicate, deduplicateItems, findDuplicateId } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
 import { logAudit } from '@/lib/audit';
+import { stripSecretsForExport } from '@/lib/secrets';
 
 const AUDIT_SKIP = new Set(['auditLog', 'syncHealth', 'audienceReadings', 'streamItems']);
 function labelOf(item: any): string {
@@ -40,6 +41,8 @@ interface DataState {
     deleteItem: (table: string, id: string) => Promise<void>;
     duplicateItem: (table: string, id: string, overrides?: Record<string, any>) => Promise<string>;
     bulkAddItems: <T extends { id: string }>(table: string, items: Omit<T, 'id'>[]) => Promise<void>;
+    bulkPatch: (table: string, ids: string[], changes: Record<string, any>) => Promise<void>;
+    bulkDelete: (table: string, ids: string[]) => Promise<void>;
 
     // ─── Settings ─────────────────────────────────────────────────────────────
     updateSettings: (changes: Partial<UserSettings>) => Promise<void>;
@@ -241,6 +244,38 @@ export const useDataStore = create<DataState>((set, _get) => ({
         schedulePush();
     },
 
+    // ─── Row-level bulk mutations ─────────────────────────────────────────────
+    // Replaces the "read whole array → rewrite whole table" pattern: only the
+    // touched rows are written and only those rows are queued for cloud sync.
+    bulkPatch: async (table: string, ids: string[], changes: Record<string, any>): Promise<void> => {
+        const tableRef = getTable(table);
+        if (!tableRef) throw new Error(`Unknown table: ${table}`);
+        if (ids.length === 0) return;
+        await db.transaction('rw', tableRef, async () => {
+            for (const id of ids) await tableRef.update(id, changes);
+        });
+        if (!AUDIT_SKIP.has(table)) {
+            for (const id of ids) {
+                logAudit({ action: 'update', collection: table, recordId: id, label: `${id} (${table})`, detail: Object.keys(changes).slice(0, 6).join(', ') });
+            }
+        }
+        markCloudRecordsDirty(table, ids);
+        schedulePush();
+    },
+
+    bulkDelete: async (table: string, ids: string[]): Promise<void> => {
+        const tableRef = getTable(table);
+        if (!tableRef) throw new Error(`Unknown table: ${table}`);
+        if (ids.length === 0) return;
+        const removed = AUDIT_SKIP.has(table) ? [] : await tableRef.bulkGet(ids);
+        await tableRef.bulkDelete(ids);
+        for (const item of removed) {
+            if (item) logAudit({ action: 'delete', collection: table, recordId: item.id, label: `${labelOf(item)} (${table})`, before: item });
+        }
+        for (const id of ids) markCloudRecordDirty(table, id, 'delete');
+        schedulePush();
+    },
+
     // ─── Settings ─────────────────────────────────────────────────────────────
     updateSettings: async (changes) => {
         await db.settings.update('default', changes);
@@ -279,7 +314,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
             db.habits.toArray(),
             db.settings.get('default'),
         ]);
-        const data = {
+        const data = stripSecretsForExport({
             websites, seoProfiles, seoSnapshots, seoQueryObservations, seoIssues, seoActions, seoChanges, seoVisibilityChecks,
             tasks, repos, buildProjects, links, notes, payments, ideas,
             credentials, customModules, habits, settings,
@@ -305,7 +340,8 @@ export const useDataStore = create<DataState>((set, _get) => ({
             // Legacy compat fields
             exportedAt: new Date().toISOString(),
             version: '9.1',
-        };
+            secretPolicy: 'secrets-excluded',
+        });
         return JSON.stringify(data, null, 2);
     },
 

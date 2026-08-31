@@ -1,4 +1,4 @@
-import { useWebsites, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
+import { useWebsites, useAddItem, useUpdateItem, useDeleteItem, useBulkPatch, useBulkDeleteItems, useDuplicateItem } from '@/hooks/useTableData';
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { useState, useMemo, useCallback } from "react";
 import {
@@ -53,7 +53,11 @@ const fadeUp = (i: number) => ({
 
 export default function WebsitesPage() {
   const websites = useWebsites();
-  const updateData = useUpdateData();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
+  const bulkPatch = useBulkPatch();
+  const bulkDeleteItems = useBulkDeleteItems();
   const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -145,17 +149,17 @@ export default function WebsitesPage() {
     if (!form.name.trim()) { toast.error("Website name is required."); return; }
     const now = new Date().toISOString().split("T")[0];
     if (editId) {
-      updateData({ websites: websites.map(w => w.id === editId ? { ...w, ...form, lastUpdated: now } : w) });
+      void updateItem<Website>('websites', editId, { ...form, lastUpdated: now });
       toast.success("Website updated successfully");
     } else {
-      updateData({ websites: [{ id: Math.random().toString(36).slice(2, 10), ...form, dateAdded: now, lastUpdated: now }, ...websites] });
+      void addItem('websites', { ...form, dateAdded: now, lastUpdated: now } as any);
       toast.success("Website added successfully");
     }
     setModalOpen(false);
   };
 
   const deleteWebsite = (id: string) => {
-    cd.confirm({ title: "Delete Website", description: "This website and all its data will be permanently removed.", onConfirm: () => { updateData({ websites: websites.filter(w => w.id !== id) }); toast.success("Website deleted"); } });
+    cd.confirm({ title: "Delete Website", description: "This website and all its data will be permanently removed.", onConfirm: () => { void deleteItem('websites', id); toast.success("Website deleted"); } });
   };
 
   const duplicateWebsite = async (id: string) => {
@@ -181,24 +185,24 @@ export default function WebsitesPage() {
 
   const bulkDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
-    cd.confirm({ title: `Delete ${selectedIds.size} Website(s)`, description: `This will permanently remove ${selectedIds.size} websites.`, onConfirm: () => { updateData({ websites: websites.filter(w => !selectedIds.has(w.id)) }); toast.success(`${selectedIds.size} websites deleted`); setSelectedIds(new Set()); setBulkMode(false); } });
-  }, [selectedIds, websites, updateData, cd]);
+    cd.confirm({ title: `Delete ${selectedIds.size} Website(s)`, description: `This will permanently remove ${selectedIds.size} websites.`, onConfirm: () => { void bulkDeleteItems('websites', [...selectedIds]); toast.success(`${selectedIds.size} websites deleted`); setSelectedIds(new Set()); setBulkMode(false); } });
+  }, [selectedIds, bulkDeleteItems, cd]);
 
   const bulkUpdateStatus = useCallback((status: string) => {
     if (selectedIds.size === 0) return;
     const now = new Date().toISOString().split("T")[0];
-    updateData({ websites: websites.map(w => selectedIds.has(w.id) ? { ...w, status, lastUpdated: now } : w) });
+    void bulkPatch('websites', [...selectedIds], { status, lastUpdated: now });
     toast.success(`${selectedIds.size} websites updated to ${status}`);
     setSelectedIds(new Set());
-  }, [selectedIds, websites, updateData]);
+  }, [selectedIds, bulkPatch]);
 
   const bulkUpdateCategory = useCallback((category: string) => {
     if (selectedIds.size === 0) return;
     const now = new Date().toISOString().split("T")[0];
-    updateData({ websites: websites.map(w => selectedIds.has(w.id) ? { ...w, category, lastUpdated: now } : w) });
+    void bulkPatch('websites', [...selectedIds], { category, lastUpdated: now });
     toast.success(`${selectedIds.size} websites updated to ${category}`);
     setSelectedIds(new Set());
-  }, [selectedIds, websites, updateData]);
+  }, [selectedIds, bulkPatch]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDirection(d => d === 'asc' ? 'desc' : 'asc');

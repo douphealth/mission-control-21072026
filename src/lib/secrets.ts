@@ -85,7 +85,42 @@ export function redactSecrets<T>(input: T, depth = 0): T {
   return out as unknown as T;
 }
 
-/** Convenience for backups/exports — identical rules, explicit intent. */
-export function stripSecretsForExport<T>(input: T): T {
-  return redactSecrets(input);
+/** Ciphertext / vault payload markers that must never ride along in a backup. */
+const CIPHERTEXT_KEY =
+  /(encrypted|ciphertext|cipher|vault|keymaterial|encryptionkey|^salt$|^iv$|connectionstring|conn_string|dsn|dburl|database_url)/i;
+const CIPHERTEXT_VALUE = /^(wcapi:|mcenc:)/;
+/** Credentials embedded in a URI, e.g. postgres://user:pass@host/db */
+const URI_CREDENTIAL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/gi;
+
+/** Container keys that name a collection, not a credential value. */
+const CONTAINER_KEYS = new Set(['credentials', 'credentialVault', 'vaults']);
+
+function isBackupUnsafeKey(key: string, value: unknown): boolean {
+  if (CONTAINER_KEYS.has(key) && (Array.isArray(value) || value === null)) return false;
+  // `secretRef` is a pointer, never a credential — it must survive a backup.
+  if (/^secretRef$|SecretRef$/.test(key)) return false;
+  return isSecretKey(key) || CIPHERTEXT_KEY.test(key);
+}
+
+/**
+ * Backup/export policy: secret-bearing fields are DROPPED, not redacted.
+ * A restored backup must never write `[redacted]` over a live credential, and
+ * an exported file must never contain plaintext secrets or vault ciphertext.
+ */
+export function stripSecretsForExport<T>(input: T, depth = 0): T {
+  if (depth > 10 || input == null) return input;
+  if (typeof input === 'string') {
+    if (CIPHERTEXT_VALUE.test(input) || URI_CREDENTIAL.test(input)) return REDACTED as unknown as T;
+    return redactSecretValue(input) as unknown as T;
+  }
+  if (typeof input !== 'object') return input;
+  if (input instanceof Date) return input;
+  if (Array.isArray(input)) return input.map((v) => stripSecretsForExport(v, depth + 1)) as unknown as T;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (isBackupUnsafeKey(key, value)) continue;
+    out[key] = stripSecretsForExport(value, depth + 1);
+  }
+  return out as unknown as T;
 }

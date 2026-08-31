@@ -69,6 +69,9 @@ export const useUpdateItem    = () => useDataStore(s => s.updateItem);
 export const useDeleteItem    = () => useDataStore(s => s.deleteItem);
 export const useDuplicateItem = () => useDataStore(s => s.duplicateItem);
 export const useBulkAddItems  = () => useDataStore(s => s.bulkAddItems);
+export const useBulkPatch     = () => useDataStore(s => s.bulkPatch);
+export const useBulkDeleteItems = () => useDataStore(s => s.bulkDelete);
+/** @deprecated whole-collection write — use addItem/updateItem/deleteItem/bulkPatch. */
 export const useUpdateData    = () => useDataStore(s => s.updateData);
 export const useExportAllData = () => useDataStore(s => s.exportAllData);
 export const useImportAllData = () => useDataStore(s => s.importAllData);
