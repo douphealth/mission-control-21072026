@@ -369,7 +369,7 @@ export default function NowTodayPage() {
             <ul className="space-y-1.5">
               {audit.map((a) => (
                 <li key={a.id} className="truncate text-[12px] text-muted-foreground">
-                  <span className="text-foreground/80">{a.action}</span> · {a.table} · {new Date(a.at).toLocaleString()}
+                  <span className="text-foreground/80">{a.label || a.action}</span> · {a.collection} · {new Date(a.at).toLocaleString()}
                 </li>
               ))}
             </ul>
