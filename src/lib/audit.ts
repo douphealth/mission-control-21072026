@@ -42,12 +42,35 @@ export async function logAudit(entry: {
   }
 }
 
+/**
+ * An audit snapshot is stored redacted, so it must never write `[redacted]`
+ * over a live credential. Secret-bearing fields are dropped from the restore
+ * payload and the current record's values are kept for them.
+ */
+export function stripRedactedFields<T>(snapshot: T, current?: any, depth = 0): T {
+  if (depth > 8 || snapshot == null || typeof snapshot !== 'object') return snapshot;
+  if (Array.isArray(snapshot)) return snapshot as T;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(snapshot as Record<string, unknown>)) {
+    if (isSecretKey(key) || value === REDACTED) {
+      if (current && current[key] !== undefined) out[key] = current[key];
+      continue;
+    }
+    out[key] =
+      value && typeof value === 'object' && !Array.isArray(value)
+        ? stripRedactedFields(value, current?.[key], depth + 1)
+        : value;
+  }
+  return out as T;
+}
+
 /** Restore a deleted / modified record from its audit snapshot. */
 export async function restoreFromAudit(entry: AuditEntry): Promise<boolean> {
   if (!entry.before) return false;
   const table = (db as any)[entry.collection];
   if (!table?.put) return false;
-  await table.put(entry.before);
+  const current = await table.get(entry.recordId).catch(() => undefined);
+  await table.put(stripRedactedFields(entry.before, current));
   await logAudit({
     action: 'update',
     collection: entry.collection,
