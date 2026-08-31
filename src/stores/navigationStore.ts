@@ -26,7 +26,12 @@ interface NavigationState {
   // Import modal state
   importModalOpen: boolean;
   setImportModalOpen: (open: boolean) => void;
+
+  // Hand-off: task the user chose to focus on from the daily cockpit
+  focusTaskId: string | null;
+  setFocusTaskId: (id: string | null) => void;
 }
+
 
 export const useNavigationStore = create<NavigationState>()(
   persist(
@@ -56,6 +61,10 @@ export const useNavigationStore = create<NavigationState>()(
 
       importModalOpen: false,
       setImportModalOpen: (open) => set({ importModalOpen: open }),
+
+      focusTaskId: null,
+      setFocusTaskId: (id) => set({ focusTaskId: id }),
+
     }),
     {
       name: 'mc-navigation-v1',

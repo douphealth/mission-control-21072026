@@ -17,8 +17,8 @@ const navGroups = [
   {
     label: 'TODAY',
     items: [
-      { id: 'dashboard', label: 'Dashboard', icon: Home },
-      { id: 'now', label: 'Now / Today', icon: Crosshair },
+      { id: 'dashboard', label: 'Today', icon: Home },
+
     ],
   },
   {

@@ -4,12 +4,14 @@ import { useTasks, useUpdateItem } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import {
+  addDaysLocal,
   buildBriefing,
   buildDigestText,
   daysOverdue,
   mailDigest,
   todayISO,
 } from '@/lib/overdue';
+
 import type { Task } from '@/lib/db';
 import { toast } from 'sonner';
 import { useServerFn } from '@tanstack/react-start';
@@ -35,10 +37,16 @@ function TaskRow({ task, overdue }: { task: Task; overdue: boolean }) {
   };
 
   const snooze = async () => {
-    const next = new Date(Date.now() + 86_400_000).toISOString().slice(0, 10);
-    await updateItem('tasks', task.id, { dueDate: next, remindersFired: [] } as Partial<Task>);
-    toast.success('Moved to tomorrow');
+    // Planning only — the real deadline is never rewritten.
+    const next = addDaysLocal(todayISO(), 1);
+    await updateItem('tasks', task.id, {
+      notBefore: next,
+      scheduledAt: next,
+      remindersFired: [],
+    } as Partial<Task>);
+    toast.success('Planned for tomorrow — deadline unchanged');
   };
+
 
   return (
     <div className="flex items-center gap-2.5 rounded-2xl border border-border/40 bg-background/60 px-3 py-2.5">

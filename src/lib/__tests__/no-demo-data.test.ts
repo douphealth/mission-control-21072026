@@ -15,11 +15,19 @@ describe('production trust guarantees', () => {
     expect(src).not.toMatch(/agency-demo\.com|alexdev|S3cur3P@ss/);
   });
 
-  it('dashboard stat tiles contain no hard-coded trend percentages', () => {
-    const src = read('src/pages/DashboardHome.tsx');
+  it('insight stat tiles contain no hard-coded trend percentages', () => {
+    const src = read('src/components/dashboard/InsightsPanel.tsx');
     expect(src).not.toMatch(/'\+5\.4%'|'\+3\.2%'|'\+8\.1%'|'\+12\.8%'/);
     expect(src).toMatch(/No comparison data/);
   });
+
+  it('the canonical home leads with Now / Today, not analytics', () => {
+    const src = read('src/pages/DashboardHome.tsx');
+    expect(src).toMatch(/DailyHero/);
+    expect(src).toMatch(/TodayCommitments/);
+    expect(src).toMatch(/AttentionFeed/);
+  });
+
 
   it('the app lands on the dashboard', () => {
     expect(read('src/stores/navigationStore.ts')).toMatch(/activeSection: 'dashboard'/);

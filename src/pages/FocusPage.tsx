@@ -5,6 +5,8 @@ import type { Task } from "@/lib/db";
 import { useTasks, useUpdateItem } from "@/hooks/useTableData";
 import { todayISO } from "@/lib/overdue";
 import { isOpen, sortByPriority, quadrantOf } from "@/lib/triage";
+import { useNavigationStore } from "@/stores/navigationStore";
+
 
 const PRESETS = [
   { label: "Focus", minutes: 25, icon: Zap, emoji: "🍅", gradient: "from-primary to-accent" },
@@ -13,13 +15,24 @@ const PRESETS = [
 ];
 
 export default function FocusPage() {
+  const handoffId = useNavigationStore((s) => s.focusTaskId);
+  const setFocusTaskId = useNavigationStore((s) => s.setFocusTaskId);
   const [preset, setPreset] = useState(0);
   const [totalSec, setTotalSec] = useState(PRESETS[0].minutes * 60);
   const [remaining, setRemaining] = useState(PRESETS[0].minutes * 60);
   const [running, setRunning] = useState(false);
   const [sessions, setSessions] = useState(0);
-  const [lockedId, setLockedId] = useState<string | null>(null);
+  const [lockedId, setLockedId] = useState<string | null>(handoffId);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+
+  // Consume the hand-off from the daily cockpit exactly once.
+  useEffect(() => {
+    if (handoffId) {
+      setLockedId(handoffId);
+      setFocusTaskId(null);
+    }
+  }, [handoffId, setFocusTaskId]);
+
 
   const tasks = useTasks();
   const updateItem = useUpdateItem();
