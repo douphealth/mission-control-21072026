@@ -9,6 +9,10 @@ import DailyHero from "@/components/dashboard/DailyHero";
 import TodayCommitments from "@/components/dashboard/TodayCommitments";
 import AttentionFeed from "@/components/dashboard/AttentionFeed";
 import DailyAgenda from "@/components/dashboard/DailyAgenda";
+import SitePulse from "@/components/dashboard/SitePulse";
+import ValidationPulse from "@/components/dashboard/ValidationPulse";
+import IntelligencePulse from "@/components/dashboard/IntelligencePulse";
+
 import ReliabilityPanel from "@/components/ReliabilityPanel";
 import { useDailyOps } from "@/hooks/useDailyOps";
 import { useNavigationStore } from "@/stores/navigationStore";
