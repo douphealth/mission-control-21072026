@@ -149,7 +149,7 @@ export default function WebsitesPage() {
     if (!form.name.trim()) { toast.error("Website name is required."); return; }
     const now = new Date().toISOString().split("T")[0];
     if (editId) {
-      void updateItem('websites', editId, { ...form, lastUpdated: now });
+      void updateItem<Website>('websites', editId, { ...form, lastUpdated: now });
       toast.success("Website updated successfully");
     } else {
       void addItem('websites', { ...form, dateAdded: now, lastUpdated: now } as any);
