@@ -24,14 +24,6 @@ interface KanbanCard {
   description: string;
 }
 
-const defaultCards: KanbanCard[] = [
-  { id: "k1", title: "AI SEO Audit Tool", priority: "P2", column: "ideas", progress: 0, deadline: "2026-04-01", tags: ["AI", "SEO"], description: "Build an AI-powered SEO auditing tool" },
-  { id: "k2", title: "Newsletter System", priority: "P3", column: "ideas", progress: 0, deadline: "", tags: ["automation"], description: "Automated newsletter delivery system" },
-  { id: "k3", title: "Client Reporting Dashboard", priority: "P1", column: "backlog", progress: 10, deadline: "2026-03-15", tags: ["client", "dashboard"], description: "Dashboard for client analytics reporting" },
-  { id: "k4", title: "Agency Site Redesign v2", priority: "P0", column: "in-progress", progress: 65, deadline: "2026-03-01", tags: ["client", "design"], description: "Complete redesign of the agency website" },
-  { id: "k5", title: "Invoice Generator Polish", priority: "P2", column: "review", progress: 90, deadline: "2026-02-28", tags: ["tool"], description: "Final polish and bug fixes" },
-  { id: "k6", title: "WP Starter Theme v3", priority: "P3", column: "completed", progress: 100, deadline: "2026-02-15", tags: ["wordpress"], description: "WordPress starter theme update" },
-];
 
 const priorityConfig: Record<string, { class: string; label: string; dot: string }> = {
   P0: { class: "badge-destructive", label: "Critical", dot: "bg-destructive" },
@@ -45,8 +37,8 @@ const emptyCard: Omit<KanbanCard, "id"> = { title: "", priority: "P2", column: "
 export default function ProjectsPage() {
   const isMobile = useIsMobile();
   const [cards, setCards] = useState<KanbanCard[]>(() => {
-    try { const saved = localStorage.getItem("mc-kanban"); return saved ? JSON.parse(saved) : defaultCards; }
-    catch { return defaultCards; }
+    try { const saved = localStorage.getItem("mc-kanban"); return saved ? JSON.parse(saved) : []; }
+    catch { return []; }
   });
   const [dragId, setDragId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);

@@ -184,6 +184,15 @@ export default function OpenClawPage() {
 
       {/* Services */}
       <div className="space-y-2">
+        {services.length === 0 && (
+          <div className="card-glass p-8 text-center">
+            <Globe size={22} className="mx-auto mb-2 opacity-40" />
+            <div className="text-sm font-bold text-foreground">No services tracked yet</div>
+            <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+              Add a service with its URL and press <strong>Check now</strong> — status is measured by a real HTTP request, never assumed.
+            </p>
+          </div>
+        )}
         {services.map((s, i) => (
           <div key={s.id} 
             className="card-elevated p-4 flex items-center gap-4 group">
