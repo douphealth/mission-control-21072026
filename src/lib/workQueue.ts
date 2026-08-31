@@ -24,6 +24,10 @@ export interface WorkItem {
   score: number;
   bucket: WorkBucket;
   source: string;
+  /** Planning date chosen by the user — separate from the real deadline. */
+  scheduled?: string;
+  /** Hidden from Now/Today until this date. */
+  notBefore?: string;
   raw: any;
 }
 
