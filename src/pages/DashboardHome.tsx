@@ -412,7 +412,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
                 <div className="mt-1.5 sm:mt-2 text-[12px] sm:text-[13px] font-semibold text-white/90">{s.label}</div>
                 <div className="mt-1 hidden sm:block text-[11px] text-white/65">{s.sub}</div>
                 <div className="mt-3 sm:mt-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold">
-                  <ArrowUp size={10} /> {s.delta}
+                  {s.delta ? (<><ArrowUp size={10} /> {s.delta}</>) : 'No comparison data'}
                 </div>
               </div>
             </button>
