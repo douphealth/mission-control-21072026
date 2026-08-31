@@ -390,10 +390,10 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
       {/* ═══ STAT CARDS — 4 distinct colored tiles ═══ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {[
-          { hue: 'emerald' as const, label: 'Total projects', value: websites.length + buildProjects.length, delta: '+5.4%', Icon: BarChart3, nav: 'websites', sub: 'across all workspaces' },
-          { hue: 'violet'  as const, label: 'Completed',      value: done.length,                            delta: '+3.2%', Icon: CheckSquare, nav: 'tasks', sub: 'tasks this month' },
-          { hue: 'amber'   as const, label: 'Active tasks',   value: open.length,                            delta: overdue ? `${overdue} overdue` : '+8.1%', Icon: TrendingUp, nav: 'tasks', sub: 'currently running' },
-          { hue: 'sky'     as const, label: 'Net revenue',    value: fmt(income - expense),                   delta: '+12.8%', Icon: DollarSign, nav: 'payments', sub: 'this period' },
+          { hue: 'emerald' as const, label: 'Total projects', value: websites.length + buildProjects.length, delta: null, Icon: BarChart3, nav: 'websites', sub: 'across all workspaces' },
+          { hue: 'violet'  as const, label: 'Completed',      value: done.length,                            delta: null, Icon: CheckSquare, nav: 'tasks', sub: 'tasks this month' },
+          { hue: 'amber'   as const, label: 'Active tasks',   value: open.length,                            delta: overdue ? `${overdue} overdue` : null, Icon: TrendingUp, nav: 'tasks', sub: 'currently running' },
+          { hue: 'sky'     as const, label: 'Net revenue',    value: fmt(income - expense),                   delta: null, Icon: DollarSign, nav: 'payments', sub: 'this period' },
         ].map((s, i) => {
           const h = HUES[s.hue];
           return (
@@ -412,7 +412,7 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
                 <div className="mt-1.5 sm:mt-2 text-[12px] sm:text-[13px] font-semibold text-white/90">{s.label}</div>
                 <div className="mt-1 hidden sm:block text-[11px] text-white/65">{s.sub}</div>
                 <div className="mt-3 sm:mt-4 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/20 backdrop-blur text-[10px] font-bold">
-                  <ArrowUp size={10} /> {s.delta}
+                  {s.delta ? (<><ArrowUp size={10} /> {s.delta}</>) : 'No comparison data'}
                 </div>
               </div>
             </button>
