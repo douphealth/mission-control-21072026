@@ -117,7 +117,7 @@ export function buildWorkQueue(input: {
   }
 
   for (const p of input.payments ?? []) {
-    if (p.status === 'paid' || p.status === 'completed') continue;
+    if (p.status !== 'pending' && p.status !== 'overdue') continue;
     const due = (p.dueDate || '').slice(0, 10);
     if (!due) continue;
     const overdue = due < today
