@@ -7,6 +7,7 @@ import {
   type AutonomousImportResult,
 } from '@/lib/importEngine';
 import { parseCredentialsDump } from '@/lib/parseCredentialsDump';
+import { redactSecretText } from '@/lib/secrets';
 
 
 function stringifyRow(item: Record<string, any>): Record<string, string> {
@@ -51,7 +52,11 @@ export async function aiAutonomousImport(text: string, fileName?: string): Promi
     }
   }
 
-  const result = (await aiParseImport({ data: { text, fileName } })) as {
+  // Anything that reaches an AI provider is redacted first. Real credential
+  // dumps are handled above by the deterministic local parser, so nothing of
+  // value is lost by stripping secret material from the prompt.
+  const safeText = redactSecretText(text);
+  const result = (await aiParseImport({ data: { text: safeText, fileName } })) as {
     categories: Array<{ target: ImportTarget; items: Record<string, any>[] }>;
   };
   const cats = result?.categories ?? [];
@@ -120,7 +125,7 @@ export async function aiImageImport(
   fileName?: string,
   note?: string,
 ): Promise<AutonomousImportResult> {
-  const result = (await aiParseImport({ data: { images, fileName, text: note } })) as {
+  const result = (await aiParseImport({ data: { images, fileName, text: note ? redactSecretText(note) : note } })) as {
     categories: Array<{ target: ImportTarget; items: Record<string, any>[] }>;
   };
   const categories = buildCategories(result?.categories ?? []);
