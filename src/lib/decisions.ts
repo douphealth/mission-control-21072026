@@ -126,6 +126,7 @@ export async function actOnDecision(decision: Decision, opts?: { dueInDays?: num
     status: 'acted',
     linkedTaskId: task.id,
     resolvedAt: nowISO(),
+    cooldownUntil: cooldownFrom(decision.cooldownDays ?? 7),
     updatedAt: nowISO(),
   });
   await logAudit({
@@ -136,7 +137,7 @@ export async function actOnDecision(decision: Decision, opts?: { dueInDays?: num
 }
 
 export async function ignoreDecision(decision: Decision, reason: string): Promise<void> {
-  await persist({ ...decision, status: 'ignored', resolutionNote: reason, resolvedAt: nowISO(), updatedAt: nowISO() });
+  await persist({ ...decision, status: 'ignored', resolutionNote: reason, resolvedAt: nowISO(), cooldownUntil: cooldownFrom(decision.cooldownDays ?? 30), updatedAt: nowISO() });
   await logAudit({
     action: 'decision', collection: 'decisions', recordId: decision.id,
     label: `Ignored: ${decision.title}`, detail: reason,
