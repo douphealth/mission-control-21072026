@@ -229,6 +229,12 @@ export interface Task {
     archivedAt?: string;
     /** Manual Eisenhower override */
     important?: boolean;
+    /** Planning semantics — snoozing NEVER rewrites the real deadline (dueDate). */
+    notBefore?: string;   // YYYY-MM-DD — hide from Now/Today until this date
+    scheduledAt?: string; // YYYY-MM-DD — when the user intends to work on it
+    reviewAt?: string;    // YYYY-MM-DD — next review checkpoint
+    /** Manual pin into TODAY's three commitments */
+    committedOn?: string; // YYYY-MM-DD
 }
 
 export interface GitHubRepo {
