@@ -3,7 +3,7 @@
 // the user can always answer "what changed, when, and can I get it back?".
 
 import { db, genId, type AuditEntry } from '@/lib/db';
-import { redactSecrets } from '@/lib/secrets';
+import { redactSecrets, isSecretKey, REDACTED } from '@/lib/secrets';
 
 const MAX_ENTRIES = 2000;
 
