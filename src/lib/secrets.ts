@@ -85,7 +85,34 @@ export function redactSecrets<T>(input: T, depth = 0): T {
   return out as unknown as T;
 }
 
-/** Convenience for backups/exports — identical rules, explicit intent. */
-export function stripSecretsForExport<T>(input: T): T {
-  return redactSecrets(input);
+/** Ciphertext / vault payload markers that must never ride along in a backup. */
+const CIPHERTEXT_KEY = /(encrypted|ciphertext|cipher|vault|keyMaterial|encryptionKey|salt|iv)$/i;
+const CIPHERTEXT_VALUE = /^(wcapi:|mcenc:)/;
+
+function isBackupUnsafeKey(key: string): boolean {
+  // `secretRef` is a pointer, never a credential — it must survive a backup.
+  if (/^secretRef$|SecretRef$/.test(key)) return false;
+  return isSecretKey(key) || CIPHERTEXT_KEY.test(key);
+}
+
+/**
+ * Backup/export policy: secret-bearing fields are DROPPED, not redacted.
+ * A restored backup must never write `[redacted]` over a live credential, and
+ * an exported file must never contain plaintext secrets or vault ciphertext.
+ */
+export function stripSecretsForExport<T>(input: T, depth = 0): T {
+  if (depth > 10 || input == null) return input;
+  if (typeof input === 'string') {
+    return (CIPHERTEXT_VALUE.test(input) ? REDACTED : redactSecretValue(input)) as unknown as T;
+  }
+  if (typeof input !== 'object') return input;
+  if (input instanceof Date) return input;
+  if (Array.isArray(input)) return input.map((v) => stripSecretsForExport(v, depth + 1)) as unknown as T;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input as Record<string, unknown>)) {
+    if (isBackupUnsafeKey(key)) continue;
+    out[key] = stripSecretsForExport(value, depth + 1);
+  }
+  return out as unknown as T;
 }
