@@ -615,7 +615,15 @@ class MissionControlDB extends Dexie {
             audienceReadings: 'id, accountId, capturedAt, [accountId+capturedAt]',
             reminders: 'id, status, remindAt, createdAt',
         });
+
+        // Cockpit: Decision Center, audit history, reliability indicators.
+        this.version(6).stores({
+            decisions: 'id, status, source, severity, websiteId, groupKey, createdAt, updatedAt',
+            auditLog: 'id, at, action, collection, recordId',
+            syncHealth: 'id, status, lastSuccessAt',
+        });
     }
+
 }
 
 
