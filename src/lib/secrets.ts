@@ -17,7 +17,11 @@ const SAFE_KEY_RE = /(secretref|secret_ref|passwordref|password_ref|tokenref|tok
 export function isSecretKey(key: string): boolean {
   if (!key) return false;
   if (SAFE_KEY_RE.test(key)) return false;
-  return SECRET_KEY_RE.test(key.replace(/[-_]/g, '_'));
+  const normalized = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/[-\s]+/g, '_')
+    .toLowerCase();
+  return SECRET_KEY_RE.test(`_${normalized}_`);
 }
 
 /** Obvious secret-shaped values, independent of their field name. */
