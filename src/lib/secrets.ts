@@ -86,8 +86,11 @@ export function redactSecrets<T>(input: T, depth = 0): T {
 }
 
 /** Ciphertext / vault payload markers that must never ride along in a backup. */
-const CIPHERTEXT_KEY = /(encrypted|ciphertext|cipher|vault|keyMaterial|encryptionKey|salt|iv)$/i;
+const CIPHERTEXT_KEY =
+  /(encrypted|ciphertext|cipher|vault|keymaterial|encryptionkey|^salt$|^iv$|connectionstring|conn_string|dsn|dburl|database_url)/i;
 const CIPHERTEXT_VALUE = /^(wcapi:|mcenc:)/;
+/** Credentials embedded in a URI, e.g. postgres://user:pass@host/db */
+const URI_CREDENTIAL = /\b[a-z][a-z0-9+.-]*:\/\/[^\s/@:]+:[^\s/@]+@/gi;
 
 function isBackupUnsafeKey(key: string): boolean {
   // `secretRef` is a pointer, never a credential — it must survive a backup.
@@ -103,7 +106,8 @@ function isBackupUnsafeKey(key: string): boolean {
 export function stripSecretsForExport<T>(input: T, depth = 0): T {
   if (depth > 10 || input == null) return input;
   if (typeof input === 'string') {
-    return (CIPHERTEXT_VALUE.test(input) ? REDACTED : redactSecretValue(input)) as unknown as T;
+    if (CIPHERTEXT_VALUE.test(input) || URI_CREDENTIAL.test(input)) return REDACTED as unknown as T;
+    return redactSecretValue(input) as unknown as T;
   }
   if (typeof input !== 'object') return input;
   if (input instanceof Date) return input;
