@@ -74,6 +74,9 @@ export function buildWorkQueue(input: {
       priority: t.priority, overdueDays: overdue, staleDays: stale, due: t.dueDate, today, kind: 'task' as const,
     };
     const score = scoreOf(base);
+    const notBefore = t.notBefore;
+    const deferred = !!notBefore && notBefore > today;
+    const committed = t.committedOn === today;
     items.push({
       id: `task:${t.id}`,
       kind: 'task',
@@ -86,9 +89,11 @@ export function buildWorkQueue(input: {
       context: t.linkedProject || t.category,
       overdueDays: overdue,
       staleDays: stale,
-      score,
-      bucket: bucketOf({ ...base, score }),
+      score: committed ? score + 100 : score,
+      bucket: deferred && !committed ? 'later' : committed ? 'today' : bucketOf({ ...base, score }),
       source: 'Tasks',
+      scheduled: t.scheduledAt,
+      notBefore,
       raw: t,
     });
   }
