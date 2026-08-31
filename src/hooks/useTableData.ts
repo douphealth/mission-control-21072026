@@ -44,6 +44,8 @@ export const useDecisions        = () => (useLiveQuery(() => db.decisions.toArra
 export const useAuditLog         = (limit = 120) =>
   useLiveQuery(() => db.auditLog.orderBy('at').reverse().limit(limit).toArray(), [limit]) ?? (EMPTY as AuditEntry[]);
 export const useSyncHealth       = () => (useLiveQuery(() => db.syncHealth.toArray(), []) ?? (EMPTY as SyncHealth[]));
+export const useValidations      = () => (useLiveQuery(() => db.validations.toArray(), []) ?? (EMPTY as Validation[]));
+
 
 // ─── Indexed / paginated query hooks (use these for >500-row tables) ──────────
 export const useTasksByStatus = (status: Task['status']) =>
