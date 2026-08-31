@@ -606,6 +606,8 @@ class MissionControlDB extends Dexie {
     decisions!: Table<Decision>;
     auditLog!: Table<AuditEntry>;
     syncHealth!: Table<SyncHealth>;
+    validations!: Table<Validation>;
+
 
 
 
