@@ -1,11 +1,12 @@
 import { useCredentials } from '@/hooks/useTableData';
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bug, Activity, ExternalLink, Plus, Trash2, Edit2, Globe,
   CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap, Lock
 } from "lucide-react";
 import FormModal, { FormField, FormInput, FormSelect, FormTextarea } from "@/components/FormModal";
 import { toast } from "sonner";
+import { probeEndpoint } from "@/lib/integrations.functions";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 
 // OpenClaw = generic service/API tracker — user can track any service
@@ -19,10 +20,17 @@ interface ServiceEntry {
   lastChecked: string;
 }
 
-const defaultServices: ServiceEntry[] = [
-  { id: "oc1", name: "OpenClaw API", url: "https://openclaw.io", status: "operational", category: "API", notes: "Main API endpoint", lastChecked: "2026-02-26" },
-  { id: "oc2", name: "OpenClaw Dashboard", url: "https://app.openclaw.io", status: "operational", category: "Dashboard", notes: "", lastChecked: "2026-02-26" },
-];
+const STORAGE_KEY = "mc-services";
+
+function loadServices(): ServiceEntry[] {
+  try {
+    const raw = typeof window === "undefined" ? null : localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as ServiceEntry[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 
 const emptyForm: Omit<ServiceEntry, "id"> = {
   name: "", url: "", status: "operational", category: "API", notes: "",
@@ -42,7 +50,33 @@ function StatusBadge({ status }: { status: ServiceEntry["status"] }) {
 
 export default function OpenClawPage() {
   const credentials = useCredentials();
-  const [services, setServices] = useState<ServiceEntry[]>(defaultServices);
+  const [services, setServices] = useState<ServiceEntry[]>([]);
+  const [checking, setChecking] = useState(false);
+  useEffect(() => { setServices(loadServices()); }, []);
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(services)); } catch { /* storage unavailable */ }
+  }, [services]);
+
+  const checkAll = async () => {
+    const targets = services.filter(s => s.url);
+    if (!targets.length) { toast.error("Add a service URL first"); return; }
+    setChecking(true);
+    try {
+      const results = await Promise.all(targets.map(async s => ({ s, r: await probeEndpoint({ data: { url: s.url } }) })));
+      setServices(prev => prev.map(svc => {
+        const hit = results.find(x => x.s.id === svc.id);
+        if (!hit) return svc;
+        const status: ServiceEntry["status"] = hit.r.ok ? "operational" : hit.r.status >= 500 || hit.r.status === 0 ? "outage" : "degraded";
+        return { ...svc, status, lastChecked: new Date().toISOString().split("T")[0] };
+      }));
+      toast.success(`Checked ${results.length} service${results.length === 1 ? "" : "s"}`);
+    } catch (e: any) {
+      toast.error(String(e?.message ?? e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<ServiceEntry, "id">>(emptyForm);
@@ -108,6 +142,9 @@ export default function OpenClawPage() {
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500">
             <Activity size={12} className="animate-pulse" /> System Status
           </a>
+          <button onClick={() => void checkAll()} disabled={checking} className="btn-secondary text-sm">
+            <RefreshCw size={13} className={checking ? "animate-spin" : ""} /> Check now
+          </button>
           <button onClick={openAdd} className="btn-primary text-sm">
             <Plus size={14} /> Add Service
           </button>
@@ -147,6 +184,15 @@ export default function OpenClawPage() {
 
       {/* Services */}
       <div className="space-y-2">
+        {services.length === 0 && (
+          <div className="card-glass p-8 text-center">
+            <Globe size={22} className="mx-auto mb-2 opacity-40" />
+            <div className="text-sm font-bold text-foreground">No services tracked yet</div>
+            <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
+              Add a service with its URL and press <strong>Check now</strong> — status is measured by a real HTTP request, never assumed.
+            </p>
+          </div>
+        )}
         {services.map((s, i) => (
           <div key={s.id} 
             className="card-elevated p-4 flex items-center gap-4 group">
