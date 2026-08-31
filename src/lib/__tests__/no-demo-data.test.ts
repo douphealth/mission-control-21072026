@@ -21,7 +21,7 @@ describe('production trust guarantees', () => {
     expect(src).toMatch(/No comparison data/);
   });
 
-  it('the app lands on NOW / TODAY', () => {
-    expect(read('src/stores/navigationStore.ts')).toMatch(/activeSection: 'now'/);
+  it('the app lands on the dashboard', () => {
+    expect(read('src/stores/navigationStore.ts')).toMatch(/activeSection: 'dashboard'/);
   });
 });

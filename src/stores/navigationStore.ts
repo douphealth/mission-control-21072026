@@ -31,7 +31,7 @@ interface NavigationState {
 export const useNavigationStore = create<NavigationState>()(
   persist(
     (set, get) => ({
-      activeSection: 'now',
+      activeSection: 'dashboard',
       setActiveSection: (section) => {
         set({ activeSection: section });
         get().pushRecent(section);
