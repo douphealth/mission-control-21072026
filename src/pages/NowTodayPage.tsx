@@ -128,7 +128,7 @@ export default function NowTodayPage() {
             {briefing.completedToday > 0 ? ` · ${briefing.completedToday} done today` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden sm:flex items-center gap-2">
           <button
             onClick={() => setCommandPaletteOpen(true)}
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground transition hover:text-foreground hover:border-border"
@@ -334,7 +334,7 @@ export default function NowTodayPage() {
       </section>
 
       {/* ── Queues ─────────────────────────────────────────── */}
-      <section className="grid grid-cols-3 gap-3">
+      <section className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
           { label: 'Waiting', value: waiting, icon: Hourglass, section: 'tasks' },
           { label: 'Decisions', value: decisions.filter((d) => d.status === 'open').length, icon: Scale, section: 'decisions' },
@@ -343,7 +343,7 @@ export default function NowTodayPage() {
           <button
             key={q.label}
             onClick={() => setActiveSection(q.section)}
-            className="rounded-xl border border-border/50 px-4 py-3.5 text-left transition hover:border-border"
+            className="rounded-xl border border-border/50 px-3 py-3 sm:px-4 sm:py-3.5 text-left transition hover:border-border"
           >
             <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <q.icon size={12} /> {q.label}
@@ -388,7 +388,7 @@ export default function NowTodayPage() {
 
 function SectionLabel({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
   return (
-    <h2 className={`mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] ${muted ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
+    <h2 className={`mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] [word-spacing:0.2em] ${muted ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
       {children}
     </h2>
   );
