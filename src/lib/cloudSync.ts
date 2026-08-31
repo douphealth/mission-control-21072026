@@ -141,7 +141,22 @@ function setStatus(next: CloudStatus, err: string | null = null) {
     status = next;
     lastError = err;
     listeners.forEach((cb) => cb(status, lastError));
+    // Reliability indicators: the cockpit always knows what is synced.
+    void (async () => {
+        try {
+            const { reportSync } = await import('@/lib/reliability');
+            const pending = Object.keys(readDirtyRecords()).length;
+            const health =
+                next === 'synced' ? 'ok'
+                    : next === 'syncing' ? 'syncing'
+                        : next === 'error' ? 'error'
+                            : next === 'offline' ? 'stale'
+                                : 'not-configured';
+            await reportSync('cloud', { status: health as any, error: err ?? undefined, pending, label: 'Cloud backup' });
+        } catch { /* never break sync on reporting */ }
+    })();
 }
+
 
 export function getCloudStatus(): CloudStatus { return status; }
 export function getCloudError(): string | null { return lastError; }
