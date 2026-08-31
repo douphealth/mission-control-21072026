@@ -84,8 +84,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
             db.tasks.count(), db.websites.count(), db.repos.count(), db.buildProjects.count(),
           ]);
           if (t + w + r + b === 0) {
-            const restored = await restoreLatestNonEmptyVersion();
-            if (!restored.restored) await seedDefaults();
+            // Only real prior user data may repopulate an empty device.
+            await restoreLatestNonEmptyVersion();
           }
         }
 
