@@ -2,7 +2,7 @@
 // The scoring engine stays internal. The user only ever sees plain reasoning.
 
 import type { WorkItem } from "@/lib/workQueue";
-import type { SyncHealth, Decision, Payment } from "@/lib/db";
+import type { SyncHealth, Decision, Payment, SEOIssue, Validation } from "@/lib/db";
 import { SYNC_SOURCES, effectiveStatus, ageLabel } from "@/lib/reliability";
 import { todayISO } from "@/lib/overdue";
 
