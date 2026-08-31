@@ -71,6 +71,10 @@ export const useNavigationStore = create<NavigationState>()(
       focusTaskId: null,
       setFocusTaskId: (id) => set({ focusTaskId: id }),
 
+      focusEntity: null,
+      setFocusEntity: (e) => set({ focusEntity: e }),
+
+
     }),
     {
       name: 'mc-navigation-v1',
