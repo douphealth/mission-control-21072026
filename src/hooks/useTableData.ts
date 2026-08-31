@@ -9,7 +9,7 @@ import type {
   Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment,
   Idea, CredentialVault, CustomModule, HabitTracker,
   FeedSource, StreamItem, WatchTerm, AudienceAccount, AudienceReading, Reminder,
-  Decision, AuditEntry, SyncHealth,
+  Decision, AuditEntry, SyncHealth, Validation,
   SEOProfile, SEOSnapshot, SEOQueryObservation, SEOIssue, SEOAction, SEOChange, SEOVisibilityCheck,
 } from '@/lib/db';
 import { useDataStore } from '@/stores/dataStore';
