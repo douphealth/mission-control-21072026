@@ -9,7 +9,7 @@ import {
   Settings, Sun, Moon, X, Sparkles,
   DollarSign, Lightbulb, KeyRound, Flame,
   ChevronLeft, ChevronRight, Plus, Check, Download, Zap, RefreshCcw, Archive,
-  Radar, Newspaper, AtSign, Users, Bell
+  Radar, Newspaper, AtSign, Users, Bell, Scale, Crosshair
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -17,6 +17,7 @@ const navGroups = [
   {
     label: 'DAILY',
     items: [
+      { id: 'now', label: 'Now / Today', icon: Crosshair },
       { id: 'dashboard', label: 'Dashboard', icon: Home },
       { id: 'tasks', label: 'Tasks', icon: CheckSquare },
       { id: 'review', label: 'Review', icon: RefreshCcw },
@@ -34,6 +35,7 @@ const navGroups = [
       { id: 'mentions', label: 'Brand Mentions', icon: AtSign },
       { id: 'audience', label: 'Audience', icon: Users },
       { id: 'reminders', label: 'Reminders', icon: Bell },
+      { id: 'decisions', label: 'Decision Center', icon: Scale },
     ],
   },
   {
