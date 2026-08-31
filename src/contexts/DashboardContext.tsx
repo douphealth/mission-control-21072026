@@ -9,7 +9,7 @@
 // nothing else. No subscriptions = no cross-table re-render storms.
 
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { db, genId, migrateFromLocalStorage } from '@/lib/db';
+import { db, migrateFromLocalStorage } from '@/lib/db';
 import type {
   Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment,
   Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout,
@@ -90,6 +90,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         }
 
 
+        await ensureSettingsRow();
         await deduplicateAll();
         await loadSettings();
 
