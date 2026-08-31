@@ -11,7 +11,7 @@ import type {
     UserSettings, WidgetLayout,
 } from '@/lib/db';
 import { isSupabaseConnected, pushToSupabase } from '@/lib/supabase';
-import { flushCloudChanges, markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from '@/lib/cloudSync';
+import { markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from '@/lib/cloudSync';
 
 import { isDuplicate, deduplicateItems, findDuplicateId } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
