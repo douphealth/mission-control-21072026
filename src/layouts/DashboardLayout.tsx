@@ -145,9 +145,10 @@ export default function DashboardLayout() {
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
 
             <CloudBackupBanner />
-            {(activeSection === 'dashboard' || activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
+            {(activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
               <DailyBriefingBanner />
             )}
+
 
             <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
 

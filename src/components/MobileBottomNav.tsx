@@ -32,8 +32,8 @@ import {
 import { useState } from "react";
 
 const moreItems = [
-  { id: "now", label: "Now", icon: Crosshair },
   { id: "tasks", label: "Tasks", icon: CheckSquare },
+
   { id: "review", label: "Review", icon: RefreshCcw },
   { id: "focus", label: "Focus", icon: Timer },
   { id: "calendar", label: "Calendar", icon: Calendar },
