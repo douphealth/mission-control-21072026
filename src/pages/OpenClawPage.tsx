@@ -1,11 +1,12 @@
 import { useCredentials } from '@/hooks/useTableData';
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bug, Activity, ExternalLink, Plus, Trash2, Edit2, Globe,
   CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap, Lock
 } from "lucide-react";
 import FormModal, { FormField, FormInput, FormSelect, FormTextarea } from "@/components/FormModal";
 import { toast } from "sonner";
+import { probeEndpoint } from "@/lib/integrations.functions";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 
 // OpenClaw = generic service/API tracker — user can track any service
@@ -141,6 +142,9 @@ export default function OpenClawPage() {
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500">
             <Activity size={12} className="animate-pulse" /> System Status
           </a>
+          <button onClick={() => void checkAll()} disabled={checking} className="btn-secondary text-sm">
+            <RefreshCw size={13} className={checking ? "animate-spin" : ""} /> Check now
+          </button>
           <button onClick={openAdd} className="btn-primary text-sm">
             <Plus size={14} /> Add Service
           </button>
