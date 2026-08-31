@@ -739,6 +739,7 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(f
         </div>
       </div>
       <TaskQuickEditor task={editingTask} onClose={() => setEditingTaskId(null)} />
+      </>)}
     </div>
   );
 });
