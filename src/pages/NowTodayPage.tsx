@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
-  Check, Clock, ArrowRight, Target, ChevronDown, ChevronUp, Plus,
-  CalendarClock, AlertTriangle, Scale, Play, Inbox, Hourglass, Search,
+  Check, Clock, ArrowRight, ChevronDown, ChevronUp, Plus,
+  CalendarClock, Scale, Play, Inbox, Hourglass, Search,
   ShieldCheck, Pin,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -382,11 +382,6 @@ export default function NowTodayPage() {
           <ReliabilityPanel compact />
         </div>
       </section>
-
-      {/* Mobile capture affordance is the bottom nav; desktop uses the header. */}
-      <div className="sr-only" aria-hidden={false}>
-        <Target size={0} /> <AlertTriangle size={0} />
-      </div>
     </div>
   );
 }
