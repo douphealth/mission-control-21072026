@@ -40,6 +40,8 @@ const VercelPage = lazy(() => import('@/pages/VercelPage'));
 const OpenClawPage = lazy(() => import('@/pages/OpenClawPage'));
 const HabitsPage = lazy(() => import('@/pages/HabitsPage'));
 const ReviewPage = lazy(() => import('@/pages/ReviewPage'));
+const NowTodayPage = lazy(() => import('@/pages/NowTodayPage'));
+const DecisionsPage = lazy(() => import('@/pages/DecisionsPage'));
 const ControlCenterPage = lazy(() => import('@/pages/ControlCenterPage'));
 const IndustryPage = lazy(() => import('@/pages/IndustryPage'));
 const MentionsPage = lazy(() => import('@/pages/MentionsPage'));
@@ -49,6 +51,8 @@ const CustomModulePage = lazy(() => import('@/pages/CustomModulePage'));
 
 const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
   dashboard: DashboardHome,
+  now: NowTodayPage,
+  decisions: DecisionsPage,
   tasks: TasksPage,
   'google-tasks': GoogleTasksPage,
   websites: WebsitesPage,
