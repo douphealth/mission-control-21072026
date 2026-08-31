@@ -471,8 +471,71 @@ export interface Reminder {
     createdAt: string;
 }
 
+// ─── Decision Center ─────────────────────────────────────────────────────────
+// Every finding (SEO issue, mention, trend, sync failure, stale task) becomes a
+// decision record. A decision always ends: acted, ignored (with a reason), or
+// explicitly deferred. Nothing is allowed to rot silently.
+
+export type DecisionStatus = 'open' | 'acted' | 'ignored' | 'later';
+export type DecisionSource =
+    | 'seo' | 'mention' | 'audience' | 'sync' | 'task' | 'payment' | 'site' | 'manual';
+
+export interface Decision {
+    id: string;
+    title: string;
+    context: string;
+    source: DecisionSource;
+    sourceRef?: string;        // id of the originating finding
+    websiteId?: string;
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    recommendation?: string;
+    options?: string[];
+    status: DecisionStatus;
+    /** Grouping key — identical findings collapse into one decision with a count. */
+    groupKey: string;
+    occurrences: number;
+    resolutionNote?: string;
+    linkedTaskId?: string;
+    deferUntil?: string;       // YYYY-MM-DD when status = later
+    createdAt: string;
+    updatedAt: string;
+    resolvedAt?: string;
+}
+
+// ─── Audit history ───────────────────────────────────────────────────────────
+
+export interface AuditEntry {
+    id: string;
+    at: string;                // ISO datetime
+    action: 'create' | 'update' | 'delete' | 'decision' | 'sync' | 'import';
+    collection: string;
+    recordId: string;
+    label: string;
+    detail?: string;
+    /** Snapshot of the record before the change — enables restore. */
+    before?: any;
+    device?: string;
+}
+
+// ─── Reliability indicators ──────────────────────────────────────────────────
+
+export type SyncSourceId =
+    | 'cloud' | 'google-calendar' | 'wordpress' | 'gsc' | 'ga4' | 'bing' | 'feeds' | 'audience';
+
+export interface SyncHealth {
+    id: SyncSourceId | string;
+    label: string;
+    status: 'ok' | 'stale' | 'error' | 'not-configured' | 'syncing';
+    lastSuccessAt?: string;
+    lastAttemptAt?: string;
+    pending?: number;
+    error?: string;
+    detail?: string;
+}
+
 
 // ─── Database Class ─────────────────────────────────────────────────────────────
+
 
 class MissionControlDB extends Dexie {
     websites!: Table<Website>;
