@@ -166,7 +166,6 @@ export const useDataStore = create<DataState>((set, _get) => ({
         if (!AUDIT_SKIP.has(table)) logAudit({ action: 'create', collection: table, recordId: id, label: `${labelOf(item)} (${table})` });
         markCloudRecordDirty(table, id);
         schedulePush();
-        await flushCloudChanges();
         return id;
     },
 
@@ -188,7 +187,6 @@ export const useDataStore = create<DataState>((set, _get) => ({
         });
         markCloudRecordDirty(table, id);
         schedulePush();
-        await flushCloudChanges();
     },
 
     deleteItem: async (table: string, id: string): Promise<void> => {
@@ -199,7 +197,6 @@ export const useDataStore = create<DataState>((set, _get) => ({
         if (removed) logAudit({ action: 'delete', collection: table, recordId: id, label: `${labelOf(removed)} (${table})`, before: removed });
         markCloudRecordDirty(table, id, 'delete');
         schedulePush();
-        await flushCloudChanges();
     },
 
     duplicateItem: async (table: string, id: string, overrides: Record<string, any> = {}): Promise<string> => {
@@ -223,7 +220,6 @@ export const useDataStore = create<DataState>((set, _get) => ({
         await tableRef.put(clone);
         markCloudRecordDirty(table, newId);
         schedulePush();
-        await flushCloudChanges();
         return newId;
     },
 
@@ -243,7 +239,6 @@ export const useDataStore = create<DataState>((set, _get) => ({
         await tableRef.bulkPut(withIds);
         markCloudRecordsDirty(table, withIds.map(item => item.id));
         schedulePush();
-        await flushCloudChanges();
     },
 
     // ─── Settings ─────────────────────────────────────────────────────────────
