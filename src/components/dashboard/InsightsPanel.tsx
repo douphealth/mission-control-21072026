@@ -202,7 +202,7 @@ const AvatarStack = ({ names, size = 28 }: { names: string[]; size?: number }) =
 /* ═══════════════════════════════════════════════════════════════════
    MAIN
    ═══════════════════════════════════════════════════════════════════ */
-const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) {
+const InsightsPanel = forwardRef<HTMLDivElement>(function InsightsPanel(_, ref) {
   const websites = useWebsites();
   const buildProjects = useBuildProjects();
   const tasks = useTasks();
@@ -742,4 +742,4 @@ const DashboardHome = forwardRef<HTMLDivElement>(function DashboardHome(_, ref) 
   );
 });
 
-export default DashboardHome;
+export default InsightsPanel;
