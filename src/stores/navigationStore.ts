@@ -30,7 +30,13 @@ interface NavigationState {
   // Hand-off: task the user chose to focus on from the daily cockpit
   focusTaskId: string | null;
   setFocusTaskId: (id: string | null) => void;
+
+  // Deep context: the exact entity the user clicked from the daily cockpit,
+  // so destination modules can select it instead of making the user search.
+  focusEntity: { type: string; id: string; label?: string } | null;
+  setFocusEntity: (e: { type: string; id: string; label?: string } | null) => void;
 }
+
 
 
 export const useNavigationStore = create<NavigationState>()(
@@ -64,6 +70,10 @@ export const useNavigationStore = create<NavigationState>()(
 
       focusTaskId: null,
       setFocusTaskId: (id) => set({ focusTaskId: id }),
+
+      focusEntity: null,
+      setFocusEntity: (e) => set({ focusEntity: e }),
+
 
     }),
     {

@@ -9,6 +9,10 @@ import DailyHero from "@/components/dashboard/DailyHero";
 import TodayCommitments from "@/components/dashboard/TodayCommitments";
 import AttentionFeed from "@/components/dashboard/AttentionFeed";
 import DailyAgenda from "@/components/dashboard/DailyAgenda";
+import SitePulse from "@/components/dashboard/SitePulse";
+import ValidationPulse from "@/components/dashboard/ValidationPulse";
+import IntelligencePulse from "@/components/dashboard/IntelligencePulse";
+
 import ReliabilityPanel from "@/components/ReliabilityPanel";
 import { useDailyOps } from "@/hooks/useDailyOps";
 import { useNavigationStore } from "@/stores/navigationStore";
@@ -78,19 +82,18 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* ═══ The premium visual layer — stat tiles, productivity pulse, focus timer ═══ */}
-      <Suspense
-        fallback={
-          <div className="animate-pulse space-y-4">
-            <div className="h-32 rounded-[28px] bg-muted/30" />
-            <div className="h-72 rounded-[28px] bg-muted/30" />
-          </div>
-        }
-      >
-        <InsightsPanel highlightsOnly />
-      </Suspense>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+        <div className="flex flex-col gap-4 lg:col-span-7">
+          <SitePulse rows={ops.sitePulse} />
+          <ValidationPulse items={ops.validationPulse} today={ops.today} />
+        </div>
+        <div className="lg:col-span-5">
+          <IntelligencePulse items={ops.intelligence} />
+        </div>
+      </div>
 
       <ReliabilityPanel compact />
+
 
       {/* ═══ INSIGHTS — below the fold, loaded only when asked for ═══ */}
       <section>

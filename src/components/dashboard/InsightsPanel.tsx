@@ -514,7 +514,7 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(f
                       </div>
                       <div className="text-[13px] font-semibold text-foreground line-clamp-2 leading-snug mb-3">{t.title}</div>
                       <div className="flex items-center justify-between">
-                        <AvatarStack names={[userName, 'Alex', 'Jamie'].slice(0, (i % 3) + 1)} size={22} />
+                        <AvatarStack names={[userName]} size={22} />
                         <div className={`flex items-center gap-1 text-[10px] font-semibold ${isOverdue ? 'text-rose-500' : 'text-muted-foreground'}`}>
                           <Clock size={10} />
                           {t.dueDate ? (t.dueDate === today ? 'Today' : t.dueDate.slice(5)) : '—'}

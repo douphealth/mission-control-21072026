@@ -545,6 +545,34 @@ export interface SyncHealth {
     detail?: string;
 }
 
+// ─── Validation ledger ───────────────────────────────────────────────────────
+// Every change that claims to fix something must prove it. Additive model —
+// nothing else in the schema depends on it.
+
+export type ValidationStatus = 'pending' | 'validating' | 'monitoring' | 'passed' | 'failed';
+
+export interface Validation {
+    id: string;
+    title: string;
+    /** What the change was applied to — websiteId, repo id, payment id, ... */
+    entityId?: string;
+    entityLabel?: string;
+    /** Originating action: seoAction id, task id, decision id, ... */
+    actionId?: string;
+    section?: string;              // where clicking should navigate
+    status: ValidationStatus;
+    startedAt: string;             // ISO
+    reviewAt?: string;             // YYYY-MM-DD — when proof is expected
+    successCriteria?: string;
+    evidence?: string;
+    result?: string;
+    validatedAt?: string;
+    source?: string;
+    createdAt: string;
+    updatedAt: string;
+}
+
+
 
 // ─── Database Class ─────────────────────────────────────────────────────────────
 
@@ -578,6 +606,8 @@ class MissionControlDB extends Dexie {
     decisions!: Table<Decision>;
     auditLog!: Table<AuditEntry>;
     syncHealth!: Table<SyncHealth>;
+    validations!: Table<Validation>;
+
 
 
 
@@ -634,6 +664,12 @@ class MissionControlDB extends Dexie {
             auditLog: 'id, at, action, collection, recordId',
             syncHealth: 'id, status, lastSuccessAt',
         });
+
+        // Validation ledger: proof that shipped changes actually worked.
+        this.version(7).stores({
+            validations: 'id, status, entityId, actionId, reviewAt, startedAt, updatedAt',
+        });
+
     }
 
 }

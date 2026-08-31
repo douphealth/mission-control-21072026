@@ -2,7 +2,7 @@
 // The scoring engine stays internal. The user only ever sees plain reasoning.
 
 import type { WorkItem } from "@/lib/workQueue";
-import type { SyncHealth, Decision, Payment } from "@/lib/db";
+import type { SyncHealth, Decision, Payment, SEOIssue, Validation } from "@/lib/db";
 import { SYNC_SOURCES, effectiveStatus, ageLabel } from "@/lib/reliability";
 import { todayISO } from "@/lib/overdue";
 
@@ -51,10 +51,56 @@ export function buildAttention(input: {
   decisions: Decision[];
   payments: Payment[];
   health: SyncHealth[];
+  seoIssues?: SEOIssue[];
+  validations?: Validation[];
   today?: string;
 }): AttentionItem[] {
   const today = input.today ?? todayISO();
   const out: AttentionItem[] = [];
+
+  const failedValidations = (input.validations ?? []).filter((v) => v.status === "failed");
+  if (failedValidations.length > 0) {
+    out.push({
+      id: "attn:validation-failed",
+      title: `${failedValidations.length} change${failedValidations.length === 1 ? "" : "s"} did not work`,
+      detail: failedValidations.slice(0, 3).map((v) => v.title).join(" · "),
+      severity: "critical",
+      section: "seo",
+      actionLabel: "Re-plan",
+      provenance: "Validation ledger · live",
+    });
+  }
+
+  const dueValidations = (input.validations ?? []).filter(
+    (v) => v.reviewAt && v.reviewAt <= today && v.status !== "passed" && v.status !== "failed",
+  );
+  if (dueValidations.length > 0) {
+    out.push({
+      id: "attn:validation-due",
+      title: `${dueValidations.length} change${dueValidations.length === 1 ? "" : "s"} waiting for proof`,
+      detail: dueValidations.slice(0, 3).map((v) => v.title).join(" · "),
+      severity: "warning",
+      section: "seo",
+      actionLabel: "Verify",
+      provenance: "Validation ledger · live",
+    });
+  }
+
+  const criticalSeo = (input.seoIssues ?? []).filter(
+    (i) => (i.status === "open" || i.status === "in-progress") && (i.severity === "critical" || i.severity === "high"),
+  );
+  if (criticalSeo.length > 0) {
+    out.push({
+      id: "attn:seo",
+      title: `${criticalSeo.length} high-impact site issue${criticalSeo.length === 1 ? "" : "s"} unresolved`,
+      detail: criticalSeo.slice(0, 3).map((i) => i.title).join(" · "),
+      severity: criticalSeo.some((i) => i.severity === "critical") ? "critical" : "warning",
+      section: "seo",
+      actionLabel: "Fix",
+      provenance: "Site audit · live",
+    });
+  }
+
 
   const overdue = input.work.filter((i) => i.overdueDays > 0);
   if (overdue.length > 0) {

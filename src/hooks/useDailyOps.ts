@@ -11,12 +11,22 @@ import {
   useDecisions,
   useSyncHealth,
   useUpdateItem,
+  useWebsites,
+  useSEOProfiles,
+  useSEOIssues,
+  useSEOSnapshots,
+  useStreamItems,
+  useValidations,
 } from "@/hooks/useTableData";
 import { buildWorkQueue, splitQueue, type WorkItem } from "@/lib/workQueue";
 import { buildAttention } from "@/lib/whyNow";
+import { buildSitePulse } from "@/lib/sitePulse";
+import { pendingValidations } from "@/lib/validations";
+import { selectIntelligence } from "@/lib/intelligence";
 import { todayISO, addDaysLocal, buildBriefing } from "@/lib/overdue";
 import { actOnDecision, deferDecision } from "@/lib/decisions";
 import type { Task } from "@/lib/db";
+
 
 export function useDailyOps() {
   const tasks = useTasks();
@@ -25,6 +35,12 @@ export function useDailyOps() {
   const decisions = useDecisions();
   const health = useSyncHealth();
   const updateItem = useUpdateItem();
+  const websites = useWebsites();
+  const seoProfiles = useSEOProfiles();
+  const seoIssues = useSEOIssues();
+  const seoSnapshots = useSEOSnapshots();
+  const stream = useStreamItems();
+  const validations = useValidations();
 
   const today = todayISO();
 
@@ -34,9 +50,34 @@ export function useDailyOps() {
   );
 
   const attention = useMemo(
-    () => buildAttention({ work: queues.all, decisions, payments, health, today }),
-    [queues.all, decisions, payments, health, today],
+    () =>
+      buildAttention({
+        work: queues.all,
+        decisions,
+        payments,
+        health,
+        seoIssues,
+        validations,
+        today,
+      }),
+    [queues.all, decisions, payments, health, seoIssues, validations, today],
   );
+
+  const sitePulse = useMemo(
+    () => buildSitePulse({ websites, seoProfiles, seoIssues, seoSnapshots, health }),
+    [websites, seoProfiles, seoIssues, seoSnapshots, health],
+  );
+
+  const validationPulse = useMemo(
+    () => pendingValidations(validations, today),
+    [validations, today],
+  );
+
+  const intelligence = useMemo(
+    () => selectIntelligence({ stream, websites, tasks }),
+    [stream, websites, tasks],
+  );
+
 
   const briefing = useMemo(() => buildBriefing(tasks as Task[], today), [tasks, today]);
 
@@ -138,6 +179,10 @@ export function useDailyOps() {
     commitments,
     upNext,
     attention,
+    sitePulse,
+    validationPulse,
+    intelligence,
+
     briefing,
     agenda,
     waiting,
