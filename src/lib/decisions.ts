@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/audit';
 import { todayISO, addDaysLocal } from '@/lib/overdue';
 import { isRotten } from '@/lib/triage';
 import { markCloudRecordDirty, queueCloudPush } from '@/lib/cloudSync';
+import { fingerprint, isSuppressed, isRegression, cooldownFrom } from '@/lib/fingerprint';
 
 function nowISO() { return new Date().toISOString(); }
 
@@ -15,36 +16,66 @@ async function persist(d: Decision) {
   try { markCloudRecordDirty('decisions', d.id); queueCloudPush(); } catch { /* offline-safe */ }
 }
 
-/** Create or merge a finding into a decision, grouped by `groupKey`. */
+/**
+ * Create or merge a finding into a decision.
+ *
+ * Identity is the fingerprint (`groupKey`), so the same underlying problem
+ * seen by ten scans stays exactly one decision. Resolved decisions stay quiet
+ * during their cooldown and only reopen as an explicit regression.
+ */
 export async function upsertDecision(input: {
   title: string;
   context: string;
   source: DecisionSource;
-  groupKey: string;
+  /** Pass either a precomputed groupKey or the parts to fingerprint. */
+  groupKey?: string;
+  fingerprintParts?: unknown[];
   severity?: Decision['severity'];
   recommendation?: string;
   options?: string[];
   websiteId?: string;
   sourceRef?: string;
+  /** Days of silence after this decision is resolved. */
+  cooldownDays?: number;
 }): Promise<string> {
-  const existing = await db.decisions.where('groupKey').equals(input.groupKey).first();
+  const groupKey =
+    input.groupKey ?? fingerprint(input.source, input.fingerprintParts ?? [input.title, input.websiteId]);
+  const existing = await db.decisions.where('groupKey').equals(groupKey).first();
 
   if (existing) {
-    // Resolved decisions stay resolved unless the finding is genuinely new.
-    if (existing.status !== 'open') {
-      if (existing.status === 'later' && (existing.deferUntil ?? '') > todayISO()) return existing.id;
-      if (existing.status === 'ignored') return existing.id;
+    // Suppressed: still counted, never re-surfaced.
+    if (isSuppressed(existing) && !isRegression(existing, input.severity)) {
+      await persist({ ...existing, occurrences: existing.occurrences + 1, updatedAt: nowISO() });
+      return existing.id;
     }
+
+    const resolved = existing.status === 'acted' || existing.status === 'ignored';
+    const regression = resolved && isRegression(existing, input.severity);
+    if (resolved && !regression) {
+      await persist({ ...existing, occurrences: existing.occurrences + 1, updatedAt: nowISO() });
+      return existing.id;
+    }
+
     const merged: Decision = {
       ...existing,
-      status: existing.status === 'later' ? 'open' : existing.status === 'acted' ? existing.status : 'open',
+      status: 'open',
       occurrences: existing.occurrences + 1,
+      regressions: (existing.regressions ?? 0) + (regression ? 1 : 0),
       context: input.context || existing.context,
       recommendation: input.recommendation ?? existing.recommendation,
       severity: input.severity ?? existing.severity,
+      cooldownUntil: undefined,
+      deferUntil: undefined,
+      resolvedAt: undefined,
       updatedAt: nowISO(),
     };
     await persist(merged);
+    if (regression) {
+      await logAudit({
+        action: 'decision', collection: 'decisions', recordId: merged.id,
+        label: `Regression: ${merged.title}`, detail: `Seen again after being resolved (${merged.occurrences}x)`,
+      });
+    }
     return merged.id;
   }
 
@@ -59,8 +90,10 @@ export async function upsertDecision(input: {
     recommendation: input.recommendation,
     options: input.options,
     status: 'open',
-    groupKey: input.groupKey,
+    groupKey,
     occurrences: 1,
+    regressions: 0,
+    cooldownDays: input.cooldownDays,
     createdAt: nowISO(),
     updatedAt: nowISO(),
   };
@@ -93,6 +126,7 @@ export async function actOnDecision(decision: Decision, opts?: { dueInDays?: num
     status: 'acted',
     linkedTaskId: task.id,
     resolvedAt: nowISO(),
+    cooldownUntil: cooldownFrom(decision.cooldownDays ?? 7),
     updatedAt: nowISO(),
   });
   await logAudit({
@@ -103,7 +137,7 @@ export async function actOnDecision(decision: Decision, opts?: { dueInDays?: num
 }
 
 export async function ignoreDecision(decision: Decision, reason: string): Promise<void> {
-  await persist({ ...decision, status: 'ignored', resolutionNote: reason, resolvedAt: nowISO(), updatedAt: nowISO() });
+  await persist({ ...decision, status: 'ignored', resolutionNote: reason, resolvedAt: nowISO(), cooldownUntil: cooldownFrom(decision.cooldownDays ?? 30), updatedAt: nowISO() });
   await logAudit({
     action: 'decision', collection: 'decisions', recordId: decision.id,
     label: `Ignored: ${decision.title}`, detail: reason,

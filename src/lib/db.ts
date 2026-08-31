@@ -494,6 +494,12 @@ export interface Decision {
     /** Grouping key — identical findings collapse into one decision with a count. */
     groupKey: string;
     occurrences: number;
+    /** How many times this came back after being resolved. */
+    regressions?: number;
+    /** Days of silence after resolution before the finding may resurface. */
+    cooldownDays?: number;
+    /** ISO datetime until which this decision stays suppressed. */
+    cooldownUntil?: string;
     resolutionNote?: string;
     linkedTaskId?: string;
     deferUntil?: string;       // YYYY-MM-DD when status = later

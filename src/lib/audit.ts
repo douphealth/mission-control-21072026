@@ -3,6 +3,7 @@
 // the user can always answer "what changed, when, and can I get it back?".
 
 import { db, genId, type AuditEntry } from '@/lib/db';
+import { redactSecrets } from '@/lib/secrets';
 
 const MAX_ENTRIES = 2000;
 
@@ -22,11 +23,14 @@ export async function logAudit(entry: {
   before?: any;
 }): Promise<void> {
   try {
+    // A snapshot must never carry live secret material into the history log.
+    const { before, ...rest } = entry;
     await db.auditLog.put({
       id: genId(),
       at: new Date().toISOString(),
       device: deviceLabel(),
-      ...entry,
+      ...rest,
+      before: before === undefined ? undefined : redactSecrets(before),
     });
     const count = await db.auditLog.count();
     if (count > MAX_ENTRIES) {
