@@ -1,39 +1,55 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
-  Check, Clock, ArrowRight, ChevronDown, ChevronUp, Plus,
-  CalendarClock, Scale, Play, Inbox, Hourglass, Search,
-  ShieldCheck, Pin,
-} from 'lucide-react';
-import { toast } from 'sonner';
+  Check,
+  Clock,
+  ArrowRight,
+  ChevronDown,
+  ChevronUp,
+  Plus,
+  CalendarClock,
+  Scale,
+  Play,
+  Inbox,
+  Hourglass,
+  Search,
+  ShieldCheck,
+  Pin,
+} from "lucide-react";
+import { toast } from "sonner";
 import {
-  useTasks, useReminders, usePayments, useDecisions, useUpdateItem,
-  useSyncHealth, useAuditLog,
-} from '@/hooks/useTableData';
-import { useNavigationStore } from '@/stores/navigationStore';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { buildWorkQueue, splitQueue, type WorkItem } from '@/lib/workQueue';
-import { todayISO, addDaysLocal, buildBriefing } from '@/lib/overdue';
-import { actOnDecision, deferDecision } from '@/lib/decisions';
-import { whyNow, buildAttention, type AttentionSeverity } from '@/lib/whyNow';
-import ReliabilityPanel from '@/components/ReliabilityPanel';
-import type { Task } from '@/lib/db';
+  useTasks,
+  useReminders,
+  usePayments,
+  useDecisions,
+  useUpdateItem,
+  useSyncHealth,
+  useAuditLog,
+} from "@/hooks/useTableData";
+import { useNavigationStore } from "@/stores/navigationStore";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { buildWorkQueue, splitQueue, type WorkItem } from "@/lib/workQueue";
+import { todayISO, addDaysLocal, buildBriefing } from "@/lib/overdue";
+import { actOnDecision, deferDecision } from "@/lib/decisions";
+import { whyNow, buildAttention, type AttentionSeverity } from "@/lib/whyNow";
+import ReliabilityPanel from "@/components/ReliabilityPanel";
+import type { Task } from "@/lib/db";
 
 const SEV_DOT: Record<AttentionSeverity, string> = {
-  critical: 'bg-rose-500',
-  warning: 'bg-amber-500',
-  info: 'bg-sky-500',
+  critical: "bg-rose-500",
+  warning: "bg-amber-500",
+  info: "bg-sky-500",
 };
 
 function greeting(d = new Date()) {
   const h = d.getHours();
-  if (h < 5) return 'Still up';
-  if (h < 12) return 'Good morning';
-  if (h < 18) return 'Good afternoon';
-  return 'Good evening';
+  if (h < 5) return "Still up";
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
 }
 
 function longDate(d = new Date()) {
-  return d.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' });
+  return d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
 }
 
 export default function NowTodayPage() {
@@ -66,53 +82,58 @@ export default function NowTodayPage() {
   const nowItem = queues.now;
   const commitments = queues.today.slice(0, 3);
   const upNext = queues.today.slice(3);
-  const waiting = tasks.filter((t) => t.status === 'blocked').length;
-  const inbox = tasks.filter((t) => t.status === 'todo' && !t.dueDate).length;
+  const waiting = tasks.filter((t) => t.status === "blocked").length;
+  const inbox = tasks.filter((t) => t.status === "todo" && !t.dueDate).length;
 
   const isQuiet = !nowItem && attention.length === 0 && commitments.length === 0;
 
   async function complete(item: WorkItem) {
-    if (item.kind === 'task') {
-      await updateItem('tasks', item.refId, {
-        status: 'done', completedAt: new Date().toISOString(), touchedAt: today,
+    if (item.kind === "task") {
+      await updateItem("tasks", item.refId, {
+        status: "done",
+        completedAt: new Date().toISOString(),
+        touchedAt: today,
       } as any);
-    } else if (item.kind === 'reminder') {
-      await updateItem('reminders', item.refId, { status: 'done' } as any);
-    } else if (item.kind === 'payment') {
-      await updateItem('payments', item.refId, { status: 'paid', paidDate: today } as any);
+    } else if (item.kind === "reminder") {
+      await updateItem("reminders", item.refId, { status: "done" } as any);
+    } else if (item.kind === "payment") {
+      await updateItem("payments", item.refId, { status: "paid", paidDate: today } as any);
     } else {
       await actOnDecision(item.raw);
-      toast.success('Decision turned into a task');
+      toast.success("Decision turned into a task");
       return;
     }
-    toast.success('Done — next one is up');
+    toast.success("Done — next one is up");
   }
 
   /** Planning, not deadline mutation: the real dueDate is never touched. */
   async function schedule(item: WorkItem, days: number) {
     const next = addDaysLocal(today, days);
-    if (item.kind === 'task') {
-      await updateItem('tasks', item.refId, {
-        notBefore: next, scheduledAt: next, touchedAt: today, committedOn: undefined,
+    if (item.kind === "task") {
+      await updateItem("tasks", item.refId, {
+        notBefore: next,
+        scheduledAt: next,
+        touchedAt: today,
+        committedOn: undefined,
       } as any);
       toast.success(`Scheduled for ${next} — deadline unchanged`);
       return;
     }
-    if (item.kind === 'reminder') {
-      await updateItem('reminders', item.refId, { remindAt: `${next}T09:00:00` } as any);
-    } else if (item.kind === 'decision') {
+    if (item.kind === "reminder") {
+      await updateItem("reminders", item.refId, { remindAt: `${next}T09:00:00` } as any);
+    } else if (item.kind === "decision") {
       await deferDecision(item.raw, days);
     } else {
-      toast.warning('Payment deadlines cannot be moved — pay or renegotiate.');
+      toast.warning("Payment deadlines cannot be moved — pay or renegotiate.");
       return;
     }
     toast.success(`Scheduled for ${next}`);
   }
 
   async function commit(item: WorkItem) {
-    if (item.kind !== 'task') return;
-    await updateItem('tasks', item.refId, { committedOn: today, notBefore: undefined } as any);
-    toast.success('Pinned to today');
+    if (item.kind !== "task") return;
+    await updateItem("tasks", item.refId, { committedOn: today, notBefore: undefined } as any);
+    toast.success("Pinned to today");
   }
 
   return (
@@ -121,11 +142,12 @@ export default function NowTodayPage() {
       <header className="flex flex-wrap items-start justify-between gap-4 pt-1">
         <div>
           <h1 className="text-[28px] sm:text-[34px] font-semibold tracking-tight text-foreground leading-tight">
-            {greeting()}{userName ? `, ${userName.split(' ')[0]}` : ''}
+            {greeting()}
+            {userName ? `, ${userName.split(" ")[0]}` : ""}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {longDate()} · {nowItem ? 'one thing at a time' : 'nothing is demanding you'}
-            {briefing.completedToday > 0 ? ` · ${briefing.completedToday} done today` : ''}
+            {longDate()} · {nowItem ? "one thing at a time" : "nothing is demanding you"}
+            {briefing.completedToday > 0 ? ` · ${briefing.completedToday} done today` : ""}
           </p>
         </div>
         <div className="hidden sm:flex items-center gap-2">
@@ -134,7 +156,9 @@ export default function NowTodayPage() {
             className="inline-flex h-10 items-center gap-2 rounded-lg border border-border/70 px-3 text-sm text-muted-foreground transition hover:text-foreground hover:border-border"
           >
             <Search size={15} /> Search
-            <kbd className="ml-1 rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium">⌘K</kbd>
+            <kbd className="ml-1 rounded border border-border/70 px-1.5 py-0.5 text-[10px] font-medium">
+              ⌘K
+            </kbd>
           </button>
           <button
             onClick={() => setImportModalOpen(true)}
@@ -163,7 +187,9 @@ export default function NowTodayPage() {
                 <>
                   <span className="opacity-40">/</span>
                   <button
-                    onClick={() => setActiveSection(nowItem.kind === 'payment' ? 'payments' : 'tasks')}
+                    onClick={() =>
+                      setActiveSection(nowItem.kind === "payment" ? "payments" : "tasks")
+                    }
                     className="underline-offset-2 hover:text-foreground hover:underline"
                   >
                     {nowItem.context}
@@ -183,24 +209,27 @@ export default function NowTodayPage() {
 
             <p className="mt-4 text-sm text-foreground/80">
               <span className="font-medium text-foreground">Why now: </span>
-              {whyNow(nowItem, today).join(' · ')}.
+              {whyNow(nowItem, today).join(" · ")}.
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 text-[12px] text-muted-foreground">
               {nowItem.due && (
                 <span className="inline-flex items-center gap-1.5">
-                  <CalendarClock size={13} /> Deadline {nowItem.due}{nowItem.time ? ` · ${nowItem.time}` : ''}
+                  <CalendarClock size={13} /> Deadline {nowItem.due}
+                  {nowItem.time ? ` · ${nowItem.time}` : ""}
                 </span>
               )}
               {nowItem.scheduled && <span>Scheduled {nowItem.scheduled}</span>}
               {nowItem.overdueDays > 0 && (
-                <span className="font-medium text-rose-500">{nowItem.overdueDays}d past deadline</span>
+                <span className="font-medium text-rose-500">
+                  {nowItem.overdueDays}d past deadline
+                </span>
               )}
             </div>
 
             <div className="mt-6 flex flex-wrap gap-2">
               <button
-                onClick={() => setActiveSection('focus')}
+                onClick={() => setActiveSection("focus")}
                 className="inline-flex h-10 items-center gap-2 rounded-lg bg-primary px-5 text-sm font-medium text-primary-foreground transition hover:opacity-90"
               >
                 <Play size={15} /> Start
@@ -209,7 +238,7 @@ export default function NowTodayPage() {
                 onClick={() => complete(nowItem)}
                 className="inline-flex h-10 items-center gap-2 rounded-lg border border-border/70 px-4 text-sm font-medium transition hover:bg-secondary/60"
               >
-                <Check size={15} /> {nowItem.kind === 'decision' ? 'Act on it' : 'Done'}
+                <Check size={15} /> {nowItem.kind === "decision" ? "Act on it" : "Done"}
               </button>
               <button
                 onClick={() => schedule(nowItem, 1)}
@@ -238,13 +267,15 @@ export default function NowTodayPage() {
         </div>
         {commitments.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            {nowItem ? 'Nothing else committed. Finish Now and stop.' : 'Your day is clear.'}
+            {nowItem ? "Nothing else committed. Finish Now and stop." : "Your day is clear."}
           </p>
         ) : (
           <ol className="divide-y divide-border/50 rounded-xl border border-border/60">
             {commitments.map((i, idx) => (
               <li key={i.id} className="group flex items-center gap-4 px-4 py-3.5">
-                <span className="w-4 shrink-0 text-sm tabular-nums text-muted-foreground/60">{idx + 1}</span>
+                <span className="w-4 shrink-0 text-sm tabular-nums text-muted-foreground/60">
+                  {idx + 1}
+                </span>
                 <button
                   onClick={() => complete(i)}
                   title="Complete"
@@ -255,7 +286,7 @@ export default function NowTodayPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[15px] font-medium text-foreground">{i.title}</p>
                   <p className="truncate text-[12px] text-muted-foreground">
-                    {whyNow(i, today).slice(0, 2).join(' · ')}
+                    {whyNow(i, today).slice(0, 2).join(" · ")}
                   </p>
                 </div>
                 <button
@@ -285,10 +316,11 @@ export default function NowTodayPage() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[14px] text-foreground">{i.title}</p>
                       <p className="truncate text-[11px] text-muted-foreground">
-                        {i.source}{i.due ? ` · deadline ${i.due}` : ''}
+                        {i.source}
+                        {i.due ? ` · deadline ${i.due}` : ""}
                       </p>
                     </div>
-                    {i.kind === 'task' && (
+                    {i.kind === "task" && (
                       <button
                         onClick={() => commit(i)}
                         className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:text-foreground"
@@ -308,7 +340,9 @@ export default function NowTodayPage() {
       <section>
         <SectionLabel>Needs attention</SectionLabel>
         {attention.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing is broken. Everything else is under control.</p>
+          <p className="text-sm text-muted-foreground">
+            Nothing is broken. Everything else is under control.
+          </p>
         ) : (
           <ul className="divide-y divide-border/50 rounded-xl border border-border/60">
             {attention.map((a) => (
@@ -318,7 +352,7 @@ export default function NowTodayPage() {
                   <p className="truncate text-[14px] font-medium text-foreground">{a.title}</p>
                   <p className="truncate text-[12px] text-muted-foreground">
                     {a.detail}
-                    {a.provenance ? ` · ${a.provenance}` : ''}
+                    {a.provenance ? ` · ${a.provenance}` : ""}
                   </p>
                 </div>
                 <button
@@ -336,9 +370,14 @@ export default function NowTodayPage() {
       {/* ── Queues ─────────────────────────────────────────── */}
       <section className="grid grid-cols-3 gap-2 sm:gap-3">
         {[
-          { label: 'Waiting', value: waiting, icon: Hourglass, section: 'tasks' },
-          { label: 'Decisions', value: decisions.filter((d) => d.status === 'open').length, icon: Scale, section: 'decisions' },
-          { label: 'Inbox', value: inbox, icon: Inbox, section: 'tasks' },
+          { label: "Waiting", value: waiting, icon: Hourglass, section: "tasks" },
+          {
+            label: "Decisions",
+            value: decisions.filter((d) => d.status === "open").length,
+            icon: Scale,
+            section: "decisions",
+          },
+          { label: "Inbox", value: inbox, icon: Inbox, section: "tasks" },
         ].map((q) => (
           <button
             key={q.label}
@@ -348,7 +387,9 @@ export default function NowTodayPage() {
             <span className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <q.icon size={12} /> {q.label}
             </span>
-            <span className="mt-1 block text-2xl font-semibold tabular-nums text-foreground">{q.value}</span>
+            <span className="mt-1 block text-2xl font-semibold tabular-nums text-foreground">
+              {q.value}
+            </span>
           </button>
         ))}
       </section>
@@ -369,7 +410,8 @@ export default function NowTodayPage() {
             <ul className="space-y-1.5">
               {audit.map((a) => (
                 <li key={a.id} className="truncate text-[12px] text-muted-foreground">
-                  <span className="text-foreground/80">{a.label || a.action}</span> · {a.collection} · {new Date(a.at).toLocaleString()}
+                  <span className="text-foreground/80">{a.label || a.action}</span> · {a.collection}{" "}
+                  · {new Date(a.at).toLocaleString()}
                 </li>
               ))}
             </ul>
@@ -377,7 +419,9 @@ export default function NowTodayPage() {
         </div>
         <div>
           <SectionLabel muted>
-            <span className="inline-flex items-center gap-1.5"><ShieldCheck size={12} /> System health</span>
+            <span className="inline-flex items-center gap-1.5">
+              <ShieldCheck size={12} /> System health
+            </span>
           </SectionLabel>
           <ReliabilityPanel compact />
         </div>
@@ -388,7 +432,9 @@ export default function NowTodayPage() {
 
 function SectionLabel({ children, muted }: { children: React.ReactNode; muted?: boolean }) {
   return (
-    <h2 className={`mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] [word-spacing:0.2em] ${muted ? 'text-muted-foreground/70' : 'text-muted-foreground'}`}>
+    <h2
+      className={`mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] [word-spacing:0.2em] ${muted ? "text-muted-foreground/70" : "text-muted-foreground"}`}
+    >
       {children}
     </h2>
   );
