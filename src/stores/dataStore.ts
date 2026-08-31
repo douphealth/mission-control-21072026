@@ -16,6 +16,7 @@ import { markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from '@/l
 import { isDuplicate, deduplicateItems, findDuplicateId } from '@/lib/dedup';
 import { markDirty as markVersionsDirty } from '@/lib/versions';
 import { logAudit } from '@/lib/audit';
+import { stripSecretsForExport } from '@/lib/secrets';
 
 const AUDIT_SKIP = new Set(['auditLog', 'syncHealth', 'audienceReadings', 'streamItems']);
 function labelOf(item: any): string {
@@ -279,7 +280,7 @@ export const useDataStore = create<DataState>((set, _get) => ({
             db.habits.toArray(),
             db.settings.get('default'),
         ]);
-        const data = {
+        const data = stripSecretsForExport({
             websites, seoProfiles, seoSnapshots, seoQueryObservations, seoIssues, seoActions, seoChanges, seoVisibilityChecks,
             tasks, repos, buildProjects, links, notes, payments, ideas,
             credentials, customModules, habits, settings,
@@ -305,7 +306,8 @@ export const useDataStore = create<DataState>((set, _get) => ({
             // Legacy compat fields
             exportedAt: new Date().toISOString(),
             version: '9.1',
-        };
+            secretPolicy: 'secrets-excluded',
+        });
         return JSON.stringify(data, null, 2);
     },
 
