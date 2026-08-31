@@ -77,6 +77,9 @@ function getTable(tableName: string) {
         audienceAccounts: db.audienceAccounts,
         audienceReadings: db.audienceReadings,
         reminders: db.reminders,
+        decisions: db.decisions,
+        auditLog: db.auditLog,
+        syncHealth: db.syncHealth,
     };
     return tables[tableName];
 }

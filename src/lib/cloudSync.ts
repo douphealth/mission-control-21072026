@@ -53,6 +53,8 @@ const COLLECTIONS: Record<string, any> = {
     audienceAccounts: db.audienceAccounts,
     audienceReadings: db.audienceReadings,
     reminders: db.reminders,
+    decisions: db.decisions,
+    auditLog: db.auditLog,
     settings: db.settings,
 };
 

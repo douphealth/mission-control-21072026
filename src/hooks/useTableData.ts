@@ -9,6 +9,7 @@ import type {
   Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment,
   Idea, CredentialVault, CustomModule, HabitTracker,
   FeedSource, StreamItem, WatchTerm, AudienceAccount, AudienceReading, Reminder,
+  Decision, AuditEntry, SyncHealth,
   SEOProfile, SEOSnapshot, SEOQueryObservation, SEOIssue, SEOAction, SEOChange, SEOVisibilityCheck,
 } from '@/lib/db';
 import { useDataStore } from '@/stores/dataStore';
@@ -39,6 +40,10 @@ export const useWatchTerms       = () => (useLiveQuery(() => db.watchTerms.toArr
 export const useAudienceAccounts = () => (useLiveQuery(() => db.audienceAccounts.toArray(), []) ?? (EMPTY as AudienceAccount[]));
 export const useAudienceReadings = () => (useLiveQuery(() => db.audienceReadings.toArray(), []) ?? (EMPTY as AudienceReading[]));
 export const useReminders        = () => (useLiveQuery(() => db.reminders.toArray(), []) ?? (EMPTY as Reminder[]));
+export const useDecisions        = () => (useLiveQuery(() => db.decisions.toArray(), []) ?? (EMPTY as Decision[]));
+export const useAuditLog         = (limit = 120) =>
+  useLiveQuery(() => db.auditLog.orderBy('at').reverse().limit(limit).toArray(), [limit]) ?? (EMPTY as AuditEntry[]);
+export const useSyncHealth       = () => (useLiveQuery(() => db.syncHealth.toArray(), []) ?? (EMPTY as SyncHealth[]));
 
 // ─── Indexed / paginated query hooks (use these for >500-row tables) ──────────
 export const useTasksByStatus = (status: Task['status']) =>
