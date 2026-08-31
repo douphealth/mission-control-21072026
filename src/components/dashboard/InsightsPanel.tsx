@@ -202,7 +202,7 @@ const AvatarStack = ({ names, size = 28 }: { names: string[]; size?: number }) =
 /* ═══════════════════════════════════════════════════════════════════
    MAIN
    ═══════════════════════════════════════════════════════════════════ */
-const InsightsPanel = forwardRef<HTMLDivElement>(function InsightsPanel(_, ref) {
+const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(function InsightsPanel({ highlightsOnly = false }, ref) {
   const websites = useWebsites();
   const buildProjects = useBuildProjects();
   const tasks = useTasks();
@@ -459,6 +459,7 @@ const InsightsPanel = forwardRef<HTMLDivElement>(function InsightsPanel(_, ref) 
         </div>
       </div>
 
+      {!highlightsOnly && (<>
       {/* ═══ KANBAN — the centerpiece from the Dribbble reference ═══ */}
       <div {...fu(8)} className="enterprise-card rounded-[28px] p-6 sm:p-7">
         <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
@@ -738,6 +739,7 @@ const InsightsPanel = forwardRef<HTMLDivElement>(function InsightsPanel(_, ref) 
         </div>
       </div>
       <TaskQuickEditor task={editingTask} onClose={() => setEditingTaskId(null)} />
+      </>)}
     </div>
   );
 });

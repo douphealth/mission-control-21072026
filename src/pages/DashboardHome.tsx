@@ -78,6 +78,18 @@ export default function DashboardHome() {
         </div>
       </div>
 
+      {/* ═══ The premium visual layer — stat tiles, productivity pulse, focus timer ═══ */}
+      <Suspense
+        fallback={
+          <div className="animate-pulse space-y-4">
+            <div className="h-32 rounded-[28px] bg-muted/30" />
+            <div className="h-72 rounded-[28px] bg-muted/30" />
+          </div>
+        }
+      >
+        <InsightsPanel highlightsOnly />
+      </Suspense>
+
       <ReliabilityPanel compact />
 
       {/* ═══ INSIGHTS — below the fold, loaded only when asked for ═══ */}
