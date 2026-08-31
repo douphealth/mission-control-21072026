@@ -563,6 +563,10 @@ class MissionControlDB extends Dexie {
     audienceAccounts!: Table<AudienceAccount>;
     audienceReadings!: Table<AudienceReading>;
     reminders!: Table<Reminder>;
+    decisions!: Table<Decision>;
+    auditLog!: Table<AuditEntry>;
+    syncHealth!: Table<SyncHealth>;
+
 
 
     constructor() {
