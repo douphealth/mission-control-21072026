@@ -11,12 +11,22 @@ import {
   useDecisions,
   useSyncHealth,
   useUpdateItem,
+  useWebsites,
+  useSEOProfiles,
+  useSEOIssues,
+  useSEOSnapshots,
+  useStreamItems,
+  useValidations,
 } from "@/hooks/useTableData";
 import { buildWorkQueue, splitQueue, type WorkItem } from "@/lib/workQueue";
 import { buildAttention } from "@/lib/whyNow";
+import { buildSitePulse } from "@/lib/sitePulse";
+import { pendingValidations } from "@/lib/validations";
+import { selectIntelligence } from "@/lib/intelligence";
 import { todayISO, addDaysLocal, buildBriefing } from "@/lib/overdue";
 import { actOnDecision, deferDecision } from "@/lib/decisions";
 import type { Task } from "@/lib/db";
+
 
 export function useDailyOps() {
   const tasks = useTasks();
