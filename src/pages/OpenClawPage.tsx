@@ -49,7 +49,33 @@ function StatusBadge({ status }: { status: ServiceEntry["status"] }) {
 
 export default function OpenClawPage() {
   const credentials = useCredentials();
-  const [services, setServices] = useState<ServiceEntry[]>(defaultServices);
+  const [services, setServices] = useState<ServiceEntry[]>([]);
+  const [checking, setChecking] = useState(false);
+  useEffect(() => { setServices(loadServices()); }, []);
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(services)); } catch { /* storage unavailable */ }
+  }, [services]);
+
+  const checkAll = async () => {
+    const targets = services.filter(s => s.url);
+    if (!targets.length) { toast.error("Add a service URL first"); return; }
+    setChecking(true);
+    try {
+      const results = await Promise.all(targets.map(async s => ({ s, r: await probeEndpoint({ data: { url: s.url } }) })));
+      setServices(prev => prev.map(svc => {
+        const hit = results.find(x => x.s.id === svc.id);
+        if (!hit) return svc;
+        const status: ServiceEntry["status"] = hit.r.ok ? "operational" : hit.r.status >= 500 || hit.r.status === 0 ? "outage" : "degraded";
+        return { ...svc, status, lastChecked: new Date().toISOString().split("T")[0] };
+      }));
+      toast.success(`Checked ${results.length} service${results.length === 1 ? "" : "s"}`);
+    } catch (e: any) {
+      toast.error(String(e?.message ?? e));
+    } finally {
+      setChecking(false);
+    }
+  };
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<ServiceEntry, "id">>(emptyForm);
