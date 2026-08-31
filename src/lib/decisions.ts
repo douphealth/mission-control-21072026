@@ -7,6 +7,7 @@ import { logAudit } from '@/lib/audit';
 import { todayISO, addDaysLocal } from '@/lib/overdue';
 import { isRotten } from '@/lib/triage';
 import { markCloudRecordDirty, queueCloudPush } from '@/lib/cloudSync';
+import { fingerprint, isSuppressed, isRegression, cooldownFrom } from '@/lib/fingerprint';
 
 function nowISO() { return new Date().toISOString(); }
 
