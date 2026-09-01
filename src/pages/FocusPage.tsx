@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import type { Task } from "@/lib/db";
 import { useTasks, useUpdateItem } from "@/hooks/useTableData";
 import { todayISO } from "@/lib/overdue";
-import { isOpen, sortByPriority, quadrantOf } from "@/lib/triage";
+import { isOpen, daysSinceTouch } from "@/lib/triage";
+import { daysOverdue } from "@/lib/overdue";
+import { scoreItem } from "@/lib/priorityEngine";
 import { useNavigationStore } from "@/stores/navigationStore";
 
 
@@ -38,12 +40,25 @@ export default function FocusPage() {
   const updateItem = useUpdateItem();
   const today = todayISO();
 
+  // One engine everywhere: Focus candidates are ranked by the same
+  // priority engine that builds the Home queue — the two-engines
+  // disagreement (Eisenhower vs score) is gone.
   const candidates = useMemo(() => {
     const open = tasks.filter(isOpen);
-    const ranked = sortByPriority(open).sort((a, b) => {
-      const rank = (t: Task) => (quadrantOf(t, today) === 'do' ? 0 : quadrantOf(t, today) === 'schedule' ? 1 : 2);
-      return rank(a) - rank(b);
-    });
+    const ranked = open
+      .map((t) => ({
+        task: t,
+        scored: scoreItem({
+          priority: t.priority,
+          overdueDays: daysOverdue(t, today),
+          staleDays: daysSinceTouch(t, today),
+          due: t.dueDate,
+          today,
+          kind: 'task' as const,
+          pinned: t.committedOn === today,
+        }),
+      }))
+      .sort((a, b) => b.scored.score - a.scored.score);
     return ranked.slice(0, 12);
   }, [tasks, today]);
 
@@ -146,10 +161,13 @@ export default function FocusPage() {
               <Target size={14} className="text-primary" /> Lock the session to one task
             </div>
             <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
-              {candidates.map(t => (
+              {candidates.map(({ task: t, scored }) => (
                 <button key={t.id} onClick={() => setLockedId(t.id)}
                   className="flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2 text-left transition hover:bg-secondary">
                   <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{t.title}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground/80">
+                    {scored.dimensions.find(d => d.name === 'pinned') ? '📌 ' : ''}{scored.score}
+                  </span>
                   <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{t.priority}</span>
                 </button>
               ))}
