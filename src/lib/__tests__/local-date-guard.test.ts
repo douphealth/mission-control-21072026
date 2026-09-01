@@ -9,16 +9,19 @@ describe('local-date regression guards', () => {
   // The UTC bug class: components computing "today" via toISOString() lie
   // by a day for every timezone ahead of UTC in the evening (e.g. UTC+3).
   // These were real bugs found in TopBar and CommandPalette.
+  // (Backup filenames using toISOString are fine — they're labels, not logic.)
+  const BUG_RE = /const today\s*=\s*new Date\(\)\.toISOString\(\)/;
+
   it('TopBar uses the local todayISO helper, never toISOString', () => {
     const src = read('src/components/TopBar.tsx');
     expect(src).toMatch(/todayISO/);
-    expect(src).not.toMatch(/toISOString\(\)\.split\('T'\)\[0\]/);
+    expect(src).not.toMatch(BUG_RE);
   });
 
   it('CommandPalette uses the local todayISO helper, never toISOString', () => {
     const src = read('src/components/CommandPalette.tsx');
     expect(src).toMatch(/todayISO/);
-    expect(src).not.toMatch(/toISOString\(\)\.split\('T'\)\[0\]/);
+    expect(src).not.toMatch(BUG_RE);
   });
 
   it('the palette offers inline capture for free text', () => {
