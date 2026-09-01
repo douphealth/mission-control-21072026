@@ -1,7 +1,7 @@
 import { useTasks, usePayments, useIdeas, useCustomModules, useAddItem, genId } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Home, CheckSquare, Calendar, FileText, Timer,
   Globe, Github, Hammer, Link2, BarChart3,
@@ -9,60 +9,57 @@ import {
   Settings, Sun, Moon, X, Sparkles,
   DollarSign, Lightbulb, KeyRound, Flame,
   ChevronLeft, ChevronRight, Plus, Check, Download, Zap, RefreshCcw, Archive,
-  Radar, Newspaper, AtSign, Users, Bell, Scale, Crosshair
+  Radar, Newspaper, AtSign, Users, Bell, Scale, Crosshair, PanelsTopLeft
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Two-level navigation. Level 1 = the daily system (Home, Review, Calendar,
+// Tasks). Level 2 = everything else under one collapsed "Modules" group —
+// fully usable, never deleted, just out of the daily path. Custom modules
+// the user creates still render inline after Modules.
 const navGroups = [
   {
-    label: 'TODAY',
+    label: 'NOW',
     items: [
-      { id: 'dashboard', label: 'Today', icon: Home },
-
+      { id: 'dashboard', label: 'Home', icon: Home },
+      { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+      { id: 'review', label: 'Review', icon: RefreshCcw },
+      { id: 'calendar', label: 'Calendar', icon: Calendar },
+      { id: 'control-center', label: 'Captures', icon: Radar },
     ],
   },
   {
-    label: 'INBOX',
+    label: 'CORE',
     items: [
-      { id: 'control-center', label: 'Captures', icon: Radar },
       { id: 'decisions', label: 'Findings', icon: Scale },
       { id: 'reminders', label: 'Reminders', icon: Bell },
-    ],
-  },
-  {
-    label: 'WORK',
-    items: [
-      { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-      { id: 'projects', label: 'Projects', icon: BarChart3 },
-      { id: 'review', label: 'Review', icon: RefreshCcw },
-    ],
-  },
-  {
-    label: 'SITES',
-    items: [
-      { id: 'websites', label: 'Websites', icon: Globe },
-      { id: 'wp-manage', label: 'WordPress', icon: Zap },
-      { id: 'seo', label: 'SEO', icon: SearchIcon },
-    ],
-  },
-  {
-    label: 'INTELLIGENCE',
-    items: [
-      { id: 'industry', label: 'Trends', icon: Newspaper },
-      { id: 'mentions', label: 'Mentions', icon: AtSign },
-      { id: 'audience', label: 'Audience', icon: Users },
-    ],
-  },
-  {
-    label: 'GENERAL',
-    items: [
-      { id: 'calendar', label: 'Calendar', icon: Calendar },
       { id: 'notes', label: 'Notes', icon: FileText },
-      { id: 'payments', label: 'Finance', icon: DollarSign },
-      { id: 'focus', label: 'Focus', icon: Timer },
-      { id: 'settings', label: 'Settings', icon: Settings },
     ],
   },
+];
+
+// Level 2 — every module, one click away under "Modules".
+const modulesNav = [
+  { id: 'projects', label: 'Projects', icon: PanelsTopLeft },
+  { id: 'websites', label: 'Websites', icon: Globe },
+  { id: 'wp-manage', label: 'WordPress', icon: Zap },
+  { id: 'seo', label: 'SEO', icon: SearchIcon },
+  { id: 'industry', label: 'Trends', icon: Newspaper },
+  { id: 'mentions', label: 'Mentions', icon: AtSign },
+  { id: 'audience', label: 'Audience', icon: Users },
+  { id: 'payments', label: 'Finance', icon: DollarSign },
+  { id: 'habits', label: 'Habits', icon: Flame },
+  { id: 'ideas', label: 'Ideas', icon: Lightbulb },
+  { id: 'credentials', label: 'Credentials', icon: KeyRound },
+  { id: 'links', label: 'Links Hub', icon: Link2 },
+  { id: 'github', label: 'GitHub', icon: Github },
+  { id: 'builds', label: 'Build Projects', icon: Hammer },
+  { id: 'google-tasks', label: 'Google Tasks', icon: CheckSquare },
+  { id: 'cloudflare', label: 'Cloudflare', icon: Cloud },
+  { id: 'vercel', label: 'Vercel', icon: Rocket },
+  { id: 'openclaw', label: 'OpenClaw', icon: Bug },
+  { id: 'focus', label: 'Focus Timer', icon: Timer },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 // Specialized modules — one click away under "More", never deleted.
@@ -92,6 +89,14 @@ export default function Sidebar() {
   const [newModName, setNewModName] = useState('');
   const [newModEmoji, setNewModEmoji] = useState('📁');
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [modulesOpen, setModulesOpen] = useState(false);
+
+  // If the user lands on a second-level section (deep link, palette, sidebar
+  // old state), the Modules group expands to show where they are.
+  const inModules = modulesNav.some(m => m.id === activeSection);
+  useEffect(() => {
+    if (inModules) setModulesOpen(true);
+  }, [inModules]);
 
   const openTaskCount = tasks.filter(t => t.status !== 'done').length;
   const overduePayments = payments.filter(p => p.status === 'overdue').length;
@@ -251,6 +256,43 @@ export default function Sidebar() {
                 )}
             </div>
           ))}
+
+          {/* ── Level 2: Modules — every specialized module, collapsed by default ── */}
+          <div>
+            <button
+              onClick={() => setModulesOpen(o => !o)}
+              className={`w-full flex items-center justify-between px-3 mb-1.5 text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase hover:text-sidebar-foreground/60 transition-colors ${isCollapsed ? 'justify-center' : ''}`}
+              title="All modules"
+            >
+              {!isCollapsed && <span className="flex items-center gap-1.5"><PanelsTopLeft size={10} /> Modules · {modulesNav.length}</span>}
+              {!isCollapsed && <span>{modulesOpen ? '−' : '+'}</span>}
+              {isCollapsed && <PanelsTopLeft size={16} strokeWidth={1.5} />}
+            </button>
+            {modulesOpen && (
+              <div className="space-y-0.5">
+                {modulesNav.map(item => {
+                  const active = activeSection === item.id;
+                  const badge = getBadge(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all
+                        ${active
+                          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35'
+                          : 'text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'}`}
+                    >
+                      <item.icon size={15} strokeWidth={1.5} className="flex-shrink-0" />
+                      <span className="flex-1 text-left truncate">{item.label}</span>
+                      {badge !== null && (
+                        <span className="text-[10px] font-bold min-w-[20px] text-center px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">{badge}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Custom Modules */}
           {customModules.filter(m => m.visible).length > 0 && (
