@@ -8,6 +8,7 @@ import { BarChart3, ChevronDown, Inbox, PauseCircle, Scale } from "lucide-react"
 import DailyHero from "@/components/dashboard/DailyHero";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
 import FocusDock from "@/components/dashboard/FocusDock";
+import QuickCaptureBar from "@/components/dashboard/QuickCaptureBar";
 import SitePulse from "@/components/dashboard/SitePulse";
 import ValidationPulse from "@/components/dashboard/ValidationPulse";
 import IntelligencePulse from "@/components/dashboard/IntelligencePulse";
@@ -46,6 +47,8 @@ export default function DashboardHome() {
         onPlan={ops.schedule}
         onDockFocus={ops.now && ops.now.kind === "task" ? () => setDockItem(ops.now!) : undefined}
       />
+
+      <QuickCaptureBar />
 
       {dockItem && (
         <FocusDock
