@@ -1,6 +1,7 @@
 import { useTasks, useExportAllData } from '@/hooks/useTableData';
 import { useNavigationStore } from '@/stores/navigationStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { todayISO } from '@/lib/overdue';
 import { Search, Bell, Plus, Menu, Download, Mail, History } from 'lucide-react';
 import { forwardRef, lazy, Suspense, useState, useEffect } from 'react';
 
@@ -43,7 +44,9 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
     ? '⌘K'
     : 'Ctrl K';
 
-  const today = new Date().toISOString().split('T')[0];
+  // Local date — never toISOString() (UTC), which lied by a day in the
+  // evening for anyone outside UTC+0 (the overdue count was off).
+  const today = todayISO();
   const overdueTasks = tasks.filter(t => t.status !== 'done' && t.dueDate && t.dueDate < today);
   const dueTodayTasks = tasks.filter(t => t.status !== 'done' && t.dueDate === today);
   const overdueCount = overdueTasks.length;

@@ -5,9 +5,12 @@ import {
   ArrowRight, Clock, Zap, Hash, Flame, Moon, Upload, Download,
   ExternalLink, Star, TrendingUp
 } from 'lucide-react';
-import { useWebsites, useTasks, useRepos, useBuildProjects, useLinks, useNotes, usePayments, useExportAllData } from '@/hooks/useTableData';
+import { useWebsites, useTasks, useRepos, useBuildProjects, useLinks, useNotes, usePayments, useExportAllData, useAddItem } from '@/hooks/useTableData';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useNavigationStore } from '@/stores/navigationStore';
+import { parseCapture, toRecord } from '@/lib/quickCapture';
+import { todayISO } from '@/lib/overdue';
+import { toast } from 'sonner';
 import Fuse from 'fuse.js';
 
 const sections = [
@@ -50,56 +53,56 @@ interface CommandPaletteProps {
   onImport: () => void;
 }
 
-// Natural language query patterns
-const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = [
-  {
-    pattern: /tasks?\s*(due|for)\s*(today|this week|tomorrow)/i,
-    handler: (ctx) => {
-      const today = new Date().toISOString().split('T')[0];
-      const tasks = ctx.tasks.filter((t: any) => t.status !== 'done' && t.dueDate <= today);
-      return tasks.map((t: any) => ({
-        id: `task-${t.id}`,
-        type: 'data' as const,
-        label: t.title,
-        sub: `${t.priority} · ${t.dueDate}`,
-        action: () => { ctx.setActiveSection('tasks'); ctx.onClose(); },
-        emoji: '✅',
-        priority: 10,
-      }));
+  // Natural language query patterns — local dates only, never UTC.
+  const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = [
+    {
+      pattern: /tasks?\s*(due|for)\s*(today|this week|tomorrow)/i,
+      handler: (ctx) => {
+        const today = todayISO();
+        const tasks = ctx.tasks.filter((t: any) => t.status !== 'done' && t.dueDate <= today);
+        return tasks.map((t: any) => ({
+          id: `task-${t.id}`,
+          type: 'data' as const,
+          label: t.title,
+          sub: `${t.priority} · ${t.dueDate}`,
+          action: () => { ctx.setActiveSection('tasks'); ctx.onClose(); },
+          emoji: '✅',
+          priority: 10,
+        }));
+      },
     },
-  },
-  {
-    pattern: /overdue|late|past\s*due/i,
-    handler: (ctx) => {
-      const today = new Date().toISOString().split('T')[0];
-      const overdue = ctx.tasks.filter((t: any) => t.status !== 'done' && t.dueDate < today);
-      return overdue.map((t: any) => ({
-        id: `overdue-${t.id}`,
-        type: 'data' as const,
-        label: `⚠️ ${t.title}`,
-        sub: `Overdue since ${t.dueDate}`,
-        action: () => { ctx.setActiveSection('tasks'); ctx.onClose(); },
-        emoji: '🔴',
-        priority: 10,
-      }));
+    {
+      pattern: /overdue|late|past\s*due/i,
+      handler: (ctx) => {
+        const today = todayISO();
+        const overdue = ctx.tasks.filter((t: any) => t.status !== 'done' && t.dueDate < today);
+        return overdue.map((t: any) => ({
+          id: `overdue-${t.id}`,
+          type: 'data' as const,
+          label: `⚠️ ${t.title}`,
+          sub: `Overdue since ${t.dueDate}`,
+          action: () => { ctx.setActiveSection('tasks'); ctx.onClose(); },
+          emoji: '🔴',
+          priority: 10,
+        }));
+      },
     },
-  },
-  {
-    pattern: /unpaid|pending\s*(payment|invoice)/i,
-    handler: (ctx) => {
-      const pending = ctx.payments.filter((p: any) => p.status === 'pending' || p.status === 'overdue');
-      return pending.map((p: any) => ({
-        id: `payment-${p.id}`,
-        type: 'data' as const,
-        label: p.title,
-        sub: `$${p.amount} · ${p.status}`,
-        action: () => { ctx.setActiveSection('payments'); ctx.onClose(); },
-        emoji: '💰',
-        priority: 10,
-      }));
+    {
+      pattern: /unpaid|pending\s*(payment|invoice)/i,
+      handler: (ctx) => {
+        const pending = ctx.payments.filter((p: any) => p.status === 'pending' || p.status === 'overdue');
+        return pending.map((p: any) => ({
+          id: `payment-${p.id}`,
+          type: 'data' as const,
+          label: p.title,
+          sub: `$${p.amount} · ${p.status}`,
+          action: () => { ctx.setActiveSection('payments'); ctx.onClose(); },
+          emoji: '💰',
+          priority: 10,
+        }));
+      },
     },
-  },
-];
+  ];
 
 export default function CommandPalette({ open, onClose, onImport }: CommandPaletteProps) {
   const websites = useWebsites();
@@ -109,6 +112,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
   const links = useLinks();
   const notes = useNotes();
   const payments = usePayments();
+  const addItem = useAddItem();
   const exportAllData = useExportAllData();
   const toggleTheme = useSettingsStore(s => s.toggleTheme);
   const { setActiveSection, recentSections } = useNavigationStore();
@@ -133,6 +137,31 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
 
   const allItems = useMemo(() => {
     const items: CommandItem[] = [];
+
+    // ── Universal capture: whatever the user typed becomes the top action ──
+    const raw = query.trim();
+    if (raw.length > 1 && !['tasks due', 'overdue', 'unpaid'].some((p) => p === raw.toLowerCase())) {
+      const parsed = parseCapture(raw);
+      items.push({
+        id: 'capture-inline',
+        type: 'action',
+        label: `Capture: “${raw.slice(0, 48)}${raw.length > 48 ? '…' : ''}”`,
+        sub: `→ ${parsed.target}${parsed.due ? ` · ${parsed.due}` : ''}${parsed.priority ? ` · ${parsed.priority}` : ''}`,
+        action: async () => {
+          try {
+            await addItem(parsed.target, toRecord(parsed) as never);
+            toast.success(`Captured as ${parsed.target}`, { description: parsed.title.slice(0, 60) });
+          } catch (e: any) {
+            toast.error('Capture failed', { description: String(e?.message ?? e) });
+          }
+          onClose();
+        },
+        emoji: '⚡',
+        icon: Zap,
+        keywords: ['capture', 'add', 'new', 'task', 'note', 'idea', 'reminder', 'link'],
+        priority: 200,
+      });
+    }
 
     // Recent sections (high priority)
     recentSections.slice(0, 4).forEach((id, i) => {
@@ -275,7 +304,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
     }));
 
     return items;
-  }, [websites, tasks, repos, buildProjects, links, notes, recentSections, setActiveSection, onClose, onImport, exportAllData, toggleTheme]);
+  }, [query, websites, tasks, repos, buildProjects, links, notes, payments, addItem, recentSections, setActiveSection, onClose, onImport, exportAllData, toggleTheme]);
 
   // Fuse.js fuzzy search
   const fuse = useMemo(() => new Fuse(allItems, {
