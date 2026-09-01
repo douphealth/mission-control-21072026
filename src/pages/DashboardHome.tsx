@@ -9,6 +9,7 @@ import DailyHero from "@/components/dashboard/DailyHero";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
 import FocusDock from "@/components/dashboard/FocusDock";
 import QuickCaptureBar from "@/components/dashboard/QuickCaptureBar";
+import FirstRunExperience from "@/components/dashboard/FirstRunExperience";
 import SitePulse from "@/components/dashboard/SitePulse";
 import ValidationPulse from "@/components/dashboard/ValidationPulse";
 import IntelligencePulse from "@/components/dashboard/IntelligencePulse";
@@ -58,6 +59,10 @@ export default function DashboardHome() {
         />
       )}
 
+      {ops.isEmpty && <FirstRunExperience />}
+
+      {!ops.isEmpty && (
+        <>
       <div className="grid grid-cols-3 gap-3">
         {pills.map((p) => (
           <button
@@ -101,6 +106,8 @@ export default function DashboardHome() {
           <IntelligencePulse items={ops.intelligence} />
         </div>
       </div>
+        </>
+      )}
 
       {/* ═══ INSIGHTS — below the fold, loaded only when asked for ═══ */}
       <section>

@@ -12,6 +12,7 @@ import {
   useSyncHealth,
   useUpdateItem,
   useWebsites,
+  useNotes,
   useSEOProfiles,
   useSEOIssues,
   useSEOSnapshots,
@@ -37,6 +38,7 @@ export function useDailyOps() {
   const health = useSyncHealth();
   const updateItem = useUpdateItem();
   const websites = useWebsites();
+  const notes = useNotes();
   const seoProfiles = useSEOProfiles();
   const seoIssues = useSEOIssues();
   const seoSnapshots = useSEOSnapshots();
@@ -81,6 +83,19 @@ export function useDailyOps() {
 
 
   const briefing = useMemo(() => buildBriefing(tasks as Task[], today), [tasks, today]);
+
+  /** True first-run: zero rows in every core table. Drives the gorgeous
+   *  empty state instead of a dead dashboard. Never fabricated rows. */
+  const isEmpty = useMemo(
+    () =>
+      tasks.length === 0 &&
+      reminders.length === 0 &&
+      payments.length === 0 &&
+      decisions.length === 0 &&
+      websites.length === 0 &&
+      notes.length === 0,
+    [tasks, reminders, payments, decisions, websites, notes],
+  );
 
   const commitments = useMemo(() => queues.today.slice(0, 3), [queues.today]);
   const upNext = useMemo(() => queues.today.slice(3), [queues.today]);
@@ -194,6 +209,7 @@ export function useDailyOps() {
     commitments,
     upNext,
     timeline,
+    isEmpty,
     attention,
     sitePulse,
     validationPulse,

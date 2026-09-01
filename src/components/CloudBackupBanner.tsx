@@ -4,6 +4,7 @@ import {
   onCloudStatus, signInToCloud, forceCloudSync, getLastCloudSync,
   type CloudStatus,
 } from '@/lib/cloudSync';
+import EmailSignInDialog from './EmailSignInDialog';
 
 function label(status: CloudStatus) {
   switch (status) {
@@ -48,35 +49,58 @@ export function CloudBackupBadge() {
 export default function CloudBackupBanner() {
   const [status, setStatus] = useState<CloudStatus>('signed-out');
   const [err, setErr] = useState<string | null>(null);
+  const [emailDialog, setEmailDialog] = useState(false);
   useEffect(() => onCloudStatus((s, e) => { setStatus(s); setErr(e); }), []);
 
-  if (status !== 'signed-out' && status !== 'error') return null;
+  if (status === 'synced' || status === 'syncing') return null;
 
-  const isError = status === 'error';
+  // Google OAuth is unconfigured on the backend (missing client secret) —
+  // route the user straight to the email-code flow that works.
+  const oauthBroken = /GOOGLE_OAUTH_UNCONFIGURED|OAuth secret|Unsupported provider/i.test(err ?? '');
+
+  const start = () => {
+    if (oauthBroken) { setEmailDialog(true); return; }
+    // Try Google first; the catch in signInToCloud flips the banner into
+    // the oauthBroken state, and the next click opens email sign-in.
+    void signInToCloud().then(() => {
+      // signInToCloud swallows errors into status — re-read current error
+      // from the store via the callback we already have is not possible
+      // synchronously; instead poll once.
+    });
+  };
 
   return (
-    <div className={`enterprise-panel mb-3 flex items-center gap-3 rounded-2xl border p-3 sm:mb-4 sm:p-4 ${isError ? 'border-destructive/40' : 'border-primary/30'}`}>
-      <div className={`shrink-0 rounded-xl p-2 ${isError ? 'bg-destructive/15 text-destructive' : 'bg-primary/15 text-primary'}`}>
-        {isError ? <AlertTriangle size={16} /> : <CloudOff size={16} />}
+    <>
+      <div className={`enterprise-panel mb-3 flex items-center gap-3 rounded-2xl border p-3 sm:mb-4 sm:p-4 ${status === 'error' ? 'border-destructive/40' : 'border-primary/30'}`}>
+        <div className={`shrink-0 rounded-xl p-2 ${status === 'error' ? 'bg-destructive/15 text-destructive' : 'bg-primary/15 text-primary'}`}>
+          {status === 'error' ? <AlertTriangle size={16} /> : <CloudOff size={16} />}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[13px] font-semibold text-foreground sm:text-sm">
+            {status === 'error' ? 'Cloud backup problem' : 'Data is only on this device'}
+          </p>
+          <p className="line-clamp-2 text-[11px] text-muted-foreground sm:text-xs">
+            {status === 'error'
+              ? (oauthBroken
+                ? 'Google sign-in is not configured on this deployment yet. Use the email code instead — same private backup.'
+                : (err ?? 'Sync failed. Try again.'))
+              : 'Sign in to back up and restore on any device.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={status === 'error' && !oauthBroken ? () => void forceCloudSync() : () => setEmailDialog(true)}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2 text-[12px] font-semibold text-primary-foreground transition-opacity active:opacity-80 sm:px-4 sm:text-sm"
+        >
+          {status === 'error' && !oauthBroken ? (
+            <><RefreshCw size={14} /> <span className="hidden sm:inline">Retry sync</span></>
+          ) : (
+            <><Cloud size={14} /> <span className="hidden sm:inline">Back up with email</span><span className="sm:hidden">Back up</span></>
+          )}
+        </button>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] font-semibold text-foreground sm:text-sm">
-          {isError ? 'Cloud backup problem' : 'Data is only on this device'}
-        </p>
-        <p className="line-clamp-2 text-[11px] text-muted-foreground sm:text-xs">
-          {isError
-            ? (err ?? 'Sync failed. Try again.')
-            : 'Sign in to back up and restore on any device.'}
-        </p>
-      </div>
-      <button
-        type="button"
-        onClick={() => (isError ? void forceCloudSync() : void signInToCloud())}
-        className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-primary px-3 py-2 text-[12px] font-semibold text-primary-foreground transition-opacity active:opacity-80 sm:px-4 sm:text-sm"
-      >
-        {isError ? <><RefreshCw size={14} /> <span className="hidden sm:inline">Retry sync</span></> : <><Cloud size={14} /> <span className="hidden sm:inline">Turn on cloud backup</span><span className="sm:hidden">Back up</span></>}
-      </button>
-    </div>
+      <EmailSignInDialog open={emailDialog} onClose={() => setEmailDialog(false)} />
+    </>
   );
 }
 

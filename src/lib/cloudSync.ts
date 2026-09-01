@@ -213,6 +213,12 @@ export async function signInToCloud() {
         if (popupError || res?.error) {
             if (await waitForSession(2500)) { await startCloudSync(true); return; }
             const msg = String(popupError?.message ?? res?.error?.message ?? res?.error ?? '');
+            // Server-side OAuth misconfiguration (missing client secret) is
+            // common and outside the user's control — guide to email backup
+            // instead of a dead-end error.
+            if (/missing OAuth secret|Unsupported provider|secret/i.test(msg)) {
+                throw new Error('GOOGLE_OAUTH_UNCONFIGURED');
+            }
             if (/cancel|closed|popup/i.test(msg)) {
                 throw new Error('Google sign-in window was closed before finishing. Allow pop-ups for this site and try again.');
             }
@@ -226,6 +232,40 @@ export async function signInToCloud() {
         await startCloudSync(true);
     } catch (e: any) {
         setStatus('error', e?.message ?? 'Sign-in failed');
+    }
+}
+
+/** Email code sign-in — works with zero server-side OAuth configuration.
+ *  Sends a 6-digit code; onAutoSession fires when the code is verified. */
+export async function requestEmailCode(email: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+        setStatus('connecting');
+        const { error } = await supabase.auth.signInWithOtp({
+            email: email.trim(),
+            options: { shouldCreateUser: true },
+        });
+        if (error) { setStatus('error', error.message); return { ok: false, error: error.message }; }
+        return { ok: true };
+    } catch (e: any) {
+        const msg = String(e?.message ?? e);
+        setStatus('error', msg);
+        return { ok: false, error: msg };
+    }
+}
+
+/** Verify the 6-digit code from the email. */
+export async function verifyEmailCode(email: string, code: string): Promise<{ ok: boolean; error?: string }> {
+    try {
+        const { error } = await supabase.auth.verifyOtp({
+            email: email.trim(),
+            token: code.trim(),
+            type: 'email',
+        });
+        if (error) return { ok: false, error: error.message };
+        await startCloudSync(true);
+        return { ok: true };
+    } catch (e: any) {
+        return { ok: false, error: String(e?.message ?? e) };
     }
 }
 

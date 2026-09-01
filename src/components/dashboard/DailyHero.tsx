@@ -174,10 +174,11 @@ export default function DailyHero({
           ) : (
             <div className="py-3">
               <h2 className="font-display text-[19px] font-bold tracking-tight sm:text-[22px]">
-                Queue is clear
+                Nothing is demanding your attention
               </h2>
               <p className="mt-1 text-[12px] text-white/60">
-                Nothing is demanding your attention right now. Capture something new or review what is coming.
+                No deadlines, no overdue work, no open exceptions. Capture the next thing — or, if this
+                is a new device, sign in above to restore your data.
               </p>
               <button
                 onClick={() => setActiveSection("review")}
