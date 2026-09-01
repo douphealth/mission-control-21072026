@@ -6,9 +6,7 @@
 import { Suspense, lazy, useState } from "react";
 import { BarChart3, ChevronDown, Inbox, PauseCircle, Scale } from "lucide-react";
 import DailyHero from "@/components/dashboard/DailyHero";
-import TodayCommitments from "@/components/dashboard/TodayCommitments";
-import AttentionFeed from "@/components/dashboard/AttentionFeed";
-import DailyAgenda from "@/components/dashboard/DailyAgenda";
+import TodayTimeline from "@/components/dashboard/TodayTimeline";
 import SitePulse from "@/components/dashboard/SitePulse";
 import ValidationPulse from "@/components/dashboard/ValidationPulse";
 import IntelligencePulse from "@/components/dashboard/IntelligencePulse";
@@ -67,18 +65,15 @@ export default function DashboardHome() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         <div className="lg:col-span-7">
-          <TodayCommitments
-            commitments={ops.commitments}
-            upNext={ops.upNext}
-            today={ops.today}
+          <TodayTimeline
+            timeline={ops.timeline}
             onComplete={ops.complete}
             onPlan={ops.schedule}
             onCommit={ops.commit}
           />
         </div>
         <div className="flex flex-col gap-4 lg:col-span-5">
-          <AttentionFeed items={ops.attention} />
-          <DailyAgenda rows={ops.agenda} />
+          <ReliabilityPanel compact />
         </div>
       </div>
 
@@ -91,9 +86,6 @@ export default function DashboardHome() {
           <IntelligencePulse items={ops.intelligence} />
         </div>
       </div>
-
-      <ReliabilityPanel compact />
-
 
       {/* ═══ INSIGHTS — below the fold, loaded only when asked for ═══ */}
       <section>

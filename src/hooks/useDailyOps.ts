@@ -25,6 +25,7 @@ import { pendingValidations } from "@/lib/validations";
 import { selectIntelligence } from "@/lib/intelligence";
 import { todayISO, addDaysLocal, buildBriefing } from "@/lib/overdue";
 import { actOnDecision, deferDecision } from "@/lib/decisions";
+import { buildTimeline, hhmmNow, type Timeline } from "@/lib/timeline";
 import type { Task } from "@/lib/db";
 
 
@@ -83,6 +84,20 @@ export function useDailyOps() {
 
   const commitments = useMemo(() => queues.today.slice(0, 3), [queues.today]);
   const upNext = useMemo(() => queues.today.slice(3), [queues.today]);
+
+  /** The unified Today timeline: attention flags + timed commitments + the
+   *  engine-ordered queue, one chronology with a NOW marker. Replaces the
+   *  siloed agenda / commitments / attention trio. */
+  const timeline = useMemo<Timeline>(
+    () =>
+      buildTimeline({
+        items: queues.today,
+        attention,
+        nowTime: hhmmNow(),
+        today,
+      }),
+    [queues.today, attention, today],
+  );
 
   const waiting = useMemo(() => tasks.filter((t) => t.status === "blocked").length, [tasks]);
   const inbox = useMemo(
@@ -178,6 +193,7 @@ export function useDailyOps() {
     now: queues.now,
     commitments,
     upNext,
+    timeline,
     attention,
     sitePulse,
     validationPulse,

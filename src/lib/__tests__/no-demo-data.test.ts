@@ -24,8 +24,17 @@ describe('production trust guarantees', () => {
   it('the canonical home leads with Now / Today, not analytics', () => {
     const src = read('src/pages/DashboardHome.tsx');
     expect(src).toMatch(/DailyHero/);
-    expect(src).toMatch(/TodayCommitments/);
-    expect(src).toMatch(/AttentionFeed/);
+    expect(src).toMatch(/TodayTimeline/);
+    // The unified timeline replaces the three siloed panels.
+    expect(src).not.toMatch(/TodayCommitments/);
+    expect(src).not.toMatch(/AttentionFeed/);
+    expect(src).not.toMatch(/DailyAgenda/);
+  });
+
+  it('the timeline is built by one pure, testable builder', () => {
+    const src = read('src/hooks/useDailyOps.ts');
+    expect(src).toMatch(/buildTimeline/);
+    expect(src).toMatch(/hhmmNow/); // local clock, never UTC
   });
 
 
