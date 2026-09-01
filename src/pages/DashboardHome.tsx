@@ -7,9 +7,11 @@ import { Suspense, lazy, useState } from "react";
 import { BarChart3, ChevronDown, Inbox, PauseCircle, Scale } from "lucide-react";
 import DailyHero from "@/components/dashboard/DailyHero";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
+import FocusDock from "@/components/dashboard/FocusDock";
 import SitePulse from "@/components/dashboard/SitePulse";
 import ValidationPulse from "@/components/dashboard/ValidationPulse";
 import IntelligencePulse from "@/components/dashboard/IntelligencePulse";
+import type { WorkItem } from "@/lib/workQueue";
 
 import ReliabilityPanel from "@/components/ReliabilityPanel";
 import { useDailyOps } from "@/hooks/useDailyOps";
@@ -21,6 +23,7 @@ export default function DashboardHome() {
   const ops = useDailyOps();
   const setActiveSection = useNavigationStore((s) => s.setActiveSection);
   const [showInsights, setShowInsights] = useState(false);
+  const [dockItem, setDockItem] = useState<WorkItem | null>(null);
 
   const pills = [
     { label: "Inbox", value: ops.inbox, icon: Inbox, section: "tasks" },
@@ -41,7 +44,16 @@ export default function DashboardHome() {
         }}
         onComplete={ops.complete}
         onPlan={ops.schedule}
+        onDockFocus={ops.now && ops.now.kind === "task" ? () => setDockItem(ops.now!) : undefined}
       />
+
+      {dockItem && (
+        <FocusDock
+          item={dockItem}
+          onDone={() => setDockItem(null)}
+          onClose={() => setDockItem(null)}
+        />
+      )}
 
       <div className="grid grid-cols-3 gap-3">
         {pills.map((p) => (

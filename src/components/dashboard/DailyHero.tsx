@@ -39,15 +39,17 @@ export default function DailyHero({
   stats,
   onComplete,
   onPlan,
+  onDockFocus,
 }: {
   now?: WorkItem;
   today: string;
   stats: { commitments: number; overdue: number; completedToday: number; inbox: number };
   onComplete: (item: WorkItem) => void;
   onPlan: (item: WorkItem, days: number) => void;
+  /** Dock a focus session on this page instead of navigating away. */
+  onDockFocus?: () => void;
 }) {
   const setActiveSection = useNavigationStore((s) => s.setActiveSection);
-  const setFocusTaskId = useNavigationStore((s) => s.setFocusTaskId);
   const userName = useSettingsStore((s) => s.userName);
 
   const hour = new Date().getHours();
@@ -60,11 +62,6 @@ export default function DailyHero({
 
   const planned = stats.commitments + stats.completedToday;
   const pct = planned > 0 ? (stats.completedToday / planned) * 100 : 0;
-
-  const startFocus = () => {
-    if (now?.kind === "task") setFocusTaskId(now.refId);
-    setActiveSection("focus");
-  };
 
   return (
     <section
@@ -161,10 +158,10 @@ export default function DailyHero({
                   <CheckCircle2 size={15} /> Complete
                 </button>
                 <button
-                  onClick={startFocus}
+                  onClick={() => (onDockFocus ? onDockFocus() : setActiveSection("focus"))}
                   className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-[13px] font-semibold backdrop-blur transition active:scale-[0.97]"
                 >
-                  <Timer size={15} /> Focus 25m
+                  <Timer size={15} /> {onDockFocus ? "Focus here" : "Focus 25m"}
                 </button>
                 <button
                   onClick={() => onPlan(now, 1)}
