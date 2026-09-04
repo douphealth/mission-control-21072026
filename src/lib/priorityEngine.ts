@@ -9,8 +9,9 @@ export interface ScoreInput {
   priority: 'critical' | 'high' | 'medium' | 'low' | string;
   overdueDays: number;
   staleDays: number;
-  due?: string;      // YYYY-MM-DD
-  today: string;     // YYYY-MM-DD
+  due?: string;       // YYYY-MM-DD hard deadline
+  scheduled?: string; // YYYY-MM-DD planning date; never deadline pressure
+  today: string;      // YYYY-MM-DD
   kind: WorkKind;
   pinned?: boolean;   // committedOn === today
 }
@@ -119,6 +120,20 @@ export function scoreItem(input: ScoreInput): ScoreResult {
     }
   }
 
+  // Planning is intentionally a zero-point explanation dimension. It decides
+  // whether a task belongs in Today in workQueue.ts, but it must never pretend
+  // that the user-created plan is a hard deadline.
+  if (input.scheduled && input.scheduled <= input.today) {
+    const missedDays = daysBetween(input.scheduled, input.today);
+    dims.push({
+      name: 'planned',
+      points: 0,
+      reason: missedDays > 0
+        ? (missedDays === 1 ? 'planned for yesterday' : `planned ${missedDays} days ago`)
+        : 'planned for today',
+    });
+  }
+
   if (input.staleDays > 0) {
     const capped = Math.min(input.staleDays, STALE_CAP_DAYS);
     dims.push({
@@ -147,15 +162,16 @@ export function scoreItem(input: ScoreInput): ScoreResult {
 
 /** Human "why now" lines for the UI — derived from the same dimensions so
  *  the explanation can never drift from the score. Order is semantic, not
- *  by points: deadlines lead, then the user's own commitment, then labels. */
+ *  by points: deadlines lead, then plans/commitments, then labels. */
 const REASON_RANK: Record<string, number> = {
   lateness: 0,
   dueToday: 1,
   approaching: 2,
-  pinned: 3,
-  priority: 4,
-  kind: 5,
-  decay: 6,
+  planned: 3,
+  pinned: 4,
+  priority: 5,
+  kind: 6,
+  decay: 7,
 };
 
 export function reasonsOf(result: ScoreResult): string[] {
