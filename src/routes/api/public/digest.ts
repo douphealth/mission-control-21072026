@@ -1,6 +1,6 @@
-// Public cron endpoint: builds the full daily briefing from the user's cloud
+// Public cron endpoint: builds the full daily briefing from the owner's cloud
 // records and emails it. Called by a scheduled job (pg_cron) once a day.
-// Security: requires the shared digest secret (env or mc_cron_tokens row).
+// Security: requires the shared digest secret AND an explicit owner user id.
 import { createFileRoute } from '@tanstack/react-router'
 
 interface TaskLike {
@@ -24,8 +24,9 @@ interface PaymentLike {
 }
 
 const RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 }
+const DIGEST_TIME_ZONE = 'Europe/Athens'
 
-function isoDay(offsetDays = 0, tz = 'Europe/Bucharest'): string {
+function isoDay(offsetDays = 0, tz = DIGEST_TIME_ZONE): string {
   const d = new Date(Date.now() + offsetDays * 86_400_000)
   return new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(d)
 }
@@ -77,9 +78,22 @@ async function run(request: Request) {
   }
   if (!authorized) return new Response('Unauthorized', { status: 401 })
 
+  // Service-role queries bypass RLS. Never run a global digest: production
+  // must declare the single Mission Control owner explicitly and fail closed
+  // when that deployment setting is absent.
+  const ownerUserId = process.env['MISSION_CONTROL_OWNER_USER_ID']?.trim()
+  if (!ownerUserId) {
+    console.error('[digest] MISSION_CONTROL_OWNER_USER_ID is required')
+    return Response.json(
+      { ok: false, error: 'Digest owner is not configured' },
+      { status: 503 },
+    )
+  }
+
   const { data, error } = await supabaseAdmin
     .from('mc_records')
     .select('collection, data')
+    .eq('user_id', ownerUserId)
     .in('collection', ['tasks', 'payments'])
     .eq('deleted', false)
     .limit(8000)
@@ -122,7 +136,6 @@ async function run(request: Request) {
     return d >= weekStart && d <= today
   }).length
 
-  // ── issues / major points ─────────────────────────────────────────────────
   const issues: { label: string; detail: string; severity: 'high' | 'medium' | 'low' }[] = []
 
   const critOverdue = overdue.filter((t) => (t.priority || '').toLowerCase() === 'critical')
@@ -179,7 +192,7 @@ async function run(request: Request) {
   if (backlog.length >= 10) {
     issues.push({
       label: `${backlog.length} tasks have no due date`,
-      detail: 'Undated work never gets scheduled — give the top ones a date today.',
+      detail: 'Undated work needs planning — choose the next few intentionally.',
       severity: 'low',
     })
   }
