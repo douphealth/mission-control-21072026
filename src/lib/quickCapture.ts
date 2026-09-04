@@ -1,7 +1,7 @@
 // ─── Universal Quick Capture ─────────────────────────────────────────────────
 // One input, one router. Any thought goes in; the router decides what it is,
 // where it lands, and what its urgency is. Prefixes override; heuristics
-// default; nothing is lost (unknown → note, never dropped).
+// default; nothing is lost (unknown → task, never dropped).
 
 import { todayISO, addDaysLocal, fmtLocal } from '@/lib/overdue';
 
@@ -11,7 +11,7 @@ export interface ParsedCapture {
   target: CaptureTarget;
   title: string;
   priority?: 'critical' | 'high' | 'medium' | 'low';
-  /** YYYY-MM-DD — planning date, never a hard deadline unless ! was used. */
+  /** YYYY-MM-DD planning date. For tasks this never becomes a hard deadline. */
   due?: string;
   /** HH:MM if a time was recognized. */
   time?: string;
@@ -51,7 +51,7 @@ function nextWeekday(word: string, today: string): string | undefined {
   if (idx < 0) return undefined;
   const d = new Date(`${today}T00:00:00`);
   let delta = (idx - d.getDay() + 7) % 7;
-  if (delta === 0) delta = 7; // "on monday" said on a monday = next monday
+  if (delta === 0) delta = 7;
   return addDaysLocal(today, delta);
 }
 
@@ -59,7 +59,6 @@ function nextWeekday(word: string, today: string): string | undefined {
 export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
   let text = raw.trim();
 
-  // 1. Explicit prefix wins.
   let target: CaptureTarget | undefined;
   const first = text[0];
   if (first && PREFIX[first]) {
@@ -67,16 +66,13 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
     text = text.slice(1).trim();
   }
 
-  // 2. Pull the URL out first (links are the whole thought).
   const urlMatch = text.match(URL_RE);
 
-  // 3. Priority words.
   let priority: ParsedCapture['priority'];
   for (const [re, p] of PRIORITY_WORDS) {
     if (re.test(text)) { priority = p; break; }
   }
 
-  // 4. Date: today/tonight/tomorrow/next week/weekday/+/N days
   let due: string | undefined;
   for (const [re, delta] of DAY_WORDS) {
     if (re.test(text)) { due = addDaysLocal(today, delta); break; }
@@ -90,7 +86,6 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
     if (wd) due = nextWeekday(wd[1], today);
   }
 
-  // 5. Time.
   let time: string | undefined;
   const tm = text.match(TIME_RE);
   if (tm) {
@@ -101,14 +96,12 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
     }
   }
 
-  // 6. Tags: #word (after prefix strip — only inline)
   const tags: string[] = [];
   text = text.replace(/(?:^|\s)#([\p{L}\p{N}_-]{2,})/gu, (_m, t: string) => {
     tags.push(t.toLowerCase());
     return ' ';
   }).replace(/\s+/g, ' ').trim();
 
-  // 7. Clean title: strip scheduling words so the title stays human.
   const title = text
     .replace(/\b(today|tonight|tomorrow|day after tomorrow|next week|next month)\b/gi, ' ')
     .replace(/\bin\s+\d{1,3}\s+days?\b/gi, ' ')
@@ -118,8 +111,6 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
     .replace(/\s+/g, ' ')
     .trim() || (urlMatch ? urlMatch[0] : raw.trim());
 
-  // 8. Default target heuristics: URL → link; question mark → note/idea;
-  //    everything else → task (the actionable default).
   if (!target) {
     if (urlMatch && text.replace(URL_RE, '').trim().length === 0) target = 'links';
     else if (/\?$/.test(raw.trim())) target = 'ideas';
@@ -132,11 +123,7 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
   if (time) out.time = time;
   if (urlMatch) out.url = urlMatch[0];
   if (tags.length) out.tags = tags;
-  // Reminders keep their time as the whole point; tasks may too.
-  if (target === 'reminders' && !time) {
-    // default reminder time keeps it visible same-day
-    out.time = time ?? '09:00';
-  }
+  if (target === 'reminders' && !time) out.time = '09:00';
   return out;
 }
 
@@ -149,7 +136,12 @@ export function toRecord(p: ParsedCapture, today = todayISO()): Record<string, u
         title: p.title,
         priority: p.priority ?? 'medium',
         status: 'todo',
-        dueDate: p.due ?? today,
+        // Natural-language dates are planning intent, not fabricated deadlines.
+        // A real dueDate is set explicitly in the task editor.
+        dueDate: '',
+        scheduledAt: p.due,
+        notBefore: p.due && p.due > today ? p.due : undefined,
+        reviewAt: p.due,
         startTime: p.time,
         category: '',
         description: p.tags?.join(', ') ?? '',
