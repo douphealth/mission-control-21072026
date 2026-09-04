@@ -19,7 +19,7 @@ export interface WorkItem {
   refId: string;
   title: string;
   subtitle?: string;
-  due?: string;            // YYYY-MM-DD
+  due?: string;            // YYYY-MM-DD hard deadline
   time?: string;           // HH:MM
   priority: 'critical' | 'high' | 'medium' | 'low';
   context?: string;        // project / website / category
@@ -38,12 +38,19 @@ export interface WorkItem {
 }
 
 function scoreOf(input: {
-  priority: string; overdueDays: number; staleDays: number; due?: string; today: string; kind: WorkKind; pinned?: boolean;
+  priority: string;
+  overdueDays: number;
+  staleDays: number;
+  due?: string;
+  scheduled?: string;
+  today: string;
+  kind: WorkKind;
+  pinned?: boolean;
 }): ScoreResult {
   return scoreItem(input);
 }
 
-function bucketOf(item: { due?: string; overdueDays: number; today: string; kind: WorkKind; score: number }): WorkBucket {
+function bucketOf(item: { due?: string; overdueDays: number; today: string; kind: WorkKind }): WorkBucket {
   if (item.overdueDays > 0) return 'today';
   if (item.due && item.due <= item.today) return 'today';
   if (item.kind === 'decision') return 'today';
@@ -65,8 +72,19 @@ export function buildWorkQueue(input: {
     const overdue = daysOverdue(t, today);
     const stale = daysSinceTouch(t, today);
     const committed = t.committedOn === today;
+    const scheduled = t.scheduledAt;
+    // A task planned for today — or missed on a prior planned day — must
+    // resurface. A planning date is not a deadline, so it affects inclusion,
+    // never overdue math.
+    const plannedNow = !!scheduled && scheduled <= today;
     const base = {
-      priority: t.priority, overdueDays: overdue, staleDays: stale, due: t.dueDate, today, kind: 'task' as const,
+      priority: t.priority,
+      overdueDays: overdue,
+      staleDays: stale,
+      due: t.dueDate || undefined,
+      scheduled,
+      today,
+      kind: 'task' as const,
       pinned: committed,
     };
     const scored = scoreOf(base);
@@ -78,7 +96,7 @@ export function buildWorkQueue(input: {
       refId: t.id,
       title: t.title,
       subtitle: t.description?.slice(0, 120) || undefined,
-      due: t.dueDate,
+      due: t.dueDate || undefined,
       time: t.startTime,
       priority: t.priority,
       context: t.linkedProject || t.category,
@@ -86,9 +104,13 @@ export function buildWorkQueue(input: {
       staleDays: stale,
       score: scored.score,
       scoreDimensions: scored.dimensions,
-      bucket: deferred && !committed ? 'later' : committed ? 'today' : bucketOf({ ...base, score: scored.score }),
+      bucket: deferred && !committed
+        ? 'later'
+        : committed || plannedNow
+          ? 'today'
+          : bucketOf(base),
       source: 'Tasks',
-      scheduled: t.scheduledAt,
+      scheduled,
       notBefore,
       raw: t,
     });
@@ -116,7 +138,7 @@ export function buildWorkQueue(input: {
       staleDays: 0,
       score: scored.score,
       scoreDimensions: scored.dimensions,
-      bucket: bucketOf({ ...base, score: scored.score }),
+      bucket: bucketOf(base),
       source: 'Reminders',
       raw: r,
     });
@@ -144,7 +166,7 @@ export function buildWorkQueue(input: {
       staleDays: 0,
       score: scored.score,
       scoreDimensions: scored.dimensions,
-      bucket: bucketOf({ ...base, score: scored.score }),
+      bucket: bucketOf(base),
       source: 'Payments',
       raw: p,
     });
