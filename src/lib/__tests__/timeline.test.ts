@@ -38,10 +38,10 @@ describe('unified timeline', () => {
     });
     expect(t.entries[0].kind).toBe('flag');
     expect(t.entries[0].title).toBe('Site down');
-    expect(t.nowIndex).toBe(2); // flag(1) + timed(1)
+    expect(t.nowIndex).toBe(2); // flag + elapsed 08:00 appointment
   });
 
-  it('NOW marker sits between timed (clock) and untimed (score) blocks', () => {
+  it('places NOW between elapsed and current/future timed work', () => {
     const t = buildTimeline({
       items: [
         item({ id: 'a', time: '08:00', title: 'Past' }),
@@ -52,10 +52,24 @@ describe('unified timeline', () => {
       nowTime: '09:00',
       today,
     });
-    expect(t.nowIndex).toBe(2);
-    expect(t.entries[t.nowIndex - 1].title).toBe('Future'); // last timed above marker
-    expect(t.entries[t.nowIndex].title).toBe('Untimed');     // first queued below marker
-    expect(t.entries[t.nowIndex].score).toBe(99);
+    expect(t.nowIndex).toBe(1);
+    expect(t.entries[t.nowIndex - 1].title).toBe('Past');
+    expect(t.entries[t.nowIndex].title).toBe('Future');
+    expect(t.entries[t.nowIndex + 1].title).toBe('Untimed');
+  });
+
+  it('treats an event at the current minute as current, not elapsed', () => {
+    const t = buildTimeline({
+      items: [
+        item({ id: 'a', time: '08:59', title: 'Past' }),
+        item({ id: 'b', time: '09:00', title: 'Current' }),
+      ],
+      attention: [],
+      nowTime: '09:00',
+      today,
+    });
+    expect(t.nowIndex).toBe(1);
+    expect(t.entries[t.nowIndex].title).toBe('Current');
   });
 
   it('with no timed entries the NOW marker separates flags from the queue', () => {
@@ -65,7 +79,7 @@ describe('unified timeline', () => {
       nowTime: '12:00',
       today,
     });
-    expect(t.nowIndex).toBe(1); // right after the flag
+    expect(t.nowIndex).toBe(1);
     expect(t.counts.timed).toBe(0);
   });
 
@@ -107,7 +121,7 @@ describe('unified timeline', () => {
   });
 
   it('hhmmNow is local, padded, and never UTC', () => {
-    const d = new Date(2026, 8, 1, 9, 5); // local 09:05
+    const d = new Date(2026, 8, 1, 9, 5);
     expect(hhmmNow(d)).toBe('09:05');
     const midnight = new Date(2026, 8, 1, 0, 0);
     expect(hhmmNow(midnight)).toBe('00:00');
