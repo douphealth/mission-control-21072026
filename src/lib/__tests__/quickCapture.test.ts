@@ -4,11 +4,14 @@ import { parseCapture, toRecord } from '@/lib/quickCapture';
 const today = '2026-09-01'; // a Tuesday
 
 describe('universal capture router', () => {
-  it('bare actionable text defaults to a task for today', () => {
+  it('bare actionable text defaults to an undated task', () => {
     const p = parseCapture('Fix the broken sitemap on frenchyfab', today);
     expect(p.target).toBe('tasks');
     expect(p.title).toBe('Fix the broken sitemap on frenchyfab');
-    expect(p.due).toBeUndefined(); // no scheduling words → no planning date forced
+    expect(p.due).toBeUndefined();
+    const record = toRecord(p, today);
+    expect(record.dueDate).toBe('');
+    expect(record.scheduledAt).toBeUndefined();
   });
 
   it('explicit prefixes win: > task, # note, ! idea, @ reminder', () => {
@@ -44,9 +47,8 @@ describe('universal capture router', () => {
     expect(parseCapture('ship the post next week', today).due).toBe('2026-09-08');
   });
 
-  it('"on friday" resolves to the next friday (not today if today is friday)', () => {
-    const p = parseCapture('review numbers on friday', today);
-    expect(p.due).toBe('2026-09-04'); // 2026-09-01 is a Tuesday
+  it('"on friday" resolves to the next friday', () => {
+    expect(parseCapture('review numbers on friday', today).due).toBe('2026-09-04');
   });
 
   it('times are normalized to HH:MM', () => {
@@ -61,8 +63,7 @@ describe('universal capture router', () => {
   });
 
   it('a question defaults to an idea, not a task', () => {
-    const p = parseCapture('should we migrate to cloudflare workers?', today);
-    expect(p.target).toBe('ideas');
+    expect(parseCapture('should we migrate to cloudflare workers?', today).target).toBe('ideas');
   });
 
   it('reminders always get a time (default 09:00)', () => {
@@ -72,20 +73,32 @@ describe('universal capture router', () => {
     expect(p.due).toBe('2026-09-02');
   });
 
-  it('toRecord produces insertable payloads per target', () => {
+  it('task dates become planning fields, never fabricated hard deadlines', () => {
     const task = toRecord(parseCapture('> urgent fix sitemap tomorrow at 10:00', today), today);
     expect(task).toMatchObject({
       priority: 'critical',
       status: 'todo',
-      dueDate: '2026-09-02',
+      dueDate: '',
+      scheduledAt: '2026-09-02',
+      notBefore: '2026-09-02',
+      reviewAt: '2026-09-02',
       startTime: '10:00',
       touchedAt: today,
     });
+  });
+
+  it('planning something today does not hide it behind notBefore', () => {
+    const task = toRecord(parseCapture('> ship post today at 10:00', today), today);
+    expect(task).toMatchObject({ dueDate: '', scheduledAt: today, startTime: '10:00' });
+    expect(task.notBefore).toBeUndefined();
+  });
+
+  it('reminder dates remain actual reminder timestamps', () => {
     const reminder = toRecord(parseCapture('@ renew SSL tomorrow at 09:30', today), today);
     expect(reminder).toMatchObject({ status: 'pending', remindAt: '2026-09-02T09:30:00' });
   });
 
-  it('nothing is ever dropped: unknown junk becomes a note-ish task with the original text', () => {
+  it('nothing is ever dropped', () => {
     const p = parseCapture('   !!!???   ', today);
     expect(p.title.length + p.target.length).toBeGreaterThan(0);
   });
