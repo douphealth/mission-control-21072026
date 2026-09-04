@@ -58,7 +58,7 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
           <span className={`hidden items-center gap-1.5 rounded-full border border-border/60 bg-secondary/60 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide sm:inline-flex ${meta.tone}`}>
             <meta.icon size={11} /> {meta.label}
             {preview.priority && <span className="text-muted-foreground">· {preview.priority}</span>}
-            {preview.due && <span className="text-muted-foreground">· {preview.due.slice(5)}</span>}
+            {preview.due && <span className="text-muted-foreground">· plan {preview.due.slice(5)}</span>}
           </span>
         )}
         <button
@@ -74,7 +74,7 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
           <ArrowRight size={10} />
           <span className="truncate">
             Lands as <strong className="text-foreground/80">{TARGET_META[preview.target].label.toLowerCase()}</strong>
-            {preview.due ? ` · ${preview.due}` : ""}
+            {preview.due ? ` · planned ${preview.due}` : ""}
             {preview.time ? ` ${preview.time}` : ""}
           </span>
         </div>
