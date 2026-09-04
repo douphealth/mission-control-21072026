@@ -2,7 +2,7 @@
 // One chronological "Today" that answers the three questions:
 //   1. What needs attention → flag cards (pinned to the top, never hidden)
 //   2. What am I doing now   → the NOW marker, placed by the wall clock
-//   3. What comes next       → timed events, then the score-ordered queue
+//   3. What comes next       → future timed work, then the score-ordered queue
 // Pure and testable: no React, no I/O. The component is a thin view over this.
 
 import type { WorkItem } from '@/lib/workQueue';
@@ -28,7 +28,7 @@ export interface TimelineEntry {
 
 export interface Timeline {
   entries: TimelineEntry[];
-  /** Index inside `entries` where the NOW marker belongs. -1 = append at end. */
+  /** Index inside `entries` where the NOW marker belongs. */
   nowIndex: number;
   counts: { flags: number; timed: number; untimed: number };
 }
@@ -41,23 +41,36 @@ export function hhmmNow(d: Date = new Date()): string {
 const DEFAULT_FLAG_LIMIT = 4;
 const DEFAULT_UNTIMED_LIMIT = 8;
 
-/** Reasons for a work item, preferring the engine's own dimensions when the
- *  item carries them (tasks do), so the explanation never drifts from the score. */
 function reasonsFor(item: WorkItem, today: string): string[] {
   const dims = (item as { scoreDimensions?: ScoreDimension[] }).scoreDimensions;
   if (dims && dims.length > 0) {
     return reasonsOf({ score: item.score, dimensions: dims });
   }
-  // Fallback for kinds scored without dimensions kept — reuse whyNow semantics.
   const out: string[] = [];
   if (item.overdueDays > 0) {
     out.push(item.overdueDays === 1 ? 'overdue since yesterday' : `${item.overdueDays} days overdue`);
   } else if (item.due === today) {
     out.push('due today');
+  } else if (item.scheduled === today) {
+    out.push('planned for today');
   }
   if (item.kind === 'decision') out.push('blocks other work until decided');
   if (item.kind === 'payment') out.push('money has a hard deadline');
   return out.length > 0 ? out.slice(0, 3) : ['top of your queue right now'];
+}
+
+function toEntry(i: WorkItem, today: string): TimelineEntry {
+  return {
+    id: i.id,
+    time: i.time,
+    title: i.title,
+    kind: i.kind,
+    severity: i.overdueDays > 0 ? 'critical' : undefined,
+    reasons: reasonsFor(i, today),
+    section: sectionFor(i),
+    workItem: i,
+    score: i.score,
+  };
 }
 
 export function buildTimeline(input: {
@@ -84,46 +97,28 @@ export function buildTimeline(input: {
   const timed = input.items
     .filter((i) => !!i.time)
     .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
+  const elapsedTimed = timed.filter((i) => (i.time ?? '') < input.nowTime);
+  const upcomingTimed = timed.filter((i) => (i.time ?? '') >= input.nowTime);
   const untimed = input.items
     .filter((i) => !i.time)
     .sort((a, b) => b.score - a.score)
     .slice(0, untimedLimit);
 
-  const timedEntries: TimelineEntry[] = timed.map((i) => ({
-    id: i.id,
-    time: i.time,
-    title: i.title,
-    kind: i.kind,
-    severity: i.overdueDays > 0 ? 'critical' : undefined,
-    reasons: reasonsFor(i, input.today),
-    section: sectionFor(i),
-    workItem: i,
-    score: i.score,
-  }));
+  const elapsedEntries = elapsedTimed.map((i) => toEntry(i, input.today));
+  const upcomingEntries = upcomingTimed.map((i) => toEntry(i, input.today));
+  const untimedEntries = untimed.map((i) => toEntry(i, input.today));
 
-  const untimedEntries: TimelineEntry[] = untimed.map((i) => ({
-    id: i.id,
-    title: i.title,
-    kind: i.kind,
-    severity: i.overdueDays > 0 ? 'critical' : undefined,
-    reasons: reasonsFor(i, input.today),
-    section: sectionFor(i),
-    workItem: i,
-    score: i.score,
-  }));
-
-  // Entries order: flags → timed (clock) → NOW marker → untimed (score).
-  // The marker always sits between the two blocks: everything above is
-  // "the day so far", everything below is "what the engine says is next".
-  const entries = [...flags, ...timedEntries, ...untimedEntries];
-  const nowIndex = flags.length + timedEntries.length;
+  // Actual chronology: exceptions first, elapsed appointments above NOW,
+  // current/future timed work immediately below NOW, then the engine queue.
+  const entries = [...flags, ...elapsedEntries, ...upcomingEntries, ...untimedEntries];
+  const nowIndex = flags.length + elapsedEntries.length;
 
   return {
     entries,
     nowIndex,
     counts: {
       flags: flags.length,
-      timed: timedEntries.length,
+      timed: timed.length,
       untimed: untimedEntries.length,
     },
   };
