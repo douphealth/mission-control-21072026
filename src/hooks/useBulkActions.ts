@@ -16,24 +16,25 @@ export function useBulkActions<T extends { id: string }>(): BulkActionsReturn<T>
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const toggleBulkMode = useCallback(() => {
-    setBulkMode(prev => {
+    setBulkMode((prev) => {
       if (prev) setSelectedIds(new Set());
       return !prev;
     });
   }, []);
 
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
   }, []);
 
   const selectAll = useCallback((items: T[]) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       if (prev.size === items.length) return new Set();
-      return new Set(items.map(i => i.id));
+      return new Set(items.map((i) => i.id));
     });
   }, []);
 
@@ -45,8 +46,13 @@ export function useBulkActions<T extends { id: string }>(): BulkActionsReturn<T>
   const isSelected = useCallback((id: string) => selectedIds.has(id), [selectedIds]);
 
   return {
-    bulkMode, selectedIds, toggleBulkMode, toggleSelect,
-    selectAll, clearSelection, isSelected,
+    bulkMode,
+    selectedIds,
+    toggleBulkMode,
+    toggleSelect,
+    selectAll,
+    clearSelection,
+    isSelected,
     selectedCount: selectedIds.size,
   };
 }

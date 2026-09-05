@@ -2,10 +2,10 @@
 // A change is not "done" until it is proven. This module owns the lifecycle:
 // pending → validating → monitoring → passed / failed.
 
-import { db, type Validation, type ValidationStatus } from '@/lib/db';
-import { todayISO, addDaysLocal } from '@/lib/overdue';
+import { db, type Validation, type ValidationStatus } from "@/lib/db";
+import { todayISO, addDaysLocal } from "@/lib/overdue";
 
-export const OPEN_STATUSES: ValidationStatus[] = ['pending', 'validating', 'monitoring'];
+export const OPEN_STATUSES: ValidationStatus[] = ["pending", "validating", "monitoring"];
 
 export function isOpenValidation(v: Validation): boolean {
   return OPEN_STATUSES.includes(v.status);
@@ -14,11 +14,11 @@ export function isOpenValidation(v: Validation): boolean {
 /** Only things needing proof now, or very soon. Newest review date first. */
 export function pendingValidations(all: Validation[], today = todayISO(), limit = 4): Validation[] {
   return all
-    .filter((v) => v.status === 'failed' || isOpenValidation(v))
+    .filter((v) => v.status === "failed" || isOpenValidation(v))
     .sort((a, b) => {
-      if (a.status === 'failed' && b.status !== 'failed') return -1;
-      if (b.status === 'failed' && a.status !== 'failed') return 1;
-      return (a.reviewAt || '9999').localeCompare(b.reviewAt || '9999');
+      if (a.status === "failed" && b.status !== "failed") return -1;
+      if (b.status === "failed" && a.status !== "failed") return 1;
+      return (a.reviewAt || "9999").localeCompare(b.reviewAt || "9999");
     })
     .slice(0, limit);
 }
@@ -29,16 +29,16 @@ export function isDueForReview(v: Validation, today = todayISO()): boolean {
 
 export function statusLabel(v: Validation, today = todayISO()): string {
   switch (v.status) {
-    case 'pending':
-      return 'Waiting for validation';
-    case 'validating':
-      return isDueForReview(v, today) ? 'Ready to verify' : 'Validating';
-    case 'monitoring':
-      return isDueForReview(v, today) ? 'Observation window closed' : 'Monitoring';
-    case 'passed':
-      return 'Verified';
+    case "pending":
+      return "Waiting for validation";
+    case "validating":
+      return isDueForReview(v, today) ? "Ready to verify" : "Validating";
+    case "monitoring":
+      return isDueForReview(v, today) ? "Observation window closed" : "Monitoring";
+    case "passed":
+      return "Verified";
     default:
-      return 'Failed';
+      return "Failed";
   }
 }
 
@@ -60,7 +60,7 @@ export async function recordValidation(input: {
     entityLabel: input.entityLabel,
     actionId: input.actionId,
     section: input.section,
-    status: 'validating',
+    status: "validating",
     startedAt: now,
     reviewAt: addDaysLocal(todayISO(), input.observationDays ?? 7),
     successCriteria: input.successCriteria,
@@ -81,7 +81,7 @@ export async function setValidationResult(
   await db.validations.update(id, {
     status,
     result,
-    validatedAt: status === 'passed' || status === 'failed' ? now : undefined,
+    validatedAt: status === "passed" || status === "failed" ? now : undefined,
     updatedAt: now,
   });
 }

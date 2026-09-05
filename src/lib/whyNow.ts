@@ -29,10 +29,13 @@ export function whyNow(item: WorkItem, today = todayISO()): string[] {
     if (item.scheduled === today) out.push("planned for today");
     else if (item.scheduled < today) {
       const plannedDaysAgo = Math.round(
-        (new Date(`${today}T00:00:00`).getTime() - new Date(`${item.scheduled}T00:00:00`).getTime()) /
+        (new Date(`${today}T00:00:00`).getTime() -
+          new Date(`${item.scheduled}T00:00:00`).getTime()) /
           86_400_000,
       );
-      out.push(plannedDaysAgo === 1 ? "planned for yesterday" : `planned ${plannedDaysAgo} days ago`);
+      out.push(
+        plannedDaysAgo === 1 ? "planned for yesterday" : `planned ${plannedDaysAgo} days ago`,
+      );
     }
   }
   if (item.priority === "critical") out.push("critical priority");
@@ -75,7 +78,10 @@ export function buildAttention(input: {
     out.push({
       id: "attn:validation-failed",
       title: `${failedValidations.length} change${failedValidations.length === 1 ? "" : "s"} did not work`,
-      detail: failedValidations.slice(0, 3).map((v) => v.title).join(" · "),
+      detail: failedValidations
+        .slice(0, 3)
+        .map((v) => v.title)
+        .join(" · "),
       severity: "critical",
       section: "seo",
       actionLabel: "Re-plan",
@@ -90,7 +96,10 @@ export function buildAttention(input: {
     out.push({
       id: "attn:validation-due",
       title: `${dueValidations.length} change${dueValidations.length === 1 ? "" : "s"} waiting for proof`,
-      detail: dueValidations.slice(0, 3).map((v) => v.title).join(" · "),
+      detail: dueValidations
+        .slice(0, 3)
+        .map((v) => v.title)
+        .join(" · "),
       severity: "warning",
       section: "seo",
       actionLabel: "Verify",
@@ -99,20 +108,24 @@ export function buildAttention(input: {
   }
 
   const criticalSeo = (input.seoIssues ?? []).filter(
-    (i) => (i.status === "open" || i.status === "in-progress") && (i.severity === "critical" || i.severity === "high"),
+    (i) =>
+      (i.status === "open" || i.status === "in-progress") &&
+      (i.severity === "critical" || i.severity === "high"),
   );
   if (criticalSeo.length > 0) {
     out.push({
       id: "attn:seo",
       title: `${criticalSeo.length} high-impact site issue${criticalSeo.length === 1 ? "" : "s"} unresolved`,
-      detail: criticalSeo.slice(0, 3).map((i) => i.title).join(" · "),
+      detail: criticalSeo
+        .slice(0, 3)
+        .map((i) => i.title)
+        .join(" · "),
       severity: criticalSeo.some((i) => i.severity === "critical") ? "critical" : "warning",
       section: "seo",
       actionLabel: "Fix",
       provenance: "Site audit · live",
     });
   }
-
 
   const overdue = input.work.filter((i) => i.overdueDays > 0);
   if (overdue.length > 0) {

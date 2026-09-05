@@ -1,9 +1,9 @@
-import { lazy, type ComponentType } from 'react';
+import { lazy, type ComponentType } from "react";
 
-const RELOAD_KEY = 'mc-chunk-reload-at';
+const RELOAD_KEY = "mc-chunk-reload-at";
 
 function isChunkLoadError(error: unknown): boolean {
-  const message = String((error as Error)?.message ?? error ?? '');
+  const message = String((error as Error)?.message ?? error ?? "");
   return (
     /Failed to fetch dynamically imported module/i.test(message) ||
     /Importing a module script failed/i.test(message) ||
@@ -31,8 +31,8 @@ export function lazyWithRetry<T extends ComponentType<any>>(
       } catch (retryError) {
         if (!isChunkLoadError(retryError)) throw retryError;
 
-        if (typeof window !== 'undefined') {
-          const last = Number(window.sessionStorage.getItem(RELOAD_KEY) ?? '0');
+        if (typeof window !== "undefined") {
+          const last = Number(window.sessionStorage.getItem(RELOAD_KEY) ?? "0");
           if (Date.now() - last > 60_000) {
             window.sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
             window.location.reload();

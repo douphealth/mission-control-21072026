@@ -1,6 +1,6 @@
-import { ExternalLink, Archive, Sparkles } from 'lucide-react';
-import type { StreamItem } from '@/lib/db';
-import { archiveStreamItem } from '@/lib/controlCenter';
+import { ExternalLink, Archive, Sparkles } from "lucide-react";
+import type { StreamItem } from "@/lib/db";
+import { archiveStreamItem } from "@/lib/controlCenter";
 
 export function CCHeader({
   title,
@@ -22,18 +22,36 @@ export function CCHeader({
   );
 }
 
-export function Panel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+export function Panel({
+  children,
+  className = "",
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={`rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl p-4 sm:p-5 shadow-sm ${className}`}>
+    <div
+      className={`rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl p-4 sm:p-5 shadow-sm ${className}`}
+    >
       {children}
     </div>
   );
 }
 
-export function StatTile({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+export function StatTile({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string | number;
+  hint?: string;
+}) {
   return (
     <Panel className="min-w-0">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">{label}</p>
+      <p className="text-[11px] uppercase tracking-wide text-muted-foreground font-semibold">
+        {label}
+      </p>
       <p className="text-2xl font-bold text-foreground mt-1 tabular-nums">{value}</p>
       {hint && <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{hint}</p>}
     </Panel>
@@ -43,8 +61,8 @@ export function StatTile({ label, value, hint }: { label: string; value: string 
 export function relTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.round(diff / 60_000);
-  if (Number.isNaN(mins)) return '';
-  if (mins < 1) return 'just now';
+  if (Number.isNaN(mins)) return "";
+  if (mins < 1) return "just now";
   if (mins < 60) return `${mins}m ago`;
   const hrs = Math.round(mins / 60);
   if (hrs < 24) return `${hrs}h ago`;
@@ -53,9 +71,9 @@ export function relTime(iso: string): string {
 }
 
 function scoreTone(score: number) {
-  if (score >= 80) return 'bg-rose-500/15 text-rose-500 border-rose-500/30';
-  if (score >= 60) return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
-  return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/30';
+  if (score >= 80) return "bg-rose-500/15 text-rose-500 border-rose-500/30";
+  if (score >= 60) return "bg-amber-500/15 text-amber-500 border-amber-500/30";
+  return "bg-emerald-500/15 text-emerald-500 border-emerald-500/30";
 }
 
 export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: () => void }) {
@@ -77,7 +95,7 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
           {item.title}
         </a>
         <p className="text-[11px] text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2">
-          <span className="font-medium">{item.source || 'Unknown source'}</span>
+          <span className="font-medium">{item.source || "Unknown source"}</span>
           <span>·</span>
           <span>{relTime(item.publishedAt)}</span>
           {item.matchedTerm && (

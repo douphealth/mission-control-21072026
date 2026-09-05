@@ -18,8 +18,12 @@ export default function AttentionFeed({ items }: { items: AttentionItem[] }) {
           <AlertTriangle size={15} />
         </span>
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Exceptions</div>
-          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">Needs attention</h3>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Exceptions
+          </div>
+          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">
+            Needs attention
+          </h3>
         </div>
       </div>
 

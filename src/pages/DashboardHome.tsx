@@ -63,49 +63,51 @@ export default function DashboardHome() {
 
       {!ops.isEmpty && (
         <>
-      <div className="grid grid-cols-3 gap-3">
-        {pills.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => setActiveSection(p.section)}
-            className="enterprise-card flex items-center gap-3 rounded-2xl p-3.5 text-left transition hover:-translate-y-0.5 sm:p-4"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
-              <p.icon size={15} />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-display text-[20px] font-extrabold leading-none tabular-nums text-foreground">
-                {p.value}
-              </span>
-              <span className="block truncate text-[11px] font-semibold text-muted-foreground">{p.label}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+          <div className="grid grid-cols-3 gap-3">
+            {pills.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => setActiveSection(p.section)}
+                className="enterprise-card flex items-center gap-3 rounded-2xl p-3.5 text-left transition hover:-translate-y-0.5 sm:p-4"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+                  <p.icon size={15} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display text-[20px] font-extrabold leading-none tabular-nums text-foreground">
+                    {p.value}
+                  </span>
+                  <span className="block truncate text-[11px] font-semibold text-muted-foreground">
+                    {p.label}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <TodayTimeline
-            timeline={ops.timeline}
-            onComplete={ops.complete}
-            onPlan={ops.schedule}
-            onCommit={ops.commit}
-          />
-        </div>
-        <div className="flex flex-col gap-4 lg:col-span-5">
-          <ReliabilityPanel compact />
-        </div>
-      </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <TodayTimeline
+                timeline={ops.timeline}
+                onComplete={ops.complete}
+                onPlan={ops.schedule}
+                onCommit={ops.commit}
+              />
+            </div>
+            <div className="flex flex-col gap-4 lg:col-span-5">
+              <ReliabilityPanel compact />
+            </div>
+          </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="flex flex-col gap-4 lg:col-span-7">
-          <SitePulse rows={ops.sitePulse} />
-          <ValidationPulse items={ops.validationPulse} today={ops.today} />
-        </div>
-        <div className="lg:col-span-5">
-          <IntelligencePulse items={ops.intelligence} />
-        </div>
-      </div>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="flex flex-col gap-4 lg:col-span-7">
+              <SitePulse rows={ops.sitePulse} />
+              <ValidationPulse items={ops.validationPulse} today={ops.today} />
+            </div>
+            <div className="lg:col-span-5">
+              <IntelligencePulse items={ops.intelligence} />
+            </div>
+          </div>
         </>
       )}
 
@@ -128,7 +130,10 @@ export default function DashboardHome() {
               </span>
             </span>
           </span>
-          <ChevronDown size={16} className={`text-muted-foreground transition-transform ${showInsights ? "rotate-180" : ""}`} />
+          <ChevronDown
+            size={16}
+            className={`text-muted-foreground transition-transform ${showInsights ? "rotate-180" : ""}`}
+          />
         </button>
 
         {showInsights && (

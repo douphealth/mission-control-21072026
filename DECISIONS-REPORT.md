@@ -5,6 +5,7 @@ Branch `agent/unified-system-v3` — 7 commits over main. All phases tested.
 ## The report, per phase
 
 ### P1 — Priority engine (priorityEngine.ts)
+
 **Changed:** Black-box `scoreOf` (magic constants 3.2 / 0.6 / +12) replaced by
 `scoreItem` returning score + named dimensions with documented weights.
 `WorkItem.scoreDimensions` now ships to every consumer. `FocusPage` ranks by the
@@ -18,6 +19,7 @@ invariant `PINNED_BONUS > MAX_ENGINE_SCORE`.
 points-desc — "critical priority" led over "due today" until ranked explicitly.
 
 ### P2 — Unified timeline (timeline.ts + TodayTimeline.tsx)
+
 **Changed:** Three panels (TodayCommitments, AttentionFeed, DailyAgenda) → one
 chronology: flags → timed (clock) → NOW marker → engine-ordered queue. Reasons
 come from the engine's own dimensions, so the explanation cannot drift from
@@ -32,6 +34,7 @@ updating structural tests is part of the change, and I strengthened it (now
 also asserts the pure builder + local clock).
 
 ### P3 — Focus merged into Home (FocusDock.tsx)
+
 **Changed:** "Focus 25m" on the hero docks a 25m session under the hero
 (ring, pause/reset, complete-with-touchedAt) instead of navigating away.
 FocusPage (full Pomodoro) kept as a route under Modules for deep sessions.
@@ -39,6 +42,7 @@ FocusPage (full Pomodoro) kept as a route under Modules for deep sessions.
 navigation yet (state resets if you leave Home) — acceptable v1, noted as debt.
 
 ### P4 — Universal capture (quickCapture.ts + QuickCaptureBar.tsx)
+
 **Changed:** One input + one pure router: prefixes (> task, # note, ! idea,
 @ reminder), bare URL → link, question → idea, default → task; priority words,
 relative dates (today/tomorrow/in N/next week/weekday), HH:MM normalization,
@@ -49,18 +53,20 @@ where text lands before Enter. 13 router tests, all first-run green.
 leading `#` as the note prefix and only stripping inline tags after that.
 
 ### P5 — Command palette v2 + UTC bugs
+
 **Changed:** Free text in the palette now offers "Capture: …" as the TOP
 action, routed by the same engine — palette is the universal front door for
 navigation AND capture.
 **Fixed (real bug):** TopBar + palette NL patterns computed "today" via
 `toISOString()` (UTC) — every evening in UTC+3 the overdue/due-today counts
 lied by a day. Now local `todayISO()`, with a regression-guard test class.
-**Broke (and fixed):** My first guard regex matched backup *filenames* using
+**Broke (and fixed):** My first guard regex matched backup _filenames_ using
 toISOString (harmless labels) — test failed, and I had committed before
 noticing. Fixed the guard to target only the `const today =` bug pattern.
 Learned: run the gate BEFORE `git commit`, not after.
 
 ### P6 — Two-level sidebar
+
 **Changed:** Level 1: NOW (Home, Tasks, Review, Calendar, Captures) + CORE
 (Findings, Reminders, Notes). Level 2: 20 modules under a collapsed Modules
 group — kept, badges intact, never deleted. Auto-expands when the active

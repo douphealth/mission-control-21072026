@@ -1,8 +1,8 @@
 // Navigation & UI state — lightweight Zustand store
 // Prevents full-app re-renders when navigating between sections
 
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
 interface NavigationState {
   activeSection: string;
@@ -37,12 +37,10 @@ interface NavigationState {
   setFocusEntity: (e: { type: string; id: string; label?: string } | null) => void;
 }
 
-
-
 export const useNavigationStore = create<NavigationState>()(
   persist(
     (set, get) => ({
-      activeSection: 'dashboard',
+      activeSection: "dashboard",
       setActiveSection: (section) => {
         set({ activeSection: section });
         get().pushRecent(section);
@@ -73,15 +71,13 @@ export const useNavigationStore = create<NavigationState>()(
 
       focusEntity: null,
       setFocusEntity: (e) => set({ focusEntity: e }),
-
-
     }),
     {
-      name: 'mc-navigation-v1',
+      name: "mc-navigation-v1",
       partialize: (state) => ({
         recentSections: state.recentSections,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
-    }
-  )
+    },
+  ),
 );

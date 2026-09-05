@@ -1,7 +1,13 @@
-import { useBuildProjects, useUpdateData, useDuplicateItem } from '@/hooks/useTableData';
+import { useBuildProjects, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useCallback } from "react";
 import { ExternalLink, Trash2, Plus, Edit2, Search, CheckSquare, Copy } from "lucide-react";
-import FormModal, { FormField, FormInput, FormTextarea, FormSelect, FormTagsInput } from "@/components/FormModal";
+import FormModal, {
+  FormField,
+  FormInput,
+  FormTextarea,
+  FormSelect,
+  FormTagsInput,
+} from "@/components/FormModal";
 import type { BuildProject } from "@/lib/db";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
@@ -15,7 +21,19 @@ const platformStyle: Record<string, { badge: string; emoji: string; label: strin
 };
 const statusOrder: Record<string, number> = { ideation: 0, building: 1, testing: 2, deployed: 3 };
 
-const emptyBuild: Omit<BuildProject, "id"> = { name: "", platform: "bolt", projectUrl: "", deployedUrl: "", description: "", techStack: [], status: "ideation", startedDate: new Date().toISOString().split("T")[0], lastWorkedOn: new Date().toISOString().split("T")[0], nextSteps: "", githubRepo: "" };
+const emptyBuild: Omit<BuildProject, "id"> = {
+  name: "",
+  platform: "bolt",
+  projectUrl: "",
+  deployedUrl: "",
+  description: "",
+  techStack: [],
+  status: "ideation",
+  startedDate: new Date().toISOString().split("T")[0],
+  lastWorkedOn: new Date().toISOString().split("T")[0],
+  nextSteps: "",
+  githubRepo: "",
+};
 
 export default function BuildsPage() {
   const buildProjects = useBuildProjects();
@@ -33,49 +51,106 @@ export default function BuildsPage() {
     .filter((b: any) => filterPlatform === "all" || b.platform === filterPlatform)
     .filter((b: any) => b.name.toLowerCase().includes(search.toLowerCase()));
 
-  const openAdd = () => { setEditId(null); setForm(emptyBuild); setModalOpen(true); };
-  const openEdit = (b: any) => { setEditId(b.id); const { id, ...rest } = b; setForm(rest); setModalOpen(true); };
+  const openAdd = () => {
+    setEditId(null);
+    setForm(emptyBuild);
+    setModalOpen(true);
+  };
+  const openEdit = (b: any) => {
+    setEditId(b.id);
+    const { id, ...rest } = b;
+    setForm(rest);
+    setModalOpen(true);
+  };
   const saveForm = () => {
     if (!form.name.trim()) return;
     const now = new Date().toISOString().split("T")[0];
     if (editId) {
-      updateData({ buildProjects: buildProjects.map((b: any) => b.id === editId ? { ...b, ...form, lastWorkedOn: now } : b) });
+      updateData({
+        buildProjects: buildProjects.map((b: any) =>
+          b.id === editId ? { ...b, ...form, lastWorkedOn: now } : b,
+        ),
+      });
     } else {
-      updateData({ buildProjects: [{ id: Math.random().toString(36).slice(2, 10), ...form, startedDate: now, lastWorkedOn: now }, ...buildProjects] as any });
+      updateData({
+        buildProjects: [
+          {
+            id: Math.random().toString(36).slice(2, 10),
+            ...form,
+            startedDate: now,
+            lastWorkedOn: now,
+          },
+          ...buildProjects,
+        ] as any,
+      });
     }
     setModalOpen(false);
   };
   const deleteBuild = (id: string) => {
-    cd.confirm({ title: "Delete Project", description: "This build project will be permanently removed.", onConfirm: () => { updateData({ buildProjects: buildProjects.filter((b: any) => b.id !== id) }); toast.success("Project deleted"); } });
+    cd.confirm({
+      title: "Delete Project",
+      description: "This build project will be permanently removed.",
+      onConfirm: () => {
+        updateData({ buildProjects: buildProjects.filter((b: any) => b.id !== id) });
+        toast.success("Project deleted");
+      },
+    });
   };
-  const duplicateBuild = async (id: string) => { const newId = await duplicateItem("buildProjects", id, { status: "ideation" }); if (newId) toast.success("Project duplicated"); };
-  const uf = (field: keyof typeof form, val: any) => setForm(f => ({ ...f, [field]: val }));
+  const duplicateBuild = async (id: string) => {
+    const newId = await duplicateItem("buildProjects", id, { status: "ideation" });
+    if (newId) toast.success("Project duplicated");
+  };
+  const uf = (field: keyof typeof form, val: any) => setForm((f) => ({ ...f, [field]: val }));
 
   const bulkDelete = useCallback(() => {
     if (bulk.selectedCount === 0) return;
-    cd.confirm({ title: `Delete ${bulk.selectedCount} Project(s)`, description: `This will permanently remove ${bulk.selectedCount} build projects.`, onConfirm: () => { updateData({ buildProjects: buildProjects.filter((b: any) => !bulk.selectedIds.has(b.id)) }); toast.success(`${bulk.selectedCount} projects deleted`); bulk.clearSelection(); } });
+    cd.confirm({
+      title: `Delete ${bulk.selectedCount} Project(s)`,
+      description: `This will permanently remove ${bulk.selectedCount} build projects.`,
+      onConfirm: () => {
+        updateData({
+          buildProjects: buildProjects.filter((b: any) => !bulk.selectedIds.has(b.id)),
+        });
+        toast.success(`${bulk.selectedCount} projects deleted`);
+        bulk.clearSelection();
+      },
+    });
   }, [bulk, buildProjects, updateData, cd]);
 
-  const bulkUpdateStatus = useCallback((status: string) => {
-    const now = new Date().toISOString().split("T")[0];
-    updateData({ buildProjects: buildProjects.map((b: any) => bulk.selectedIds.has(b.id) ? { ...b, status, lastWorkedOn: now } : b) });
-    toast.success(`${bulk.selectedCount} projects updated`);
-    bulk.clearSelection();
-  }, [bulk, buildProjects, updateData]);
+  const bulkUpdateStatus = useCallback(
+    (status: string) => {
+      const now = new Date().toISOString().split("T")[0];
+      updateData({
+        buildProjects: buildProjects.map((b: any) =>
+          bulk.selectedIds.has(b.id) ? { ...b, status, lastWorkedOn: now } : b,
+        ),
+      });
+      toast.success(`${bulk.selectedCount} projects updated`);
+      bulk.clearSelection();
+    },
+    [bulk, buildProjects, updateData],
+  );
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-3">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Build Projects</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{buildProjects.length} projects across platforms</p>
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            {buildProjects.length} projects across platforms
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={bulk.toggleBulkMode}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-sm font-semibold transition-all ${bulk.bulkMode ? 'bg-destructive/10 text-destructive border border-destructive/20' : 'bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20'}`}>
-            <CheckSquare size={15} /> {bulk.bulkMode ? 'Cancel' : 'Bulk'}
+          <button
+            onClick={bulk.toggleBulkMode}
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-sm font-semibold transition-all ${bulk.bulkMode ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20"}`}
+          >
+            <CheckSquare size={15} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
           </button>
-          <button onClick={openAdd} className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20">
+          <button
+            onClick={openAdd}
+            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
+          >
             <Plus size={16} /> New Project
           </button>
         </div>
@@ -83,24 +158,43 @@ export default function BuildsPage() {
 
       {bulk.bulkMode && (
         <BulkActionBar
-          selectedCount={bulk.selectedCount} totalCount={filtered.length}
-          onSelectAll={() => bulk.selectAll(filtered)} allSelected={bulk.selectedCount === filtered.length && filtered.length > 0}
+          selectedCount={bulk.selectedCount}
+          totalCount={filtered.length}
+          onSelectAll={() => bulk.selectAll(filtered)}
+          allSelected={bulk.selectedCount === filtered.length && filtered.length > 0}
           onDelete={bulkDelete}
-          dropdowns={[{ label: "Set Status...", onSelect: bulkUpdateStatus, options: [
-            { value: "ideation", label: "💭 Ideation" }, { value: "building", label: "🔨 Building" },
-            { value: "testing", label: "🧪 Testing" }, { value: "deployed", label: "🚀 Deployed" },
-          ]}]}
+          dropdowns={[
+            {
+              label: "Set Status...",
+              onSelect: bulkUpdateStatus,
+              options: [
+                { value: "ideation", label: "💭 Ideation" },
+                { value: "building", label: "🔨 Building" },
+                { value: "testing", label: "🧪 Testing" },
+                { value: "deployed", label: "🚀 Deployed" },
+              ],
+            },
+          ]}
         />
       )}
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 flex-1 sm:max-w-xs">
           <Search size={14} className="text-muted-foreground" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search projects..." className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search projects..."
+            className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
+          />
         </div>
         <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 overflow-x-auto hide-scrollbar">
-          {["all", "bolt", "lovable", "replit"].map(p => (
-            <button key={p} onClick={() => setFilterPlatform(p)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${filterPlatform === p ? "bg-card text-card-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+          {["all", "bolt", "lovable", "replit"].map((p) => (
+            <button
+              key={p}
+              onClick={() => setFilterPlatform(p)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${filterPlatform === p ? "bg-card text-card-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
               {p === "all" ? "All" : `${platformStyle[p]?.emoji} ${platformStyle[p]?.label}`}
             </button>
           ))}
@@ -111,42 +205,116 @@ export default function BuildsPage() {
         {filtered.map((bp: any, i: number) => {
           const ps = platformStyle[bp.platform] || platformStyle.bolt;
           return (
-            <div key={bp.id} 
+            <div
+              key={bp.id}
               onClick={bulk.bulkMode ? () => bulk.toggleSelect(bp.id) : undefined}
-              className={`card-elevated p-4 sm:p-5 space-y-3 group ${bulk.bulkMode ? 'cursor-pointer' : ''} ${bulk.isSelected(bp.id) ? 'ring-1 ring-primary/30 border-primary/50' : ''}`}>
+              className={`card-elevated p-4 sm:p-5 space-y-3 group ${bulk.bulkMode ? "cursor-pointer" : ""} ${bulk.isSelected(bp.id) ? "ring-1 ring-primary/30 border-primary/50" : ""}`}
+            >
               <div className="flex items-start justify-between">
                 {bulk.bulkMode && (
-                  <div className="mr-2">{bulk.isSelected(bp.id) ? <CheckSquare size={16} className="text-primary" /> : <div className="w-4 h-4 rounded border border-muted-foreground/30" />}</div>
+                  <div className="mr-2">
+                    {bulk.isSelected(bp.id) ? (
+                      <CheckSquare size={16} className="text-primary" />
+                    ) : (
+                      <div className="w-4 h-4 rounded border border-muted-foreground/30" />
+                    )}
+                  </div>
                 )}
                 <h3 className="font-semibold text-card-foreground truncate">{bp.name}</h3>
-                <span className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${ps.badge}`}>{ps.emoji} {bp.platform}</span>
+                <span
+                  className={`text-xs font-medium px-2.5 py-1 rounded-full flex-shrink-0 ${ps.badge}`}
+                >
+                  {ps.emoji} {bp.platform}
+                </span>
               </div>
               <p className="text-sm text-muted-foreground line-clamp-2">{bp.description}</p>
               {/* Status pipeline - scrollable on mobile */}
               <div className="flex items-center gap-1 overflow-x-auto hide-scrollbar">
                 {(["ideation", "building", "testing", "deployed"] as const).map((s, idx) => (
                   <div key={s} className="flex items-center gap-1 flex-shrink-0">
-                    <div className={`w-2.5 h-2.5 rounded-full transition-colors ${statusOrder[bp.status] >= idx ? "bg-primary" : "bg-muted"}`} />
-                    <span className={`text-[10px] ${statusOrder[bp.status] >= idx ? "text-card-foreground font-medium" : "text-muted-foreground"}`}>{s}</span>
-                    {idx < 3 && <div className={`w-4 sm:w-5 h-0.5 rounded transition-colors ${statusOrder[bp.status] > idx ? "bg-primary" : "bg-muted"}`} />}
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full transition-colors ${statusOrder[bp.status] >= idx ? "bg-primary" : "bg-muted"}`}
+                    />
+                    <span
+                      className={`text-[10px] ${statusOrder[bp.status] >= idx ? "text-card-foreground font-medium" : "text-muted-foreground"}`}
+                    >
+                      {s}
+                    </span>
+                    {idx < 3 && (
+                      <div
+                        className={`w-4 sm:w-5 h-0.5 rounded transition-colors ${statusOrder[bp.status] > idx ? "bg-primary" : "bg-muted"}`}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
               {bp.techStack.length > 0 && (
                 <div className="flex flex-wrap gap-1">
-                  {bp.techStack.map((t: string) => <span key={t} className="text-[10px] px-1.5 py-0.5 rounded-md bg-secondary text-secondary-foreground">{t}</span>)}
+                  {bp.techStack.map((t: string) => (
+                    <span
+                      key={t}
+                      className="text-[10px] px-1.5 py-0.5 rounded-md bg-secondary text-secondary-foreground"
+                    >
+                      {t}
+                    </span>
+                  ))}
                 </div>
               )}
-              {bp.nextSteps && <p className="text-xs text-muted-foreground/80 italic">💡 Next: {bp.nextSteps}</p>}
+              {bp.nextSteps && (
+                <p className="text-xs text-muted-foreground/80 italic">💡 Next: {bp.nextSteps}</p>
+              )}
               <div className="flex gap-2 pt-1 flex-wrap">
-                {bp.projectUrl && <a href={bp.projectUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1"><ExternalLink size={12} /> Open</a>}
-                {bp.deployedUrl && <a href={bp.deployedUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground">🚀 Live</a>}
-                {bp.githubRepo && <a href={bp.githubRepo} target="_blank" rel="noopener noreferrer" className="text-xs text-muted-foreground hover:text-foreground">📂 GitHub</a>}
+                {bp.projectUrl && (
+                  <a
+                    href={bp.projectUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-primary hover:underline flex items-center gap-1"
+                  >
+                    <ExternalLink size={12} /> Open
+                  </a>
+                )}
+                {bp.deployedUrl && (
+                  <a
+                    href={bp.deployedUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    🚀 Live
+                  </a>
+                )}
+                {bp.githubRepo && (
+                  <a
+                    href={bp.githubRepo}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    📂 GitHub
+                  </a>
+                )}
                 {!bulk.bulkMode && (
                   <div className="ml-auto flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => duplicateBuild(bp.id)} className="text-muted-foreground hover:text-blue-500 p-1.5 rounded-lg hover:bg-secondary transition-colors" title="Duplicate"><Copy size={14} /></button>
-                    <button onClick={() => openEdit(bp)} className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-secondary transition-colors"><Edit2 size={14} /></button>
-                    <button onClick={() => deleteBuild(bp.id)} className="text-muted-foreground hover:text-destructive p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"><Trash2 size={14} /></button>
+                    <button
+                      onClick={() => duplicateBuild(bp.id)}
+                      className="text-muted-foreground hover:text-blue-500 p-1.5 rounded-lg hover:bg-secondary transition-colors"
+                      title="Duplicate"
+                    >
+                      <Copy size={14} />
+                    </button>
+                    <button
+                      onClick={() => openEdit(bp)}
+                      className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-secondary transition-colors"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+                    <button
+                      onClick={() => deleteBuild(bp.id)}
+                      className="text-muted-foreground hover:text-destructive p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </div>
                 )}
               </div>
@@ -159,26 +327,89 @@ export default function BuildsPage() {
         <div className="text-center py-16 text-muted-foreground">
           <div className="text-5xl mb-3">🛠️</div>
           <p className="font-medium">No build projects found</p>
-          <button onClick={openAdd} className="mt-3 text-sm text-primary hover:underline">+ Create your first project</button>
+          <button onClick={openAdd} className="mt-3 text-sm text-primary hover:underline">
+            + Create your first project
+          </button>
         </div>
       )}
 
-      <FormModal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? "Edit Project" : "New Build Project"} onSubmit={saveForm}>
-        <FormField label="Project Name *"><FormInput value={form.name} onChange={v => uf("name", v)} placeholder="My AI App" /></FormField>
+      <FormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editId ? "Edit Project" : "New Build Project"}
+        onSubmit={saveForm}
+      >
+        <FormField label="Project Name *">
+          <FormInput value={form.name} onChange={(v) => uf("name", v)} placeholder="My AI App" />
+        </FormField>
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <FormField label="Platform">
-            <FormSelect value={form.platform} onChange={v => uf("platform", v as any)} options={[{value:"bolt",label:"⚡ Bolt"},{value:"lovable",label:"💜 Lovable"},{value:"replit",label:"🟢 Replit"}]} />
+            <FormSelect
+              value={form.platform}
+              onChange={(v) => uf("platform", v as any)}
+              options={[
+                { value: "bolt", label: "⚡ Bolt" },
+                { value: "lovable", label: "💜 Lovable" },
+                { value: "replit", label: "🟢 Replit" },
+              ]}
+            />
           </FormField>
           <FormField label="Status">
-            <FormSelect value={form.status} onChange={v => uf("status", v as any)} options={[{value:"ideation",label:"Ideation"},{value:"building",label:"Building"},{value:"testing",label:"Testing"},{value:"deployed",label:"Deployed"}]} />
+            <FormSelect
+              value={form.status}
+              onChange={(v) => uf("status", v as any)}
+              options={[
+                { value: "ideation", label: "Ideation" },
+                { value: "building", label: "Building" },
+                { value: "testing", label: "Testing" },
+                { value: "deployed", label: "Deployed" },
+              ]}
+            />
           </FormField>
         </div>
-        <FormField label="Description"><FormTextarea value={form.description} onChange={v => uf("description", v)} placeholder="What does this project do?" rows={2} /></FormField>
-        <FormField label="Project URL"><FormInput value={form.projectUrl} onChange={v => uf("projectUrl", v)} placeholder="https://bolt.new/..." /></FormField>
-        <FormField label="Deployed URL"><FormInput value={form.deployedUrl} onChange={v => uf("deployedUrl", v)} placeholder="https://my-app.vercel.app" /></FormField>
-        <FormField label="GitHub Repo"><FormInput value={form.githubRepo} onChange={v => uf("githubRepo", v)} placeholder="https://github.com/..." /></FormField>
-        <FormField label="Tech Stack"><FormTagsInput value={form.techStack} onChange={v => uf("techStack", v)} placeholder="React, Supabase, etc." /></FormField>
-        <FormField label="Next Steps"><FormInput value={form.nextSteps} onChange={v => uf("nextSteps", v)} placeholder="What to do next..." /></FormField>
+        <FormField label="Description">
+          <FormTextarea
+            value={form.description}
+            onChange={(v) => uf("description", v)}
+            placeholder="What does this project do?"
+            rows={2}
+          />
+        </FormField>
+        <FormField label="Project URL">
+          <FormInput
+            value={form.projectUrl}
+            onChange={(v) => uf("projectUrl", v)}
+            placeholder="https://bolt.new/..."
+          />
+        </FormField>
+        <FormField label="Deployed URL">
+          <FormInput
+            value={form.deployedUrl}
+            onChange={(v) => uf("deployedUrl", v)}
+            placeholder="https://my-app.vercel.app"
+          />
+        </FormField>
+        <FormField label="GitHub Repo">
+          <FormInput
+            value={form.githubRepo}
+            onChange={(v) => uf("githubRepo", v)}
+            placeholder="https://github.com/..."
+          />
+        </FormField>
+        <FormField label="Tech Stack">
+          <FormTagsInput
+            value={form.techStack}
+            onChange={(v) => uf("techStack", v)}
+            placeholder="React, Supabase, etc."
+          />
+        </FormField>
+        <FormField label="Next Steps">
+          <FormInput
+            value={form.nextSteps}
+            onChange={(v) => uf("nextSteps", v)}
+            placeholder="What to do next..."
+          />
+        </FormField>
       </FormModal>
 
       <ConfirmDialog {...cd.dialogProps} />

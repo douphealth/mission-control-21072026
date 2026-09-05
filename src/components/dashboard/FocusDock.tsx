@@ -64,9 +64,21 @@ export default function FocusDock({
       <div className="flex items-center gap-4">
         <div className="relative shrink-0">
           <svg width="44" height="44" viewBox="0 0 36 36" className="-rotate-90">
-            <circle cx="18" cy="18" r="15" fill="none" strokeWidth="3.5" className="stroke-white/15" />
             <circle
-              cx="18" cy="18" r="15" fill="none" strokeWidth="3.5" strokeLinecap="round"
+              cx="18"
+              cy="18"
+              r="15"
+              fill="none"
+              strokeWidth="3.5"
+              className="stroke-white/15"
+            />
+            <circle
+              cx="18"
+              cy="18"
+              r="15"
+              fill="none"
+              strokeWidth="3.5"
+              strokeLinecap="round"
               stroke="#6ee7b7"
               strokeDasharray={c}
               strokeDashoffset={c - (Math.min(100, pct) / 100) * c}
@@ -83,7 +95,11 @@ export default function FocusDock({
           </div>
           <div className="mt-1 truncate text-[14px] font-bold text-white">{item.title}</div>
           <div className="mt-0.5 text-[11px] text-white/60">
-            {running ? "Running — one thing, no tabs" : remaining === 0 ? "Session complete" : "Paused"}
+            {running
+              ? "Running — one thing, no tabs"
+              : remaining === 0
+                ? "Session complete"
+                : "Paused"}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">

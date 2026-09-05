@@ -1,44 +1,136 @@
-import { useTasks, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem } from "@/hooks/useTableData";
+import {
+  useTasks,
+  useAddItem,
+  useUpdateItem,
+  useDeleteItem,
+  useDuplicateItem,
+} from "@/hooks/useTableData";
 import { useState, useRef, useCallback, useMemo, useEffect, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  Plus, Search, CheckCircle2, Circle, AlertTriangle, Edit2, Trash2,
-  GripVertical, ChevronDown, LayoutGrid, List, Flag, Tag, Calendar,
-  X, Clock, ArrowRight, Zap, Target, Flame, Filter, MoreHorizontal,
-  CheckSquare, Layers, TrendingUp, BarChart3, Copy, Bell, Repeat, CalendarRange
+  Plus,
+  Search,
+  CheckCircle2,
+  Circle,
+  AlertTriangle,
+  Edit2,
+  Trash2,
+  GripVertical,
+  ChevronDown,
+  LayoutGrid,
+  List,
+  Flag,
+  Tag,
+  Calendar,
+  X,
+  Clock,
+  ArrowRight,
+  Zap,
+  Target,
+  Flame,
+  Filter,
+  MoreHorizontal,
+  CheckSquare,
+  Layers,
+  TrendingUp,
+  BarChart3,
+  Copy,
+  Bell,
+  Repeat,
+  CalendarRange,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task, Subtask } from "@/lib/db";
-import { REMINDER_LABELS, getReminderLabel, requestNotificationPermission } from "@/lib/notifications";
+import {
+  REMINDER_LABELS,
+  getReminderLabel,
+  requestNotificationPermission,
+} from "@/lib/notifications";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { deleteGCalEvent } from "@/lib/googleCalendar";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUSES = [
-  { id: "todo", label: "To Do", color: "#6366f1", bg: "from-indigo-500/20 to-indigo-600/5", icon: Circle },
-  { id: "in-progress", label: "In Progress", color: "#f59e0b", bg: "from-amber-500/20 to-amber-600/5", icon: Zap },
-  { id: "blocked", label: "Blocked", color: "#ef4444", bg: "from-red-500/20 to-red-600/5", icon: AlertTriangle },
-  { id: "done", label: "Done", color: "#10b981", bg: "from-emerald-500/20 to-emerald-600/5", icon: CheckCircle2 },
+  {
+    id: "todo",
+    label: "To Do",
+    color: "#6366f1",
+    bg: "from-indigo-500/20 to-indigo-600/5",
+    icon: Circle,
+  },
+  {
+    id: "in-progress",
+    label: "In Progress",
+    color: "#f59e0b",
+    bg: "from-amber-500/20 to-amber-600/5",
+    icon: Zap,
+  },
+  {
+    id: "blocked",
+    label: "Blocked",
+    color: "#ef4444",
+    bg: "from-red-500/20 to-red-600/5",
+    icon: AlertTriangle,
+  },
+  {
+    id: "done",
+    label: "Done",
+    color: "#10b981",
+    bg: "from-emerald-500/20 to-emerald-600/5",
+    icon: CheckCircle2,
+  },
 ] as const;
 
-type StatusId = typeof STATUSES[number]["id"];
+type StatusId = (typeof STATUSES)[number]["id"];
 
 const PRIORITIES = [
-  { id: "critical", label: "Critical", color: "#ef4444", bg: "bg-red-500/15 text-red-400", dot: "bg-red-500" },
-  { id: "high", label: "High", color: "#f97316", bg: "bg-orange-500/15 text-orange-400", dot: "bg-orange-500" },
-  { id: "medium", label: "Medium", color: "#3b82f6", bg: "bg-blue-500/15 text-blue-400", dot: "bg-blue-500" },
-  { id: "low", label: "Low", color: "#10b981", bg: "bg-emerald-500/15 text-emerald-400", dot: "bg-emerald-500" },
+  {
+    id: "critical",
+    label: "Critical",
+    color: "#ef4444",
+    bg: "bg-red-500/15 text-red-400",
+    dot: "bg-red-500",
+  },
+  {
+    id: "high",
+    label: "High",
+    color: "#f97316",
+    bg: "bg-orange-500/15 text-orange-400",
+    dot: "bg-orange-500",
+  },
+  {
+    id: "medium",
+    label: "Medium",
+    color: "#3b82f6",
+    bg: "bg-blue-500/15 text-blue-400",
+    dot: "bg-blue-500",
+  },
+  {
+    id: "low",
+    label: "Low",
+    color: "#10b981",
+    bg: "bg-emerald-500/15 text-emerald-400",
+    dot: "bg-emerald-500",
+  },
 ] as const;
 
 const CATEGORIES = ["Private", "Business"];
 const today = new Date().toISOString().split("T")[0];
 
-function getPriority(id: string) { return PRIORITIES.find(p => p.id === id) || PRIORITIES[2]; }
-function getStatus(id: string) { return STATUSES.find(s => s.id === id) || STATUSES[0]; }
+function getPriority(id: string) {
+  return PRIORITIES.find((p) => p.id === id) || PRIORITIES[2];
+}
+function getStatus(id: string) {
+  return STATUSES.find((s) => s.id === id) || STATUSES[0];
+}
 
-function isOverdue(t: Task) { return t.status !== "done" && t.dueDate < today; }
-function isToday(t: Task) { return t.dueDate === today && t.status !== "done"; }
+function isOverdue(t: Task) {
+  return t.status !== "done" && t.dueDate < today;
+}
+function isToday(t: Task) {
+  return t.dueDate === today && t.status !== "done";
+}
 
 function daysUntil(date: string) {
   const diff = Math.ceil((new Date(date).getTime() - new Date(today).getTime()) / 86400000);
@@ -51,12 +143,20 @@ function daysUntil(date: string) {
 // ─── Task Form Modal ──────────────────────────────────────────────────────────
 
 const EMPTY: Omit<Task, "id"> = {
-  title: "", priority: "medium", status: "todo",
-  startDate: today, dueDate: today, category: "Private",
-  description: "", linkedProject: "",
-  subtasks: [], createdAt: today,
-  reminder: 'none', reminderFired: false,
-  reminders: [], remindersFired: [],
+  title: "",
+  priority: "medium",
+  status: "todo",
+  startDate: today,
+  dueDate: today,
+  category: "Private",
+  description: "",
+  linkedProject: "",
+  subtasks: [],
+  createdAt: today,
+  reminder: "none",
+  reminderFired: false,
+  reminders: [],
+  remindersFired: [],
 };
 
 interface TaskModalProps {
@@ -70,10 +170,10 @@ interface TaskModalProps {
 
 function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: TaskModalProps) {
   const [form, setForm] = useState<Omit<Task, "id">>(() =>
-    task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" }
+    task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" },
   );
   const [newSub, setNewSub] = useState("");
-  const uf = (k: keyof typeof form, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const uf = (k: keyof typeof form, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   // reset when task changes
   useMemo(() => {
@@ -82,15 +182,33 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
 
   const addSub = () => {
     if (!newSub.trim()) return;
-    uf("subtasks", [...form.subtasks, { id: `s-${Date.now()}`, title: newSub.trim(), done: false } as Subtask]);
+    uf("subtasks", [
+      ...form.subtasks,
+      { id: `s-${Date.now()}`, title: newSub.trim(), done: false } as Subtask,
+    ]);
     setNewSub("");
   };
-  const removeSub = (id: string) => uf("subtasks", form.subtasks.filter((s: Subtask) => s.id !== id));
-  const toggleSub = (id: string) => uf("subtasks", form.subtasks.map((s: Subtask) => s.id === id ? { ...s, done: !s.done } : s));
-  const updateSub = (id: string, changes: Partial<Subtask>) => uf("subtasks", form.subtasks.map((s: Subtask) => s.id === id ? { ...s, ...changes } : s));
+  const removeSub = (id: string) =>
+    uf(
+      "subtasks",
+      form.subtasks.filter((s: Subtask) => s.id !== id),
+    );
+  const toggleSub = (id: string) =>
+    uf(
+      "subtasks",
+      form.subtasks.map((s: Subtask) => (s.id === id ? { ...s, done: !s.done } : s)),
+    );
+  const updateSub = (id: string, changes: Partial<Subtask>) =>
+    uf(
+      "subtasks",
+      form.subtasks.map((s: Subtask) => (s.id === id ? { ...s, ...changes } : s)),
+    );
 
   const save = () => {
-    if (!form.title.trim()) { toast.error("Title required"); return; }
+    if (!form.title.trim()) {
+      toast.error("Title required");
+      return;
+    }
     onSave({ ...(task?.id ? { id: task.id } : {}), ...form });
     onClose();
   };
@@ -101,13 +219,15 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
   return (
     <>
       {open && (
-        <div 
-          className="fixed inset-0 z-[200] flex items-end sm:items-start justify-center sm:p-4 sm:pt-16" onClick={onClose}>
+        <div
+          className="fixed inset-0 z-[200] flex items-end sm:items-start justify-center sm:p-4 sm:pt-16"
+          onClick={onClose}
+        >
           <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-          <div 
+          <div
             className="relative w-full sm:max-w-2xl bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl border border-border/50 overflow-hidden max-h-[95vh] sm:max-h-none flex flex-col"
-            onClick={e => e.stopPropagation()}>
-
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Priority color strip */}
             <div className="h-1 w-full" style={{ background: pr.color }} />
 
@@ -119,12 +239,20 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
               </h2>
               <div className="flex items-center gap-2">
                 {task && onDelete && (
-                  <button onClick={() => { onDelete(task.id); onClose(); }}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                  <button
+                    onClick={() => {
+                      onDelete(task.id);
+                      onClose();
+                    }}
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  >
                     <Trash2 size={14} />
                   </button>
                 )}
-                <button onClick={onClose} className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors">
+                <button
+                  onClick={onClose}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
+                >
                   <X size={16} />
                 </button>
               </div>
@@ -134,44 +262,82 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
             <div className="p-4 sm:p-6 space-y-5 flex-1 overflow-y-auto">
               {/* Title */}
               <textarea
-                autoFocus rows={2}
-                value={form.title} onChange={e => uf("title", e.target.value)}
+                autoFocus
+                rows={2}
+                value={form.title}
+                onChange={(e) => uf("title", e.target.value)}
                 placeholder="Task title..."
-                ref={el => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
-                onInput={e => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }}
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = "auto";
+                    el.style.height = el.scrollHeight + "px";
+                  }
+                }}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = el.scrollHeight + "px";
+                }}
                 style={{ overflow: "hidden" }}
                 className="w-full text-lg font-semibold bg-transparent text-card-foreground outline-none placeholder:text-muted-foreground/40 resize-none border-b border-border/40 pb-2"
               />
 
               {/* Description */}
-              <textarea rows={2} value={form.description} onChange={e => uf("description", e.target.value)}
+              <textarea
+                rows={2}
+                value={form.description}
+                onChange={(e) => uf("description", e.target.value)}
                 placeholder="Description (optional)..."
-                ref={el => { if (el) { el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; } }}
-                onInput={e => { const el = e.currentTarget; el.style.height = "auto"; el.style.height = el.scrollHeight + "px"; }}
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = "auto";
+                    el.style.height = el.scrollHeight + "px";
+                  }
+                }}
+                onInput={(e) => {
+                  const el = e.currentTarget;
+                  el.style.height = "auto";
+                  el.style.height = el.scrollHeight + "px";
+                }}
                 style={{ overflow: "hidden" }}
-                className="w-full px-3 py-2.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none placeholder:text-muted-foreground/50" />
+                className="w-full px-3 py-2.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 resize-none placeholder:text-muted-foreground/50"
+              />
 
               {/* Status + Priority row */}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Status</label>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
+                    Status
+                  </label>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {STATUSES.map(s => (
-                      <button key={s.id} type="button" onClick={() => uf("status", s.id)}
+                    {STATUSES.map((s) => (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => uf("status", s.id)}
                         className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${form.status === s.id ? "ring-2 ring-offset-1 ring-offset-card" : "bg-secondary opacity-60 hover:opacity-100"}`}
-                        style={form.status === s.id ? { background: s.color + "22", color: s.color } : {}}>
+                        style={
+                          form.status === s.id ? { background: s.color + "22", color: s.color } : {}
+                        }
+                      >
                         {s.label}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">Priority</label>
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
+                    Priority
+                  </label>
                   <div className="grid grid-cols-2 gap-1.5">
-                    {PRIORITIES.map(p => (
-                      <button key={p.id} type="button" onClick={() => uf("priority", p.id)}
+                    {PRIORITIES.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => uf("priority", p.id)}
                         className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${p.bg} ${form.priority === p.id ? "ring-2 ring-offset-1 ring-offset-card" : "opacity-50 hover:opacity-100"}`}
-                        style={form.priority === p.id ? {} : {}}>
+                        style={form.priority === p.id ? {} : {}}
+                      >
                         {p.label}
                       </button>
                     ))}
@@ -182,29 +348,49 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
               {/* Date range + Category */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Start Date</label>
-                  <input type="date" value={form.startDate || form.dueDate} onChange={e => {
-                    uf("startDate", e.target.value);
-                    // If start > end, push end forward
-                    if (e.target.value > form.dueDate) uf("dueDate", e.target.value);
-                  }}
-                    className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                    Start Date
+                  </label>
+                  <input
+                    type="date"
+                    value={form.startDate || form.dueDate}
+                    onChange={(e) => {
+                      uf("startDate", e.target.value);
+                      // If start > end, push end forward
+                      if (e.target.value > form.dueDate) uf("dueDate", e.target.value);
+                    }}
+                    className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">End Date</label>
-                  <input type="date" value={form.dueDate} onChange={e => {
-                    uf("dueDate", e.target.value);
-                    // If end < start, pull start back
-                    if (form.startDate && e.target.value < form.startDate) uf("startDate", e.target.value);
-                  }}
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                    End Date
+                  </label>
+                  <input
+                    type="date"
+                    value={form.dueDate}
+                    onChange={(e) => {
+                      uf("dueDate", e.target.value);
+                      // If end < start, pull start back
+                      if (form.startDate && e.target.value < form.startDate)
+                        uf("startDate", e.target.value);
+                    }}
                     min={form.startDate || undefined}
-                    className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                    className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                  />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Category</label>
-                  <select value={form.category} onChange={e => uf("category", e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none appearance-none">
-                    {CATEGORIES.map(c => <option key={c}>{c}</option>)}
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                    Category
+                  </label>
+                  <select
+                    value={form.category}
+                    onChange={(e) => uf("category", e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none appearance-none"
+                  >
+                    {CATEGORIES.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -213,33 +399,60 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-primary/5 text-xs text-primary">
                   <ArrowRight size={12} />
                   <span className="font-medium">
-                    {Math.ceil((new Date(form.dueDate).getTime() - new Date(form.startDate).getTime()) / 86400000) + 1} days
+                    {Math.ceil(
+                      (new Date(form.dueDate).getTime() - new Date(form.startDate).getTime()) /
+                        86400000,
+                    ) + 1}{" "}
+                    days
                   </span>
-                  <span className="text-primary/60">({form.startDate} → {form.dueDate})</span>
+                  <span className="text-primary/60">
+                    ({form.startDate} → {form.dueDate})
+                  </span>
                 </div>
               )}
 
               {/* Time — syncs to calendar */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
-                  <button type="button" onClick={() => uf("allDay", !(form.allDay !== false))}
-                    className={`relative w-10 h-5 rounded-full transition-colors ${form.allDay !== false ? "bg-primary" : "bg-secondary"}`}>
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.allDay !== false ? "translate-x-5" : ""}`} />
+                  <button
+                    type="button"
+                    onClick={() => uf("allDay", !(form.allDay !== false))}
+                    className={`relative w-10 h-5 rounded-full transition-colors ${form.allDay !== false ? "bg-primary" : "bg-secondary"}`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.allDay !== false ? "translate-x-5" : ""}`}
+                    />
                   </button>
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">All day</span>
-                  <span className="text-[10px] text-muted-foreground ml-auto">Syncs to Calendar</span>
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                    All day
+                  </span>
+                  <span className="text-[10px] text-muted-foreground ml-auto">
+                    Syncs to Calendar
+                  </span>
                 </div>
                 {form.allDay === false && (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Start Time</label>
-                      <input type="time" value={form.startTime || "09:00"} onChange={e => uf("startTime", e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        Start Time
+                      </label>
+                      <input
+                        type="time"
+                        value={form.startTime || "09:00"}
+                        onChange={(e) => uf("startTime", e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                      />
                     </div>
                     <div>
-                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">End Time</label>
-                      <input type="time" value={form.endTime || "10:00"} onChange={e => uf("endTime", e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                      <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                        End Time
+                      </label>
+                      <input
+                        type="time"
+                        value={form.endTime || "10:00"}
+                        onChange={(e) => uf("endTime", e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                      />
                     </div>
                   </div>
                 )}
@@ -252,87 +465,125 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
                 </label>
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {[
-                    { key: undefined, label: 'None' },
-                    { key: 'daily', label: 'Daily' },
-                    { key: 'weekdays', label: 'Weekdays' },
-                    { key: 'weekly', label: 'Weekly' },
-                    { key: 'biweekly', label: 'Bi-weekly' },
-                    { key: 'monthly', label: 'Monthly' },
-                    { key: 'yearly', label: 'Yearly' },
-                    { key: 'custom', label: 'Custom' },
-                  ].map(opt => (
-                    <button key={opt.label} type="button" onClick={() => {
-                      if (opt.key) {
-                        uf("recurring", true);
-                        uf("recurringInterval", opt.key);
-                      } else {
-                        uf("recurring", false);
-                        uf("recurringInterval", undefined);
-                      }
-                    }}
+                    { key: undefined, label: "None" },
+                    { key: "daily", label: "Daily" },
+                    { key: "weekdays", label: "Weekdays" },
+                    { key: "weekly", label: "Weekly" },
+                    { key: "biweekly", label: "Bi-weekly" },
+                    { key: "monthly", label: "Monthly" },
+                    { key: "yearly", label: "Yearly" },
+                    { key: "custom", label: "Custom" },
+                  ].map((opt) => (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => {
+                        if (opt.key) {
+                          uf("recurring", true);
+                          uf("recurringInterval", opt.key);
+                        } else {
+                          uf("recurring", false);
+                          uf("recurringInterval", undefined);
+                        }
+                      }}
                       className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${
-                        (opt.key === undefined && !form.recurring) || (form.recurring && form.recurringInterval === opt.key)
+                        (opt.key === undefined && !form.recurring) ||
+                        (form.recurring && form.recurringInterval === opt.key)
                           ? "bg-primary/15 text-primary ring-1 ring-primary/30"
                           : "bg-secondary text-muted-foreground hover:text-foreground"
-                      }`}>
+                      }`}
+                    >
                       {opt.label}
                     </button>
                   ))}
                 </div>
                 {/* Custom interval */}
-                {form.recurring && form.recurringInterval === 'custom' && (
+                {form.recurring && form.recurringInterval === "custom" && (
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs text-muted-foreground">Every</span>
-                    <input type="number" min="1" value={form.recurringCustomDays || 1}
-                      onChange={e => uf("recurringCustomDays", Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-16 px-2 py-1.5 rounded-xl bg-secondary text-foreground text-sm outline-none text-center" />
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.recurringCustomDays || 1}
+                      onChange={(e) =>
+                        uf("recurringCustomDays", Math.max(1, parseInt(e.target.value) || 1))
+                      }
+                      className="w-16 px-2 py-1.5 rounded-xl bg-secondary text-foreground text-sm outline-none text-center"
+                    />
                     <span className="text-xs text-muted-foreground">days</span>
                   </div>
                 )}
                 {/* End condition */}
                 {form.recurring && (
                   <div className="space-y-2 p-3 rounded-xl bg-secondary/30 border border-border/20">
-                    <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">Ends</div>
+                    <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">
+                      Ends
+                    </div>
                     <div className="flex flex-wrap gap-1.5">
                       {[
-                        { key: 'never', label: '♾️ Never', desc: 'Repeats forever (birthdays, etc.)' },
-                        { key: 'date', label: '📅 On date', desc: 'Stops on a specific date' },
-                        { key: 'count', label: '🔢 After N times', desc: 'Stops after N completions' },
-                      ].map(opt => (
-                        <button key={opt.key} type="button" onClick={() => uf("recurringEndType", opt.key)}
+                        {
+                          key: "never",
+                          label: "♾️ Never",
+                          desc: "Repeats forever (birthdays, etc.)",
+                        },
+                        { key: "date", label: "📅 On date", desc: "Stops on a specific date" },
+                        {
+                          key: "count",
+                          label: "🔢 After N times",
+                          desc: "Stops after N completions",
+                        },
+                      ].map((opt) => (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => uf("recurringEndType", opt.key)}
                           className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${
-                            (form.recurringEndType || 'never') === opt.key
+                            (form.recurringEndType || "never") === opt.key
                               ? "bg-primary/15 text-primary ring-1 ring-primary/30"
                               : "bg-secondary text-muted-foreground hover:text-foreground"
                           }`}
-                          title={opt.desc}>
+                          title={opt.desc}
+                        >
                           {opt.label}
                         </button>
                       ))}
                     </div>
-                    {(form.recurringEndType || 'never') === 'date' && (
+                    {(form.recurringEndType || "never") === "date" && (
                       <div className="flex items-center gap-2 mt-1">
                         <CalendarRange size={12} className="text-muted-foreground" />
-                        <input type="date" value={form.recurringEndDate || ""}
-                          onChange={e => uf("recurringEndDate", e.target.value)}
+                        <input
+                          type="date"
+                          value={form.recurringEndDate || ""}
+                          onChange={(e) => uf("recurringEndDate", e.target.value)}
                           min={form.dueDate}
-                          className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30" />
+                          className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30"
+                        />
                       </div>
                     )}
-                    {form.recurringEndType === 'count' && (
+                    {form.recurringEndType === "count" && (
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-xs text-muted-foreground">After</span>
-                        <input type="number" min="1" value={form.recurringEndCount || 10}
-                          onChange={e => uf("recurringEndCount", Math.max(1, parseInt(e.target.value) || 1))}
-                          className="w-16 px-2 py-1.5 rounded-xl bg-secondary text-foreground text-sm outline-none text-center" />
+                        <input
+                          type="number"
+                          min="1"
+                          value={form.recurringEndCount || 10}
+                          onChange={(e) =>
+                            uf("recurringEndCount", Math.max(1, parseInt(e.target.value) || 1))
+                          }
+                          className="w-16 px-2 py-1.5 rounded-xl bg-secondary text-foreground text-sm outline-none text-center"
+                        />
                         <span className="text-xs text-muted-foreground">times</span>
                         {(form.recurringCompletedCount || 0) > 0 && (
-                          <span className="text-[10px] text-primary ml-auto">({form.recurringCompletedCount} done)</span>
+                          <span className="text-[10px] text-primary ml-auto">
+                            ({form.recurringCompletedCount} done)
+                          </span>
                         )}
                       </div>
                     )}
-                    {(form.recurringEndType || 'never') === 'never' && (
-                      <p className="text-[10px] text-muted-foreground/60 mt-1">Perfect for birthdays, anniversaries, recurring meetings</p>
+                    {(form.recurringEndType || "never") === "never" && (
+                      <p className="text-[10px] text-muted-foreground/60 mt-1">
+                        Perfect for birthdays, anniversaries, recurring meetings
+                      </p>
                     )}
                   </div>
                 )}
@@ -345,15 +596,25 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
                 {/* Existing reminders */}
                 <div className="space-y-1.5 mb-2">
                   {(form.reminders || []).map((r, i) => (
-                    <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary text-sm text-foreground">
+                    <div
+                      key={i}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary text-sm text-foreground"
+                    >
                       <Bell size={11} className="text-primary/70 shrink-0" />
                       <span className="flex-1">{getReminderLabel(r)}</span>
-                      <button type="button" onClick={() => {
-                        const next = [...(form.reminders || [])];
-                        next.splice(i, 1);
-                        uf("reminders", next);
-                        uf("remindersFired", (form.remindersFired || []).filter(f => f !== r));
-                      }} className="text-muted-foreground hover:text-destructive transition-colors">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = [...(form.reminders || [])];
+                          next.splice(i, 1);
+                          uf("reminders", next);
+                          uf(
+                            "remindersFired",
+                            (form.remindersFired || []).filter((f) => f !== r),
+                          );
+                        }}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                      >
                         <X size={12} />
                       </button>
                     </div>
@@ -362,39 +623,53 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
                 {/* Quick-add preset chips — like Google Calendar */}
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {[
-                    { key: 'at-time', label: 'At time' },
-                    { key: '5min', label: '5 min' },
-                    { key: '15min', label: '15 min' },
-                    { key: '30min', label: '30 min' },
-                    { key: '1hr', label: '1 hour' },
-                    { key: '2hr', label: '2 hours' },
-                    { key: '1day', label: '1 day' },
-                    { key: 'custom:2880', label: '2 days' },
-                    { key: 'custom:4320', label: '3 days' },
-                    { key: 'custom:10080', label: '1 week' },
-                  ].filter(p => !(form.reminders || []).includes(p.key)).map(preset => (
-                    <button key={preset.key} type="button" onClick={async () => {
-                      uf("reminders", [...(form.reminders || []), preset.key]);
-                      uf("remindersFired", []);
-                      const granted = await requestNotificationPermission();
-                      if (!granted) toast.info("Enable browser notifications for push alerts");
-                    }}
-                      className="px-2.5 py-1 rounded-lg bg-secondary text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-primary/10 hover:text-primary transition-colors touch-manipulation">
-                      + {preset.label}
-                    </button>
-                  ))}
+                    { key: "at-time", label: "At time" },
+                    { key: "5min", label: "5 min" },
+                    { key: "15min", label: "15 min" },
+                    { key: "30min", label: "30 min" },
+                    { key: "1hr", label: "1 hour" },
+                    { key: "2hr", label: "2 hours" },
+                    { key: "1day", label: "1 day" },
+                    { key: "custom:2880", label: "2 days" },
+                    { key: "custom:4320", label: "3 days" },
+                    { key: "custom:10080", label: "1 week" },
+                  ]
+                    .filter((p) => !(form.reminders || []).includes(p.key))
+                    .map((preset) => (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        onClick={async () => {
+                          uf("reminders", [...(form.reminders || []), preset.key]);
+                          uf("remindersFired", []);
+                          const granted = await requestNotificationPermission();
+                          if (!granted) toast.info("Enable browser notifications for push alerts");
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-secondary text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-primary/10 hover:text-primary transition-colors touch-manipulation"
+                      >
+                        + {preset.label}
+                      </button>
+                    ))}
                 </div>
                 {/* Custom minutes input */}
                 <div className="flex gap-2 items-center">
                   <input
-                    type="number" min="1" placeholder="Custom minutes..."
+                    type="number"
+                    min="1"
+                    placeholder="Custom minutes..."
                     className="flex-1 px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
                     onKeyDown={async (e) => {
-                      if (e.key !== 'Enter') return;
+                      if (e.key !== "Enter") return;
                       const mins = parseInt(e.currentTarget.value, 10);
-                      if (isNaN(mins) || mins < 1) { toast.error("Enter a valid number"); return; }
+                      if (isNaN(mins) || mins < 1) {
+                        toast.error("Enter a valid number");
+                        return;
+                      }
                       const key = `custom:${mins}`;
-                      if ((form.reminders || []).includes(key)) { toast.info("Already added"); return; }
+                      if ((form.reminders || []).includes(key)) {
+                        toast.info("Already added");
+                        return;
+                      }
                       uf("reminders", [...(form.reminders || []), key]);
                       uf("remindersFired", []);
                       e.currentTarget.value = "";
@@ -402,59 +677,111 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
                       if (!granted) toast.info("Enable browser notifications for push alerts");
                     }}
                   />
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">min before</span>
+                  <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                    min before
+                  </span>
                 </div>
               </div>
 
               {/* Linked project */}
               <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">Linked Project</label>
-                <input value={form.linkedProject} onChange={e => uf("linkedProject", e.target.value)}
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-1.5">
+                  Linked Project
+                </label>
+                <input
+                  value={form.linkedProject}
+                  onChange={(e) => uf("linkedProject", e.target.value)}
                   placeholder="Project name..."
-                  className="w-full px-3 py-2.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50" />
+                  className="w-full px-3 py-2.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+                />
               </div>
 
               {/* Subtasks */}
               <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
-                  Subtasks {form.subtasks.length > 0 && <span className="text-primary">({form.subtasks.filter((s: Subtask) => s.done).length}/{form.subtasks.length})</span>}
+                  Subtasks{" "}
+                  {form.subtasks.length > 0 && (
+                    <span className="text-primary">
+                      ({form.subtasks.filter((s: Subtask) => s.done).length}/{form.subtasks.length})
+                    </span>
+                  )}
                 </label>
                 <div className="space-y-1.5 mb-2">
                   {form.subtasks.map((sub: Subtask) => (
-                    <div key={sub.id} className="flex items-start gap-2 px-3 py-2 rounded-xl bg-secondary/50 group">
-                      <button type="button" onClick={() => toggleSub(sub.id)}
-                        className={`shrink-0 mt-0.5 transition-colors ${sub.done ? "text-emerald-500" : "text-muted-foreground hover:text-primary"}`}>
+                    <div
+                      key={sub.id}
+                      className="flex items-start gap-2 px-3 py-2 rounded-xl bg-secondary/50 group"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleSub(sub.id)}
+                        className={`shrink-0 mt-0.5 transition-colors ${sub.done ? "text-emerald-500" : "text-muted-foreground hover:text-primary"}`}
+                      >
                         {sub.done ? <CheckCircle2 size={14} /> : <Circle size={14} />}
                       </button>
                       <div className="flex-1 min-w-0">
-                        <span className={`text-sm block ${sub.done ? "line-through text-muted-foreground" : "text-foreground"}`}>{sub.title}</span>
+                        <span
+                          className={`text-sm block ${sub.done ? "line-through text-muted-foreground" : "text-foreground"}`}
+                        >
+                          {sub.title}
+                        </span>
                         {/* Subtask date/time — inline, minimal */}
                         <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <input type="date" value={sub.dueDate || ""} onChange={e => updateSub(sub.id, { dueDate: e.target.value })}
+                          <input
+                            type="date"
+                            value={sub.dueDate || ""}
+                            onChange={(e) => updateSub(sub.id, { dueDate: e.target.value })}
                             className="px-2 py-0.5 rounded-lg bg-card text-[10px] text-muted-foreground outline-none focus:ring-1 focus:ring-primary/30 w-[120px]"
-                            title="Subtask date" />
-                          <input type="time" value={sub.dueTime || ""} onChange={e => updateSub(sub.id, { dueTime: e.target.value })}
+                            title="Subtask date"
+                          />
+                          <input
+                            type="time"
+                            value={sub.dueTime || ""}
+                            onChange={(e) => updateSub(sub.id, { dueTime: e.target.value })}
                             className="px-2 py-0.5 rounded-lg bg-card text-[10px] text-muted-foreground outline-none focus:ring-1 focus:ring-primary/30 w-[85px]"
-                            title="Subtask time" />
+                            title="Subtask time"
+                          />
                           {(sub.dueDate || sub.dueTime) && (
-                            <button type="button" onClick={() => updateSub(sub.id, { dueDate: undefined, dueTime: undefined })}
-                              className="text-muted-foreground/50 hover:text-destructive text-[9px]">clear</button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateSub(sub.id, { dueDate: undefined, dueTime: undefined })
+                              }
+                              className="text-muted-foreground/50 hover:text-destructive text-[9px]"
+                            >
+                              clear
+                            </button>
                           )}
                         </div>
                       </div>
-                      <button type="button" onClick={() => removeSub(sub.id)}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 mt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => removeSub(sub.id)}
+                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 mt-0.5"
+                      >
                         <X size={11} />
                       </button>
                     </div>
                   ))}
                 </div>
                 <div className="flex items-center gap-2">
-                  <input value={newSub} onChange={e => setNewSub(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addSub(); } }}
+                  <input
+                    value={newSub}
+                    onChange={(e) => setNewSub(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addSub();
+                      }
+                    }}
                     placeholder="Add subtask... (Enter to add)"
-                    className="flex-1 px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50" />
-                  <button type="button" onClick={addSub}
-                    className="px-3 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium">
+                    className="flex-1 px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
+                  />
+                  <button
+                    type="button"
+                    onClick={addSub}
+                    className="px-3 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium"
+                  >
                     <Plus size={14} />
                   </button>
                 </div>
@@ -463,12 +790,20 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
 
             {/* Footer */}
             <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-4 border-t border-border/40 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
-              <button onClick={onClose} className="px-4 py-2.5 sm:py-2 rounded-xl text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors touch-manipulation">
+              <button
+                onClick={onClose}
+                className="px-4 py-2.5 sm:py-2 rounded-xl text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors touch-manipulation"
+              >
                 Cancel
               </button>
-              <button onClick={save}
+              <button
+                onClick={save}
                 className="px-5 py-2.5 sm:py-2 rounded-xl text-sm font-bold text-white shadow-lg transition-opacity hover:opacity-90 touch-manipulation"
-                style={{ background: `linear-gradient(135deg, ${pr.color}, ${pr.color}cc)`, boxShadow: `0 4px 15px ${pr.color}40` }}>
+                style={{
+                  background: `linear-gradient(135deg, ${pr.color}, ${pr.color}cc)`,
+                  boxShadow: `0 4px 15px ${pr.color}40`,
+                }}
+              >
                 {task ? "Save Changes" : "Create Task"}
               </button>
             </div>
@@ -482,8 +817,15 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
 // ─── Kanban Card ──────────────────────────────────────────────────────────────
 
 const KanbanCard = memo(function KanbanCard({
-  task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub,
-  isDragging, onDragStart, onDragEnd,
+  task,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onToggle,
+  onToggleSub,
+  isDragging,
+  onDragStart,
+  onDragEnd,
 }: {
   task: Task;
   onEdit: () => void;
@@ -498,7 +840,7 @@ const KanbanCard = memo(function KanbanCard({
   const pr = getPriority(task.priority);
   const overdue = isOverdue(task);
   const todayTask = isToday(task);
-  const doneSubs = task.subtasks.filter(s => s.done).length;
+  const doneSubs = task.subtasks.filter((s) => s.done).length;
   const subPct = task.subtasks.length ? (doneSubs / task.subtasks.length) * 100 : 0;
   const [expanded, setExpanded] = useState(false);
 
@@ -515,39 +857,61 @@ const KanbanCard = memo(function KanbanCard({
         ${isDragging ? "opacity-40" : ""}
         shadow-lg hover:shadow-xl hover:border-primary/30 hover:-translate-y-0.5
       `}
-      style={{ borderLeft: `3px solid ${pr.color}` }}>
-
-
-
+      style={{ borderLeft: `3px solid ${pr.color}` }}
+    >
       {/* Card header */}
       <div className="p-3.5 pb-2">
         <div className="flex items-start gap-2">
-          <button onClick={e => { e.stopPropagation(); onToggle(); }}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle();
+            }}
             className="mt-0.5 shrink-0 transition-colors hover:scale-110"
-            style={{ color: task.status === "done" ? "#10b981" : "#6b7280" }}>
+            style={{ color: task.status === "done" ? "#10b981" : "#6b7280" }}
+          >
             {task.status === "done" ? <CheckCircle2 size={16} /> : <Circle size={16} />}
           </button>
           <div className="flex-1 min-w-0">
-            <p className={`text-sm font-semibold leading-snug ${task.status === "done" ? "line-through text-muted-foreground" : "text-card-foreground"}`}>
+            <p
+              className={`text-sm font-semibold leading-snug ${task.status === "done" ? "line-through text-muted-foreground" : "text-card-foreground"}`}
+            >
               {task.title}
             </p>
             {task.description && (
-              <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{task.description}</p>
+              <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">
+                {task.description}
+              </p>
             )}
           </div>
           {/* Actions */}
           <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
-            <button onClick={e => { e.stopPropagation(); onDuplicate(); }}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDuplicate();
+              }}
               className="p-1.5 sm:p-1 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-colors touch-manipulation"
-              title="Duplicate">
+              title="Duplicate"
+            >
               <Copy size={12} />
             </button>
-            <button onClick={e => { e.stopPropagation(); onEdit(); }}
-              className="p-1.5 sm:p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit();
+              }}
+              className="p-1.5 sm:p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation"
+            >
               <Edit2 size={12} />
             </button>
-            <button onClick={e => { e.stopPropagation(); onDelete(); }}
-              className="p-1.5 sm:p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="p-1.5 sm:p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation"
+            >
               <Trash2 size={12} />
             </button>
           </div>
@@ -555,31 +919,54 @@ const KanbanCard = memo(function KanbanCard({
 
         {/* Tags row */}
         <div className="flex items-center flex-wrap gap-1.5 mt-2.5">
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${pr.bg}`}>{pr.label}</span>
-          {task.category && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-secondary text-muted-foreground font-medium">{task.category}</span>}
-          {task.linkedProject && <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 font-medium truncate max-w-[90px]">{task.linkedProject}</span>}
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${pr.bg}`}>
+            {pr.label}
+          </span>
+          {task.category && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-secondary text-muted-foreground font-medium">
+              {task.category}
+            </span>
+          )}
+          {task.linkedProject && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-500/10 text-purple-400 font-medium truncate max-w-[90px]">
+              {task.linkedProject}
+            </span>
+          )}
         </div>
 
         {/* Subtask progress */}
         {task.subtasks.length > 0 && (
           <div className="mt-2.5">
-            <button onClick={() => setExpanded(e => !e)}
-              className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
+            <button
+              onClick={() => setExpanded((e) => !e)}
+              className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full"
+            >
               <Layers size={10} />
-              <span>{doneSubs}/{task.subtasks.length} subtasks</span>
+              <span>
+                {doneSubs}/{task.subtasks.length} subtasks
+              </span>
               <div className="flex-1 bg-secondary rounded-full h-1 overflow-hidden ml-1">
-                <div className="h-full rounded-full transition-all duration-500" style={{ width: `${subPct}%`, background: pr.color }} />
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{ width: `${subPct}%`, background: pr.color }}
+                />
               </div>
-              <ChevronDown size={10} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+              <ChevronDown
+                size={10}
+                className={`transition-transform ${expanded ? "rotate-180" : ""}`}
+              />
             </button>
             <>
               {expanded && (
-                <div 
-                  className="overflow-hidden mt-1.5 space-y-1">
-                  {task.subtasks.map(sub => (
-                    <button key={sub.id} type="button" onClick={() => onToggleSub(sub.id)}
+                <div className="overflow-hidden mt-1.5 space-y-1">
+                  {task.subtasks.map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => onToggleSub(sub.id)}
                       className="flex items-center gap-1.5 text-[11px] w-full text-left hover:text-foreground transition-colors"
-                      style={{ color: sub.done ? "#10b981" : "#9ca3af" }}>
+                      style={{ color: sub.done ? "#10b981" : "#9ca3af" }}
+                    >
                       {sub.done ? <CheckCircle2 size={11} /> : <Circle size={11} />}
                       <span className={sub.done ? "line-through" : ""}>{sub.title}</span>
                     </button>
@@ -593,24 +980,38 @@ const KanbanCard = memo(function KanbanCard({
 
       {/* Footer */}
       <div className="flex items-center justify-between px-3.5 pb-3 pt-1 border-t border-border/20">
-        <div className={`flex items-center gap-1 text-[10px] font-semibold ${overdue ? "text-red-400" : todayTask ? "text-amber-400" : "text-muted-foreground"}`}>
+        <div
+          className={`flex items-center gap-1 text-[10px] font-semibold ${overdue ? "text-red-400" : todayTask ? "text-amber-400" : "text-muted-foreground"}`}
+        >
           <Calendar size={9} />
           {task.dueDate ? daysUntil(task.dueDate) : "No date"}
           {task.allDay === false && task.startTime && (
             <span className="ml-1 text-primary/70 font-medium">
               <Clock size={8} className="inline -mt-0.5 mr-0.5" />
-              {task.startTime}{task.endTime ? `–${task.endTime}` : ""}
+              {task.startTime}
+              {task.endTime ? `–${task.endTime}` : ""}
             </span>
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          {((task.reminders && task.reminders.length > 0) || (task.reminder && task.reminder !== 'none')) && (
-            <span title={(task.reminders || []).map(getReminderLabel).join(', ') || REMINDER_LABELS[task.reminder || 'none']}>
+          {((task.reminders && task.reminders.length > 0) ||
+            (task.reminder && task.reminder !== "none")) && (
+            <span
+              title={
+                (task.reminders || []).map(getReminderLabel).join(", ") ||
+                REMINDER_LABELS[task.reminder || "none"]
+              }
+            >
               <Bell size={10} className="text-primary/60" />
-              {(task.reminders?.length || 0) > 1 && <span className="text-[8px] text-primary/60 ml-0.5">{task.reminders!.length}</span>}
+              {(task.reminders?.length || 0) > 1 && (
+                <span className="text-[8px] text-primary/60 ml-0.5">{task.reminders!.length}</span>
+              )}
             </span>
           )}
-          <GripVertical size={12} className="text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors" />
+          <GripVertical
+            size={12}
+            className="text-muted-foreground/30 group-hover:text-muted-foreground/60 transition-colors"
+          />
         </div>
       </div>
     </div>
@@ -620,10 +1021,20 @@ const KanbanCard = memo(function KanbanCard({
 // ─── Kanban Column ────────────────────────────────────────────────────────────
 
 function KanbanColumn({
-  status, tasks, onEdit, onDelete, onDuplicate, onToggle, onToggleSub,
-  onAddNew, onDrop, draggingId, onCardDragStart, onCardDragEnd,
+  status,
+  tasks,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onToggle,
+  onToggleSub,
+  onAddNew,
+  onDrop,
+  draggingId,
+  onCardDragStart,
+  onCardDragEnd,
 }: {
-  status: typeof STATUSES[number];
+  status: (typeof STATUSES)[number];
   tasks: Task[];
   onEdit: (t: Task) => void;
   onDelete: (id: string) => void;
@@ -647,7 +1058,8 @@ function KanbanColumn({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
-    const taskId = e.dataTransfer.getData("taskId") || e.dataTransfer.getData("text/plain") || draggingId;
+    const taskId =
+      e.dataTransfer.getData("taskId") || e.dataTransfer.getData("text/plain") || draggingId;
     if (taskId) onDrop(taskId, status.id);
   };
 
@@ -658,10 +1070,12 @@ function KanbanColumn({
       onDragOver={handleDragOver}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
-      className={`flex-1 min-w-[240px] sm:min-w-[260px] max-w-[320px] flex flex-col rounded-2xl transition-all duration-200 snap-start ${dragOver ? "ring-2 ring-inset ring-primary/40 bg-primary/5" : ""}`}>
-
+      className={`flex-1 min-w-[240px] sm:min-w-[260px] max-w-[320px] flex flex-col rounded-2xl transition-all duration-200 snap-start ${dragOver ? "ring-2 ring-inset ring-primary/40 bg-primary/5" : ""}`}
+    >
       {/* Column header */}
-      <div className={`flex items-center justify-between px-4 py-3.5 rounded-t-2xl bg-gradient-to-r ${status.bg}`}>
+      <div
+        className={`flex items-center justify-between px-4 py-3.5 rounded-t-2xl bg-gradient-to-r ${status.bg}`}
+      >
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full" style={{ background: status.color }} />
           <span className="text-sm font-bold text-foreground">{status.label}</span>
@@ -669,16 +1083,20 @@ function KanbanColumn({
             {tasks.length}
           </span>
         </div>
-        <button onClick={onAddNew}
-          className="p-1 rounded-lg hover:bg-card/50 text-muted-foreground hover:text-foreground transition-colors">
+        <button
+          onClick={onAddNew}
+          className="p-1 rounded-lg hover:bg-card/50 text-muted-foreground hover:text-foreground transition-colors"
+        >
           <Plus size={14} />
         </button>
       </div>
 
       {/* Drop zone */}
-      <div className={`flex-1 p-2.5 space-y-2.5 overflow-y-auto min-h-[120px] rounded-b-2xl border border-t-0 transition-colors ${dragOver ? "border-primary/30 bg-primary/3" : "border-border/30 bg-secondary/20"}`}>
+      <div
+        className={`flex-1 p-2.5 space-y-2.5 overflow-y-auto min-h-[120px] rounded-b-2xl border border-t-0 transition-colors ${dragOver ? "border-primary/30 bg-primary/3" : "border-border/30 bg-secondary/20"}`}
+      >
         <>
-          {tasks.map(t => (
+          {tasks.map((t) => (
             <KanbanCard
               key={t.id}
               task={t}
@@ -699,7 +1117,9 @@ function KanbanColumn({
           ))}
         </>
         {tasks.length === 0 && (
-          <div className={`flex items-center justify-center h-20 rounded-xl border-2 border-dashed transition-colors ${dragOver ? "border-primary/40 text-primary" : "border-border/30 text-muted-foreground"}`}>
+          <div
+            className={`flex items-center justify-center h-20 rounded-xl border-2 border-dashed transition-colors ${dragOver ? "border-primary/40 text-primary" : "border-border/30 text-muted-foreground"}`}
+          >
             <p className="text-xs font-medium">{dragOver ? "Drop here" : "Empty"}</p>
           </div>
         )}
@@ -729,11 +1149,26 @@ function shiftISO(base: string, days: number) {
 }
 
 const ListRow = memo(function ListRow({
-  task, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, onRename, onSetDue, onSetPriority, onSetStatus,
-  index, bulkMode, selected, onToggleSelect,
+  task,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onToggle,
+  onToggleSub,
+  onRename,
+  onSetDue,
+  onSetPriority,
+  onSetStatus,
+  index,
+  bulkMode,
+  selected,
+  onToggleSelect,
 }: RowActions & {
-  task: Task; index: number;
-  bulkMode?: boolean; selected?: boolean; onToggleSelect?: () => void;
+  task: Task;
+  index: number;
+  bulkMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }) {
   const pr = getPriority(task.priority);
   const st = getStatus(task.status);
@@ -742,7 +1177,7 @@ const ListRow = memo(function ListRow({
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
   const [menu, setMenu] = useState<null | "priority" | "status" | "due">(null);
-  const doneSubs = task.subtasks.filter(s => s.done).length;
+  const doneSubs = task.subtasks.filter((s) => s.done).length;
 
   const commit = () => {
     setEditing(false);
@@ -760,28 +1195,36 @@ const ListRow = memo(function ListRow({
 
   return (
     <div>
-      <div className={`
+      <div
+        className={`
         rounded-2xl border group transition-all
         hover:border-primary/20 hover:bg-secondary/20 hover:shadow-md
         ${task.status === "done" ? "opacity-55" : ""}
         ${overdue ? "border-destructive/30 bg-destructive/5" : "border-border/30 bg-card/60"}
       `}
-        style={{ borderLeft: `3px solid ${pr.color}` }}>
-
+        style={{ borderLeft: `3px solid ${pr.color}` }}
+      >
         {/* Main row */}
         <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 sm:py-3.5">
           {/* Bulk select checkbox */}
           {bulkMode && (
-            <button onClick={onToggleSelect}
-              className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all touch-manipulation ${selected ? "bg-primary border-primary" : "border-border hover:border-primary/50"}`}>
+            <button
+              onClick={onToggleSelect}
+              className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all touch-manipulation ${selected ? "bg-primary border-primary" : "border-border hover:border-primary/50"}`}
+            >
               {selected && <CheckCircle2 size={12} className="text-primary-foreground" />}
             </button>
           )}
           {/* Toggle */}
-          <button onClick={onToggle}
+          <button
+            onClick={onToggle}
             title={task.status === "done" ? "Reopen" : "Mark done"}
             className="shrink-0 transition-all hover:scale-110 touch-manipulation p-1"
-            style={{ color: task.status === "done" ? "hsl(var(--success))" : "hsl(var(--muted-foreground))" }}>
+            style={{
+              color:
+                task.status === "done" ? "hsl(var(--success))" : "hsl(var(--muted-foreground))",
+            }}
+          >
             {task.status === "done" ? <CheckCircle2 size={18} /> : <Circle size={18} />}
           </button>
 
@@ -789,23 +1232,32 @@ const ListRow = memo(function ListRow({
           <div className="flex-1 min-w-0">
             {editing ? (
               <input
-                autoFocus value={draft}
-                onChange={e => setDraft(e.target.value)}
+                autoFocus
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
                 onBlur={commit}
-                onKeyDown={e => {
+                onKeyDown={(e) => {
                   if (e.key === "Enter") commit();
-                  if (e.key === "Escape") { setDraft(task.title); setEditing(false); }
+                  if (e.key === "Escape") {
+                    setDraft(task.title);
+                    setEditing(false);
+                  }
                 }}
                 className="w-full text-sm font-semibold bg-secondary/70 rounded-lg px-2 py-1 text-foreground outline-none ring-1 ring-primary/40"
               />
             ) : (
               <div className="flex items-center gap-2 mb-0.5">
                 <span
-                  onClick={() => { setDraft(task.title); setEditing(true); }}
+                  onClick={() => {
+                    setDraft(task.title);
+                    setEditing(true);
+                  }}
                   title="Click to rename · double-click for full editor"
                   onDoubleClick={onEdit}
-                  role="button" tabIndex={0}
-                  className={`text-sm font-semibold truncate cursor-text ${task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                  role="button"
+                  tabIndex={0}
+                  className={`text-sm font-semibold truncate cursor-text ${task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}
+                >
                   {task.title}
                 </span>
               </div>
@@ -813,53 +1265,93 @@ const ListRow = memo(function ListRow({
             {/* Inline meta / quick controls */}
             <div className="flex items-center gap-1.5 flex-wrap relative">
               {/* Priority quick menu */}
-              <button onClick={() => setMenu(m => m === "priority" ? null : "priority")}
-                className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${pr.bg} hover:ring-1 hover:ring-primary/30 touch-manipulation`}>
+              <button
+                onClick={() => setMenu((m) => (m === "priority" ? null : "priority"))}
+                className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold ${pr.bg} hover:ring-1 hover:ring-primary/30 touch-manipulation`}
+              >
                 {pr.label}
               </button>
               {/* Status quick menu */}
-              <button onClick={() => setMenu(m => m === "status" ? null : "status")}
+              <button
+                onClick={() => setMenu((m) => (m === "status" ? null : "status"))}
                 className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold hover:ring-1 hover:ring-primary/30 touch-manipulation"
-                style={{ background: st.color + "22", color: st.color }}>
+                style={{ background: st.color + "22", color: st.color }}
+              >
                 {st.label}
               </button>
               {/* Due quick menu */}
-              <button onClick={() => setMenu(m => m === "due" ? null : "due")}
-                className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold flex items-center gap-1 bg-secondary/70 hover:ring-1 hover:ring-primary/30 touch-manipulation ${overdue ? "text-destructive" : isToday(task) ? "text-warning" : "text-muted-foreground"}`}>
+              <button
+                onClick={() => setMenu((m) => (m === "due" ? null : "due"))}
+                className={`text-[10px] px-1.5 py-0.5 rounded-md font-semibold flex items-center gap-1 bg-secondary/70 hover:ring-1 hover:ring-primary/30 touch-manipulation ${overdue ? "text-destructive" : isToday(task) ? "text-warning" : "text-muted-foreground"}`}
+              >
                 <Calendar size={9} />
                 {task.dueDate ? daysUntil(task.dueDate) : "No date"}
               </button>
-              {task.category && <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">· {task.category}</span>}
+              {task.category && (
+                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">
+                  · {task.category}
+                </span>
+              )}
               {task.linkedProject && (
-                <span className="text-[10px] text-primary/60 font-medium truncate max-w-[80px] hidden sm:inline">↳ {task.linkedProject}</span>
+                <span className="text-[10px] text-primary/60 font-medium truncate max-w-[80px] hidden sm:inline">
+                  ↳ {task.linkedProject}
+                </span>
               )}
 
               {menu && (
                 <div className="absolute z-30 top-full left-0 mt-1 p-1 rounded-xl bg-card border border-border/60 shadow-xl flex flex-wrap gap-1 max-w-[280px]">
-                  {menu === "priority" && PRIORITIES.map(p => (
-                    <button key={p.id} onClick={() => { onSetPriority(p.id as Task["priority"]); setMenu(null); }}
-                      className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${p.bg} ${task.priority === p.id ? "ring-1 ring-primary/50" : ""}`}>
-                      {p.label}
-                    </button>
-                  ))}
-                  {menu === "status" && STATUSES.map(s => (
-                    <button key={s.id} onClick={() => { onSetStatus(s.id as StatusId); setMenu(null); }}
-                      className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${task.status === s.id ? "ring-1 ring-primary/50" : ""}`}
-                      style={{ background: s.color + "22", color: s.color }}>
-                      {s.label}
-                    </button>
-                  ))}
+                  {menu === "priority" &&
+                    PRIORITIES.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={() => {
+                          onSetPriority(p.id as Task["priority"]);
+                          setMenu(null);
+                        }}
+                        className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${p.bg} ${task.priority === p.id ? "ring-1 ring-primary/50" : ""}`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  {menu === "status" &&
+                    STATUSES.map((s) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          onSetStatus(s.id as StatusId);
+                          setMenu(null);
+                        }}
+                        className={`text-[11px] px-2 py-1 rounded-lg font-semibold ${task.status === s.id ? "ring-1 ring-primary/50" : ""}`}
+                        style={{ background: s.color + "22", color: s.color }}
+                      >
+                        {s.label}
+                      </button>
+                    ))}
                   {menu === "due" && (
                     <>
-                      {quickDates.map(q => (
-                        <button key={q.label} onClick={() => { onSetDue(q.date); setMenu(null); }}
-                          className="text-[11px] px-2 py-1 rounded-lg font-semibold bg-secondary text-foreground hover:bg-primary/15 hover:text-primary">
+                      {quickDates.map((q) => (
+                        <button
+                          key={q.label}
+                          onClick={() => {
+                            onSetDue(q.date);
+                            setMenu(null);
+                          }}
+                          className="text-[11px] px-2 py-1 rounded-lg font-semibold bg-secondary text-foreground hover:bg-primary/15 hover:text-primary"
+                        >
                           {q.label}
                         </button>
                       ))}
-                      <input type="date" value={task.dueDate || ""}
-                        onChange={e => { if (e.target.value) { onSetDue(e.target.value); setMenu(null); } }}
-                        className="text-[11px] px-2 py-1 rounded-lg bg-secondary text-foreground outline-none" />
+                      <input
+                        type="date"
+                        value={task.dueDate || ""}
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            onSetDue(e.target.value);
+                            setMenu(null);
+                          }
+                        }}
+                        className="text-[11px] px-2 py-1 rounded-lg bg-secondary text-foreground outline-none"
+                      />
                     </>
                   )}
                 </div>
@@ -869,35 +1361,67 @@ const ListRow = memo(function ListRow({
 
           {/* Subtasks mini */}
           {task.subtasks.length > 0 && (
-            <button onClick={() => setExpanded(e => !e)}
-              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0 bg-secondary px-2 py-1 rounded-lg touch-manipulation">
+            <button
+              onClick={() => setExpanded((e) => !e)}
+              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0 bg-secondary px-2 py-1 rounded-lg touch-manipulation"
+            >
               <CheckSquare size={10} />
               {doneSubs}/{task.subtasks.length}
-              <ChevronDown size={9} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+              <ChevronDown
+                size={9}
+                className={`transition-transform ${expanded ? "rotate-180" : ""}`}
+              />
             </button>
           )}
 
           {/* Snooze shortcuts — desktop */}
           {task.status !== "done" && (
             <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => onSetDue(today)} title="Due today"
-                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold">Today</button>
-              <button onClick={() => onSetDue(shiftISO(task.dueDate || today, 1))} title="Push 1 day"
-                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold">+1d</button>
-              <button onClick={() => onSetDue(shiftISO(task.dueDate || today, 7))} title="Push 1 week"
-                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold">+1w</button>
+              <button
+                onClick={() => onSetDue(today)}
+                title="Due today"
+                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold"
+              >
+                Today
+              </button>
+              <button
+                onClick={() => onSetDue(shiftISO(task.dueDate || today, 1))}
+                title="Push 1 day"
+                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold"
+              >
+                +1d
+              </button>
+              <button
+                onClick={() => onSetDue(shiftISO(task.dueDate || today, 7))}
+                title="Push 1 week"
+                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold"
+              >
+                +1w
+              </button>
             </div>
           )}
 
           {/* Actions — always visible on mobile */}
           <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
-            <button onClick={onDuplicate} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation" title="Duplicate">
+            <button
+              onClick={onDuplicate}
+              className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation"
+              title="Duplicate"
+            >
               <Copy size={13} />
             </button>
-            <button onClick={onEdit} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation" title="Open editor">
+            <button
+              onClick={onEdit}
+              className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation"
+              title="Open editor"
+            >
               <Edit2 size={13} />
             </button>
-            <button onClick={onDelete} className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation" title="Delete">
+            <button
+              onClick={onDelete}
+              className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation"
+              title="Delete"
+            >
               <Trash2 size={13} />
             </button>
           </div>
@@ -906,16 +1430,27 @@ const ListRow = memo(function ListRow({
         {/* Subtasks expanded */}
         <>
           {expanded && task.subtasks.length > 0 && (
-            <div 
-              className="overflow-hidden border-t border-border/20 mx-3 sm:mx-4">
+            <div className="overflow-hidden border-t border-border/20 mx-3 sm:mx-4">
               <div className="py-2 space-y-1">
-                {task.subtasks.map(sub => (
-                  <button key={sub.id} type="button" onClick={() => onToggleSub(sub.id)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary/40 w-full text-left group/sub hover:bg-secondary/70 transition-colors touch-manipulation">
-                    <span style={{ color: sub.done ? "hsl(var(--success))" : "hsl(var(--muted-foreground))" }}>
+                {task.subtasks.map((sub) => (
+                  <button
+                    key={sub.id}
+                    type="button"
+                    onClick={() => onToggleSub(sub.id)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-secondary/40 w-full text-left group/sub hover:bg-secondary/70 transition-colors touch-manipulation"
+                  >
+                    <span
+                      style={{
+                        color: sub.done ? "hsl(var(--success))" : "hsl(var(--muted-foreground))",
+                      }}
+                    >
                       {sub.done ? <CheckCircle2 size={13} /> : <Circle size={13} />}
                     </span>
-                    <span className={`text-xs transition-colors ${sub.done ? "line-through text-muted-foreground" : "text-foreground group-hover/sub:text-foreground"}`}>{sub.title}</span>
+                    <span
+                      className={`text-xs transition-colors ${sub.done ? "line-through text-muted-foreground" : "text-foreground group-hover/sub:text-foreground"}`}
+                    >
+                      {sub.title}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -943,8 +1478,19 @@ export interface TaskListHandlers {
 }
 
 function VirtualizedList({
-  tasks, bulkMode, selectedIds, onEdit, onDelete, onDuplicate, onToggle, onToggleSub, onToggleSelect,
-  onRename, onSetDue, onSetPriority, onSetStatus,
+  tasks,
+  bulkMode,
+  selectedIds,
+  onEdit,
+  onDelete,
+  onDuplicate,
+  onToggle,
+  onToggleSub,
+  onToggleSelect,
+  onRename,
+  onSetDue,
+  onSetPriority,
+  onSetStatus,
 }: TaskListHandlers & {
   tasks: Task[];
   bulkMode: boolean;
@@ -991,16 +1537,27 @@ function VirtualizedList({
   const items = virtualizer.getVirtualItems();
 
   return (
-    <div ref={parentRef} className="overflow-auto" style={{ maxHeight: 'calc(100vh - 280px)', contain: 'strict' }}>
-      <div style={{ height: virtualizer.getTotalSize(), width: '100%', position: 'relative' }}>
-        {items.map(v => {
+    <div
+      ref={parentRef}
+      className="overflow-auto"
+      style={{ maxHeight: "calc(100vh - 280px)", contain: "strict" }}
+    >
+      <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
+        {items.map((v) => {
           const task = tasks[v.index];
           return (
             <div
               key={task.id}
               data-index={v.index}
               ref={virtualizer.measureElement}
-              style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${v.start}px)`, paddingBottom: 6 }}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                width: "100%",
+                transform: `translateY(${v.start}px)`,
+                paddingBottom: 6,
+              }}
             >
               <ListRow {...rowProps(task, v.index)} />
             </div>
@@ -1013,7 +1570,6 @@ function VirtualizedList({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
-
 export default function TasksPage() {
   const tasks = useTasks();
   const addItem = useAddItem();
@@ -1021,29 +1577,39 @@ export default function TasksPage() {
   const deleteItem = useDeleteItem();
   const duplicateItem = useDuplicateItem();
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const [view, setView] = useState<"kanban" | "list">(isMobile ? "list" : "kanban");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
-  const [modal, setModal] = useState<{ open: boolean; task?: Task | null; defaultStatus?: StatusId }>({ open: false });
+  const [modal, setModal] = useState<{
+    open: boolean;
+    task?: Task | null;
+    defaultStatus?: StatusId;
+  }>({ open: false });
   const [quickAdd, setQuickAdd] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"priority" | "dueDate" | "created">("priority");
   const [grouped, setGrouped] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["done"]));
-  const [preset, setPreset] = useState<"open" | "all" | "overdue" | "today" | "week" | "critical">("open");
+  const [preset, setPreset] = useState<"open" | "all" | "overdue" | "today" | "week" | "critical">(
+    "open",
+  );
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const toggleSelect = useCallback((id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
   }, []);
-  const exitBulk = useCallback(() => { setBulkMode(false); setSelectedIds(new Set()); }, []);
+  const exitBulk = useCallback(() => {
+    setBulkMode(false);
+    setSelectedIds(new Set());
+  }, []);
 
   // ── Phase/Urgent normalization (dry-run preview, then apply) ───────────────
   const didNormalizeRef = useRef(false);
@@ -1061,20 +1627,21 @@ export default function TasksPage() {
     };
 
     const candidates = tasks
-      .map(t => ({ task: t, nextPriority: matchPriority(t.title) }))
-      .filter(x => x.nextPriority !== null);
+      .map((t) => ({ task: t, nextPriority: matchPriority(t.title) }))
+      .filter((x) => x.nextPriority !== null);
 
     const toUpdate = candidates.filter(
-      ({ task, nextPriority }) => task.category !== "Business" || task.priority !== nextPriority
+      ({ task, nextPriority }) => task.category !== "Business" || task.priority !== nextPriority,
     );
 
     console.log(
       `[Phase normalize] DRY RUN — ${candidates.length} matching, ${toUpdate.length} need update.`,
       toUpdate.map(({ task, nextPriority }) => ({
-        id: task.id, title: task.title,
+        id: task.id,
+        title: task.title,
         from: { category: task.category, priority: task.priority },
         to: { category: "Business", priority: nextPriority },
-      }))
+      })),
     );
     toast.message("Phase normalize (dry run)", {
       description: `${candidates.length} match • ${toUpdate.length} would update`,
@@ -1095,26 +1662,36 @@ export default function TasksPage() {
   }, [tasks]);
 
   // ── Stats ────────────────────────────────────────────────────────────────────
-  const stats = useMemo(() => ({
-    total: tasks.length,
-    open: tasks.filter(t => t.status !== "done").length,
-    done: tasks.filter(t => t.status === "done").length,
-    overdue: tasks.filter(isOverdue).length,
-    todayTask: tasks.filter(isToday).length,
-    critical: tasks.filter(t => t.priority === "critical" && t.status !== "done").length,
-    blocked: tasks.filter(t => t.status === "blocked").length,
-    pct: tasks.length ? Math.round(tasks.filter(t => t.status === "done").length / tasks.length * 100) : 0,
-  }), [tasks]);
+  const stats = useMemo(
+    () => ({
+      total: tasks.length,
+      open: tasks.filter((t) => t.status !== "done").length,
+      done: tasks.filter((t) => t.status === "done").length,
+      overdue: tasks.filter(isOverdue).length,
+      todayTask: tasks.filter(isToday).length,
+      critical: tasks.filter((t) => t.priority === "critical" && t.status !== "done").length,
+      blocked: tasks.filter((t) => t.status === "blocked").length,
+      pct: tasks.length
+        ? Math.round((tasks.filter((t) => t.status === "done").length / tasks.length) * 100)
+        : 0,
+    }),
+    [tasks],
+  );
 
   // ── Filtered + sorted ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const PORD: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     return tasks
-      .filter(t => t.archived !== true) // archived lives in Review, not here
-      .filter(t => filterStatus === "all" || t.status === filterStatus)
-      .filter(t => filterPriority === "all" || t.priority === filterPriority)
-      .filter(t => filterCategory === "all" || t.category === filterCategory)
-      .filter(t => !search || t.title.toLowerCase().includes(search.toLowerCase()) || t.description?.toLowerCase().includes(search.toLowerCase()))
+      .filter((t) => t.archived !== true) // archived lives in Review, not here
+      .filter((t) => filterStatus === "all" || t.status === filterStatus)
+      .filter((t) => filterPriority === "all" || t.priority === filterPriority)
+      .filter((t) => filterCategory === "all" || t.category === filterCategory)
+      .filter(
+        (t) =>
+          !search ||
+          t.title.toLowerCase().includes(search.toLowerCase()) ||
+          t.description?.toLowerCase().includes(search.toLowerCase()),
+      )
       .sort((a, b) => {
         if (sortBy === "priority") {
           if (a.status === "done" && b.status !== "done") return 1;
@@ -1129,57 +1706,72 @@ export default function TasksPage() {
   // Quick presets only shape the list view (kanban keeps all columns)
   const listTasks = useMemo(() => {
     const weekEnd = shiftISO(today, 7);
-    return filtered.filter(t => {
+    return filtered.filter((t) => {
       switch (preset) {
-        case "all": return true;
-        case "open": return t.status !== "done";
-        case "overdue": return t.status !== "done" && !!t.dueDate && t.dueDate < today;
-        case "today": return t.status !== "done" && (t.dueDate === today || (!!t.dueDate && t.dueDate < today));
-        case "week": return t.status !== "done" && !!t.dueDate && t.dueDate <= weekEnd;
-        case "critical": return t.status !== "done" && (t.priority === "critical" || t.priority === "high");
-        default: return true;
+        case "all":
+          return true;
+        case "open":
+          return t.status !== "done";
+        case "overdue":
+          return t.status !== "done" && !!t.dueDate && t.dueDate < today;
+        case "today":
+          return t.status !== "done" && (t.dueDate === today || (!!t.dueDate && t.dueDate < today));
+        case "week":
+          return t.status !== "done" && !!t.dueDate && t.dueDate <= weekEnd;
+        case "critical":
+          return t.status !== "done" && (t.priority === "critical" || t.priority === "high");
+        default:
+          return true;
       }
     });
   }, [filtered, preset]);
 
   const tasksByStatus = useMemo(() => {
     const map: Record<string, Task[]> = { todo: [], "in-progress": [], blocked: [], done: [] };
-    filtered.forEach(t => { (map[t.status] = map[t.status] || []).push(t); });
+    filtered.forEach((t) => {
+      (map[t.status] = map[t.status] || []).push(t);
+    });
     return map;
   }, [filtered]);
 
   // ── CRUD ─────────────────────────────────────────────────────────────────────
-  const handleSave = useCallback(async (t: Omit<Task, "id"> & { id?: string }) => {
-    if (t.id) {
-      const { id, ...rest } = t;
-      await updateItem<Task>("tasks", id, rest);
-      toast.success("Task updated ✓");
-    } else {
-      const newId = await addItem<Task>("tasks", { ...t, createdAt: today } as Omit<Task, "id">);
-      if (newId) toast.success("Task created ✓");
-      else toast.error("Duplicate task — already exists");
-    }
-  }, [addItem, updateItem]);
+  const handleSave = useCallback(
+    async (t: Omit<Task, "id"> & { id?: string }) => {
+      if (t.id) {
+        const { id, ...rest } = t;
+        await updateItem<Task>("tasks", id, rest);
+        toast.success("Task updated ✓");
+      } else {
+        const newId = await addItem<Task>("tasks", { ...t, createdAt: today } as Omit<Task, "id">);
+        if (newId) toast.success("Task created ✓");
+        else toast.error("Duplicate task — already exists");
+      }
+    },
+    [addItem, updateItem],
+  );
 
   const cd = useConfirmDialog();
-  const handleDelete = useCallback(async (id: string) => {
-    cd.confirm({
-      title: "Delete Task",
-      description: "This task and its subtasks will be permanently removed.",
-      onConfirm: async () => {
-        const task = tasks.find((item) => item.id === id);
-        if (task?.gcalEventId) {
-          try {
-            await deleteGCalEvent(task.gcalEventId);
-          } catch (error) {
-            console.warn("Failed to delete Google Calendar mirror event", error);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      cd.confirm({
+        title: "Delete Task",
+        description: "This task and its subtasks will be permanently removed.",
+        onConfirm: async () => {
+          const task = tasks.find((item) => item.id === id);
+          if (task?.gcalEventId) {
+            try {
+              await deleteGCalEvent(task.gcalEventId);
+            } catch (error) {
+              console.warn("Failed to delete Google Calendar mirror event", error);
+            }
           }
-        }
-        await deleteItem("tasks", id);
-        toast.success("Task deleted");
-      }
-    });
-  }, [deleteItem, cd, tasks]);
+          await deleteItem("tasks", id);
+          toast.success("Task deleted");
+        },
+      });
+    },
+    [deleteItem, cd, tasks],
+  );
 
   const handleBulkDelete = useCallback(() => {
     const ids = Array.from(selectedIds);
@@ -1205,88 +1797,123 @@ export default function TasksPage() {
     });
   }, [selectedIds, cd, deleteItem, exitBulk, tasks]);
 
-  const handleDuplicate = useCallback(async (id: string) => {
-    const newId = await duplicateItem("tasks", id, { status: "todo", completedAt: undefined });
-    if (newId) toast.success("Task duplicated ✓");
-  }, [duplicateItem]);
+  const handleDuplicate = useCallback(
+    async (id: string) => {
+      const newId = await duplicateItem("tasks", id, { status: "todo", completedAt: undefined });
+      if (newId) toast.success("Task duplicated ✓");
+    },
+    [duplicateItem],
+  );
 
-  const handleToggle = useCallback(async (id: string) => {
-    const t = tasks.find(x => x.id === id);
-    if (!t) return;
-    const next = t.status === "done" ? "todo" : "done";
-    await updateItem<Task>("tasks", id, { status: next, completedAt: next === "done" ? today : undefined });
-    toast.success(next === "done" ? "✅ Done!" : "Reopened");
-  }, [tasks, updateItem]);
+  const handleToggle = useCallback(
+    async (id: string) => {
+      const t = tasks.find((x) => x.id === id);
+      if (!t) return;
+      const next = t.status === "done" ? "todo" : "done";
+      await updateItem<Task>("tasks", id, {
+        status: next,
+        completedAt: next === "done" ? today : undefined,
+      });
+      toast.success(next === "done" ? "✅ Done!" : "Reopened");
+    },
+    [tasks, updateItem],
+  );
 
-  const handleToggleSub = useCallback(async (taskId: string, subId: string) => {
-    const t = tasks.find(x => x.id === taskId);
-    if (!t) return;
-    const subtasks = t.subtasks.map(s => s.id === subId ? { ...s, done: !s.done } : s);
-    await updateItem<Task>("tasks", taskId, { subtasks });
-  }, [tasks, updateItem]);
+  const handleToggleSub = useCallback(
+    async (taskId: string, subId: string) => {
+      const t = tasks.find((x) => x.id === taskId);
+      if (!t) return;
+      const subtasks = t.subtasks.map((s) => (s.id === subId ? { ...s, done: !s.done } : s));
+      await updateItem<Task>("tasks", taskId, { subtasks });
+    },
+    [tasks, updateItem],
+  );
 
-  const handleDrop = useCallback(async (taskId: string, newStatus: StatusId) => {
-    const t = tasks.find(x => x.id === taskId);
-    if (!t || t.status === newStatus) return;
-    await updateItem<Task>("tasks", taskId, {
-      status: newStatus,
-      completedAt: newStatus === "done" ? today : undefined,
-    });
-    setDraggingId(null);
-    const st = getStatus(newStatus);
-    toast.success(`Moved to ${st.label}`, { icon: "↪" });
-  }, [tasks, updateItem]);
+  const handleDrop = useCallback(
+    async (taskId: string, newStatus: StatusId) => {
+      const t = tasks.find((x) => x.id === taskId);
+      if (!t || t.status === newStatus) return;
+      await updateItem<Task>("tasks", taskId, {
+        status: newStatus,
+        completedAt: newStatus === "done" ? today : undefined,
+      });
+      setDraggingId(null);
+      const st = getStatus(newStatus);
+      toast.success(`Moved to ${st.label}`, { icon: "↪" });
+    },
+    [tasks, updateItem],
+  );
 
   const quickAddTask = useCallback(async () => {
     if (!quickAdd.trim()) return;
-    const newId = await addItem<Task>("tasks", { ...EMPTY, title: quickAdd.trim(), createdAt: today });
+    const newId = await addItem<Task>("tasks", {
+      ...EMPTY,
+      title: quickAdd.trim(),
+      createdAt: today,
+    });
     setQuickAdd("");
     if (newId) toast.success("Task added ✓");
     else toast.error("Duplicate task — already exists");
   }, [quickAdd, addItem]);
 
   // ── Inline single-task edits (no modal needed) ────────────────────────────
-  const handleRename = useCallback(async (id: string, title: string) => {
-    await updateItem<Task>("tasks", id, { title });
-  }, [updateItem]);
+  const handleRename = useCallback(
+    async (id: string, title: string) => {
+      await updateItem<Task>("tasks", id, { title });
+    },
+    [updateItem],
+  );
 
-  const handleSetDue = useCallback(async (id: string, date: string) => {
-    await updateItem<Task>("tasks", id, { dueDate: date });
-    toast.success(`Due ${date === today ? "today" : date}`);
-  }, [updateItem]);
+  const handleSetDue = useCallback(
+    async (id: string, date: string) => {
+      await updateItem<Task>("tasks", id, { dueDate: date });
+      toast.success(`Due ${date === today ? "today" : date}`);
+    },
+    [updateItem],
+  );
 
-  const handleSetPriority = useCallback(async (id: string, priority: Task["priority"]) => {
-    await updateItem<Task>("tasks", id, { priority });
-  }, [updateItem]);
+  const handleSetPriority = useCallback(
+    async (id: string, priority: Task["priority"]) => {
+      await updateItem<Task>("tasks", id, { priority });
+    },
+    [updateItem],
+  );
 
-  const handleSetStatus = useCallback(async (id: string, status: StatusId) => {
-    await updateItem<Task>("tasks", id, {
-      status,
-      completedAt: status === "done" ? today : undefined,
-    });
-  }, [updateItem]);
+  const handleSetStatus = useCallback(
+    async (id: string, status: StatusId) => {
+      await updateItem<Task>("tasks", id, {
+        status,
+        completedAt: status === "done" ? today : undefined,
+      });
+    },
+    [updateItem],
+  );
 
   // ── Bulk quick edits ───────────────────────────────────────────────────────
-  const bulkApply = useCallback(async (changes: Partial<Task>, label: string) => {
-    const ids = Array.from(selectedIds);
-    if (!ids.length) return;
-    for (const id of ids) await updateItem<Task>("tasks", id, changes);
-    toast.success(`${label} · ${ids.length} task${ids.length > 1 ? "s" : ""}`);
-    exitBulk();
-  }, [selectedIds, updateItem, exitBulk]);
+  const bulkApply = useCallback(
+    async (changes: Partial<Task>, label: string) => {
+      const ids = Array.from(selectedIds);
+      if (!ids.length) return;
+      for (const id of ids) await updateItem<Task>("tasks", id, changes);
+      toast.success(`${label} · ${ids.length} task${ids.length > 1 ? "s" : ""}`);
+      exitBulk();
+    },
+    [selectedIds, updateItem, exitBulk],
+  );
 
   const selectGroup = useCallback((groupTasks: Task[]) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const n = new Set(prev);
-      groupTasks.forEach(t => n.add(t.id));
+      groupTasks.forEach((t) => n.add(t.id));
       return n;
     });
   }, []);
 
   const toggleGroup = useCallback((id: string) => {
-    setCollapsedGroups(prev => {
+    setCollapsedGroups((prev) => {
       const n = new Set(prev);
-      if (n.has(id)) n.delete(id); else n.add(id);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
   }, []);
@@ -1295,29 +1922,57 @@ export default function TasksPage() {
   const groups = useMemo(() => {
     const weekEnd = shiftISO(today, 7);
     const defs: { id: string; label: string; tone: string; match: (t: Task) => boolean }[] = [
-      { id: "overdue", label: "Overdue", tone: "text-destructive", match: t => t.status !== "done" && !!t.dueDate && t.dueDate < today },
-      { id: "today", label: "Today", tone: "text-amber-400", match: t => t.status !== "done" && t.dueDate === today },
-      { id: "week", label: "Next 7 days", tone: "text-primary", match: t => t.status !== "done" && !!t.dueDate && t.dueDate > today && t.dueDate <= weekEnd },
-      { id: "later", label: "Later", tone: "text-muted-foreground", match: t => t.status !== "done" && !!t.dueDate && t.dueDate > weekEnd },
-      { id: "nodate", label: "No due date", tone: "text-muted-foreground", match: t => t.status !== "done" && !t.dueDate },
-      { id: "done", label: "Done", tone: "text-emerald-400", match: t => t.status === "done" },
+      {
+        id: "overdue",
+        label: "Overdue",
+        tone: "text-destructive",
+        match: (t) => t.status !== "done" && !!t.dueDate && t.dueDate < today,
+      },
+      {
+        id: "today",
+        label: "Today",
+        tone: "text-amber-400",
+        match: (t) => t.status !== "done" && t.dueDate === today,
+      },
+      {
+        id: "week",
+        label: "Next 7 days",
+        tone: "text-primary",
+        match: (t) =>
+          t.status !== "done" && !!t.dueDate && t.dueDate > today && t.dueDate <= weekEnd,
+      },
+      {
+        id: "later",
+        label: "Later",
+        tone: "text-muted-foreground",
+        match: (t) => t.status !== "done" && !!t.dueDate && t.dueDate > weekEnd,
+      },
+      {
+        id: "nodate",
+        label: "No due date",
+        tone: "text-muted-foreground",
+        match: (t) => t.status !== "done" && !t.dueDate,
+      },
+      { id: "done", label: "Done", tone: "text-emerald-400", match: (t) => t.status === "done" },
     ];
     return defs
-      .map(d => ({ ...d, tasks: collapsedGroups.has(d.id) ? [] : listTasks.filter(d.match), count: listTasks.filter(d.match).length }))
-      .filter(g => g.count > 0);
+      .map((d) => ({
+        ...d,
+        tasks: collapsedGroups.has(d.id) ? [] : listTasks.filter(d.match),
+        count: listTasks.filter(d.match).length,
+      }))
+      .filter((g) => g.count > 0);
   }, [listTasks, collapsedGroups]);
 
   const allCategories = useMemo(() => {
-    const cats = new Set(tasks.map(t => t.category).filter(Boolean));
+    const cats = new Set(tasks.map((t) => t.category).filter(Boolean));
     return Array.from(cats);
   }, [tasks]);
-
 
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-5">
-
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
@@ -1327,12 +1982,21 @@ export default function TasksPage() {
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
             {stats.open} open · {stats.done} done
-            {stats.overdue > 0 && <span className="text-red-400 font-semibold"> · ⚠ {stats.overdue} overdue</span>}
-            {stats.todayTask > 0 && <span className="text-amber-400 font-semibold"> · 🔥 {stats.todayTask} due today</span>}
+            {stats.overdue > 0 && (
+              <span className="text-red-400 font-semibold"> · ⚠ {stats.overdue} overdue</span>
+            )}
+            {stats.todayTask > 0 && (
+              <span className="text-amber-400 font-semibold">
+                {" "}
+                · 🔥 {stats.todayTask} due today
+              </span>
+            )}
           </p>
         </div>
-        <button onClick={() => setModal({ open: true, task: null })}
-          className="btn-primary flex items-center gap-1.5 text-sm shadow-lg shadow-primary/25">
+        <button
+          onClick={() => setModal({ open: true, task: null })}
+          className="btn-primary flex items-center gap-1.5 text-sm shadow-lg shadow-primary/25"
+        >
           <Plus size={15} /> New Task
         </button>
       </div>
@@ -1342,15 +2006,35 @@ export default function TasksPage() {
         {[
           { label: "Total", value: stats.total, color: "text-foreground", bg: "bg-secondary/60" },
           { label: "Open", value: stats.open, color: "text-indigo-400", bg: "bg-indigo-500/10" },
-          { label: "In Progress", value: tasksByStatus["in-progress"].length, color: "text-amber-400", bg: "bg-amber-500/10" },
+          {
+            label: "In Progress",
+            value: tasksByStatus["in-progress"].length,
+            color: "text-amber-400",
+            bg: "bg-amber-500/10",
+          },
           { label: "Blocked", value: stats.blocked, color: "text-red-400", bg: "bg-red-500/10" },
           { label: "Done", value: stats.done, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-          { label: "Overdue", value: stats.overdue, color: "text-red-400 font-bold", bg: "bg-red-500/15" },
-          { label: "Critical", value: stats.critical, color: "text-orange-400 font-bold", bg: "bg-orange-500/10" },
-        ].map(s => (
-          <div key={s.label} className={`${s.bg} rounded-xl p-2.5 text-center min-w-[72px] flex-shrink-0 sm:flex-shrink sm:min-w-0`}>
+          {
+            label: "Overdue",
+            value: stats.overdue,
+            color: "text-red-400 font-bold",
+            bg: "bg-red-500/15",
+          },
+          {
+            label: "Critical",
+            value: stats.critical,
+            color: "text-orange-400 font-bold",
+            bg: "bg-orange-500/10",
+          },
+        ].map((s) => (
+          <div
+            key={s.label}
+            className={`${s.bg} rounded-xl p-2.5 text-center min-w-[72px] flex-shrink-0 sm:flex-shrink sm:min-w-0`}
+          >
             <div className={`text-lg sm:text-xl font-extrabold ${s.color}`}>{s.value}</div>
-            <div className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">{s.label}</div>
+            <div className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">
+              {s.label}
+            </div>
           </div>
         ))}
       </div>
@@ -1358,23 +2042,28 @@ export default function TasksPage() {
       {/* ── Progress bar ── */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" 
-          />
+          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" />
         </div>
-        <span className="text-xs font-bold text-muted-foreground shrink-0">{stats.pct}% complete</span>
+        <span className="text-xs font-bold text-muted-foreground shrink-0">
+          {stats.pct}% complete
+        </span>
       </div>
 
       {/* ── Quick add ── */}
       <div className="card-elevated p-3 flex items-center gap-3 hover:shadow-lg transition-shadow">
         <Plus size={18} className="text-muted-foreground shrink-0" />
-        <input value={quickAdd} onChange={e => setQuickAdd(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && quickAddTask()}
+        <input
+          value={quickAdd}
+          onChange={(e) => setQuickAdd(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && quickAddTask()}
           placeholder="Quick add task... press Enter ↵"
-          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none" />
+          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
+        />
         {quickAdd && (
-          <button onClick={quickAddTask}
-            className="px-3 py-1 rounded-lg bg-primary/15 text-primary text-xs font-semibold hover:bg-primary/25 transition-colors">
+          <button
+            onClick={quickAddTask}
+            className="px-3 py-1 rounded-lg bg-primary/15 text-primary text-xs font-semibold hover:bg-primary/25 transition-colors"
+          >
             Add
           </button>
         )}
@@ -1386,20 +2075,34 @@ export default function TasksPage() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 flex-1 min-w-0">
             <Search size={13} className="text-muted-foreground shrink-0" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
               placeholder="Search tasks..."
-              className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none flex-1 min-w-0" />
-            {search && <button onClick={() => setSearch("")} className="text-muted-foreground hover:text-foreground touch-manipulation"><X size={12} /></button>}
+              className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none flex-1 min-w-0"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="text-muted-foreground hover:text-foreground touch-manipulation"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
           <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 shrink-0">
-            <button onClick={() => setView("kanban")}
+            <button
+              onClick={() => setView("kanban")}
               className={`p-1.5 rounded-lg transition-all touch-manipulation ${view === "kanban" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              title="Kanban Board">
+              title="Kanban Board"
+            >
               <LayoutGrid size={14} />
             </button>
-            <button onClick={() => setView("list")}
+            <button
+              onClick={() => setView("list")}
               className={`p-1.5 rounded-lg transition-all touch-manipulation ${view === "list" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              title="List View">
+              title="List View"
+            >
               <List size={14} />
             </button>
           </div>
@@ -1409,31 +2112,51 @@ export default function TasksPage() {
         <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
           {/* Status filter */}
           <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 shrink-0">
-            {["all", ...STATUSES.map(s => s.id)].map(s => (
-              <button key={s} onClick={() => setFilterStatus(s)}
-                className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-all whitespace-nowrap touch-manipulation ${filterStatus === s ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+            {["all", ...STATUSES.map((s) => s.id)].map((s) => (
+              <button
+                key={s}
+                onClick={() => setFilterStatus(s)}
+                className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-all whitespace-nowrap touch-manipulation ${filterStatus === s ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
                 {s === "all" ? `All` : getStatus(s).label}
               </button>
             ))}
           </div>
 
           {/* Priority filter */}
-          <select value={filterPriority} onChange={e => setFilterPriority(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation">
+          <select
+            value={filterPriority}
+            onChange={(e) => setFilterPriority(e.target.value)}
+            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation"
+          >
             <option value="all">Priority</option>
-            {PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+            {PRIORITIES.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
           </select>
 
           {/* Category filter */}
-          <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation">
+          <select
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation"
+          >
             <option value="all">Category</option>
-            {allCategories.map(c => <option key={c} value={c}>{c}</option>)}
+            {allCategories.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
           </select>
 
           {/* Sort */}
-          <select value={sortBy} onChange={e => setSortBy(e.target.value as any)}
-            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation">
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as any)}
+            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation"
+          >
             <option value="priority">Priority</option>
             <option value="dueDate">Due Date</option>
             <option value="created">Created</option>
@@ -1443,13 +2166,16 @@ export default function TasksPage() {
 
       {/* ── Kanban Board ── */}
       {view === "kanban" && (
-        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 snap-x snap-mandatory" style={{ minHeight: 400 }}>
-          {STATUSES.map(status => (
+        <div
+          className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+          style={{ minHeight: 400 }}
+        >
+          {STATUSES.map((status) => (
             <KanbanColumn
               key={status.id}
               status={status}
               tasks={tasksByStatus[status.id] || []}
-              onEdit={t => setModal({ open: true, task: t })}
+              onEdit={(t) => setModal({ open: true, task: t })}
               onDelete={handleDelete}
               onDuplicate={handleDuplicate}
               onToggle={handleToggle}
@@ -1469,32 +2195,40 @@ export default function TasksPage() {
         <div className="space-y-1.5">
           {/* Quick presets + grouping */}
           <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1 items-center">
-            {([
-              { id: "open", label: "Open", count: stats.open },
-              { id: "overdue", label: "Overdue", count: stats.overdue },
-              { id: "today", label: "Due today", count: stats.todayTask },
-              { id: "week", label: "This week", count: null },
-              { id: "critical", label: "Important", count: stats.critical },
-              { id: "all", label: "Everything", count: stats.total },
-            ] as const).map(p => (
-              <button key={p.id} onClick={() => setPreset(p.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${preset === p.id ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
-                {p.label}{p.count != null && p.count > 0 ? ` · ${p.count}` : ""}
+            {(
+              [
+                { id: "open", label: "Open", count: stats.open },
+                { id: "overdue", label: "Overdue", count: stats.overdue },
+                { id: "today", label: "Due today", count: stats.todayTask },
+                { id: "week", label: "This week", count: null },
+                { id: "critical", label: "Important", count: stats.critical },
+                { id: "all", label: "Everything", count: stats.total },
+              ] as const
+            ).map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setPreset(p.id)}
+                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${preset === p.id ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
+              >
+                {p.label}
+                {p.count != null && p.count > 0 ? ` · ${p.count}` : ""}
               </button>
             ))}
-            <button onClick={() => setGrouped(g => !g)}
+            <button
+              onClick={() => setGrouped((g) => !g)}
               className={`shrink-0 ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${grouped ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
-              title="Group by due date">
+              title="Group by due date"
+            >
               <Layers size={13} /> Group by date
             </button>
           </div>
 
           {/* Bulk action toolbar */}
           <div className="flex items-center gap-2 flex-wrap">
-
             <button
-              onClick={() => bulkMode ? exitBulk() : setBulkMode(true)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${bulkMode ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}>
+              onClick={() => (bulkMode ? exitBulk() : setBulkMode(true))}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${bulkMode ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
+            >
               <CheckSquare size={13} />
               {bulkMode ? "Cancel" : "Select"}
             </button>
@@ -1503,42 +2237,63 @@ export default function TasksPage() {
                 <button
                   onClick={() => {
                     if (selectedIds.size === listTasks.length) setSelectedIds(new Set());
-                    else setSelectedIds(new Set(listTasks.map(t => t.id)));
+                    else setSelectedIds(new Set(listTasks.map((t) => t.id)));
                   }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-secondary/80 transition-all touch-manipulation">
-                  {selectedIds.size === listTasks.length && listTasks.length > 0 ? "Deselect all" : "Select all"}
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-secondary/80 transition-all touch-manipulation"
+                >
+                  {selectedIds.size === listTasks.length && listTasks.length > 0
+                    ? "Deselect all"
+                    : "Select all"}
                 </button>
                 <span className="text-xs text-muted-foreground font-medium">
                   {selectedIds.size} selected
                 </span>
-                <button onClick={() => bulkApply({ status: "done", completedAt: today }, "Completed")}
+                <button
+                  onClick={() => bulkApply({ status: "done", completedAt: today }, "Completed")}
                   disabled={selectedIds.size === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-40 touch-manipulation">
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-40 touch-manipulation"
+                >
                   <CheckCircle2 size={12} /> Done
                 </button>
-                <button onClick={() => bulkApply({ dueDate: today }, "Due today")}
+                <button
+                  onClick={() => bulkApply({ dueDate: today }, "Due today")}
                   disabled={selectedIds.size === 0}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation">
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation"
+                >
                   Due today
                 </button>
-                <button onClick={() => bulkApply({ dueDate: shiftISO(today, 7) }, "Pushed 1 week")}
+                <button
+                  onClick={() => bulkApply({ dueDate: shiftISO(today, 7) }, "Pushed 1 week")}
                   disabled={selectedIds.size === 0}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation">
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation"
+                >
                   Push +1w
                 </button>
                 <select
                   value=""
-                  onChange={e => { if (e.target.value) bulkApply({ priority: e.target.value as Task["priority"] }, "Priority updated"); }}
+                  onChange={(e) => {
+                    if (e.target.value)
+                      bulkApply(
+                        { priority: e.target.value as Task["priority"] },
+                        "Priority updated",
+                      );
+                  }}
                   disabled={selectedIds.size === 0}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground outline-none disabled:opacity-40 touch-manipulation">
+                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground outline-none disabled:opacity-40 touch-manipulation"
+                >
                   <option value="">Priority…</option>
-                  {PRIORITIES.map(p => <option key={p.id} value={p.id}>{p.label}</option>)}
+                  {PRIORITIES.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label}
+                    </option>
+                  ))}
                 </select>
 
                 <button
                   onClick={handleBulkDelete}
                   disabled={selectedIds.size === 0}
-                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation">
+                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+                >
                   <Trash2 size={12} />
                   Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
                 </button>
@@ -1564,16 +2319,32 @@ export default function TasksPage() {
             if (!grouped) return <VirtualizedList tasks={listTasks} {...listHandlers} />;
             return (
               <div className="space-y-4">
-                {groups.map(g => (
+                {groups.map((g) => (
                   <div key={g.id} className="space-y-1.5">
-                    <button onClick={() => toggleGroup(g.id)}
-                      className="w-full flex items-center gap-2 px-1 py-1 text-left touch-manipulation">
-                      <ChevronDown size={13} className={`text-muted-foreground transition-transform ${collapsedGroups.has(g.id) ? "-rotate-90" : ""}`} />
-                      <span className={`text-xs font-bold uppercase tracking-wide ${g.tone}`}>{g.label}</span>
-                      <span className="text-[11px] font-semibold text-muted-foreground bg-secondary rounded-full px-2 py-0.5">{g.tasks.length}</span>
+                    <button
+                      onClick={() => toggleGroup(g.id)}
+                      className="w-full flex items-center gap-2 px-1 py-1 text-left touch-manipulation"
+                    >
+                      <ChevronDown
+                        size={13}
+                        className={`text-muted-foreground transition-transform ${collapsedGroups.has(g.id) ? "-rotate-90" : ""}`}
+                      />
+                      <span className={`text-xs font-bold uppercase tracking-wide ${g.tone}`}>
+                        {g.label}
+                      </span>
+                      <span className="text-[11px] font-semibold text-muted-foreground bg-secondary rounded-full px-2 py-0.5">
+                        {g.tasks.length}
+                      </span>
                       {bulkMode && g.tasks.length > 0 && (
-                        <span onClick={e => { e.stopPropagation(); selectGroup(g.tasks); }}
-                          className="ml-auto text-[10px] font-semibold text-primary hover:underline">Select group</span>
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            selectGroup(g.tasks);
+                          }}
+                          className="ml-auto text-[10px] font-semibold text-primary hover:underline"
+                        >
+                          Select group
+                        </span>
                       )}
                     </button>
                     <VirtualizedList tasks={g.tasks} {...listHandlers} />
@@ -1588,7 +2359,10 @@ export default function TasksPage() {
               <CheckSquare size={42} className="mx-auto mb-3 opacity-20" />
               <p className="font-semibold text-foreground">Nothing here — you're clear</p>
               <p className="text-sm mt-1">Clear filters or create a new task</p>
-              <button onClick={() => setModal({ open: true, task: null })} className="btn-primary mt-4 text-sm">
+              <button
+                onClick={() => setModal({ open: true, task: null })}
+                className="btn-primary mt-4 text-sm"
+              >
                 <Plus size={13} /> New Task
               </button>
             </div>

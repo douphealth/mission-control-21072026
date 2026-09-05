@@ -11,8 +11,16 @@ import { useNavigationStore } from "@/stores/navigationStore";
 const KIND_STYLE: Record<string, { badge: string; dot: string; label: string }> = {
   task: { badge: "bg-primary/10 text-primary", dot: "bg-primary", label: "Task" },
   reminder: { badge: "bg-info/10 text-info", dot: "bg-info", label: "Reminder" },
-  payment: { badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400", dot: "bg-amber-500", label: "Payment" },
-  decision: { badge: "bg-violet-500/15 text-violet-600 dark:text-violet-300", dot: "bg-violet-500", label: "Decision" },
+  payment: {
+    badge: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    dot: "bg-amber-500",
+    label: "Payment",
+  },
+  decision: {
+    badge: "bg-violet-500/15 text-violet-600 dark:text-violet-300",
+    dot: "bg-violet-500",
+    label: "Decision",
+  },
   flag: { badge: "bg-destructive/10 text-destructive", dot: "bg-destructive", label: "Attention" },
 };
 
@@ -46,13 +54,19 @@ function EntryRow({
         onClick={() => setActiveSection(entry.flag?.section ?? entry.section)}
         className={`group relative flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left transition hover:-translate-y-0.5 ${SEVERITY_RING[sev]}`}
       >
-        <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${sev === "critical" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-500"}`}>
+        <span
+          className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${sev === "critical" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-500"}`}
+        >
           <AlertTriangle size={14} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[13px] font-bold leading-snug text-foreground">{entry.title}</span>
+          <span className="block text-[13px] font-bold leading-snug text-foreground">
+            {entry.title}
+          </span>
           {entry.reasons[0] && (
-            <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{entry.reasons[0]}</span>
+            <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+              {entry.reasons[0]}
+            </span>
           )}
         </span>
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-background/80 px-2.5 py-1 text-[10px] font-bold text-foreground">
@@ -76,7 +90,9 @@ function EntryRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${ks.badge}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${ks.badge}`}
+          >
             {ks.label}
           </span>
           {isNow && (
@@ -94,8 +110,12 @@ function EntryRow({
           onClick={() => setActiveSection(entry.section)}
           className="mt-1 block w-full text-left"
         >
-          <span className="block text-[13px] font-semibold leading-snug text-foreground">{entry.title}</span>
-          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">{entry.reasons.join(" · ")}</span>
+          <span className="block text-[13px] font-semibold leading-snug text-foreground">
+            {entry.title}
+          </span>
+          <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+            {entry.reasons.join(" · ")}
+          </span>
         </button>
       </div>
 
@@ -103,7 +123,10 @@ function EntryRow({
         <div className="flex shrink-0 items-center gap-1 opacity-60 transition group-hover:opacity-100">
           {w.kind === "task" && (
             <button
-              onClick={() => { setFocusTaskId(w.refId); setActiveSection("focus"); }}
+              onClick={() => {
+                setFocusTaskId(w.refId);
+                setActiveSection("focus");
+              }}
               title="Start a focus session"
               className="rounded-xl p-2 text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
             >
@@ -148,7 +171,9 @@ export default function TodayTimeline({
     <section className="enterprise-card rounded-[28px] p-5 sm:p-6">
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Today</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Today
+          </div>
           <h3 className="font-display text-[19px] font-extrabold tracking-tight text-foreground sm:text-[22px]">
             One timeline
           </h3>
@@ -167,7 +192,10 @@ export default function TodayTimeline({
 
       <div className="relative space-y-2.5">
         {/* rail */}
-        <div className="absolute top-2 bottom-2 left-[27px] w-px bg-border/50 sm:left-[31px]" aria-hidden />
+        <div
+          className="absolute top-2 bottom-2 left-[27px] w-px bg-border/50 sm:left-[31px]"
+          aria-hidden
+        />
 
         {entries.length === 0 && (
           <p className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-[12px] text-muted-foreground">
@@ -207,7 +235,9 @@ export default function TodayTimeline({
               <span className="absolute h-[10px] w-[10px] animate-ping rounded-full bg-primary/60" />
               <span className="relative h-[8px] w-[8px] rounded-full bg-primary" />
             </span>
-            <span className="font-display text-[11px] font-extrabold uppercase tracking-[0.2em] text-primary">Now</span>
+            <span className="font-display text-[11px] font-extrabold uppercase tracking-[0.2em] text-primary">
+              Now
+            </span>
             <span className="h-px flex-1 bg-primary/20" />
           </div>
         )}
