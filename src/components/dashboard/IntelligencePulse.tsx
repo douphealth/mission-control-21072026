@@ -21,13 +21,19 @@ export default function IntelligencePulse({ items }: { items: IntelItem[] }) {
           <Radar size={15} />
         </span>
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Intelligence</div>
-          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">For you today</h3>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Intelligence
+          </div>
+          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">
+            For you today
+          </h3>
         </div>
       </div>
 
       {items.length === 0 ? (
-        <p className="text-[12px] text-muted-foreground">No important developments require attention.</p>
+        <p className="text-[12px] text-muted-foreground">
+          No important developments require attention.
+        </p>
       ) : (
         <div className="space-y-2.5">
           {items.map((i) => (

@@ -1,83 +1,119 @@
-import { useTasks, usePayments, useIdeas, useCustomModules, useAddItem, genId } from '@/hooks/useTableData';
-import { useNavigationStore } from '@/stores/navigationStore';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useState } from 'react';
 import {
-  Home, CheckSquare, Calendar, FileText, Timer,
-  Globe, Github, Hammer, Link2, BarChart3,
-  Search as SearchIcon, Cloud, Rocket, Bug,
-  Settings, Sun, Moon, X, Sparkles,
-  DollarSign, Lightbulb, KeyRound, Flame,
-  ChevronLeft, ChevronRight, Plus, Check, Download, Zap, RefreshCcw, Archive,
-  Radar, Newspaper, AtSign, Users, Bell, Scale, Crosshair
-} from 'lucide-react';
-import { toast } from 'sonner';
+  useTasks,
+  usePayments,
+  useIdeas,
+  useCustomModules,
+  useAddItem,
+  genId,
+} from "@/hooks/useTableData";
+import { useNavigationStore } from "@/stores/navigationStore";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { useState, useEffect } from "react";
+import {
+  Home,
+  CheckSquare,
+  Calendar,
+  FileText,
+  Timer,
+  Globe,
+  Github,
+  Hammer,
+  Link2,
+  BarChart3,
+  Search as SearchIcon,
+  Cloud,
+  Rocket,
+  Bug,
+  Settings,
+  Sun,
+  Moon,
+  X,
+  Sparkles,
+  DollarSign,
+  Lightbulb,
+  KeyRound,
+  Flame,
+  ChevronLeft,
+  ChevronRight,
+  Plus,
+  Check,
+  Download,
+  Zap,
+  RefreshCcw,
+  Archive,
+  Radar,
+  Newspaper,
+  AtSign,
+  Users,
+  Bell,
+  Scale,
+  Crosshair,
+  PanelsTopLeft,
+} from "lucide-react";
+import { toast } from "sonner";
 
+// Two-level navigation. Level 1 = the daily system (Home, Review, Calendar,
+// Tasks). Level 2 = everything else under one collapsed "Modules" group —
+// fully usable, never deleted, just out of the daily path. Custom modules
+// the user creates still render inline after Modules.
 const navGroups = [
   {
-    label: 'TODAY',
+    label: "NOW",
     items: [
-      { id: 'dashboard', label: 'Today', icon: Home },
-
+      { id: "dashboard", label: "Home", icon: Home },
+      { id: "tasks", label: "Tasks", icon: CheckSquare },
+      { id: "review", label: "Review", icon: RefreshCcw },
+      { id: "calendar", label: "Calendar", icon: Calendar },
+      { id: "control-center", label: "Captures", icon: Radar },
     ],
   },
   {
-    label: 'INBOX',
+    label: "CORE",
     items: [
-      { id: 'control-center', label: 'Captures', icon: Radar },
-      { id: 'decisions', label: 'Findings', icon: Scale },
-      { id: 'reminders', label: 'Reminders', icon: Bell },
-    ],
-  },
-  {
-    label: 'WORK',
-    items: [
-      { id: 'tasks', label: 'Tasks', icon: CheckSquare },
-      { id: 'projects', label: 'Projects', icon: BarChart3 },
-      { id: 'review', label: 'Review', icon: RefreshCcw },
-    ],
-  },
-  {
-    label: 'SITES',
-    items: [
-      { id: 'websites', label: 'Websites', icon: Globe },
-      { id: 'wp-manage', label: 'WordPress', icon: Zap },
-      { id: 'seo', label: 'SEO', icon: SearchIcon },
-    ],
-  },
-  {
-    label: 'INTELLIGENCE',
-    items: [
-      { id: 'industry', label: 'Trends', icon: Newspaper },
-      { id: 'mentions', label: 'Mentions', icon: AtSign },
-      { id: 'audience', label: 'Audience', icon: Users },
-    ],
-  },
-  {
-    label: 'GENERAL',
-    items: [
-      { id: 'calendar', label: 'Calendar', icon: Calendar },
-      { id: 'notes', label: 'Notes', icon: FileText },
-      { id: 'payments', label: 'Finance', icon: DollarSign },
-      { id: 'focus', label: 'Focus', icon: Timer },
-      { id: 'settings', label: 'Settings', icon: Settings },
+      { id: "decisions", label: "Findings", icon: Scale },
+      { id: "reminders", label: "Reminders", icon: Bell },
+      { id: "notes", label: "Notes", icon: FileText },
     ],
   },
 ];
 
+// Level 2 — every module, one click away under "Modules".
+const modulesNav = [
+  { id: "projects", label: "Projects", icon: PanelsTopLeft },
+  { id: "websites", label: "Websites", icon: Globe },
+  { id: "wp-manage", label: "WordPress", icon: Zap },
+  { id: "seo", label: "SEO", icon: SearchIcon },
+  { id: "industry", label: "Trends", icon: Newspaper },
+  { id: "mentions", label: "Mentions", icon: AtSign },
+  { id: "audience", label: "Audience", icon: Users },
+  { id: "payments", label: "Finance", icon: DollarSign },
+  { id: "habits", label: "Habits", icon: Flame },
+  { id: "ideas", label: "Ideas", icon: Lightbulb },
+  { id: "credentials", label: "Credentials", icon: KeyRound },
+  { id: "links", label: "Links Hub", icon: Link2 },
+  { id: "github", label: "GitHub", icon: Github },
+  { id: "builds", label: "Build Projects", icon: Hammer },
+  { id: "google-tasks", label: "Google Tasks", icon: CheckSquare },
+  { id: "cloudflare", label: "Cloudflare", icon: Cloud },
+  { id: "vercel", label: "Vercel", icon: Rocket },
+  { id: "openclaw", label: "OpenClaw", icon: Bug },
+  { id: "focus", label: "Focus Timer", icon: Timer },
+  { id: "settings", label: "Settings", icon: Settings },
+];
+
 // Specialized modules — one click away under "More", never deleted.
 const archivedNav = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home },
-  { id: 'habits', label: 'Habits', icon: Flame },
-  { id: 'ideas', label: 'Ideas', icon: Lightbulb },
-  { id: 'credentials', label: 'Credentials', icon: KeyRound },
-  { id: 'links', label: 'Links Hub', icon: Link2 },
-  { id: 'github', label: 'GitHub', icon: Github },
-  { id: 'builds', label: 'Build Projects', icon: Hammer },
-  { id: 'google-tasks', label: 'Google Tasks', icon: CheckSquare },
-  { id: 'cloudflare', label: 'Cloudflare', icon: Cloud },
-  { id: 'vercel', label: 'Vercel', icon: Rocket },
-  { id: 'openclaw', label: 'OpenClaw', icon: Bug },
+  { id: "dashboard", label: "Dashboard", icon: Home },
+  { id: "habits", label: "Habits", icon: Flame },
+  { id: "ideas", label: "Ideas", icon: Lightbulb },
+  { id: "credentials", label: "Credentials", icon: KeyRound },
+  { id: "links", label: "Links Hub", icon: Link2 },
+  { id: "github", label: "GitHub", icon: Github },
+  { id: "builds", label: "Build Projects", icon: Hammer },
+  { id: "google-tasks", label: "Google Tasks", icon: CheckSquare },
+  { id: "cloudflare", label: "Cloudflare", icon: Cloud },
+  { id: "vercel", label: "Vercel", icon: Rocket },
+  { id: "openclaw", label: "OpenClaw", icon: Bug },
 ];
 
 export default function Sidebar() {
@@ -86,21 +122,38 @@ export default function Sidebar() {
   const ideas = useIdeas();
   const customModules = useCustomModules();
   const addItem = useAddItem();
-  const { activeSection, setActiveSection, sidebarOpen, setSidebarOpen, sidebarCollapsed, setSidebarCollapsed } = useNavigationStore();
+  const {
+    activeSection,
+    setActiveSection,
+    sidebarOpen,
+    setSidebarOpen,
+    sidebarCollapsed,
+    setSidebarCollapsed,
+  } = useNavigationStore();
   const { userName, userRole, theme, toggleTheme } = useSettingsStore();
   const [addingTo, setAddingTo] = useState<string | null>(null);
-  const [newModName, setNewModName] = useState('');
-  const [newModEmoji, setNewModEmoji] = useState('📁');
+  const [newModName, setNewModName] = useState("");
+  const [newModEmoji, setNewModEmoji] = useState("📁");
   const [archiveOpen, setArchiveOpen] = useState(false);
+  const [modulesOpen, setModulesOpen] = useState(false);
 
-  const openTaskCount = tasks.filter(t => t.status !== 'done').length;
-  const overduePayments = payments.filter(p => p.status === 'overdue').length;
-  const activeIdeas = ideas.filter(i => i.status === 'exploring' || i.status === 'validated').length;
+  // If the user lands on a second-level section (deep link, palette, sidebar
+  // old state), the Modules group expands to show where they are.
+  const inModules = modulesNav.some((m) => m.id === activeSection);
+  useEffect(() => {
+    if (inModules) setModulesOpen(true);
+  }, [inModules]);
+
+  const openTaskCount = tasks.filter((t) => t.status !== "done").length;
+  const overduePayments = payments.filter((p) => p.status === "overdue").length;
+  const activeIdeas = ideas.filter(
+    (i) => i.status === "exploring" || i.status === "validated",
+  ).length;
 
   const getBadge = (id: string): number | null => {
-    if (id === 'tasks') return openTaskCount || null;
-    if (id === 'payments' && overduePayments > 0) return overduePayments;
-    if (id === 'ideas' && activeIdeas > 0) return activeIdeas;
+    if (id === "tasks") return openTaskCount || null;
+    if (id === "payments" && overduePayments > 0) return overduePayments;
+    if (id === "ideas" && activeIdeas > 0) return activeIdeas;
     return null;
   };
 
@@ -108,29 +161,50 @@ export default function Sidebar() {
 
   const handleAddModule = async (groupLabel: string) => {
     if (!newModName.trim()) return;
-    const newId = await addItem('customModules', {
+    const newId = await addItem("customModules", {
       name: newModName.trim(),
       icon: newModEmoji,
-      description: '',
+      description: "",
       fields: [
-        { key: 'name', label: 'Name', type: 'text' },
-        { key: 'url', label: 'URL', type: 'url' },
-        { key: 'notes', label: 'Notes', type: 'textarea' },
+        { key: "name", label: "Name", type: "text" },
+        { key: "url", label: "URL", type: "url" },
+        { key: "notes", label: "Notes", type: "textarea" },
       ],
       data: [],
       createdAt: new Date().toISOString(),
       order: customModules.length,
       visible: true,
-      color: '',
+      color: "",
     });
     if (newId) toast.success(`"${newModName}" added!`);
     else toast.error(`"${newModName}" already exists`);
-    setNewModName('');
-    setNewModEmoji('📁');
+    setNewModName("");
+    setNewModEmoji("📁");
     setAddingTo(null);
   };
 
-  const emojiOptions = ['📁', '📊', '🎯', '🏷️', '📱', '🖥️', '🎨', '📐', '🔧', '⚙️', '🌟', '💎', '🏠', '📈', '🛒', '📡', '🔬', '🎮', '🎵', '📚'];
+  const emojiOptions = [
+    "📁",
+    "📊",
+    "🎯",
+    "🏷️",
+    "📱",
+    "🖥️",
+    "🎨",
+    "📐",
+    "🔧",
+    "⚙️",
+    "🌟",
+    "💎",
+    "🏠",
+    "📈",
+    "🛒",
+    "📡",
+    "🔬",
+    "🎮",
+    "🎵",
+    "📚",
+  ];
 
   return (
     <>
@@ -144,26 +218,35 @@ export default function Sidebar() {
       <aside
         className={`fixed top-0 left-0 z-50 h-full flex flex-col bg-sidebar/95 text-sidebar-foreground backdrop-blur-2xl border-r border-sidebar-border/70 shadow-[18px_0_60px_-44px_hsl(var(--foreground)/0.7)]
           lg:relative lg:translate-x-0 transition-all duration-300
-          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}`}
+          ${sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"}`}
         style={{ width: isCollapsed ? 72 : 260 }}
       >
         {/* Close (mobile) */}
-        <button onClick={() => setSidebarOpen(false)} className="absolute top-5 right-5 lg:hidden text-muted-foreground hover:text-foreground transition-colors touch-manipulation">
+        <button
+          onClick={() => setSidebarOpen(false)}
+          className="absolute top-5 right-5 lg:hidden text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
+        >
           <X size={18} />
         </button>
 
         {/* Logo / Brand */}
-        <div className={`h-[72px] flex items-center border-b border-sidebar-border/70 ${isCollapsed ? 'justify-center px-3' : 'px-5 gap-3'}`}>
+        <div
+          className={`h-[72px] flex items-center border-b border-sidebar-border/70 ${isCollapsed ? "justify-center px-3" : "px-5 gap-3"}`}
+        >
           <div
-             className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center text-primary-foreground font-extrabold text-base flex-shrink-0 ring-1 ring-sidebar-primary/30"
-            style={{ boxShadow: 'var(--shadow-primary)' }}
+            className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center text-primary-foreground font-extrabold text-base flex-shrink-0 ring-1 ring-sidebar-primary/30"
+            style={{ boxShadow: "var(--shadow-primary)" }}
           >
             N
           </div>
           {!isCollapsed && (
             <div className="min-w-0">
-              <div className="font-bold text-[15px] text-sidebar-foreground tracking-tight">Nexus</div>
-              <div className="text-[10px] text-sidebar-foreground/45 font-medium">Mission Control</div>
+              <div className="font-bold text-[15px] text-sidebar-foreground tracking-tight">
+                Nexus
+              </div>
+              <div className="text-[10px] text-sidebar-foreground/45 font-medium">
+                Mission Control
+              </div>
             </div>
           )}
         </div>
@@ -177,15 +260,15 @@ export default function Sidebar() {
         </button>
 
         {/* Nav */}
-          <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-5">
-          {navGroups.map(group => (
+        <nav className="flex-1 overflow-y-auto px-3 py-5 space-y-5">
+          {navGroups.map((group) => (
             <div key={group.label}>
               {!isCollapsed && (
                 <div className="flex items-center justify-between px-3 mb-1.5">
-                    <span className="text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase">
+                  <span className="text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase">
                     {group.label}
                   </span>
-                  {group.label !== 'GENERAL' && group.label !== 'SYSTEM' && (
+                  {group.label !== "GENERAL" && group.label !== "SYSTEM" && (
                     <button
                       onClick={() => setAddingTo(addingTo === group.label ? null : group.label)}
                       className="p-0.5 rounded text-sidebar-foreground/25 hover:text-sidebar-primary transition-all hover:scale-110"
@@ -197,32 +280,50 @@ export default function Sidebar() {
                 </div>
               )}
               <div className="space-y-0.5">
-                {group.items.map(item => {
+                {group.items.map((item) => {
                   const active = activeSection === item.id;
                   const badge = getBadge(item.id);
                   return (
                     <button
                       key={item.id}
-                      onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
+                      onClick={() => {
+                        setActiveSection(item.id);
+                        setSidebarOpen(false);
+                      }}
                       className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200 group relative
-                        ${isCollapsed ? 'justify-center px-0 rounded-xl' : 'rounded-xl'}
-                        ${(item as any).indent && !isCollapsed ? 'ml-5 border-l border-sidebar-border/40 pl-4' : ''}
-                        ${active
-                          ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35'
-                          : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground'
+                        ${isCollapsed ? "justify-center px-0 rounded-xl" : "rounded-xl"}
+                        ${(item as any).indent && !isCollapsed ? "ml-5 border-l border-sidebar-border/40 pl-4" : ""}
+                        ${
+                          active
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35"
+                            : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground"
                         }`}
-                      style={active ? { boxShadow: '0 12px 30px -18px hsl(var(--sidebar-primary) / 0.9)' } : undefined}
+                      style={
+                        active
+                          ? { boxShadow: "0 12px 30px -18px hsl(var(--sidebar-primary) / 0.9)" }
+                          : undefined
+                      }
                       title={isCollapsed ? item.label : undefined}
                     >
-                      <item.icon size={16} strokeWidth={active ? 2.2 : 1.5} className="flex-shrink-0" />
-                      {!isCollapsed && <span className="flex-1 text-left truncate">{item.label}</span>}
+                      <item.icon
+                        size={16}
+                        strokeWidth={active ? 2.2 : 1.5}
+                        className="flex-shrink-0"
+                      />
+                      {!isCollapsed && (
+                        <span className="flex-1 text-left truncate">{item.label}</span>
+                      )}
                       {badge !== null && !isCollapsed && (
-                        <span className={`text-[10px] font-bold min-w-[20px] text-center px-1.5 py-0.5 rounded-full ${active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-primary/10 text-primary'}`}>
+                        <span
+                          className={`text-[10px] font-bold min-w-[20px] text-center px-1.5 py-0.5 rounded-full ${active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary/10 text-primary"}`}
+                        >
                           {badge}
                         </span>
                       )}
                       {badge !== null && isCollapsed && (
-                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full flex items-center justify-center">{badge}</span>
+                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive text-destructive-foreground text-[8px] font-bold rounded-full flex items-center justify-center">
+                          {badge}
+                        </span>
                       )}
                     </button>
                   );
@@ -230,59 +331,143 @@ export default function Sidebar() {
               </div>
 
               {/* Inline Add Form */}
-                              {addingTo === group.label && !isCollapsed && (
-                  <div className="overflow-hidden">
-                    <div className="mt-2 mx-1 p-3 rounded-xl bg-secondary/30 border border-border/20 space-y-2">
-                      <div className="flex gap-1.5">
-                        <select value={newModEmoji} onChange={e => setNewModEmoji(e.target.value)}
-                          className="w-9 h-9 rounded-lg bg-secondary text-center text-sm appearance-none cursor-pointer outline-none border border-transparent focus:border-primary/30">
-                          {emojiOptions.map(e => <option key={e} value={e}>{e}</option>)}
-                        </select>
-                        <input value={newModName} onChange={e => setNewModName(e.target.value)} placeholder="Module name..." autoFocus
-                          onKeyDown={e => { if (e.key === 'Enter') handleAddModule(group.label); if (e.key === 'Escape') setAddingTo(null); }}
-                          className="flex-1 px-3 py-2 rounded-lg bg-secondary text-foreground text-xs outline-none border border-transparent focus:border-primary/30 placeholder:text-muted-foreground/40" />
-                        <button onClick={() => handleAddModule(group.label)} disabled={!newModName.trim()}
-                          className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-all disabled:opacity-30">
-                          <Check size={13} />
-                        </button>
-                      </div>
+              {addingTo === group.label && !isCollapsed && (
+                <div className="overflow-hidden">
+                  <div className="mt-2 mx-1 p-3 rounded-xl bg-secondary/30 border border-border/20 space-y-2">
+                    <div className="flex gap-1.5">
+                      <select
+                        value={newModEmoji}
+                        onChange={(e) => setNewModEmoji(e.target.value)}
+                        className="w-9 h-9 rounded-lg bg-secondary text-center text-sm appearance-none cursor-pointer outline-none border border-transparent focus:border-primary/30"
+                      >
+                        {emojiOptions.map((e) => (
+                          <option key={e} value={e}>
+                            {e}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        value={newModName}
+                        onChange={(e) => setNewModName(e.target.value)}
+                        placeholder="Module name..."
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAddModule(group.label);
+                          if (e.key === "Escape") setAddingTo(null);
+                        }}
+                        className="flex-1 px-3 py-2 rounded-lg bg-secondary text-foreground text-xs outline-none border border-transparent focus:border-primary/30 placeholder:text-muted-foreground/40"
+                      />
+                      <button
+                        onClick={() => handleAddModule(group.label)}
+                        disabled={!newModName.trim()}
+                        className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-all disabled:opacity-30"
+                      >
+                        <Check size={13} />
+                      </button>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
             </div>
           ))}
 
+          {/* ── Level 2: Modules — every specialized module, collapsed by default ── */}
+          <div>
+            <button
+              onClick={() => setModulesOpen((o) => !o)}
+              className={`w-full flex items-center justify-between px-3 mb-1.5 text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase hover:text-sidebar-foreground/60 transition-colors ${isCollapsed ? "justify-center" : ""}`}
+              title="All modules"
+            >
+              {!isCollapsed && (
+                <span className="flex items-center gap-1.5">
+                  <PanelsTopLeft size={10} /> Modules · {modulesNav.length}
+                </span>
+              )}
+              {!isCollapsed && <span>{modulesOpen ? "−" : "+"}</span>}
+              {isCollapsed && <PanelsTopLeft size={16} strokeWidth={1.5} />}
+            </button>
+            {modulesOpen && (
+              <div className="space-y-0.5">
+                {modulesNav.map((item) => {
+                  const active = activeSection === item.id;
+                  const badge = getBadge(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActiveSection(item.id);
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all
+                        ${
+                          active
+                            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35"
+                            : "text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                        }`}
+                    >
+                      <item.icon size={15} strokeWidth={1.5} className="flex-shrink-0" />
+                      <span className="flex-1 text-left truncate">{item.label}</span>
+                      {badge !== null && (
+                        <span className="text-[10px] font-bold min-w-[20px] text-center px-1.5 py-0.5 rounded-full bg-primary/10 text-primary">
+                          {badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* Custom Modules */}
-          {customModules.filter(m => m.visible).length > 0 && (
+          {customModules.filter((m) => m.visible).length > 0 && (
             <div>
               {!isCollapsed && (
                 <div className="flex items-center justify-between px-3 mb-1.5">
-                  <span className="text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase">CUSTOM</span>
+                  <span className="text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase">
+                    CUSTOM
+                  </span>
                 </div>
               )}
               <div className="space-y-0.5">
-                {customModules.filter(m => m.visible).sort((a, b) => a.order - b.order).map(mod => (
-                  <button key={mod.id}
-                    onClick={() => { setActiveSection(`custom-${mod.id}`); setSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200
-                      ${isCollapsed ? 'justify-center px-0 rounded-xl' : 'rounded-xl'}
-                      ${activeSection === `custom-${mod.id}` ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground'}`}
-                    style={activeSection === `custom-${mod.id}` ? { boxShadow: '0 12px 30px -18px hsl(var(--sidebar-primary) / 0.9)' } : undefined}
-                    title={isCollapsed ? mod.name : undefined}>
-                    <span className="text-sm">{mod.icon}</span>
-                    {!isCollapsed && <span className="flex-1 text-left truncate">{mod.name}</span>}
-                  </button>
-                ))}
+                {customModules
+                  .filter((m) => m.visible)
+                  .sort((a, b) => a.order - b.order)
+                  .map((mod) => (
+                    <button
+                      key={mod.id}
+                      onClick={() => {
+                        setActiveSection(`custom-${mod.id}`);
+                        setSidebarOpen(false);
+                      }}
+                      className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium transition-all duration-200
+                      ${isCollapsed ? "justify-center px-0 rounded-xl" : "rounded-xl"}
+                      ${activeSection === `custom-${mod.id}` ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35" : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground"}`}
+                      style={
+                        activeSection === `custom-${mod.id}`
+                          ? { boxShadow: "0 12px 30px -18px hsl(var(--sidebar-primary) / 0.9)" }
+                          : undefined
+                      }
+                      title={isCollapsed ? mod.name : undefined}
+                    >
+                      <span className="text-sm">{mod.icon}</span>
+                      {!isCollapsed && (
+                        <span className="flex-1 text-left truncate">{mod.name}</span>
+                      )}
+                    </button>
+                  ))}
               </div>
             </div>
           )}
 
           {/* Add custom module */}
-          {customModules.filter(m => m.visible).length === 0 && !isCollapsed && (
+          {customModules.filter((m) => m.visible).length === 0 && !isCollapsed && (
             <div>
-              {addingTo !== 'NEW_CUSTOM' ? (
-                <button onClick={() => setAddingTo('NEW_CUSTOM')}
-                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-medium text-sidebar-foreground/35 hover:text-sidebar-primary hover:bg-sidebar-accent/60 transition-all border border-dashed border-sidebar-border/70 hover:border-sidebar-primary/30">
+              {addingTo !== "NEW_CUSTOM" ? (
+                <button
+                  onClick={() => setAddingTo("NEW_CUSTOM")}
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-[13px] font-medium text-sidebar-foreground/35 hover:text-sidebar-primary hover:bg-sidebar-accent/60 transition-all border border-dashed border-sidebar-border/70 hover:border-sidebar-primary/30"
+                >
                   <Plus size={15} />
                   <span>Add Custom Module</span>
                 </button>
@@ -290,15 +475,33 @@ export default function Sidebar() {
                 <div className="overflow-hidden">
                   <div className="p-3 rounded-xl bg-secondary/30 border border-border/20 space-y-2">
                     <div className="flex gap-1.5">
-                      <select value={newModEmoji} onChange={e => setNewModEmoji(e.target.value)}
-                        className="w-9 h-9 rounded-lg bg-secondary text-center text-sm appearance-none cursor-pointer outline-none">
-                        {emojiOptions.map(e => <option key={e} value={e}>{e}</option>)}
+                      <select
+                        value={newModEmoji}
+                        onChange={(e) => setNewModEmoji(e.target.value)}
+                        className="w-9 h-9 rounded-lg bg-secondary text-center text-sm appearance-none cursor-pointer outline-none"
+                      >
+                        {emojiOptions.map((e) => (
+                          <option key={e} value={e}>
+                            {e}
+                          </option>
+                        ))}
                       </select>
-                      <input value={newModName} onChange={e => setNewModName(e.target.value)} placeholder="Module name..." autoFocus
-                        onKeyDown={e => { if (e.key === 'Enter') handleAddModule('NEW_CUSTOM'); if (e.key === 'Escape') setAddingTo(null); }}
-                        className="flex-1 px-3 py-2 rounded-lg bg-secondary text-foreground text-xs outline-none placeholder:text-muted-foreground/40" />
-                      <button onClick={() => handleAddModule('NEW_CUSTOM')} disabled={!newModName.trim()}
-                        className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30">
+                      <input
+                        value={newModName}
+                        onChange={(e) => setNewModName(e.target.value)}
+                        placeholder="Module name..."
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleAddModule("NEW_CUSTOM");
+                          if (e.key === "Escape") setAddingTo(null);
+                        }}
+                        className="flex-1 px-3 py-2 rounded-lg bg-secondary text-foreground text-xs outline-none placeholder:text-muted-foreground/40"
+                      />
+                      <button
+                        onClick={() => handleAddModule("NEW_CUSTOM")}
+                        disabled={!newModName.trim()}
+                        className="w-9 h-9 rounded-lg bg-primary text-primary-foreground flex items-center justify-center disabled:opacity-30"
+                      >
                         <Check size={13} />
                       </button>
                     </div>
@@ -310,24 +513,31 @@ export default function Sidebar() {
           {!isCollapsed && (
             <div>
               <button
-                onClick={() => setArchiveOpen(o => !o)}
+                onClick={() => setArchiveOpen((o) => !o)}
                 className="w-full flex items-center justify-between px-3 mb-1.5 text-[9px] font-bold tracking-[0.15em] text-sidebar-foreground/35 uppercase hover:text-sidebar-foreground/60 transition-colors"
               >
-                <span className="flex items-center gap-1.5"><Archive size={10} /> More</span>
-                <span>{archiveOpen ? '−' : '+'}</span>
+                <span className="flex items-center gap-1.5">
+                  <Archive size={10} /> More
+                </span>
+                <span>{archiveOpen ? "−" : "+"}</span>
               </button>
               {archiveOpen && (
                 <div className="space-y-0.5">
-                  {archivedNav.map(item => {
+                  {archivedNav.map((item) => {
                     const active = activeSection === item.id;
                     return (
                       <button
                         key={item.id}
-                        onClick={() => { setActiveSection(item.id); setSidebarOpen(false); }}
+                        onClick={() => {
+                          setActiveSection(item.id);
+                          setSidebarOpen(false);
+                        }}
                         className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all
-                          ${active
-                            ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35'
-                            : 'text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'}`}
+                          ${
+                            active
+                              ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35"
+                              : "text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+                          }`}
                       >
                         <item.icon size={15} strokeWidth={1.5} className="flex-shrink-0" />
                         <span className="flex-1 text-left truncate">{item.label}</span>
@@ -338,7 +548,6 @@ export default function Sidebar() {
               )}
             </div>
           )}
-
         </nav>
 
         {/* Bottom — user area */}
@@ -350,15 +559,17 @@ export default function Sidebar() {
                 {userName.charAt(0)}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-xs font-semibold text-sidebar-foreground truncate">{userName}</div>
+                <div className="text-xs font-semibold text-sidebar-foreground truncate">
+                  {userName}
+                </div>
                 <div className="text-[10px] text-sidebar-foreground/45 truncate">{userRole}</div>
               </div>
               <button
                 onClick={toggleTheme}
                 className="p-1.5 rounded-lg text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
-                title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+                title={theme === "dark" ? "Light mode" : "Dark mode"}
               >
-                {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
               </button>
             </div>
           )}
@@ -366,9 +577,9 @@ export default function Sidebar() {
             <button
               onClick={toggleTheme}
               className="w-full flex items-center justify-center py-2.5 rounded-xl text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
-              title={theme === 'dark' ? 'Light mode' : 'Dark mode'}
+              title={theme === "dark" ? "Light mode" : "Dark mode"}
             >
-              {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
             </button>
           )}
         </div>

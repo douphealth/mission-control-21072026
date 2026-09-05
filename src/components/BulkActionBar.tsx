@@ -17,12 +17,15 @@ interface BulkActionBarProps {
 }
 
 export default function BulkActionBar({
-  selectedCount, totalCount, onSelectAll, allSelected, onDelete, dropdowns = [],
+  selectedCount,
+  totalCount,
+  onSelectAll,
+  allSelected,
+  onDelete,
+  dropdowns = [],
 }: BulkActionBarProps) {
   return (
-    <div 
-      className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/15 flex-wrap"
-    >
+    <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/15 flex-wrap">
       <button
         onClick={onSelectAll}
         className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary/50 hover:bg-secondary transition-all"
@@ -39,18 +42,20 @@ export default function BulkActionBar({
         <>
           <div className="h-4 w-px bg-border/30" />
 
-          {dropdowns.map(dd => (
+          {dropdowns.map((dd) => (
             <select
               key={dd.label}
-              onChange={e => {
+              onChange={(e) => {
                 if (e.target.value) dd.onSelect(e.target.value);
                 e.target.value = "";
               }}
               className="px-2.5 py-1.5 rounded-lg bg-secondary/50 text-xs font-semibold text-muted-foreground border border-border/15 outline-none cursor-pointer"
             >
               <option value="">{dd.label}</option>
-              {dd.options.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+              {dd.options.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           ))}

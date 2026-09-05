@@ -6,12 +6,14 @@
 import { Suspense, lazy, useState } from "react";
 import { BarChart3, ChevronDown, Inbox, PauseCircle, Scale } from "lucide-react";
 import DailyHero from "@/components/dashboard/DailyHero";
-import TodayCommitments from "@/components/dashboard/TodayCommitments";
-import AttentionFeed from "@/components/dashboard/AttentionFeed";
-import DailyAgenda from "@/components/dashboard/DailyAgenda";
+import TodayTimeline from "@/components/dashboard/TodayTimeline";
+import FocusDock from "@/components/dashboard/FocusDock";
+import QuickCaptureBar from "@/components/dashboard/QuickCaptureBar";
+import FirstRunExperience from "@/components/dashboard/FirstRunExperience";
 import SitePulse from "@/components/dashboard/SitePulse";
 import ValidationPulse from "@/components/dashboard/ValidationPulse";
 import IntelligencePulse from "@/components/dashboard/IntelligencePulse";
+import type { WorkItem } from "@/lib/workQueue";
 
 import ReliabilityPanel from "@/components/ReliabilityPanel";
 import { useDailyOps } from "@/hooks/useDailyOps";
@@ -23,6 +25,7 @@ export default function DashboardHome() {
   const ops = useDailyOps();
   const setActiveSection = useNavigationStore((s) => s.setActiveSection);
   const [showInsights, setShowInsights] = useState(false);
+  const [dockItem, setDockItem] = useState<WorkItem | null>(null);
 
   const pills = [
     { label: "Inbox", value: ops.inbox, icon: Inbox, section: "tasks" },
@@ -43,57 +46,70 @@ export default function DashboardHome() {
         }}
         onComplete={ops.complete}
         onPlan={ops.schedule}
+        onDockFocus={ops.now && ops.now.kind === "task" ? () => setDockItem(ops.now!) : undefined}
       />
 
-      <div className="grid grid-cols-3 gap-3">
-        {pills.map((p) => (
-          <button
-            key={p.label}
-            onClick={() => setActiveSection(p.section)}
-            className="enterprise-card flex items-center gap-3 rounded-2xl p-3.5 text-left transition hover:-translate-y-0.5 sm:p-4"
-          >
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
-              <p.icon size={15} />
-            </span>
-            <span className="min-w-0">
-              <span className="block font-display text-[20px] font-extrabold leading-none tabular-nums text-foreground">
-                {p.value}
-              </span>
-              <span className="block truncate text-[11px] font-semibold text-muted-foreground">{p.label}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+      <QuickCaptureBar />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <TodayCommitments
-            commitments={ops.commitments}
-            upNext={ops.upNext}
-            today={ops.today}
-            onComplete={ops.complete}
-            onPlan={ops.schedule}
-            onCommit={ops.commit}
-          />
-        </div>
-        <div className="flex flex-col gap-4 lg:col-span-5">
-          <AttentionFeed items={ops.attention} />
-          <DailyAgenda rows={ops.agenda} />
-        </div>
-      </div>
+      {dockItem && (
+        <FocusDock
+          item={dockItem}
+          onDone={() => setDockItem(null)}
+          onClose={() => setDockItem(null)}
+        />
+      )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <div className="flex flex-col gap-4 lg:col-span-7">
-          <SitePulse rows={ops.sitePulse} />
-          <ValidationPulse items={ops.validationPulse} today={ops.today} />
-        </div>
-        <div className="lg:col-span-5">
-          <IntelligencePulse items={ops.intelligence} />
-        </div>
-      </div>
+      {ops.isEmpty && <FirstRunExperience />}
 
-      <ReliabilityPanel compact />
+      {!ops.isEmpty && (
+        <>
+          <div className="grid grid-cols-3 gap-3">
+            {pills.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => setActiveSection(p.section)}
+                className="enterprise-card flex items-center gap-3 rounded-2xl p-3.5 text-left transition hover:-translate-y-0.5 sm:p-4"
+              >
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-secondary text-muted-foreground">
+                  <p.icon size={15} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display text-[20px] font-extrabold leading-none tabular-nums text-foreground">
+                    {p.value}
+                  </span>
+                  <span className="block truncate text-[11px] font-semibold text-muted-foreground">
+                    {p.label}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
 
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="lg:col-span-7">
+              <TodayTimeline
+                timeline={ops.timeline}
+                onComplete={ops.complete}
+                onPlan={ops.schedule}
+                onCommit={ops.commit}
+              />
+            </div>
+            <div className="flex flex-col gap-4 lg:col-span-5">
+              <ReliabilityPanel compact />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="flex flex-col gap-4 lg:col-span-7">
+              <SitePulse rows={ops.sitePulse} />
+              <ValidationPulse items={ops.validationPulse} today={ops.today} />
+            </div>
+            <div className="lg:col-span-5">
+              <IntelligencePulse items={ops.intelligence} />
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ═══ INSIGHTS — below the fold, loaded only when asked for ═══ */}
       <section>
@@ -114,7 +130,10 @@ export default function DashboardHome() {
               </span>
             </span>
           </span>
-          <ChevronDown size={16} className={`text-muted-foreground transition-transform ${showInsights ? "rotate-180" : ""}`} />
+          <ChevronDown
+            size={16}
+            className={`text-muted-foreground transition-transform ${showInsights ? "rotate-180" : ""}`}
+          />
         </button>
 
         {showInsights && (

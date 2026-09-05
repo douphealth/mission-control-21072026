@@ -21,25 +21,37 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
 }
 
-const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(function ConfirmDialog({
-  open,
-  onOpenChange,
-  title = "Are you sure?",
-  description = "This action cannot be undone.",
-  confirmLabel = "Delete",
-  cancelLabel = "Cancel",
-  variant = "destructive",
-  onConfirm,
-}, ref) {
+const ConfirmDialog = forwardRef<HTMLDivElement, ConfirmDialogProps>(function ConfirmDialog(
+  {
+    open,
+    onOpenChange,
+    title = "Are you sure?",
+    description = "This action cannot be undone.",
+    confirmLabel = "Delete",
+    cancelLabel = "Cancel",
+    variant = "destructive",
+    onConfirm,
+  },
+  ref,
+) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent ref={ref} className="rounded-2xl border-border/50 bg-card shadow-2xl max-w-[400px]">
+      <AlertDialogContent
+        ref={ref}
+        className="rounded-2xl border-border/50 bg-card shadow-2xl max-w-[400px]"
+      >
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-base font-bold text-card-foreground">{title}</AlertDialogTitle>
-          <AlertDialogDescription className="text-sm text-muted-foreground">{description}</AlertDialogDescription>
+          <AlertDialogTitle className="text-base font-bold text-card-foreground">
+            {title}
+          </AlertDialogTitle>
+          <AlertDialogDescription className="text-sm text-muted-foreground">
+            {description}
+          </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2">
-          <AlertDialogCancel className="rounded-xl text-sm font-medium">{cancelLabel}</AlertDialogCancel>
+          <AlertDialogCancel className="rounded-xl text-sm font-medium">
+            {cancelLabel}
+          </AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             className={`rounded-xl text-sm font-semibold ${
@@ -70,10 +82,15 @@ export function useConfirmDialog() {
   }>({ open: false, title: "", description: "", confirmLabel: "Delete", onConfirm: () => {} });
 
   const confirm = useCallback(
-    (opts: { title: string; description: string; confirmLabel?: string; onConfirm: () => void }) => {
+    (opts: {
+      title: string;
+      description: string;
+      confirmLabel?: string;
+      onConfirm: () => void;
+    }) => {
       setState({ open: true, ...opts, confirmLabel: opts.confirmLabel || "Delete" });
     },
-    []
+    [],
   );
 
   const dialogProps = {

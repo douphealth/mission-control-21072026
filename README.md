@@ -1,27 +1,31 @@
 # Mission Control
 
-Personal operations dashboard: tasks, calendar, notes, focus and habits — with a
-review loop that keeps the backlog from rotting.
+Personal operations system: it tells you what you're doing now, what comes
+next, and what needs your attention — one timeline, one capture bar, one
+command palette. Everything else is one click deeper.
 
-## Focused daily path
+## The daily loop
 
-The daily path is intentionally six screens:
+| Surface                         | Purpose                                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home                            | Now → capture → one unified timeline (flags, timed, NOW marker, engine-ordered queue)                                                                 |
+| Review                          | Weekly review, decay triage, priority matrix, daily shutdown                                                                                          |
+| Calendar                        | Time-blocked commitments                                                                                                                              |
+| Tasks                           | Capture and work                                                                                                                                      |
+| Captures / Findings / Reminders | The inbox layer                                                                                                                                       |
+| Modules (collapsed)             | Websites, WP, SEO, GitHub, Builds, Cloudflare, Vercel, Finance, Habits, Ideas, Credentials, Links, Focus Timer, Settings — everything, one level down |
 
-| Screen | Purpose |
-| --- | --- |
-| Dashboard | Today at a glance |
-| Tasks | Capture and work |
-| Review | Weekly review, decay triage, priority matrix, daily shutdown |
-| Calendar | Time-blocked commitments |
-| Notes | Reference material |
-| Focus | One locked task at a time |
-| Habits | Streaks |
+Every ranking is explainable: the priority engine scores named dimensions
+(deadline pressure, priority, decay, kind, pinned) and the UI shows those
+reasons — never a raw score. Planning (`notBefore`/`scheduledAt`) never
+rewrites a real deadline. Universal capture routes free text (`>` task,
+`#` note, `!` idea, `@` reminder, bare link) with dates, times, and tags
+parsed inline — from Home or ⌘K.
 
-Everything else (Websites, WP Management, Kanban, Payments, Ideas, Credentials,
-Links, GitHub, Builds, SEO, Cloudflare, Vercel, OpenClaw) lives behind the
-collapsed **Archive** group in the sidebar. Those modules are fully usable and
-can be edited, improved or extended at any time — they are simply kept out of
-the default daily path to reduce noise.
+All specialized modules live behind the collapsed **Modules** group in the
+sidebar (second level). Those modules are fully usable and can be edited,
+improved or extended at any time — they are simply kept out of the default
+daily path to reduce noise.
 
 ## The review loop
 

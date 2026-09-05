@@ -51,7 +51,16 @@ export interface GitHubRepo {
   lastUpdated: string;
   devPlatformUrl?: string;
   deploymentUrl?: string;
-  dbType?: 'supabase' | 'firebase' | 'planetscale' | 'neon' | 'railway' | 'mongodb' | 'postgres' | 'mysql' | 'other';
+  dbType?:
+    | "supabase"
+    | "firebase"
+    | "planetscale"
+    | "neon"
+    | "railway"
+    | "mongodb"
+    | "postgres"
+    | "mysql"
+    | "other";
   dbUrl?: string;
   dbDashboardUrl?: string;
   dbName?: string;
@@ -193,7 +202,9 @@ export function loadData(): StoreData {
         credentials: parsed.credentials || defaults.credentials,
       };
     }
-  } catch { }
+  } catch {
+    /* ignore */
+  }
   const d = getDefaultData();
   saveData(d);
   return d;

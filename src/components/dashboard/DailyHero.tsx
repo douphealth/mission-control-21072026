@@ -9,7 +9,14 @@ function Ring({ pct, size = 76, stroke = 8 }: { pct: number; size?: number; stro
   const c = 2 * Math.PI * r;
   return (
     <svg width={size} height={size} className="-rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} className="stroke-white/15" fill="none" />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        strokeWidth={stroke}
+        className="stroke-white/15"
+        fill="none"
+      />
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -39,19 +46,28 @@ export default function DailyHero({
   stats,
   onComplete,
   onPlan,
+  onDockFocus,
 }: {
   now?: WorkItem;
   today: string;
   stats: { commitments: number; overdue: number; completedToday: number; inbox: number };
   onComplete: (item: WorkItem) => void;
   onPlan: (item: WorkItem, days: number) => void;
+  /** Dock a focus session on this page instead of navigating away. */
+  onDockFocus?: () => void;
 }) {
   const setActiveSection = useNavigationStore((s) => s.setActiveSection);
-  const setFocusTaskId = useNavigationStore((s) => s.setFocusTaskId);
   const userName = useSettingsStore((s) => s.userName);
 
   const hour = new Date().getHours();
-  const greet = hour < 5 ? "Still up" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greet =
+    hour < 5
+      ? "Still up"
+      : hour < 12
+        ? "Good morning"
+        : hour < 18
+          ? "Good afternoon"
+          : "Good evening";
   const dateLabel = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, {
     weekday: "long",
     day: "numeric",
@@ -60,11 +76,6 @@ export default function DailyHero({
 
   const planned = stats.commitments + stats.completedToday;
   const pct = planned > 0 ? (stats.completedToday / planned) * 100 : 0;
-
-  const startFocus = () => {
-    if (now?.kind === "task") setFocusTaskId(now.refId);
-    setActiveSection("focus");
-  };
 
   return (
     <section
@@ -136,7 +147,15 @@ export default function DailyHero({
           {now ? (
             <>
               <button
-                onClick={() => setActiveSection(now.kind === "decision" ? "decisions" : now.kind === "payment" ? "payments" : "tasks")}
+                onClick={() =>
+                  setActiveSection(
+                    now.kind === "decision"
+                      ? "decisions"
+                      : now.kind === "payment"
+                        ? "payments"
+                        : "tasks",
+                  )
+                }
                 className="block w-full text-left"
               >
                 <h2 className="font-display text-[19px] font-bold leading-snug tracking-tight sm:text-[24px]">
@@ -161,10 +180,10 @@ export default function DailyHero({
                   <CheckCircle2 size={15} /> Complete
                 </button>
                 <button
-                  onClick={startFocus}
+                  onClick={() => (onDockFocus ? onDockFocus() : setActiveSection("focus"))}
                   className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-[13px] font-semibold backdrop-blur transition active:scale-[0.97]"
                 >
-                  <Timer size={15} /> Focus 25m
+                  <Timer size={15} /> {onDockFocus ? "Focus here" : "Focus 25m"}
                 </button>
                 <button
                   onClick={() => onPlan(now, 1)}
@@ -177,10 +196,11 @@ export default function DailyHero({
           ) : (
             <div className="py-3">
               <h2 className="font-display text-[19px] font-bold tracking-tight sm:text-[22px]">
-                Queue is clear
+                Nothing is demanding your attention
               </h2>
               <p className="mt-1 text-[12px] text-white/60">
-                Nothing is demanding your attention right now. Capture something new or review what is coming.
+                No deadlines, no overdue work, no open exceptions. Capture the next thing — or, if
+                this is a new device, sign in above to restore your data.
               </p>
               <button
                 onClick={() => setActiveSection("review")}

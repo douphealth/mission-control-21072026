@@ -1,40 +1,183 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
-  Search, Home, CheckSquare, Calendar, FileText, Timer, Globe, Github,
-  Hammer, Link2, BarChart3, Settings, DollarSign, Lightbulb, KeyRound,
-  ArrowRight, Clock, Zap, Hash, Flame, Moon, Upload, Download,
-  ExternalLink, Star, TrendingUp
-} from 'lucide-react';
-import { useWebsites, useTasks, useRepos, useBuildProjects, useLinks, useNotes, usePayments, useExportAllData } from '@/hooks/useTableData';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useNavigationStore } from '@/stores/navigationStore';
-import Fuse from 'fuse.js';
+  Search,
+  Home,
+  CheckSquare,
+  Calendar,
+  FileText,
+  Timer,
+  Globe,
+  Github,
+  Hammer,
+  Link2,
+  BarChart3,
+  Settings,
+  DollarSign,
+  Lightbulb,
+  KeyRound,
+  ArrowRight,
+  Clock,
+  Zap,
+  Hash,
+  Flame,
+  Moon,
+  Upload,
+  Download,
+  ExternalLink,
+  Star,
+  TrendingUp,
+} from "lucide-react";
+import {
+  useWebsites,
+  useTasks,
+  useRepos,
+  useBuildProjects,
+  useLinks,
+  useNotes,
+  usePayments,
+  useExportAllData,
+  useAddItem,
+} from "@/hooks/useTableData";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { useNavigationStore } from "@/stores/navigationStore";
+import { parseCapture, toRecord } from "@/lib/quickCapture";
+import { todayISO } from "@/lib/overdue";
+import { toast } from "sonner";
+import Fuse from "fuse.js";
 
 const sections = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home, emoji: '🏠', keywords: ['home', 'overview', 'main'] },
-  { id: 'tasks', label: 'Tasks', icon: CheckSquare, emoji: '✅', keywords: ['todo', 'checklist', 'work'] },
-  { id: 'calendar', label: 'Calendar', icon: Calendar, emoji: '📅', keywords: ['date', 'schedule', 'events'] },
-  { id: 'notes', label: 'Notes', icon: FileText, emoji: '📝', keywords: ['write', 'document', 'memo'] },
-  { id: 'habits', label: 'Habit Tracker', icon: Flame, emoji: '🔥', keywords: ['streak', 'daily', 'routine'] },
-  { id: 'focus', label: 'Focus Timer', icon: Timer, emoji: '🍅', keywords: ['pomodoro', 'timer', 'concentrate'] },
-  { id: 'websites', label: 'My Websites', icon: Globe, emoji: '🌐', keywords: ['sites', 'domains', 'hosting'] },
-  { id: 'github', label: 'GitHub Projects', icon: Github, emoji: '🐙', keywords: ['repos', 'code', 'git'] },
-  { id: 'builds', label: 'Build Projects', icon: Hammer, emoji: '🛠️', keywords: ['deploy', 'bolt', 'lovable'] },
-  { id: 'links', label: 'Links Hub', icon: Link2, emoji: '🔗', keywords: ['bookmarks', 'urls', 'resources'] },
-  { id: 'projects', label: 'Kanban Board', icon: BarChart3, emoji: '📊', keywords: ['board', 'kanban', 'columns'] },
-  { id: 'payments', label: 'Payments', icon: DollarSign, emoji: '💰', keywords: ['money', 'invoice', 'billing'] },
-  { id: 'ideas', label: 'Ideas Board', icon: Lightbulb, emoji: '💡', keywords: ['brainstorm', 'concepts', 'innovation'] },
-  { id: 'credentials', label: 'Credential Vault', icon: KeyRound, emoji: '🔐', keywords: ['passwords', 'secrets', 'keys'] },
-  { id: 'seo', label: 'SEO Center', icon: TrendingUp, emoji: '🔍', keywords: ['search', 'optimization', 'ranking'] },
-  { id: 'cloudflare', label: 'Cloudflare', icon: Globe, emoji: '☁️', keywords: ['cdn', 'dns', 'protection'] },
-  { id: 'vercel', label: 'Vercel', icon: Globe, emoji: '🚀', keywords: ['deploy', 'hosting', 'nextjs'] },
-  { id: 'openclaw', label: 'OpenClaw', icon: Github, emoji: '🐙', keywords: ['tool', 'platform'] },
-  { id: 'settings', label: 'Settings', icon: Settings, emoji: '⚙️', keywords: ['preferences', 'config', 'account'] },
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    icon: Home,
+    emoji: "🏠",
+    keywords: ["home", "overview", "main"],
+  },
+  {
+    id: "tasks",
+    label: "Tasks",
+    icon: CheckSquare,
+    emoji: "✅",
+    keywords: ["todo", "checklist", "work"],
+  },
+  {
+    id: "calendar",
+    label: "Calendar",
+    icon: Calendar,
+    emoji: "📅",
+    keywords: ["date", "schedule", "events"],
+  },
+  {
+    id: "notes",
+    label: "Notes",
+    icon: FileText,
+    emoji: "📝",
+    keywords: ["write", "document", "memo"],
+  },
+  {
+    id: "habits",
+    label: "Habit Tracker",
+    icon: Flame,
+    emoji: "🔥",
+    keywords: ["streak", "daily", "routine"],
+  },
+  {
+    id: "focus",
+    label: "Focus Timer",
+    icon: Timer,
+    emoji: "🍅",
+    keywords: ["pomodoro", "timer", "concentrate"],
+  },
+  {
+    id: "websites",
+    label: "My Websites",
+    icon: Globe,
+    emoji: "🌐",
+    keywords: ["sites", "domains", "hosting"],
+  },
+  {
+    id: "github",
+    label: "GitHub Projects",
+    icon: Github,
+    emoji: "🐙",
+    keywords: ["repos", "code", "git"],
+  },
+  {
+    id: "builds",
+    label: "Build Projects",
+    icon: Hammer,
+    emoji: "🛠️",
+    keywords: ["deploy", "bolt", "lovable"],
+  },
+  {
+    id: "links",
+    label: "Links Hub",
+    icon: Link2,
+    emoji: "🔗",
+    keywords: ["bookmarks", "urls", "resources"],
+  },
+  {
+    id: "projects",
+    label: "Kanban Board",
+    icon: BarChart3,
+    emoji: "📊",
+    keywords: ["board", "kanban", "columns"],
+  },
+  {
+    id: "payments",
+    label: "Payments",
+    icon: DollarSign,
+    emoji: "💰",
+    keywords: ["money", "invoice", "billing"],
+  },
+  {
+    id: "ideas",
+    label: "Ideas Board",
+    icon: Lightbulb,
+    emoji: "💡",
+    keywords: ["brainstorm", "concepts", "innovation"],
+  },
+  {
+    id: "credentials",
+    label: "Credential Vault",
+    icon: KeyRound,
+    emoji: "🔐",
+    keywords: ["passwords", "secrets", "keys"],
+  },
+  {
+    id: "seo",
+    label: "SEO Center",
+    icon: TrendingUp,
+    emoji: "🔍",
+    keywords: ["search", "optimization", "ranking"],
+  },
+  {
+    id: "cloudflare",
+    label: "Cloudflare",
+    icon: Globe,
+    emoji: "☁️",
+    keywords: ["cdn", "dns", "protection"],
+  },
+  {
+    id: "vercel",
+    label: "Vercel",
+    icon: Globe,
+    emoji: "🚀",
+    keywords: ["deploy", "hosting", "nextjs"],
+  },
+  { id: "openclaw", label: "OpenClaw", icon: Github, emoji: "🐙", keywords: ["tool", "platform"] },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: Settings,
+    emoji: "⚙️",
+    keywords: ["preferences", "config", "account"],
+  },
 ];
 
 interface CommandItem {
   id: string;
-  type: 'navigate' | 'action' | 'data' | 'recent';
+  type: "navigate" | "action" | "data" | "recent";
   label: string;
   sub: string;
   action: () => void;
@@ -50,20 +193,23 @@ interface CommandPaletteProps {
   onImport: () => void;
 }
 
-// Natural language query patterns
+// Natural language query patterns — local dates only, never UTC.
 const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = [
   {
     pattern: /tasks?\s*(due|for)\s*(today|this week|tomorrow)/i,
     handler: (ctx) => {
-      const today = new Date().toISOString().split('T')[0];
-      const tasks = ctx.tasks.filter((t: any) => t.status !== 'done' && t.dueDate <= today);
+      const today = todayISO();
+      const tasks = ctx.tasks.filter((t: any) => t.status !== "done" && t.dueDate <= today);
       return tasks.map((t: any) => ({
         id: `task-${t.id}`,
-        type: 'data' as const,
+        type: "data" as const,
         label: t.title,
         sub: `${t.priority} · ${t.dueDate}`,
-        action: () => { ctx.setActiveSection('tasks'); ctx.onClose(); },
-        emoji: '✅',
+        action: () => {
+          ctx.setActiveSection("tasks");
+          ctx.onClose();
+        },
+        emoji: "✅",
         priority: 10,
       }));
     },
@@ -71,15 +217,18 @@ const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = 
   {
     pattern: /overdue|late|past\s*due/i,
     handler: (ctx) => {
-      const today = new Date().toISOString().split('T')[0];
-      const overdue = ctx.tasks.filter((t: any) => t.status !== 'done' && t.dueDate < today);
+      const today = todayISO();
+      const overdue = ctx.tasks.filter((t: any) => t.status !== "done" && t.dueDate < today);
       return overdue.map((t: any) => ({
         id: `overdue-${t.id}`,
-        type: 'data' as const,
+        type: "data" as const,
         label: `⚠️ ${t.title}`,
         sub: `Overdue since ${t.dueDate}`,
-        action: () => { ctx.setActiveSection('tasks'); ctx.onClose(); },
-        emoji: '🔴',
+        action: () => {
+          ctx.setActiveSection("tasks");
+          ctx.onClose();
+        },
+        emoji: "🔴",
         priority: 10,
       }));
     },
@@ -87,14 +236,19 @@ const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = 
   {
     pattern: /unpaid|pending\s*(payment|invoice)/i,
     handler: (ctx) => {
-      const pending = ctx.payments.filter((p: any) => p.status === 'pending' || p.status === 'overdue');
+      const pending = ctx.payments.filter(
+        (p: any) => p.status === "pending" || p.status === "overdue",
+      );
       return pending.map((p: any) => ({
         id: `payment-${p.id}`,
-        type: 'data' as const,
+        type: "data" as const,
         label: p.title,
         sub: `$${p.amount} · ${p.status}`,
-        action: () => { ctx.setActiveSection('payments'); ctx.onClose(); },
-        emoji: '💰',
+        action: () => {
+          ctx.setActiveSection("payments");
+          ctx.onClose();
+        },
+        emoji: "💰",
         priority: 10,
       }));
     },
@@ -109,41 +263,81 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
   const links = useLinks();
   const notes = useNotes();
   const payments = usePayments();
+  const addItem = useAddItem();
   const exportAllData = useExportAllData();
-  const toggleTheme = useSettingsStore(s => s.toggleTheme);
+  const toggleTheme = useSettingsStore((s) => s.toggleTheme);
   const { setActiveSection, recentSections } = useNavigationStore();
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [activeTab, setActiveTab] = useState<'all' | 'navigate' | 'data' | 'actions'>('all');
+  const [activeTab, setActiveTab] = useState<"all" | "navigate" | "data" | "actions">("all");
 
   useEffect(() => {
     if (open) {
-      setQuery('');
+      setQuery("");
       setSelectedIndex(0);
-      setActiveTab('all');
+      setActiveTab("all");
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
 
-  const ctx = useMemo(() => ({
-    tasks, payments, setActiveSection, onClose
-  }), [tasks, payments, setActiveSection, onClose]);
+  const ctx = useMemo(
+    () => ({
+      tasks,
+      payments,
+      setActiveSection,
+      onClose,
+    }),
+    [tasks, payments, setActiveSection, onClose],
+  );
 
   const allItems = useMemo(() => {
     const items: CommandItem[] = [];
 
+    // ── Universal capture: whatever the user typed becomes the top action ──
+    const raw = query.trim();
+    if (
+      raw.length > 1 &&
+      !["tasks due", "overdue", "unpaid"].some((p) => p === raw.toLowerCase())
+    ) {
+      const parsed = parseCapture(raw);
+      items.push({
+        id: "capture-inline",
+        type: "action",
+        label: `Capture: “${raw.slice(0, 48)}${raw.length > 48 ? "…" : ""}”`,
+        sub: `→ ${parsed.target}${parsed.due ? ` · ${parsed.due}` : ""}${parsed.priority ? ` · ${parsed.priority}` : ""}`,
+        action: async () => {
+          try {
+            await addItem(parsed.target, toRecord(parsed) as never);
+            toast.success(`Captured as ${parsed.target}`, {
+              description: parsed.title.slice(0, 60),
+            });
+          } catch (e: any) {
+            toast.error("Capture failed", { description: String(e?.message ?? e) });
+          }
+          onClose();
+        },
+        emoji: "⚡",
+        icon: Zap,
+        keywords: ["capture", "add", "new", "task", "note", "idea", "reminder", "link"],
+        priority: 200,
+      });
+    }
+
     // Recent sections (high priority)
     recentSections.slice(0, 4).forEach((id, i) => {
-      const sec = sections.find(s => s.id === id);
+      const sec = sections.find((s) => s.id === id);
       if (sec) {
         items.push({
           id: `recent-${id}`,
-          type: 'recent',
+          type: "recent",
           label: sec.label,
-          sub: 'Recently visited',
-          action: () => { setActiveSection(sec.id); onClose(); },
+          sub: "Recently visited",
+          action: () => {
+            setActiveSection(sec.id);
+            onClose();
+          },
           emoji: sec.emoji,
           icon: Clock,
           priority: 100 - i,
@@ -152,13 +346,16 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
     });
 
     // Navigation sections
-    sections.forEach(s => {
+    sections.forEach((s) => {
       items.push({
         id: `nav-${s.id}`,
-        type: 'navigate',
+        type: "navigate",
         label: s.label,
-        sub: 'Go to section',
-        action: () => { setActiveSection(s.id); onClose(); },
+        sub: "Go to section",
+        action: () => {
+          setActiveSection(s.id);
+          onClose();
+        },
         emoji: s.emoji,
         icon: ArrowRight,
         keywords: s.keywords,
@@ -168,139 +365,197 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
 
     // Actions
     items.push({
-      id: 'action-import',
-      type: 'action',
-      label: 'Bulk Import (CSV/JSON)',
-      sub: 'Import data from file',
-      action: () => { onImport(); onClose(); },
-      emoji: '📥',
+      id: "action-import",
+      type: "action",
+      label: "Bulk Import (CSV/JSON)",
+      sub: "Import data from file",
+      action: () => {
+        onImport();
+        onClose();
+      },
+      emoji: "📥",
       icon: Upload,
-      keywords: ['upload', 'csv', 'json'],
+      keywords: ["upload", "csv", "json"],
       priority: 40,
     });
     items.push({
-      id: 'action-export',
-      type: 'action',
-      label: 'Export All Data',
-      sub: 'Download backup JSON',
+      id: "action-export",
+      type: "action",
+      label: "Export All Data",
+      sub: "Download backup JSON",
       action: async () => {
         const data = await exportAllData();
-        const blob = new Blob([data], { type: 'application/json' });
-        const a = document.createElement('a');
+        const blob = new Blob([data], { type: "application/json" });
+        const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
-        a.download = `mission-control-backup-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `mission-control-backup-${new Date().toISOString().split("T")[0]}.json`;
         a.click();
         onClose();
       },
-      emoji: '📤',
+      emoji: "📤",
       icon: Download,
-      keywords: ['backup', 'save', 'download'],
+      keywords: ["backup", "save", "download"],
       priority: 40,
     });
     items.push({
-      id: 'action-theme',
-      type: 'action',
-      label: 'Toggle Dark Mode',
-      sub: 'Switch between light & dark',
-      action: () => { toggleTheme(); onClose(); },
-      emoji: '🌙',
+      id: "action-theme",
+      type: "action",
+      label: "Toggle Dark Mode",
+      sub: "Switch between light & dark",
+      action: () => {
+        toggleTheme();
+        onClose();
+      },
+      emoji: "🌙",
       icon: Moon,
-      keywords: ['theme', 'dark', 'light', 'mode'],
+      keywords: ["theme", "dark", "light", "mode"],
       priority: 30,
     });
 
     // Data items
-    websites.forEach(w => items.push({
-      id: `site-${w.id}`,
-      type: 'data',
-      label: w.name,
-      sub: w.url,
-      action: () => { window.open(w.url, '_blank'); onClose(); },
-      emoji: '🌐',
-      icon: ExternalLink,
-      keywords: [w.category, w.hostingProvider],
-      priority: 20,
-    }));
-    tasks.filter(t => t.status !== 'done').forEach(t => items.push({
-      id: `task-${t.id}`,
-      type: 'data',
-      label: t.title,
-      sub: `${t.priority} · ${t.dueDate}`,
-      action: () => { setActiveSection('tasks'); onClose(); },
-      emoji: '✅',
-      keywords: [t.category, t.linkedProject],
-      priority: 20,
-    }));
-    repos.forEach(r => items.push({
-      id: `repo-${r.id}`,
-      type: 'data',
-      label: r.name,
-      sub: r.description?.slice(0, 50) || '',
-      action: () => { window.open(r.url, '_blank'); onClose(); },
-      emoji: '🐙',
-      icon: ExternalLink,
-      keywords: [r.language, ...(r.topics || [])],
-      priority: 15,
-    }));
-    buildProjects.forEach(b => items.push({
-      id: `build-${b.id}`,
-      type: 'data',
-      label: b.name,
-      sub: `${b.platform} · ${b.status}`,
-      action: () => { setActiveSection('builds'); onClose(); },
-      emoji: '🛠️',
-      keywords: b.techStack,
-      priority: 15,
-    }));
-    links.forEach(l => items.push({
-      id: `link-${l.id}`,
-      type: 'data',
-      label: l.title,
-      sub: l.url,
-      action: () => { window.open(l.url, '_blank'); onClose(); },
-      emoji: '🔗',
-      icon: ExternalLink,
-      keywords: [l.category],
-      priority: 10,
-    }));
-    notes.forEach(n => items.push({
-      id: `note-${n.id}`,
-      type: 'data',
-      label: n.title,
-      sub: n.content?.slice(0, 40) || '',
-      action: () => { setActiveSection('notes'); onClose(); },
-      emoji: '📝',
-      keywords: n.tags,
-      priority: 10,
-    }));
+    websites.forEach((w) =>
+      items.push({
+        id: `site-${w.id}`,
+        type: "data",
+        label: w.name,
+        sub: w.url,
+        action: () => {
+          window.open(w.url, "_blank");
+          onClose();
+        },
+        emoji: "🌐",
+        icon: ExternalLink,
+        keywords: [w.category, w.hostingProvider],
+        priority: 20,
+      }),
+    );
+    tasks
+      .filter((t) => t.status !== "done")
+      .forEach((t) =>
+        items.push({
+          id: `task-${t.id}`,
+          type: "data",
+          label: t.title,
+          sub: `${t.priority} · ${t.dueDate}`,
+          action: () => {
+            setActiveSection("tasks");
+            onClose();
+          },
+          emoji: "✅",
+          keywords: [t.category, t.linkedProject],
+          priority: 20,
+        }),
+      );
+    repos.forEach((r) =>
+      items.push({
+        id: `repo-${r.id}`,
+        type: "data",
+        label: r.name,
+        sub: r.description?.slice(0, 50) || "",
+        action: () => {
+          window.open(r.url, "_blank");
+          onClose();
+        },
+        emoji: "🐙",
+        icon: ExternalLink,
+        keywords: [r.language, ...(r.topics || [])],
+        priority: 15,
+      }),
+    );
+    buildProjects.forEach((b) =>
+      items.push({
+        id: `build-${b.id}`,
+        type: "data",
+        label: b.name,
+        sub: `${b.platform} · ${b.status}`,
+        action: () => {
+          setActiveSection("builds");
+          onClose();
+        },
+        emoji: "🛠️",
+        keywords: b.techStack,
+        priority: 15,
+      }),
+    );
+    links.forEach((l) =>
+      items.push({
+        id: `link-${l.id}`,
+        type: "data",
+        label: l.title,
+        sub: l.url,
+        action: () => {
+          window.open(l.url, "_blank");
+          onClose();
+        },
+        emoji: "🔗",
+        icon: ExternalLink,
+        keywords: [l.category],
+        priority: 10,
+      }),
+    );
+    notes.forEach((n) =>
+      items.push({
+        id: `note-${n.id}`,
+        type: "data",
+        label: n.title,
+        sub: n.content?.slice(0, 40) || "",
+        action: () => {
+          setActiveSection("notes");
+          onClose();
+        },
+        emoji: "📝",
+        keywords: n.tags,
+        priority: 10,
+      }),
+    );
 
     return items;
-  }, [websites, tasks, repos, buildProjects, links, notes, recentSections, setActiveSection, onClose, onImport, exportAllData, toggleTheme]);
+  }, [
+    query,
+    websites,
+    tasks,
+    repos,
+    buildProjects,
+    links,
+    notes,
+    payments,
+    addItem,
+    recentSections,
+    setActiveSection,
+    onClose,
+    onImport,
+    exportAllData,
+    toggleTheme,
+  ]);
 
   // Fuse.js fuzzy search
-  const fuse = useMemo(() => new Fuse(allItems, {
-    keys: [
-      { name: 'label', weight: 0.5 },
-      { name: 'sub', weight: 0.2 },
-      { name: 'type', weight: 0.1 },
-      { name: 'keywords', weight: 0.2 },
-    ],
-    threshold: 0.35,
-    includeScore: true,
-    sortFn: (a, b) => a.score - b.score,
-  }), [allItems]);
+  const fuse = useMemo(
+    () =>
+      new Fuse(allItems, {
+        keys: [
+          { name: "label", weight: 0.5 },
+          { name: "sub", weight: 0.2 },
+          { name: "type", weight: 0.1 },
+          { name: "keywords", weight: 0.2 },
+        ],
+        threshold: 0.35,
+        includeScore: true,
+        sortFn: (a, b) => a.score - b.score,
+      }),
+    [allItems],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim();
     if (!q) {
       // Show recent first, then navigation, filtered by tab
       let items = allItems;
-      if (activeTab !== 'all') {
-        items = items.filter(i => activeTab === 'actions' ? i.type === 'action' : i.type === activeTab);
+      if (activeTab !== "all") {
+        items = items.filter((i) =>
+          activeTab === "actions" ? i.type === "action" : i.type === activeTab,
+        );
       }
-      return items
-        .sort((a, b) => (b.priority || 0) - (a.priority || 0))
-        .slice(0, 12);
+      return items.sort((a, b) => (b.priority || 0) - (a.priority || 0)).slice(0, 12);
     }
 
     // Check natural language patterns first
@@ -312,59 +567,82 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
     }
 
     // Fuzzy search
-    let results = fuse.search(q).map(r => r.item);
-    if (activeTab !== 'all') {
-      results = results.filter(i => activeTab === 'actions' ? i.type === 'action' : i.type === activeTab);
+    let results = fuse.search(q).map((r) => r.item);
+    if (activeTab !== "all") {
+      results = results.filter((i) =>
+        activeTab === "actions" ? i.type === "action" : i.type === activeTab,
+      );
     }
     return results.slice(0, 12);
   }, [query, allItems, fuse, activeTab, ctx]);
 
-  useEffect(() => { setSelectedIndex(0); }, [query, activeTab]);
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [query, activeTab]);
 
   // Scroll selected item into view
   useEffect(() => {
     if (listRef.current) {
       const selected = listRef.current.children[selectedIndex] as HTMLElement;
-      selected?.scrollIntoView({ block: 'nearest' });
+      selected?.scrollIntoView({ block: "nearest" });
     }
   }, [selectedIndex]);
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setSelectedIndex(i => Math.min(i + 1, filtered.length - 1)); }
-    if (e.key === 'ArrowUp') { e.preventDefault(); setSelectedIndex(i => Math.max(i - 1, 0)); }
-    if (e.key === 'Enter' && filtered[selectedIndex]) { filtered[selectedIndex].action(); }
-    if (e.key === 'Escape') onClose();
-    if (e.key === 'Tab') {
-      e.preventDefault();
-      const tabs: typeof activeTab[] = ['all', 'navigate', 'data', 'actions'];
-      const next = tabs[(tabs.indexOf(activeTab) + 1) % tabs.length];
-      setActiveTab(next);
-    }
-  }, [filtered, selectedIndex, onClose, activeTab]);
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex((i) => Math.max(i - 1, 0));
+      }
+      if (e.key === "Enter" && filtered[selectedIndex]) {
+        filtered[selectedIndex].action();
+      }
+      if (e.key === "Escape") onClose();
+      if (e.key === "Tab") {
+        e.preventDefault();
+        const tabs: (typeof activeTab)[] = ["all", "navigate", "data", "actions"];
+        const next = tabs[(tabs.indexOf(activeTab) + 1) % tabs.length];
+        setActiveTab(next);
+      }
+    },
+    [filtered, selectedIndex, onClose, activeTab],
+  );
 
   const typeConfig: Record<string, { label: string; color: string }> = {
-    recent: { label: 'Recent', color: 'bg-warning/10 text-warning' },
-    navigate: { label: 'Navigate', color: 'bg-primary/10 text-primary' },
-    action: { label: 'Action', color: 'bg-accent/10 text-accent' },
-    data: { label: 'Data', color: 'bg-secondary text-muted-foreground' },
+    recent: { label: "Recent", color: "bg-warning/10 text-warning" },
+    navigate: { label: "Navigate", color: "bg-primary/10 text-primary" },
+    action: { label: "Action", color: "bg-accent/10 text-accent" },
+    data: { label: "Data", color: "bg-secondary text-muted-foreground" },
   };
 
   const tabs = [
-    { id: 'all' as const, label: 'All', count: allItems.length },
-    { id: 'navigate' as const, label: 'Navigate', count: allItems.filter(i => i.type === 'navigate').length },
-    { id: 'data' as const, label: 'Data', count: allItems.filter(i => i.type === 'data').length },
-    { id: 'actions' as const, label: 'Actions', count: allItems.filter(i => i.type === 'action').length },
+    { id: "all" as const, label: "All", count: allItems.length },
+    {
+      id: "navigate" as const,
+      label: "Navigate",
+      count: allItems.filter((i) => i.type === "navigate").length,
+    },
+    { id: "data" as const, label: "Data", count: allItems.filter((i) => i.type === "data").length },
+    {
+      id: "actions" as const,
+      label: "Actions",
+      count: allItems.filter((i) => i.type === "action").length,
+    },
   ];
 
   return (
     <>
       {open && (
-        <div 
+        <div
           className="fixed inset-0 z-[200] flex items-start justify-center pt-[12vh] sm:pt-[15vh] px-4"
           onClick={onClose}
         >
           <div className="absolute inset-0 bg-foreground/30 backdrop-blur-md" />
-          <div 
+          <div
             className="relative w-full max-w-xl bg-card/95 backdrop-blur-2xl rounded-2xl shadow-[var(--shadow-xl)] border border-border/50 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -379,23 +657,27 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
                 placeholder="Search, navigate, or type a command..."
                 className="flex-1 bg-transparent text-foreground text-sm outline-none placeholder:text-muted-foreground/50"
               />
-              <kbd className="text-[10px] text-muted-foreground/40 bg-secondary px-1.5 py-0.5 rounded font-mono border border-border/30">ESC</kbd>
+              <kbd className="text-[10px] text-muted-foreground/40 bg-secondary px-1.5 py-0.5 rounded font-mono border border-border/30">
+                ESC
+              </kbd>
             </div>
 
             {/* Filter tabs */}
             <div className="flex items-center gap-1 px-4 py-2 border-b border-border/30 bg-secondary/20">
-              {tabs.map(tab => (
+              {tabs.map((tab) => (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
                     activeTab === tab.id
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'text-muted-foreground/60 hover:text-foreground hover:bg-secondary/60'
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground/60 hover:text-foreground hover:bg-secondary/60"
                   }`}
                 >
                   {tab.label}
-                  <span className={`text-[9px] px-1 rounded ${activeTab === tab.id ? 'bg-primary-foreground/20' : 'bg-secondary'}`}>
+                  <span
+                    className={`text-[9px] px-1 rounded ${activeTab === tab.id ? "bg-primary-foreground/20" : "bg-secondary"}`}
+                  >
                     {tab.count}
                   </span>
                 </button>
@@ -405,7 +687,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
             {/* Results */}
             <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-1.5">
               {/* Section labels */}
-              {!query && activeTab === 'all' && recentSections.length > 0 && (
+              {!query && activeTab === "all" && recentSections.length > 0 && (
                 <div className="px-4 py-1.5 text-[10px] font-semibold text-muted-foreground/40 uppercase tracking-widest flex items-center gap-2">
                   <Clock size={10} /> Recent
                 </div>
@@ -415,21 +697,27 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
                 const tc = typeConfig[item.type] || typeConfig.data;
                 return (
                   <button
-                    key={item.id} 
+                    key={item.id}
                     onClick={item.action}
                     onMouseEnter={() => setSelectedIndex(i)}
                     className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all ${
                       selectedIndex === i
-                        ? 'bg-primary/8 border-l-2 border-primary'
-                        : 'border-l-2 border-transparent hover:bg-secondary/40'
+                        ? "bg-primary/8 border-l-2 border-primary"
+                        : "border-l-2 border-transparent hover:bg-secondary/40"
                     }`}
                   >
                     <span className="text-base flex-shrink-0 w-7 text-center">{item.emoji}</span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[13px] font-semibold text-foreground truncate">{item.label}</div>
-                      <div className="text-[11px] text-muted-foreground/50 truncate">{item.sub}</div>
+                      <div className="text-[13px] font-semibold text-foreground truncate">
+                        {item.label}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground/50 truncate">
+                        {item.sub}
+                      </div>
                     </div>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-md font-semibold flex-shrink-0 ${tc.color}`}>
+                    <span
+                      className={`text-[9px] px-2 py-0.5 rounded-md font-semibold flex-shrink-0 ${tc.color}`}
+                    >
                       {tc.label}
                     </span>
                     {selectedIndex === i && (
@@ -441,7 +729,9 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
               {filtered.length === 0 && (
                 <div className="px-4 py-10 text-center">
                   <div className="text-2xl mb-2">🔍</div>
-                  <div className="text-sm font-semibold text-foreground/60">No results for "{query}"</div>
+                  <div className="text-sm font-semibold text-foreground/60">
+                    No results for "{query}"
+                  </div>
                   <div className="text-[11px] text-muted-foreground/40 mt-1">
                     Try "tasks due today" or "unpaid invoices"
                   </div>
@@ -452,9 +742,18 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
             {/* Footer */}
             <div className="border-t border-border/40 px-4 py-2.5 flex items-center justify-between text-[10px] text-muted-foreground/40 bg-secondary/10">
               <div className="flex items-center gap-4">
-                <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded bg-secondary font-mono text-[9px]">↑↓</kbd> Navigate</span>
-                <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded bg-secondary font-mono text-[9px]">↵</kbd> Select</span>
-                <span className="flex items-center gap-1"><kbd className="px-1 py-0.5 rounded bg-secondary font-mono text-[9px]">Tab</kbd> Filter</span>
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1 py-0.5 rounded bg-secondary font-mono text-[9px]">↑↓</kbd>{" "}
+                  Navigate
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1 py-0.5 rounded bg-secondary font-mono text-[9px]">↵</kbd>{" "}
+                  Select
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1 py-0.5 rounded bg-secondary font-mono text-[9px]">Tab</kbd>{" "}
+                  Filter
+                </span>
               </div>
               <div className="flex items-center gap-1.5">
                 <Zap size={10} className="text-primary" />

@@ -32,8 +32,12 @@ export default function SitePulse({ rows }: { rows: SitePulseRow[] }) {
           <Globe size={15} />
         </span>
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Portfolio</div>
-          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">Site pulse</h3>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Portfolio
+          </div>
+          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">
+            Site pulse
+          </h3>
         </div>
       </div>
 
@@ -47,7 +51,9 @@ export default function SitePulse({ rows }: { rows: SitePulseRow[] }) {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="text-[12.5px] font-bold text-foreground">{r.name}</span>
-                <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${BADGE[r.status]}`}>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${BADGE[r.status]}`}
+                >
                   {r.status === "unknown" ? "Status unknown" : r.headline}
                 </span>
               </div>

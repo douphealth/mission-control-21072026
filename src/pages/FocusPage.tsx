@@ -1,17 +1,41 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { Play, Pause, RotateCcw, SkipForward, Coffee, Flame, Zap, TreePine, Target, CheckCircle2 } from "lucide-react";
+import {
+  Play,
+  Pause,
+  RotateCcw,
+  SkipForward,
+  Coffee,
+  Flame,
+  Zap,
+  TreePine,
+  Target,
+  CheckCircle2,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
 import { useTasks, useUpdateItem } from "@/hooks/useTableData";
 import { todayISO } from "@/lib/overdue";
-import { isOpen, sortByPriority, quadrantOf } from "@/lib/triage";
+import { isOpen, daysSinceTouch } from "@/lib/triage";
+import { daysOverdue } from "@/lib/overdue";
+import { scoreItem } from "@/lib/priorityEngine";
 import { useNavigationStore } from "@/stores/navigationStore";
-
 
 const PRESETS = [
   { label: "Focus", minutes: 25, icon: Zap, emoji: "🍅", gradient: "from-primary to-accent" },
-  { label: "Short Break", minutes: 5, icon: Coffee, emoji: "☕", gradient: "from-emerald-500 to-teal-500" },
-  { label: "Long Break", minutes: 15, icon: TreePine, emoji: "🌿", gradient: "from-blue-500 to-indigo-500" },
+  {
+    label: "Short Break",
+    minutes: 5,
+    icon: Coffee,
+    emoji: "☕",
+    gradient: "from-emerald-500 to-teal-500",
+  },
+  {
+    label: "Long Break",
+    minutes: 15,
+    icon: TreePine,
+    emoji: "🌿",
+    gradient: "from-blue-500 to-indigo-500",
+  },
 ];
 
 export default function FocusPage() {
@@ -33,25 +57,40 @@ export default function FocusPage() {
     }
   }, [handoffId, setFocusTaskId]);
 
-
   const tasks = useTasks();
   const updateItem = useUpdateItem();
   const today = todayISO();
 
+  // One engine everywhere: Focus candidates are ranked by the same
+  // priority engine that builds the Home queue — the two-engines
+  // disagreement (Eisenhower vs score) is gone.
   const candidates = useMemo(() => {
     const open = tasks.filter(isOpen);
-    const ranked = sortByPriority(open).sort((a, b) => {
-      const rank = (t: Task) => (quadrantOf(t, today) === 'do' ? 0 : quadrantOf(t, today) === 'schedule' ? 1 : 2);
-      return rank(a) - rank(b);
-    });
+    const ranked = open
+      .map((t) => ({
+        task: t,
+        scored: scoreItem({
+          priority: t.priority,
+          overdueDays: daysOverdue(t, today),
+          staleDays: daysSinceTouch(t, today),
+          due: t.dueDate,
+          today,
+          kind: "task" as const,
+          pinned: t.committedOn === today,
+        }),
+      }))
+      .sort((a, b) => b.scored.score - a.scored.score);
     return ranked.slice(0, 12);
   }, [tasks, today]);
 
-  const locked = tasks.find(t => t.id === lockedId) || null;
+  const locked = tasks.find((t) => t.id === lockedId) || null;
 
   const completeLocked = async () => {
     if (!locked) return;
-    await updateItem<Task>('tasks', locked.id, { status: 'done', completedAt: new Date().toISOString() });
+    await updateItem<Task>("tasks", locked.id, {
+      status: "done",
+      completedAt: new Date().toISOString(),
+    });
     toast.success(`"${locked.title}" done ✓`);
     setLockedId(null);
     setRunning(false);
@@ -59,20 +98,20 @@ export default function FocusPage() {
 
   const toggleRunning = () => {
     if (!running && preset === 0 && !locked) {
-      toast.error('Pick the one task you are working on first');
+      toast.error("Pick the one task you are working on first");
       return;
     }
-    setRunning(r => !r);
+    setRunning((r) => !r);
   };
 
   useEffect(() => {
     if (running && remaining > 0) {
-      intervalRef.current = setInterval(() => setRemaining(r => r - 1), 1000);
+      intervalRef.current = setInterval(() => setRemaining((r) => r - 1), 1000);
     } else {
       clearInterval(intervalRef.current);
       if (remaining === 0 && running) {
         setRunning(false);
-        if (preset === 0) setSessions(s => s + 1);
+        if (preset === 0) setSessions((s) => s + 1);
         // Auto-advance to break after focus
         if (preset === 0) {
           const nextPreset = sessions > 0 && (sessions + 1) % 4 === 0 ? 2 : 1;
@@ -92,10 +131,13 @@ export default function FocusPage() {
     setRunning(false);
   };
 
-  const reset = () => { setRemaining(totalSec); setRunning(false); };
+  const reset = () => {
+    setRemaining(totalSec);
+    setRunning(false);
+  };
   const skip = () => {
     setRunning(false);
-    if (preset === 0) setSessions(s => s + 1);
+    if (preset === 0) setSessions((s) => s + 1);
     const next = preset === 0 ? 1 : 0;
     selectPreset(next);
   };
@@ -111,11 +153,8 @@ export default function FocusPage() {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[70vh] gap-6 sm:gap-8 px-4">
-
       {/* Header */}
-      <div 
-        className="text-center"
-      >
+      <div className="text-center">
         <h1 className="text-xl sm:text-2xl font-extrabold text-foreground tracking-tight flex items-center justify-center gap-2">
           <Flame size={22} className="text-primary" />
           Focus Timer
@@ -130,13 +169,22 @@ export default function FocusPage() {
         {locked ? (
           <div className="flex flex-wrap items-center gap-3">
             <Target size={16} className="text-primary shrink-0" />
-            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{locked.title}</span>
-            <button onClick={completeLocked}
-              className="flex items-center gap-1 rounded-xl bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-500 transition hover:bg-emerald-500/20">
+            <span className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">
+              {locked.title}
+            </span>
+            <button
+              onClick={completeLocked}
+              className="flex items-center gap-1 rounded-xl bg-emerald-500/10 px-2.5 py-1.5 text-[11px] font-semibold text-emerald-500 transition hover:bg-emerald-500/20"
+            >
               <CheckCircle2 size={12} /> Done
             </button>
-            <button onClick={() => { setLockedId(null); setRunning(false); }}
-              className="rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground">
+            <button
+              onClick={() => {
+                setLockedId(null);
+                setRunning(false);
+              }}
+              className="rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
+            >
               Unlock
             </button>
           </div>
@@ -146,14 +194,29 @@ export default function FocusPage() {
               <Target size={14} className="text-primary" /> Lock the session to one task
             </div>
             <div className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
-              {candidates.map(t => (
-                <button key={t.id} onClick={() => setLockedId(t.id)}
-                  className="flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2 text-left transition hover:bg-secondary">
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{t.title}</span>
-                  <span className="shrink-0 text-[10px] uppercase text-muted-foreground">{t.priority}</span>
+              {candidates.map(({ task: t, scored }) => (
+                <button
+                  key={t.id}
+                  onClick={() => setLockedId(t.id)}
+                  className="flex items-center gap-2 rounded-xl bg-secondary/40 px-3 py-2 text-left transition hover:bg-secondary"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+                    {t.title}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground/80">
+                    {scored.dimensions.find((d) => d.name === "pinned") ? "📌 " : ""}
+                    {scored.score}
+                  </span>
+                  <span className="shrink-0 text-[10px] uppercase text-muted-foreground">
+                    {t.priority}
+                  </span>
                 </button>
               ))}
-              {!candidates.length && <p className="py-3 text-center text-xs text-muted-foreground">No open tasks — nothing to focus on. 🎉</p>}
+              {!candidates.length && (
+                <p className="py-3 text-center text-xs text-muted-foreground">
+                  No open tasks — nothing to focus on. 🎉
+                </p>
+              )}
             </div>
           </>
         )}
@@ -164,11 +227,13 @@ export default function FocusPage() {
         {PRESETS.map((p, i) => (
           <button
             key={i}
-            onClick={() => selectPreset(i)} 
+            onClick={() => selectPreset(i)}
             className={`relative px-4 sm:px-5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all touch-manipulation
-              ${preset === i
-                ? 'bg-card text-foreground shadow-[var(--shadow-md)]'
-                : 'text-muted-foreground hover:text-foreground'}`}
+              ${
+                preset === i
+                  ? "bg-card text-foreground shadow-[var(--shadow-md)]"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
           >
             <span className="relative z-10 flex items-center gap-1.5">
               <span>{p.emoji}</span>
@@ -180,33 +245,40 @@ export default function FocusPage() {
       </div>
 
       {/* Timer ring */}
-      <div
-        key={preset} 
-        className="relative"
-      >
+      <div key={preset} className="relative">
         {/* Glow effect */}
         {running && (
           <div
-            className="absolute inset-0 rounded-full" 
+            className="absolute inset-0 rounded-full"
             style={{
               background: `radial-gradient(circle, hsl(var(--primary) / 0.15), transparent 70%)`,
-              transform: 'scale(1.3)',
+              transform: "scale(1.3)",
             }}
           />
         )}
 
         <svg width="260" height="260" viewBox="0 0 200 200" className="drop-shadow-lg">
           {/* Background ring */}
-          <circle cx="100" cy="100" r={r} fill="none" stroke="hsl(var(--muted) / 0.5)" strokeWidth="6" />
+          <circle
+            cx="100"
+            cy="100"
+            r={r}
+            fill="none"
+            stroke="hsl(var(--muted) / 0.5)"
+            strokeWidth="6"
+          />
           {/* Progress ring */}
           <circle
-            cx="100" cy="100" r={r} fill="none"
+            cx="100"
+            cy="100"
+            r={r}
+            fill="none"
             stroke="hsl(var(--primary))"
             strokeWidth="7"
             strokeLinecap="round"
-            strokeDasharray={circumference} 
+            strokeDasharray={circumference}
             transform="rotate(-90 100 100)"
-            style={{ filter: 'drop-shadow(0 0 8px hsl(var(--primary) / 0.3))' }}
+            style={{ filter: "drop-shadow(0 0 8px hsl(var(--primary) / 0.3))" }}
           />
           {/* Dot at end of progress */}
           {pct > 0 && pct < 100 && (
@@ -214,8 +286,8 @@ export default function FocusPage() {
               cx={100 + r * Math.cos((pct / 100) * 2 * Math.PI - Math.PI / 2)}
               cy={100 + r * Math.sin((pct / 100) * 2 * Math.PI - Math.PI / 2)}
               r="5"
-              fill="hsl(var(--primary))" 
-              style={{ filter: 'drop-shadow(0 0 6px hsl(var(--primary) / 0.5))' }}
+              fill="hsl(var(--primary))"
+              style={{ filter: "drop-shadow(0 0 6px hsl(var(--primary) / 0.5))" }}
             />
           )}
         </svg>
@@ -224,7 +296,7 @@ export default function FocusPage() {
           <span
             key={`${mm}:${ss}`}
             className="text-[56px] sm:text-[64px] font-extrabold text-foreground tracking-tighter tabular-nums leading-none"
-            style={{ fontFamily: 'var(--font-mono)' }}
+            style={{ fontFamily: "var(--font-mono)" }}
           >
             {mm}:{ss}
           </span>
@@ -238,27 +310,25 @@ export default function FocusPage() {
       {/* Controls */}
       <div className="flex items-center gap-4">
         <button
-          onClick={reset} 
+          onClick={reset}
           className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-secondary/60 border border-border/30 text-muted-foreground flex items-center justify-center hover:bg-secondary hover:text-foreground transition-all touch-manipulation"
         >
           <RotateCcw size={20} />
         </button>
 
         <button
-          onClick={toggleRunning} 
+          onClick={toggleRunning}
           className="w-16 h-16 sm:w-20 sm:h-20 rounded-[28px] gradient-primary text-primary-foreground flex items-center justify-center shadow-[var(--shadow-primary)] hover:shadow-[0_8px_32px_-4px_hsl(var(--primary)/0.5)] transition-all touch-manipulation"
         >
           <>
-            <div
-              key={running ? 'pause' : 'play'} 
-            >
+            <div key={running ? "pause" : "play"}>
               {running ? <Pause size={28} /> : <Play size={28} className="ml-1" />}
             </div>
           </>
         </button>
 
         <button
-          onClick={skip} 
+          onClick={skip}
           className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-secondary/60 border border-border/30 text-muted-foreground flex items-center justify-center hover:bg-secondary hover:text-foreground transition-all touch-manipulation"
         >
           <SkipForward size={20} />
@@ -266,9 +336,7 @@ export default function FocusPage() {
       </div>
 
       {/* Session stats */}
-      <div 
-        className="flex items-center gap-6 px-6 py-4 rounded-2xl bg-card border border-border/30 shadow-[var(--shadow-sm)]"
-      >
+      <div className="flex items-center gap-6 px-6 py-4 rounded-2xl bg-card border border-border/30 shadow-[var(--shadow-sm)]">
         <div className="text-center">
           <div className="text-2xl font-bold text-foreground tabular-nums">{sessions}</div>
           <div className="text-[10px] text-muted-foreground/50 font-medium mt-0.5">Sessions</div>
@@ -281,7 +349,8 @@ export default function FocusPage() {
         <div className="w-px h-8 bg-border/30" />
         <div className="text-center">
           <div className="text-2xl font-bold text-primary tabular-nums flex items-center gap-1">
-            <Flame size={16} />{sessions}
+            <Flame size={16} />
+            {sessions}
           </div>
           <div className="text-[10px] text-muted-foreground/50 font-medium mt-0.5">Streak</div>
         </div>

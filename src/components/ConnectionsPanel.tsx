@@ -1,14 +1,26 @@
-import { Plug, ExternalLink, Info } from 'lucide-react';
-import { useAudienceAccounts } from '@/hooks/useTableData';
-import { useNavigationStore } from '@/stores/navigationStore';
+import { Plug, ExternalLink, Info } from "lucide-react";
+import { useAudienceAccounts } from "@/hooks/useTableData";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 const PLATFORMS = [
-  { id: 'youtube', label: 'YouTube', hint: 'Public channel metrics are read automatically on every refresh.' },
-  { id: 'x', label: 'X (Twitter)', hint: 'Public profile metrics are read on refresh; some profiles hide counts.' },
-  { id: 'instagram', label: 'Instagram', hint: 'Public profile metrics are read on refresh; login-walled profiles stay blank.' },
-  { id: 'facebook', label: 'Facebook', hint: 'Public pages only.' },
-  { id: 'linkedin', label: 'LinkedIn', hint: 'Public company pages only.' },
-  { id: 'tiktok', label: 'TikTok', hint: 'Public profiles only.' },
+  {
+    id: "youtube",
+    label: "YouTube",
+    hint: "Public channel metrics are read automatically on every refresh.",
+  },
+  {
+    id: "x",
+    label: "X (Twitter)",
+    hint: "Public profile metrics are read on refresh; some profiles hide counts.",
+  },
+  {
+    id: "instagram",
+    label: "Instagram",
+    hint: "Public profile metrics are read on refresh; login-walled profiles stay blank.",
+  },
+  { id: "facebook", label: "Facebook", hint: "Public pages only." },
+  { id: "linkedin", label: "LinkedIn", hint: "Public company pages only." },
+  { id: "tiktok", label: "TikTok", hint: "Public profiles only." },
 ];
 
 export default function ConnectionsPanel() {
@@ -22,25 +34,31 @@ export default function ConnectionsPanel() {
           <Plug size={18} className="text-primary" /> Connections
         </h2>
         <p className="text-xs text-muted-foreground mb-4">
-          Audience tracking runs on public profile data — no API keys required. Add a profile URL and Mission Control
-          reads follower counts on every refresh. Readings that a platform hides stay blank instead of showing a false zero.
+          Audience tracking runs on public profile data — no API keys required. Add a profile URL
+          and Mission Control reads follower counts on every refresh. Readings that a platform hides
+          stay blank instead of showing a false zero.
         </p>
 
         <div className="space-y-2">
           {PLATFORMS.map((p) => {
             const tracked = accounts.filter((a) => a.platform === p.id).length;
             return (
-              <div key={p.id} className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-2.5">
+              <div
+                key={p.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border/60 px-3 py-2.5"
+              >
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-foreground">{p.label}</p>
                   <p className="text-xs text-muted-foreground">{p.hint}</p>
                 </div>
                 <span
                   className={`shrink-0 text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                    tracked ? 'bg-emerald-500/15 text-emerald-600' : 'bg-secondary text-muted-foreground'
+                    tracked
+                      ? "bg-emerald-500/15 text-emerald-600"
+                      : "bg-secondary text-muted-foreground"
                   }`}
                 >
-                  {tracked ? `${tracked} tracked` : 'Not tracked'}
+                  {tracked ? `${tracked} tracked` : "Not tracked"}
                 </span>
               </div>
             );
@@ -48,7 +66,7 @@ export default function ConnectionsPanel() {
         </div>
 
         <button
-          onClick={() => setActiveSection('audience')}
+          onClick={() => setActiveSection("audience")}
           className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold gradient-primary text-primary-foreground"
         >
           Manage tracked profiles <ExternalLink size={13} />

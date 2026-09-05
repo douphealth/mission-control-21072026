@@ -30,8 +30,12 @@ export default function ValidationPulse({ items, today }: { items: Validation[];
           <ShieldQuestion size={15} />
         </span>
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Proof</div>
-          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">Validating</h3>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Proof
+          </div>
+          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">
+            Validating
+          </h3>
         </div>
       </div>
 
@@ -46,7 +50,9 @@ export default function ValidationPulse({ items, today }: { items: Validation[];
                 {v.entityLabel ? ` · ${v.entityLabel}` : ""}
               </div>
               {v.successCriteria && (
-                <div className="mt-1 text-[10px] text-muted-foreground/80">Success: {v.successCriteria}</div>
+                <div className="mt-1 text-[10px] text-muted-foreground/80">
+                  Success: {v.successCriteria}
+                </div>
               )}
             </button>
             {isDueForReview(v, today) && (

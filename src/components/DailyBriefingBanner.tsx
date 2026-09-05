@@ -1,8 +1,16 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, CalendarClock, CheckCircle2, ChevronDown, Mail, Copy, Check } from 'lucide-react';
-import { useTasks, useUpdateItem } from '@/hooks/useTableData';
-import { useNavigationStore } from '@/stores/navigationStore';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  ChevronDown,
+  Mail,
+  Copy,
+  Check,
+} from "lucide-react";
+import { useTasks, useUpdateItem } from "@/hooks/useTableData";
+import { useNavigationStore } from "@/stores/navigationStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 import {
   addDaysLocal,
   buildBriefing,
@@ -10,18 +18,18 @@ import {
   daysOverdue,
   mailDigest,
   todayISO,
-} from '@/lib/overdue';
+} from "@/lib/overdue";
 
-import type { Task } from '@/lib/db';
-import { toast } from 'sonner';
-import { useServerFn } from '@tanstack/react-start';
-import { sendOverdueDigest } from '@/lib/digest.functions';
+import type { Task } from "@/lib/db";
+import { toast } from "sonner";
+import { useServerFn } from "@tanstack/react-start";
+import { sendOverdueDigest } from "@/lib/digest.functions";
 
 const PRIORITY_STYLE: Record<string, string> = {
-  critical: 'bg-rose-500/15 text-rose-500 ring-rose-500/25',
-  high: 'bg-amber-500/15 text-amber-600 ring-amber-500/25',
-  medium: 'bg-sky-500/15 text-sky-600 ring-sky-500/25',
-  low: 'bg-emerald-500/15 text-emerald-600 ring-emerald-500/25',
+  critical: "bg-rose-500/15 text-rose-500 ring-rose-500/25",
+  high: "bg-amber-500/15 text-amber-600 ring-amber-500/25",
+  medium: "bg-sky-500/15 text-sky-600 ring-sky-500/25",
+  low: "bg-emerald-500/15 text-emerald-600 ring-emerald-500/25",
 };
 
 function TaskRow({ task, overdue }: { task: Task; overdue: boolean }) {
@@ -29,24 +37,23 @@ function TaskRow({ task, overdue }: { task: Task; overdue: boolean }) {
   const days = daysOverdue(task);
 
   const complete = async () => {
-    await updateItem('tasks', task.id, {
-      status: 'done',
+    await updateItem("tasks", task.id, {
+      status: "done",
       completedAt: new Date().toISOString(),
     } as Partial<Task>);
-    toast.success('Task completed');
+    toast.success("Task completed");
   };
 
   const snooze = async () => {
     // Planning only — the real deadline is never rewritten.
     const next = addDaysLocal(todayISO(), 1);
-    await updateItem('tasks', task.id, {
+    await updateItem("tasks", task.id, {
       notBefore: next,
       scheduledAt: next,
       remindersFired: [],
     } as Partial<Task>);
-    toast.success('Planned for tomorrow — deadline unchanged');
+    toast.success("Planned for tomorrow — deadline unchanged");
   };
-
 
   return (
     <div className="flex items-center gap-2.5 rounded-2xl border border-border/40 bg-background/60 px-3 py-2.5">
@@ -60,10 +67,15 @@ function TaskRow({ task, overdue }: { task: Task; overdue: boolean }) {
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13px] font-semibold text-foreground">{task.title}</div>
         <div className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span className={`rounded-full px-1.5 py-0.5 font-bold uppercase ring-1 ${PRIORITY_STYLE[task.priority] ?? ''}`}>
+          <span
+            className={`rounded-full px-1.5 py-0.5 font-bold uppercase ring-1 ${PRIORITY_STYLE[task.priority] ?? ""}`}
+          >
             {task.priority}
           </span>
-          <span>{task.dueDate}{task.startTime ? ` · ${task.startTime}` : ''}</span>
+          <span>
+            {task.dueDate}
+            {task.startTime ? ` · ${task.startTime}` : ""}
+          </span>
           {overdue && days > 0 && (
             <span className="font-semibold text-rose-500">{days}d overdue</span>
           )}
@@ -94,14 +106,14 @@ export default function DailyBriefingBanner() {
   if (briefing.overdue.length === 0 && briefing.dueToday.length === 0) return null;
 
   const digestEmail =
-    (typeof settings.digestEmail === 'string' && settings.digestEmail) ||
-    (typeof settings.email === 'string' && settings.email) ||
-    'papalexios@gmail.com';
+    (typeof settings.digestEmail === "string" && settings.digestEmail) ||
+    (typeof settings.email === "string" && settings.email) ||
+    "papalexios@gmail.com";
 
   const copyDigest = async () => {
     await navigator.clipboard.writeText(buildDigestText(briefing, today));
     setCopied(true);
-    toast.success('Digest copied');
+    toast.success("Digest copied");
     setTimeout(() => setCopied(false), 1800);
   };
 
@@ -127,20 +139,19 @@ export default function DailyBriefingBanner() {
         },
       });
       if (res.sent) toast.success(`Digest emailed to ${digestEmail}`);
-      else toast.warning('That address is unsubscribed from emails');
+      else toast.warning("That address is unsubscribed from emails");
     } catch (e: any) {
       const msg = String(e?.message || e);
-      if (msg.includes('domain_not_verified')) {
-        toast.error('Email domain still verifying — opening your mail app instead');
+      if (msg.includes("domain_not_verified")) {
+        toast.error("Email domain still verifying — opening your mail app instead");
       } else {
-        toast.error('Could not send — opening your mail app instead');
+        toast.error("Could not send — opening your mail app instead");
       }
       mailDigest(briefing, digestEmail, today);
     } finally {
       setSending(false);
     }
   };
-
 
   const shown = expanded
     ? [...briefing.overdue, ...briefing.dueToday]
@@ -151,7 +162,7 @@ export default function DailyBriefingBanner() {
       <div className="flex items-center gap-2.5 border-b border-border/40 px-3 py-2.5 sm:gap-3 sm:px-5 sm:py-3">
         <div
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl sm:h-9 sm:w-9 ${
-            briefing.overdue.length ? 'bg-rose-500/15 text-rose-500' : 'bg-sky-500/15 text-sky-500'
+            briefing.overdue.length ? "bg-rose-500/15 text-rose-500" : "bg-sky-500/15 text-sky-500"
           }`}
         >
           {briefing.overdue.length ? <AlertTriangle size={18} /> : <CalendarClock size={18} />}
@@ -160,7 +171,7 @@ export default function DailyBriefingBanner() {
           <h2 className="truncate text-[13px] font-extrabold tracking-tight text-foreground sm:text-[14px]">
             {briefing.overdue.length
               ? `${briefing.overdue.length} overdue · ${briefing.dueToday.length} due today`
-              : `${briefing.dueToday.length} task${briefing.dueToday.length === 1 ? '' : 's'} due today`}
+              : `${briefing.dueToday.length} task${briefing.dueToday.length === 1 ? "" : "s"} due today`}
           </h2>
           <p className="truncate text-[10px] text-muted-foreground sm:text-[11px]">
             Daily briefing · {today} · {briefing.completedToday} completed today
@@ -179,10 +190,10 @@ export default function DailyBriefingBanner() {
             title="Email digest"
             className="hidden rounded-full border border-border/50 p-2 sm:block text-muted-foreground transition active:scale-90"
           >
-            <Mail size={15} className={sending ? 'animate-pulse' : ''} />
+            <Mail size={15} className={sending ? "animate-pulse" : ""} />
           </button>
           <button
-            onClick={() => setActiveSection('tasks')}
+            onClick={() => setActiveSection("tasks")}
             className="shrink-0 rounded-full bg-primary px-3 py-2 text-[11px] font-bold text-primary-foreground transition active:scale-95"
           >
             Open tasks
@@ -199,8 +210,8 @@ export default function DailyBriefingBanner() {
             onClick={() => setExpanded((e) => !e)}
             className="flex w-full items-center justify-center gap-1 rounded-2xl py-2 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
           >
-            {expanded ? 'Show less' : `Show all ${briefing.total}`}
-            <ChevronDown size={13} className={expanded ? 'rotate-180 transition' : 'transition'} />
+            {expanded ? "Show less" : `Show all ${briefing.total}`}
+            <ChevronDown size={13} className={expanded ? "rotate-180 transition" : "transition"} />
           </button>
         )}
       </div>

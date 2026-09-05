@@ -1,8 +1,8 @@
 // Accessibility & inclusivity preferences — applied globally on <html>.
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-export type MotionPref = 'system' | 'reduced' | 'full';
+export type MotionPref = "system" | "reduced" | "full";
 
 interface A11yState {
   highContrast: boolean;
@@ -10,7 +10,7 @@ interface A11yState {
   motion: MotionPref;
   alwaysShowFocus: boolean;
   underlineLinks: boolean;
-  set: (patch: Partial<Omit<A11yState, 'set' | 'reset' | 'apply'>>) => void;
+  set: (patch: Partial<Omit<A11yState, "set" | "reset" | "apply">>) => void;
   reset: () => void;
   apply: () => void;
 }
@@ -18,19 +18,19 @@ interface A11yState {
 const defaults = {
   highContrast: false,
   fontScale: 1,
-  motion: 'system' as MotionPref,
+  motion: "system" as MotionPref,
   alwaysShowFocus: false,
   underlineLinks: false,
 };
 
 function applyToDom(s: typeof defaults) {
-  if (typeof document === 'undefined') return;
+  if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.classList.toggle('a11y-contrast', s.highContrast);
-  root.classList.toggle('a11y-reduce-motion', s.motion === 'reduced');
-  root.classList.toggle('a11y-focus-always', s.alwaysShowFocus);
-  root.classList.toggle('a11y-underline-links', s.underlineLinks);
-  root.style.setProperty('--a11y-font-scale', String(s.fontScale));
+  root.classList.toggle("a11y-contrast", s.highContrast);
+  root.classList.toggle("a11y-reduce-motion", s.motion === "reduced");
+  root.classList.toggle("a11y-focus-always", s.alwaysShowFocus);
+  root.classList.toggle("a11y-underline-links", s.underlineLinks);
+  root.style.setProperty("--a11y-font-scale", String(s.fontScale));
   root.style.fontSize = `${Math.round(16 * s.fontScale)}px`;
 }
 
@@ -65,7 +65,7 @@ export const useA11yStore = create<A11yState>()(
       },
     }),
     {
-      name: 'mc-a11y-v1',
+      name: "mc-a11y-v1",
       partialize: (s) => ({
         highContrast: s.highContrast,
         fontScale: s.fontScale,

@@ -8,21 +8,46 @@
 // It exposes `isLoading` through context for the layout's loading splash and
 // nothing else. No subscriptions = no cross-table re-render storms.
 
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { db, migrateFromLocalStorage } from '@/lib/db';
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import { db, migrateFromLocalStorage } from "@/lib/db";
 import type {
-  Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment,
-  Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout,
-} from '@/lib/db';
-import { useSettingsStore } from '@/stores/settingsStore';
-import { useDataStore } from '@/stores/dataStore';
-import { deduplicateAll } from '@/lib/dedup';
-import { startCloudSync } from '@/lib/cloudSync';
+  Website,
+  Task,
+  GitHubRepo,
+  BuildProject,
+  LinkItem,
+  Note,
+  Payment,
+  Idea,
+  CredentialVault,
+  CustomModule,
+  HabitTracker,
+  UserSettings,
+  WidgetLayout,
+} from "@/lib/db";
+import { useSettingsStore } from "@/stores/settingsStore";
+import { useDataStore } from "@/stores/dataStore";
+import { deduplicateAll } from "@/lib/dedup";
+import { startCloudSync } from "@/lib/cloudSync";
 
-import { restoreLatestNonEmptyVersion } from '@/lib/versions';
+import { restoreLatestNonEmptyVersion } from "@/lib/versions";
 
 // Re-export types for backward compat with old imports
-export type { Website, Task, GitHubRepo, BuildProject, LinkItem, Note, Payment, Idea, CredentialVault, CustomModule, HabitTracker, UserSettings, WidgetLayout };
+export type {
+  Website,
+  Task,
+  GitHubRepo,
+  BuildProject,
+  LinkItem,
+  Note,
+  Payment,
+  Idea,
+  CredentialVault,
+  CustomModule,
+  HabitTracker,
+  UserSettings,
+  WidgetLayout,
+};
 
 interface DashboardContextValue {
   isLoading: boolean;
@@ -37,13 +62,13 @@ const DashboardContext = createContext<DashboardContextValue | null>(null);
 // empty; only the settings row is created so the UI has a place to write to.
 
 export async function ensureSettingsRow() {
-  const existing = await db.settings.get('default');
+  const existing = await db.settings.get("default");
   if (existing) return;
   await db.settings.put({
-    id: 'default',
-    userName: '',
-    userRole: '',
-    theme: 'dark',
+    id: "default",
+    userName: "",
+    userRole: "",
+    theme: "dark",
     sidebarCollapsed: false,
     dashboardLayout: [],
   });
@@ -52,9 +77,9 @@ export async function ensureSettingsRow() {
 // ─── Provider (bootstrap-only) ───────────────────────────────────────────────
 
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
-  const loadSettings = useSettingsStore(s => s.loadSettings);
-  const setIsLoadingStore = useDataStore(s => s.setIsLoading);
-  const setDashboardLayout = useDataStore(s => s.setDashboardLayout);
+  const loadSettings = useSettingsStore((s) => s.loadSettings);
+  const setIsLoadingStore = useDataStore((s) => s.setIsLoading);
+  const setDashboardLayout = useDataStore((s) => s.setDashboardLayout);
   const [isLoading, setIsLoading] = useState(true);
 
   const initialized = useRef(false);
@@ -73,7 +98,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
           const cloud = await startCloudSync();
           cloudRestored = cloud.restored;
         } catch (e) {
-          console.warn('Cloud sync unavailable:', e);
+          console.warn("Cloud sync unavailable:", e);
         }
 
         // The account-scoped mc_records store is the single cloud authority.
@@ -81,7 +106,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         // restore was replacing freshly edited tasks with an older full snapshot.
         if (cloudRestored === 0) {
           const [t, w, r, b] = await Promise.all([
-            db.tasks.count(), db.websites.count(), db.repos.count(), db.buildProjects.count(),
+            db.tasks.count(),
+            db.websites.count(),
+            db.repos.count(),
+            db.buildProjects.count(),
           ]);
           if (t + w + r + b === 0) {
             // Only real prior user data may repopulate an empty device.
@@ -89,15 +117,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
-
         await ensureSettingsRow();
         await deduplicateAll();
         await loadSettings();
 
-        const settings = await db.settings.get('default');
+        const settings = await db.settings.get("default");
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
       } catch (e) {
-        console.error('DB init error:', e);
+        console.error("DB init error:", e);
       } finally {
         setIsLoading(false);
         setIsLoadingStore(false);
@@ -113,7 +140,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
 export function useDashboard() {
   const ctx = useContext(DashboardContext);
-  if (!ctx) throw new Error('useDashboard must be used within DashboardProvider');
+  if (!ctx) throw new Error("useDashboard must be used within DashboardProvider");
   return ctx;
 }
 
