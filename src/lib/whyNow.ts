@@ -23,6 +23,18 @@ export function whyNow(item: WorkItem, today = todayISO()): string[] {
     if (days === 1) out.push("due tomorrow");
     else if (days > 1 && days <= 7) out.push(`due in ${days} days`);
   }
+  // A plan (scheduledAt) is an intention, not a deadline. Only explain the
+  // plan when there is no real deadline reason to show instead.
+  if (item.scheduled && !item.due) {
+    if (item.scheduled === today) out.push("planned for today");
+    else if (item.scheduled < today) {
+      const plannedDaysAgo = Math.round(
+        (new Date(`${today}T00:00:00`).getTime() - new Date(`${item.scheduled}T00:00:00`).getTime()) /
+          86_400_000,
+      );
+      out.push(plannedDaysAgo === 1 ? "planned for yesterday" : `planned ${plannedDaysAgo} days ago`);
+    }
+  }
   if (item.priority === "critical") out.push("critical priority");
   else if (item.priority === "high") out.push("high impact");
   if (item.kind === "payment") out.push("money has a hard deadline");
