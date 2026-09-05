@@ -1,8 +1,19 @@
-import { useCredentials } from '@/hooks/useTableData';
+import { useCredentials } from "@/hooks/useTableData";
 import { useEffect, useState } from "react";
 import {
-  Bug, Activity, ExternalLink, Plus, Trash2, Edit2, Globe,
-  CheckCircle2, AlertTriangle, Clock, RefreshCw, Zap, Lock
+  Bug,
+  Activity,
+  ExternalLink,
+  Plus,
+  Trash2,
+  Edit2,
+  Globe,
+  CheckCircle2,
+  AlertTriangle,
+  Clock,
+  RefreshCw,
+  Zap,
+  Lock,
 } from "lucide-react";
 import FormModal, { FormField, FormInput, FormSelect, FormTextarea } from "@/components/FormModal";
 import { toast } from "sonner";
@@ -31,9 +42,12 @@ function loadServices(): ServiceEntry[] {
   }
 }
 
-
 const emptyForm: Omit<ServiceEntry, "id"> = {
-  name: "", url: "", status: "operational", category: "API", notes: "",
+  name: "",
+  url: "",
+  status: "operational",
+  category: "API",
+  notes: "",
   lastChecked: new Date().toISOString().split("T")[0],
 };
 
@@ -52,23 +66,40 @@ export default function OpenClawPage() {
   const credentials = useCredentials();
   const [services, setServices] = useState<ServiceEntry[]>([]);
   const [checking, setChecking] = useState(false);
-  useEffect(() => { setServices(loadServices()); }, []);
   useEffect(() => {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(services)); } catch { /* storage unavailable */ }
+    setServices(loadServices());
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(services));
+    } catch {
+      /* storage unavailable */
+    }
   }, [services]);
 
   const checkAll = async () => {
-    const targets = services.filter(s => s.url);
-    if (!targets.length) { toast.error("Add a service URL first"); return; }
+    const targets = services.filter((s) => s.url);
+    if (!targets.length) {
+      toast.error("Add a service URL first");
+      return;
+    }
     setChecking(true);
     try {
-      const results = await Promise.all(targets.map(async s => ({ s, r: await probeEndpoint({ data: { url: s.url } }) })));
-      setServices(prev => prev.map(svc => {
-        const hit = results.find(x => x.s.id === svc.id);
-        if (!hit) return svc;
-        const status: ServiceEntry["status"] = hit.r.ok ? "operational" : hit.r.status >= 500 || hit.r.status === 0 ? "outage" : "degraded";
-        return { ...svc, status, lastChecked: new Date().toISOString().split("T")[0] };
-      }));
+      const results = await Promise.all(
+        targets.map(async (s) => ({ s, r: await probeEndpoint({ data: { url: s.url } }) })),
+      );
+      setServices((prev) =>
+        prev.map((svc) => {
+          const hit = results.find((x) => x.s.id === svc.id);
+          if (!hit) return svc;
+          const status: ServiceEntry["status"] = hit.r.ok
+            ? "operational"
+            : hit.r.status >= 500 || hit.r.status === 0
+              ? "outage"
+              : "degraded";
+          return { ...svc, status, lastChecked: new Date().toISOString().split("T")[0] };
+        }),
+      );
       toast.success(`Checked ${results.length} service${results.length === 1 ? "" : "s"}`);
     } catch (e: any) {
       toast.error(String(e?.message ?? e));
@@ -81,13 +112,13 @@ export default function OpenClawPage() {
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<ServiceEntry, "id">>(emptyForm);
 
-  const ocCreds = credentials.filter(c =>
-    c.service.toLowerCase().includes("openclaw") ||
-    c.label.toLowerCase().includes("openclaw")
+  const ocCreds = credentials.filter(
+    (c) =>
+      c.service.toLowerCase().includes("openclaw") || c.label.toLowerCase().includes("openclaw"),
   );
 
-  const operational = services.filter(s => s.status === "operational").length;
-  const issues = services.filter(s => s.status !== "operational").length;
+  const operational = services.filter((s) => s.status === "operational").length;
+  const issues = services.filter((s) => s.status !== "operational").length;
 
   const openAdd = () => {
     setEditId(null);
@@ -103,12 +134,15 @@ export default function OpenClawPage() {
   };
 
   const save = () => {
-    if (!form.name.trim()) { toast.error("Name is required"); return; }
+    if (!form.name.trim()) {
+      toast.error("Name is required");
+      return;
+    }
     if (editId) {
-      setServices(prev => prev.map(s => s.id === editId ? { ...s, ...form } : s));
+      setServices((prev) => prev.map((s) => (s.id === editId ? { ...s, ...form } : s)));
       toast.success("Service updated");
     } else {
-      setServices(prev => [{ id: Math.random().toString(36).slice(2), ...form }, ...prev]);
+      setServices((prev) => [{ id: Math.random().toString(36).slice(2), ...form }, ...prev]);
       toast.success("Service added");
     }
     setModalOpen(false);
@@ -120,13 +154,13 @@ export default function OpenClawPage() {
       title: "Remove Service",
       description: "This service entry will be permanently removed.",
       onConfirm: () => {
-        setServices(prev => prev.filter(s => s.id !== id));
+        setServices((prev) => prev.filter((s) => s.id !== id));
         toast.success("Removed");
       },
     });
   };
 
-  const uf = (k: keyof typeof form, v: any) => setForm(f => ({ ...f, [k]: v }));
+  const uf = (k: keyof typeof form, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -135,14 +169,24 @@ export default function OpenClawPage() {
           <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             <Bug size={20} className="text-violet-500" /> OpenClaw
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Track OpenClaw services and API endpoints</p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Track OpenClaw services and API endpoints
+          </p>
         </div>
         <div className="flex items-center gap-2">
-          <a href="https://openclaw.io" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500">
+          <a
+            href="https://openclaw.io"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-500/10 text-emerald-500"
+          >
             <Activity size={12} className="animate-pulse" /> System Status
           </a>
-          <button onClick={() => void checkAll()} disabled={checking} className="btn-secondary text-sm">
+          <button
+            onClick={() => void checkAll()}
+            disabled={checking}
+            className="btn-secondary text-sm"
+          >
             <RefreshCw size={13} className={checking ? "animate-spin" : ""} /> Check now
           </button>
           <button onClick={openAdd} className="btn-primary text-sm">
@@ -189,17 +233,24 @@ export default function OpenClawPage() {
             <Globe size={22} className="mx-auto mb-2 opacity-40" />
             <div className="text-sm font-bold text-foreground">No services tracked yet</div>
             <p className="mx-auto mt-1 max-w-md text-xs text-muted-foreground">
-              Add a service with its URL and press <strong>Check now</strong> — status is measured by a real HTTP request, never assumed.
+              Add a service with its URL and press <strong>Check now</strong> — status is measured
+              by a real HTTP request, never assumed.
             </p>
           </div>
         )}
         {services.map((s, i) => (
-          <div key={s.id} 
-            className="card-elevated p-4 flex items-center gap-4 group">
-            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${s.status === "operational" ? "bg-emerald-500" :
-                s.status === "degraded" ? "bg-amber-500" :
-                  s.status === "outage" ? "bg-red-500" : "bg-blue-500"
-              }`} />
+          <div key={s.id} className="card-elevated p-4 flex items-center gap-4 group">
+            <div
+              className={`w-2.5 h-2.5 rounded-full shrink-0 ${
+                s.status === "operational"
+                  ? "bg-emerald-500"
+                  : s.status === "degraded"
+                    ? "bg-amber-500"
+                    : s.status === "outage"
+                      ? "bg-red-500"
+                      : "bg-blue-500"
+              }`}
+            />
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-semibold text-foreground">{s.name}</span>
@@ -207,8 +258,12 @@ export default function OpenClawPage() {
                 <span className="badge-muted">{s.category}</span>
               </div>
               {s.url && (
-                <a href={s.url} target="_blank" rel="noopener noreferrer"
-                  className="text-[11px] text-primary hover:underline flex items-center gap-1 mt-0.5">
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] text-primary hover:underline flex items-center gap-1 mt-0.5"
+                >
                   {s.url} <ExternalLink size={9} />
                 </a>
               )}
@@ -218,15 +273,25 @@ export default function OpenClawPage() {
               <Clock size={9} /> {s.lastChecked}
             </div>
             <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-              <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
+              <button
+                onClick={() => openEdit(s)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
                 <Edit2 size={12} />
               </button>
-              <button onClick={() => del(s.id)} className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+              <button
+                onClick={() => del(s.id)}
+                className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              >
                 <Trash2 size={12} />
               </button>
               {s.url && (
-                <a href={s.url} target="_blank" rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition-colors">
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-secondary transition-colors"
+                >
                   <ExternalLink size={12} />
                 </a>
               )}
@@ -238,13 +303,24 @@ export default function OpenClawPage() {
       {/* Saved creds */}
       {ocCreds.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-sm font-bold flex items-center gap-2"><Lock size={13} className="text-primary" /> Saved Credentials</h2>
+          <h2 className="text-sm font-bold flex items-center gap-2">
+            <Lock size={13} className="text-primary" /> Saved Credentials
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {ocCreds.map(c => (
+            {ocCreds.map((c) => (
               <div key={c.id} className="card-glass p-3 space-y-1">
                 <div className="font-semibold text-sm">{c.label}</div>
                 <div className="text-xs text-muted-foreground">{c.username}</div>
-                {c.url && <a href={c.url} target="_blank" rel="noopener noreferrer" className="text-[11px] text-primary hover:underline flex items-center gap-1">Open <ExternalLink size={9} /></a>}
+                {c.url && (
+                  <a
+                    href={c.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                  >
+                    Open <ExternalLink size={9} />
+                  </a>
+                )}
               </div>
             ))}
           </div>
@@ -252,28 +328,54 @@ export default function OpenClawPage() {
       )}
 
       {/* Add/Edit modal */}
-      <FormModal open={modalOpen} onClose={() => setModalOpen(false)} title={editId ? "Edit Service" : "Add Service"} onSubmit={save}>
+      <FormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={editId ? "Edit Service" : "Add Service"}
+        onSubmit={save}
+      >
         <FormField label="Service Name *">
-          <FormInput value={form.name} onChange={v => uf("name", v)} placeholder="OpenClaw API v2" />
+          <FormInput
+            value={form.name}
+            onChange={(v) => uf("name", v)}
+            placeholder="OpenClaw API v2"
+          />
         </FormField>
         <FormField label="URL">
-          <FormInput value={form.url} onChange={v => uf("url", v)} placeholder="https://api.openclaw.io" />
+          <FormInput
+            value={form.url}
+            onChange={(v) => uf("url", v)}
+            placeholder="https://api.openclaw.io"
+          />
         </FormField>
         <div className="grid grid-cols-2 gap-4">
           <FormField label="Status">
-            <FormSelect value={form.status} onChange={v => uf("status", v)} options={[
-              { value: "operational", label: "Operational" },
-              { value: "degraded", label: "Degraded" },
-              { value: "outage", label: "Outage" },
-              { value: "maintenance", label: "Maintenance" },
-            ]} />
+            <FormSelect
+              value={form.status}
+              onChange={(v) => uf("status", v)}
+              options={[
+                { value: "operational", label: "Operational" },
+                { value: "degraded", label: "Degraded" },
+                { value: "outage", label: "Outage" },
+                { value: "maintenance", label: "Maintenance" },
+              ]}
+            />
           </FormField>
           <FormField label="Category">
-            <FormInput value={form.category} onChange={v => uf("category", v)} placeholder="API, Dashboard, etc." />
+            <FormInput
+              value={form.category}
+              onChange={(v) => uf("category", v)}
+              placeholder="API, Dashboard, etc."
+            />
           </FormField>
         </div>
         <FormField label="Notes">
-          <FormTextarea value={form.notes} onChange={v => uf("notes", v)} rows={2} placeholder="Additional notes..." />
+          <FormTextarea
+            value={form.notes}
+            onChange={(v) => uf("notes", v)}
+            rows={2}
+            placeholder="Additional notes..."
+          />
         </FormField>
       </FormModal>
       <ConfirmDialog {...cd.dialogProps} />

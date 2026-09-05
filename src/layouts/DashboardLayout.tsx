@@ -1,62 +1,61 @@
-import Sidebar from '@/components/Sidebar';
-import TopBar from '@/components/TopBar';
-import StatusBar from '@/components/StatusBar';
-import MobileBottomNav from '@/components/MobileBottomNav';
-import DailyBriefingBanner from '@/components/DailyBriefingBanner';
-import CloudBackupBanner from '@/components/CloudBackupBanner';
+import Sidebar from "@/components/Sidebar";
+import TopBar from "@/components/TopBar";
+import StatusBar from "@/components/StatusBar";
+import MobileBottomNav from "@/components/MobileBottomNav";
+import DailyBriefingBanner from "@/components/DailyBriefingBanner";
+import CloudBackupBanner from "@/components/CloudBackupBanner";
 
+import { useIsMobile } from "@/hooks/use-mobile";
+import { DashboardProvider, useDashboardOptional } from "@/contexts/DashboardContext";
+import { useNavigationStore } from "@/stores/navigationStore";
 
-import { useIsMobile } from '@/hooks/use-mobile';
-import { DashboardProvider, useDashboardOptional } from '@/contexts/DashboardContext';
-import { useNavigationStore } from '@/stores/navigationStore';
+import React, { Suspense, useEffect } from "react";
+import { useA11yStore } from "@/stores/a11yStore";
+import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
+import RouteErrorBoundary from "@/components/RouteErrorBoundary";
+import GoogleTasksPage from "@/pages/GoogleTasksPage";
+import SnapCapture from "@/components/SnapCapture";
 
-import React, { Suspense, useEffect } from 'react';
-import { useA11yStore } from '@/stores/a11yStore';
-import { lazyWithRetry as lazy } from '@/lib/lazyWithRetry';
-import RouteErrorBoundary from '@/components/RouteErrorBoundary';
-import GoogleTasksPage from '@/pages/GoogleTasksPage';
-import SnapCapture from '@/components/SnapCapture';
+const VoiceCapture = lazy(() => import("@/components/VoiceCapture"));
 
-const VoiceCapture = lazy(() => import('@/components/VoiceCapture'));
-
-const DashboardHome = lazy(() => import('@/pages/DashboardHome'));
-const TasksPage = lazy(() => import('@/pages/TasksPage'));
-const WebsitesPage = lazy(() => import('@/pages/WebsitesPage'));
-const WordPressManagementPage = lazy(() => import('@/pages/WordPressManagementPage'));
-const GitHubPage = lazy(() => import('@/pages/GitHubPage'));
-const BuildsPage = lazy(() => import('@/pages/BuildsPage'));
-const LinksPage = lazy(() => import('@/pages/LinksPage'));
-const NotesPage = lazy(() => import('@/pages/NotesPage'));
-const FocusPage = lazy(() => import('@/pages/FocusPage'));
-const CalendarPage = lazy(() => import('@/pages/CalendarPage'));
-const ProjectsPage = lazy(() => import('@/pages/ProjectsPage'));
-const SettingsPage = lazy(() => import('@/pages/SettingsPage'));
-const PaymentsPage = lazy(() => import('@/pages/PaymentsPage'));
-const IdeasPage = lazy(() => import('@/pages/IdeasPage'));
-const CredentialsPage = lazy(() => import('@/pages/CredentialsPage'));
-const SEOPage = lazy(() => import('@/pages/SEOPage'));
-const CloudflarePage = lazy(() => import('@/pages/CloudflarePage'));
-const VercelPage = lazy(() => import('@/pages/VercelPage'));
-const OpenClawPage = lazy(() => import('@/pages/OpenClawPage'));
-const HabitsPage = lazy(() => import('@/pages/HabitsPage'));
-const ReviewPage = lazy(() => import('@/pages/ReviewPage'));
-const NowTodayPage = lazy(() => import('@/pages/NowTodayPage'));
-const DecisionsPage = lazy(() => import('@/pages/DecisionsPage'));
-const ControlCenterPage = lazy(() => import('@/pages/ControlCenterPage'));
-const IndustryPage = lazy(() => import('@/pages/IndustryPage'));
-const MentionsPage = lazy(() => import('@/pages/MentionsPage'));
-const AudiencePage = lazy(() => import('@/pages/AudiencePage'));
-const RemindersPage = lazy(() => import('@/pages/RemindersPage'));
-const CustomModulePage = lazy(() => import('@/pages/CustomModulePage'));
+const DashboardHome = lazy(() => import("@/pages/DashboardHome"));
+const TasksPage = lazy(() => import("@/pages/TasksPage"));
+const WebsitesPage = lazy(() => import("@/pages/WebsitesPage"));
+const WordPressManagementPage = lazy(() => import("@/pages/WordPressManagementPage"));
+const GitHubPage = lazy(() => import("@/pages/GitHubPage"));
+const BuildsPage = lazy(() => import("@/pages/BuildsPage"));
+const LinksPage = lazy(() => import("@/pages/LinksPage"));
+const NotesPage = lazy(() => import("@/pages/NotesPage"));
+const FocusPage = lazy(() => import("@/pages/FocusPage"));
+const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
+const IdeasPage = lazy(() => import("@/pages/IdeasPage"));
+const CredentialsPage = lazy(() => import("@/pages/CredentialsPage"));
+const SEOPage = lazy(() => import("@/pages/SEOPage"));
+const CloudflarePage = lazy(() => import("@/pages/CloudflarePage"));
+const VercelPage = lazy(() => import("@/pages/VercelPage"));
+const OpenClawPage = lazy(() => import("@/pages/OpenClawPage"));
+const HabitsPage = lazy(() => import("@/pages/HabitsPage"));
+const ReviewPage = lazy(() => import("@/pages/ReviewPage"));
+const NowTodayPage = lazy(() => import("@/pages/NowTodayPage"));
+const DecisionsPage = lazy(() => import("@/pages/DecisionsPage"));
+const ControlCenterPage = lazy(() => import("@/pages/ControlCenterPage"));
+const IndustryPage = lazy(() => import("@/pages/IndustryPage"));
+const MentionsPage = lazy(() => import("@/pages/MentionsPage"));
+const AudiencePage = lazy(() => import("@/pages/AudiencePage"));
+const RemindersPage = lazy(() => import("@/pages/RemindersPage"));
+const CustomModulePage = lazy(() => import("@/pages/CustomModulePage"));
 
 const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
   dashboard: DashboardHome,
   now: NowTodayPage,
   decisions: DecisionsPage,
   tasks: TasksPage,
-  'google-tasks': GoogleTasksPage,
+  "google-tasks": GoogleTasksPage,
   websites: WebsitesPage,
-  'wp-manage': WordPressManagementPage,
+  "wp-manage": WordPressManagementPage,
   github: GitHubPage,
   builds: BuildsPage,
   links: LinksPage,
@@ -74,7 +73,7 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   openclaw: OpenClawPage,
   habits: HabitsPage,
   review: ReviewPage,
-  'control-center': ControlCenterPage,
+  "control-center": ControlCenterPage,
   industry: IndustryPage,
   mentions: MentionsPage,
   audience: AudiencePage,
@@ -101,7 +100,13 @@ function LoadingSkeleton() {
 export default function DashboardLayout() {
   const dashboard = useDashboardOptional();
   const applyA11y = useA11yStore((s) => s.apply);
-  useEffect(() => { applyA11y(); }, [applyA11y]);
+  // Hooks must run before any early return so their order is identical on
+  // every render (react-hooks/rules-of-hooks).
+  const { activeSection } = useNavigationStore();
+  const isMobile = useIsMobile();
+  useEffect(() => {
+    applyA11y();
+  }, [applyA11y]);
 
   if (!dashboard) {
     return (
@@ -112,9 +117,9 @@ export default function DashboardLayout() {
   }
 
   const { isLoading } = dashboard;
-  const { activeSection } = useNavigationStore();
-  const isMobile = useIsMobile();
-  const Section = activeSection.startsWith('custom-') ? CustomModulePage : (sectionMap[activeSection] || DashboardHome);
+  const Section = activeSection.startsWith("custom-")
+    ? CustomModulePage
+    : sectionMap[activeSection] || DashboardHome;
 
   if (isLoading) {
     return (
@@ -131,29 +136,34 @@ export default function DashboardLayout() {
     );
   }
 
-
   return (
     <div className="enterprise-shell flex h-screen overflow-hidden bg-background">
-      <a href="#main-content" className="a11y-skip-link">Skip to content</a>
+      <a href="#main-content" className="a11y-skip-link">
+        Skip to content
+      </a>
       {/* Hide sidebar on mobile — use bottom nav instead */}
       <div className="hidden lg:block">
         <Sidebar />
       </div>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <TopBar />
-        <main id="main-content" tabIndex={-1} className="mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain"
+        >
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
-
             <CloudBackupBanner />
-            {(activeSection === 'tasks' || activeSection === 'focus' || activeSection === 'review') && (
-              <DailyBriefingBanner />
-            )}
-
+            {(activeSection === "tasks" ||
+              activeSection === "focus" ||
+              activeSection === "review") && <DailyBriefingBanner />}
 
             <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
-
               <Suspense fallback={<LoadingSkeleton />}>
-                <div key={activeSection} className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
+                <div
+                  key={activeSection}
+                  className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
+                >
                   <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />
                 </div>
               </Suspense>

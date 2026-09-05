@@ -6,14 +6,14 @@ command palette. Everything else is one click deeper.
 
 ## The daily loop
 
-| Surface | Purpose |
-| --- | --- |
-| Home | Now → capture → one unified timeline (flags, timed, NOW marker, engine-ordered queue) |
-| Review | Weekly review, decay triage, priority matrix, daily shutdown |
-| Calendar | Time-blocked commitments |
-| Tasks | Capture and work |
-| Captures / Findings / Reminders | The inbox layer |
-| Modules (collapsed) | Websites, WP, SEO, GitHub, Builds, Cloudflare, Vercel, Finance, Habits, Ideas, Credentials, Links, Focus Timer, Settings — everything, one level down |
+| Surface                         | Purpose                                                                                                                                               |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Home                            | Now → capture → one unified timeline (flags, timed, NOW marker, engine-ordered queue)                                                                 |
+| Review                          | Weekly review, decay triage, priority matrix, daily shutdown                                                                                          |
+| Calendar                        | Time-blocked commitments                                                                                                                              |
+| Tasks                           | Capture and work                                                                                                                                      |
+| Captures / Findings / Reminders | The inbox layer                                                                                                                                       |
+| Modules (collapsed)             | Websites, WP, SEO, GitHub, Builds, Cloudflare, Vercel, Finance, Habits, Ideas, Credentials, Links, Focus Timer, Settings — everything, one level down |
 
 Every ranking is explainable: the priority engine scores named dimensions
 (deadline pressure, priority, decay, kind, pinned) and the UI shows those

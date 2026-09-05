@@ -47,7 +47,12 @@ describe("planning semantics", () => {
   });
 
   it("keeps future planned work out of Today", () => {
-    const t = task({ id: "future-plan", dueDate: "", scheduledAt: "2026-09-05", notBefore: "2026-09-05" });
+    const t = task({
+      id: "future-plan",
+      dueDate: "",
+      scheduledAt: "2026-09-05",
+      notBefore: "2026-09-05",
+    });
     const [item] = buildWorkQueue({ tasks: [t], today });
     expect(item.bucket).toBe("later");
   });

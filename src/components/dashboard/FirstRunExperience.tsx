@@ -44,9 +44,9 @@ export default function FirstRunExperience() {
           This system tells you what matters — the moment it knows your work.
         </h2>
         <p className="mt-3 max-w-xl text-[13.5px] leading-relaxed text-muted-foreground">
-          No data on this device yet — and that is stated honestly, never faked.
-          One capture is all it takes: the timeline, the NOW marker, and the
-          priority engine turn on with the first item you add.
+          No data on this device yet — and that is stated honestly, never faked. One capture is all
+          it takes: the timeline, the NOW marker, and the priority engine turn on with the first
+          item you add.
         </p>
 
         <div className="mt-7 grid gap-3 sm:grid-cols-3">
@@ -61,7 +61,9 @@ export default function FirstRunExperience() {
               <h3 className="font-display mt-3 text-[14.5px] font-bold leading-snug tracking-tight text-foreground">
                 {s.title}
               </h3>
-              <p className="mt-1.5 flex-1 text-[11.5px] leading-relaxed text-muted-foreground">{s.hint}</p>
+              <p className="mt-1.5 flex-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                {s.hint}
+              </p>
             </div>
           ))}
         </div>

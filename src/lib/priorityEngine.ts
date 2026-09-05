@@ -3,17 +3,17 @@
 // carries its reasons so the UI can always answer "why is this first?".
 // Magic constants are banned; every weight has a name and a comment.
 
-import type { WorkKind } from '@/lib/workQueue';
+import type { WorkKind } from "@/lib/workQueue";
 
 export interface ScoreInput {
-  priority: 'critical' | 'high' | 'medium' | 'low' | string;
+  priority: "critical" | "high" | "medium" | "low" | string;
   overdueDays: number;
   staleDays: number;
-  due?: string;       // YYYY-MM-DD hard deadline
+  due?: string; // YYYY-MM-DD hard deadline
   scheduled?: string; // YYYY-MM-DD planning date; never deadline pressure
-  today: string;      // YYYY-MM-DD
+  today: string; // YYYY-MM-DD
   kind: WorkKind;
-  pinned?: boolean;   // committedOn === today
+  pinned?: boolean; // committedOn === today
 }
 
 export interface ScoreDimension {
@@ -49,12 +49,12 @@ export const STALE_CAP_DAYS = 30;
 /** Fixed boosts for due-today and approaching deadlines. */
 export const DUE_TODAY_BONUS = 22;
 export const APPROACHING_WINDOW_DAYS = 14; // full bonus at 0 days out
-export const APPROACHING_MAX_BONUS = 14;   // fades linearly to 0 at window edge
+export const APPROACHING_MAX_BONUS = 14; // fades linearly to 0 at window edge
 
 /** Kind biases — certain kinds block more value than others. */
 export const KIND_BONUS: Record<WorkKind, number> = {
-  decision: 12,  // undecided findings block downstream work
-  payment: 8,    // money has hard consequences
+  decision: 12, // undecided findings block downstream work
+  payment: 8, // money has hard consequences
   task: 0,
   reminder: 0,
 };
@@ -86,7 +86,7 @@ export function scoreItem(input: ScoreInput): ScoreResult {
   const base = PRIORITY_POINTS[input.priority];
   if (base > 0) {
     dims.push({
-      name: 'priority',
+      name: "priority",
       points: base,
       reason: `${input.priority} priority`,
     });
@@ -95,26 +95,26 @@ export function scoreItem(input: ScoreInput): ScoreResult {
   if (input.overdueDays > 0) {
     const capped = Math.min(input.overdueDays, OVERDUE_CAP_DAYS);
     dims.push({
-      name: 'lateness',
+      name: "lateness",
       points: capped * OVERDUE_PER_DAY,
       reason:
-        input.overdueDays === 1
-          ? 'overdue since yesterday'
-          : `${input.overdueDays} days overdue`,
+        input.overdueDays === 1 ? "overdue since yesterday" : `${input.overdueDays} days overdue`,
     });
   }
 
   if (input.due === input.today) {
-    dims.push({ name: 'dueToday', points: DUE_TODAY_BONUS, reason: 'due today' });
+    dims.push({ name: "dueToday", points: DUE_TODAY_BONUS, reason: "due today" });
   } else if (input.due && input.due > input.today) {
     const daysOut = daysBetween(input.today, input.due);
     if (daysOut <= APPROACHING_WINDOW_DAYS) {
-      const pts = Math.round(((APPROACHING_WINDOW_DAYS - daysOut) / APPROACHING_WINDOW_DAYS) * APPROACHING_MAX_BONUS);
+      const pts = Math.round(
+        ((APPROACHING_WINDOW_DAYS - daysOut) / APPROACHING_WINDOW_DAYS) * APPROACHING_MAX_BONUS,
+      );
       if (pts > 0) {
         dims.push({
-          name: 'approaching',
+          name: "approaching",
           points: pts,
-          reason: daysOut === 1 ? 'due tomorrow' : `due in ${daysOut} days`,
+          reason: daysOut === 1 ? "due tomorrow" : `due in ${daysOut} days`,
         });
       }
     }
@@ -126,18 +126,21 @@ export function scoreItem(input: ScoreInput): ScoreResult {
   if (input.scheduled && input.scheduled <= input.today) {
     const missedDays = daysBetween(input.scheduled, input.today);
     dims.push({
-      name: 'planned',
+      name: "planned",
       points: 0,
-      reason: missedDays > 0
-        ? (missedDays === 1 ? 'planned for yesterday' : `planned ${missedDays} days ago`)
-        : 'planned for today',
+      reason:
+        missedDays > 0
+          ? missedDays === 1
+            ? "planned for yesterday"
+            : `planned ${missedDays} days ago`
+          : "planned for today",
     });
   }
 
   if (input.staleDays > 0) {
     const capped = Math.min(input.staleDays, STALE_CAP_DAYS);
     dims.push({
-      name: 'decay',
+      name: "decay",
       points: capped * STALE_PER_DAY,
       reason: `untouched for ${input.staleDays} days`,
     });
@@ -146,14 +149,15 @@ export function scoreItem(input: ScoreInput): ScoreResult {
   const kindPts = KIND_BONUS[input.kind] ?? 0;
   if (kindPts > 0) {
     dims.push({
-      name: 'kind',
+      name: "kind",
       points: kindPts,
-      reason: input.kind === 'decision' ? 'blocks other work until decided' : 'money has a hard deadline',
+      reason:
+        input.kind === "decision" ? "blocks other work until decided" : "money has a hard deadline",
     });
   }
 
   if (input.pinned) {
-    dims.push({ name: 'pinned', points: PINNED_BONUS, reason: 'you committed to this today' });
+    dims.push({ name: "pinned", points: PINNED_BONUS, reason: "you committed to this today" });
   }
 
   const score = dims.reduce((s, d) => s + d.points, 0);
@@ -179,5 +183,5 @@ export function reasonsOf(result: ScoreResult): string[] {
     (a, b) => (REASON_RANK[a.name] ?? 9) - (REASON_RANK[b.name] ?? 9),
   );
   const out = ordered.map((d) => d.reason);
-  return out.length > 0 ? out.slice(0, 3) : ['top of your queue right now'];
+  return out.length > 0 ? out.slice(0, 3) : ["top of your queue right now"];
 }

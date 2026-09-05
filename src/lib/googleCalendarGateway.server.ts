@@ -1,5 +1,5 @@
-const GATEWAY_BASE_URL = 'https://connector-gateway.lovable.dev';
-const CONNECTOR_ID = 'google_calendar';
+const GATEWAY_BASE_URL = "https://connector-gateway.lovable.dev";
+const CONNECTOR_ID = "google_calendar";
 
 type CalendarEventBody = {
   summary: string;
@@ -15,16 +15,16 @@ function credentials() {
   const calendarApiKey = process.env.GOOGLE_CALENDAR_API_KEY;
 
   if (!lovableApiKey || !calendarApiKey) {
-    throw new Error('Google Calendar connector is not linked to this project.');
+    throw new Error("Google Calendar connector is not linked to this project.");
   }
 
   return { lovableApiKey, calendarApiKey };
 }
 
 function calendarPath(path: string): string {
-  const clean = path.replace(/^\/+/, '');
-  if (!clean.startsWith('calendar/v3/')) {
-    throw new Error('Unsupported Google Calendar endpoint.');
+  const clean = path.replace(/^\/+/, "");
+  if (!clean.startsWith("calendar/v3/")) {
+    throw new Error("Unsupported Google Calendar endpoint.");
   }
   return `/${clean}`;
 }
@@ -32,9 +32,9 @@ function calendarPath(path: string): string {
 async function gatewayJson<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { lovableApiKey, calendarApiKey } = credentials();
   const headers = new Headers(init.headers);
-  headers.set('Authorization', `Bearer ${lovableApiKey}`);
-  headers.set('X-Connection-Api-Key', calendarApiKey);
-  if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+  headers.set("Authorization", `Bearer ${lovableApiKey}`);
+  headers.set("X-Connection-Api-Key", calendarApiKey);
+  if (init.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   const response = await fetch(`${GATEWAY_BASE_URL}/${CONNECTOR_ID}${calendarPath(path)}`, {
     ...init,
@@ -45,7 +45,9 @@ async function gatewayJson<T>(path: string, init: RequestInit = {}): Promise<T> 
 
   const text = await response.text();
   if (!response.ok) {
-    throw new Error(`Google Calendar connector request failed (${response.status}): ${text.slice(0, 600)}`);
+    throw new Error(
+      `Google Calendar connector request failed (${response.status}): ${text.slice(0, 600)}`,
+    );
   }
 
   if (!text) return undefined as T;
@@ -64,20 +66,22 @@ export async function listGoogleCalendarsServer() {
   let pageToken: string | undefined;
 
   do {
-    const qs = new URLSearchParams({ maxResults: '250', showHidden: 'true' });
-    if (pageToken) qs.set('pageToken', pageToken);
+    const qs = new URLSearchParams({ maxResults: "250", showHidden: "true" });
+    if (pageToken) qs.set("pageToken", pageToken);
     const data = await gatewayJson<{ items?: any[]; nextPageToken?: string }>(
       `calendar/v3/users/me/calendarList?${qs.toString()}`,
     );
 
-    calendars.push(...(data.items || []).map((cal) => ({
-      id: cal.id,
-      summary: cal.summary || cal.id,
-      backgroundColor: cal.backgroundColor,
-      foregroundColor: cal.foregroundColor,
-      primary: cal.primary || false,
-      selected: cal.selected !== false,
-    })));
+    calendars.push(
+      ...(data.items || []).map((cal) => ({
+        id: cal.id,
+        summary: cal.summary || cal.id,
+        backgroundColor: cal.backgroundColor,
+        foregroundColor: cal.foregroundColor,
+        primary: cal.primary || false,
+        selected: cal.selected !== false,
+      })),
+    );
 
     pageToken = data.nextPageToken;
   } while (pageToken);
@@ -99,10 +103,10 @@ export async function fetchGoogleCalendarEventsServer(input: {
       timeMin: input.timeMin,
       timeMax: input.timeMax,
       maxResults: String(input.maxResults),
-      singleEvents: 'true',
-      orderBy: 'startTime',
+      singleEvents: "true",
+      orderBy: "startTime",
     });
-    if (pageToken) qs.set('pageToken', pageToken);
+    if (pageToken) qs.set("pageToken", pageToken);
 
     const data = await gatewayJson<{ items?: any[]; nextPageToken?: string }>(
       `calendar/v3/calendars/${encodeURIComponent(input.calendarId)}/events?${qs.toString()}`,
@@ -126,29 +130,35 @@ export async function createOrUpdateGoogleCalendarEventServer(input: {
 
   try {
     return await gatewayJson<any>(`calendar/v3/calendars/${calendarId}/events`, {
-      method: 'POST',
+      method: "POST",
       body: JSON.stringify(createBody),
     });
   } catch (error: any) {
-    if (!deterministicId || !/\(409\)/.test(error?.message || '')) throw error;
-    return gatewayJson<any>(`calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(deterministicId)}`, {
-      method: 'PUT',
-      body: JSON.stringify(input.event),
-    });
+    if (!deterministicId || !/\(409\)/.test(error?.message || "")) throw error;
+    return gatewayJson<any>(
+      `calendar/v3/calendars/${calendarId}/events/${encodeURIComponent(deterministicId)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(input.event),
+      },
+    );
   }
 }
 
-export async function deleteGoogleCalendarEventServer(input: { calendarId: string; eventId: string }) {
+export async function deleteGoogleCalendarEventServer(input: {
+  calendarId: string;
+  eventId: string;
+}) {
   try {
     await gatewayJson<void>(
       `calendar/v3/calendars/${encodeURIComponent(input.calendarId)}/events/${encodeURIComponent(input.eventId)}`,
-      { method: 'DELETE' },
+      { method: "DELETE" },
     );
     return { deleted: true };
   } catch (error: any) {
     // Google returns 404 when the event is absent and 410 when it exists only
     // as a deleted tombstone. Both mean the requested end state is satisfied.
-    if (/\((?:404|410)\)/.test(error?.message || '')) return { deleted: true };
+    if (/\((?:404|410)\)/.test(error?.message || "")) return { deleted: true };
     throw error;
   }
 }

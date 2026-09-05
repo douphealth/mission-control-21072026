@@ -14,10 +14,20 @@
  * - FUZZY FIELD MATCHING: Levenshtein-based field name matching
  * - EXPRESS IMPORT: High-confidence data can skip review
  */
-import Papa from 'papaparse';
-import { parseCredentialsDump } from './parseCredentialsDump';
+import Papa from "papaparse";
+import { parseCredentialsDump } from "./parseCredentialsDump";
 
-export type ImportTarget = 'websites' | 'links' | 'tasks' | 'repos' | 'buildProjects' | 'credentials' | 'payments' | 'notes' | 'ideas' | 'habits';
+export type ImportTarget =
+  | "websites"
+  | "links"
+  | "tasks"
+  | "repos"
+  | "buildProjects"
+  | "credentials"
+  | "payments"
+  | "notes"
+  | "ideas"
+  | "habits";
 
 export interface TargetMeta {
   label: string;
@@ -30,170 +40,521 @@ export interface TargetMeta {
 
 export const TARGET_META: Record<ImportTarget, TargetMeta> = {
   websites: {
-    label: 'Websites', emoji: '🌐',
-    requiredFields: ['name', 'url'],
-    optionalFields: ['wpAdminUrl', 'wpUsername', 'wpPassword', 'hostingProvider', 'hostingLoginUrl', 'hostingUsername', 'hostingPassword', 'category', 'status', 'notes', 'plugins', 'tags'],
+    label: "Websites",
+    emoji: "🌐",
+    requiredFields: ["name", "url"],
+    optionalFields: [
+      "wpAdminUrl",
+      "wpUsername",
+      "wpPassword",
+      "hostingProvider",
+      "hostingLoginUrl",
+      "hostingUsername",
+      "hostingPassword",
+      "category",
+      "status",
+      "notes",
+      "plugins",
+      "tags",
+    ],
     aliases: {
-      name: ['site', 'website', 'domain', 'siteName', 'site_name', 'website_name', 'domain_name', 'hostname', 'host', 'site name', 'website name', 'project', 'label', 'site title', 'website title'],
-      url: ['link', 'href', 'siteUrl', 'site_url', 'website_url', 'address', 'domain', 'homepage', 'web', 'webpage', 'page', 'site url', 'website url', 'live url', 'liveurl', 'production url', 'prod url', 'website link', 'site link', 'main url'],
-      wpAdminUrl: ['wp_admin', 'wordpress_admin', 'admin_url', 'wp_url', 'wp_admin_url', 'wp admin', 'wordpress admin', 'admin url', 'admin panel', 'wp login', 'wplogin', 'admin login', 'backend', 'backend url', 'dashboard url', 'cms url', 'cms', 'wp admin url', 'admin', 'wordpress url', 'wp-admin', 'wordpress login'],
-      wpUsername: ['wp_user', 'wordpress_user', 'admin_user', 'wp_login', 'wp user', 'wordpress user', 'admin user', 'wp username', 'admin username', 'cms user', 'cms username', 'backend user', 'backend username', 'wp login user', 'username', 'user', 'login', 'user name'],
-      wpPassword: ['wp_pass', 'wordpress_pass', 'admin_pass', 'wp_pwd', 'wp pass', 'wordpress pass', 'admin pass', 'wp password', 'admin password', 'cms pass', 'cms password', 'backend pass', 'backend password', 'wp login pass', 'password', 'pass', 'pwd'],
-      hostingProvider: ['hosting', 'host', 'provider', 'hosting_provider', 'hoster', 'hosting provider', 'server', 'host provider', 'web host', 'webhost', 'hosting company'],
-      hostingLoginUrl: ['hosting_url', 'hosting_login', 'host_url', 'hosting url', 'hosting login', 'host url', 'hosting login url', 'hosting panel', 'cpanel url', 'cpanel', 'plesk', 'server url', 'hosting dashboard'],
-      hostingUsername: ['hosting_user', 'host_user', 'hosting user', 'hosting username', 'host user', 'host username', 'server user', 'server username', 'cpanel user', 'cpanel username', 'hosting login user', 'hosting account user'],
-      hostingPassword: ['hosting_pass', 'host_pass', 'hosting_pwd', 'hosting pass', 'hosting password', 'host pass', 'host password', 'server pass', 'server password', 'cpanel pass', 'cpanel password', 'hosting login pass', 'hosting account password'],
-      category: ['type', 'group', 'cat', 'kind', 'sector', 'niche'],
-      status: ['state', 'active', 'live'],
-      notes: ['note', 'comment', 'comments', 'description', 'desc', 'info', 'details'],
-      plugins: ['plugin', 'extensions', 'addons', 'modules'],
-      tags: ['tag', 'labels', 'keywords'],
+      name: [
+        "site",
+        "website",
+        "domain",
+        "siteName",
+        "site_name",
+        "website_name",
+        "domain_name",
+        "hostname",
+        "host",
+        "site name",
+        "website name",
+        "project",
+        "label",
+        "site title",
+        "website title",
+      ],
+      url: [
+        "link",
+        "href",
+        "siteUrl",
+        "site_url",
+        "website_url",
+        "address",
+        "domain",
+        "homepage",
+        "web",
+        "webpage",
+        "page",
+        "site url",
+        "website url",
+        "live url",
+        "liveurl",
+        "production url",
+        "prod url",
+        "website link",
+        "site link",
+        "main url",
+      ],
+      wpAdminUrl: [
+        "wp_admin",
+        "wordpress_admin",
+        "admin_url",
+        "wp_url",
+        "wp_admin_url",
+        "wp admin",
+        "wordpress admin",
+        "admin url",
+        "admin panel",
+        "wp login",
+        "wplogin",
+        "admin login",
+        "backend",
+        "backend url",
+        "dashboard url",
+        "cms url",
+        "cms",
+        "wp admin url",
+        "admin",
+        "wordpress url",
+        "wp-admin",
+        "wordpress login",
+      ],
+      wpUsername: [
+        "wp_user",
+        "wordpress_user",
+        "admin_user",
+        "wp_login",
+        "wp user",
+        "wordpress user",
+        "admin user",
+        "wp username",
+        "admin username",
+        "cms user",
+        "cms username",
+        "backend user",
+        "backend username",
+        "wp login user",
+        "username",
+        "user",
+        "login",
+        "user name",
+      ],
+      wpPassword: [
+        "wp_pass",
+        "wordpress_pass",
+        "admin_pass",
+        "wp_pwd",
+        "wp pass",
+        "wordpress pass",
+        "admin pass",
+        "wp password",
+        "admin password",
+        "cms pass",
+        "cms password",
+        "backend pass",
+        "backend password",
+        "wp login pass",
+        "password",
+        "pass",
+        "pwd",
+      ],
+      hostingProvider: [
+        "hosting",
+        "host",
+        "provider",
+        "hosting_provider",
+        "hoster",
+        "hosting provider",
+        "server",
+        "host provider",
+        "web host",
+        "webhost",
+        "hosting company",
+      ],
+      hostingLoginUrl: [
+        "hosting_url",
+        "hosting_login",
+        "host_url",
+        "hosting url",
+        "hosting login",
+        "host url",
+        "hosting login url",
+        "hosting panel",
+        "cpanel url",
+        "cpanel",
+        "plesk",
+        "server url",
+        "hosting dashboard",
+      ],
+      hostingUsername: [
+        "hosting_user",
+        "host_user",
+        "hosting user",
+        "hosting username",
+        "host user",
+        "host username",
+        "server user",
+        "server username",
+        "cpanel user",
+        "cpanel username",
+        "hosting login user",
+        "hosting account user",
+      ],
+      hostingPassword: [
+        "hosting_pass",
+        "host_pass",
+        "hosting_pwd",
+        "hosting pass",
+        "hosting password",
+        "host pass",
+        "host password",
+        "server pass",
+        "server password",
+        "cpanel pass",
+        "cpanel password",
+        "hosting login pass",
+        "hosting account password",
+      ],
+      category: ["type", "group", "cat", "kind", "sector", "niche"],
+      status: ["state", "active", "live"],
+      notes: ["note", "comment", "comments", "description", "desc", "info", "details"],
+      plugins: ["plugin", "extensions", "addons", "modules"],
+      tags: ["tag", "labels", "keywords"],
     },
-    contentSignals: [/wp-admin/i, /wordpress/i, /hosting/i, /\.com|\.org|\.io|\.net|\.dev|\.co|\.app|\.me|\.info|\.biz/i, /siteground|cloudways|bluehost|godaddy/i, /https?:\/\/[^\s]+/i],
+    contentSignals: [
+      /wp-admin/i,
+      /wordpress/i,
+      /hosting/i,
+      /\.com|\.org|\.io|\.net|\.dev|\.co|\.app|\.me|\.info|\.biz/i,
+      /siteground|cloudways|bluehost|godaddy/i,
+      /https?:\/\/[^\s]+/i,
+    ],
   },
   links: {
-    label: 'Links', emoji: '🔗',
-    requiredFields: ['title', 'url'],
-    optionalFields: ['category', 'description', 'status', 'pinned', 'tags'],
+    label: "Links",
+    emoji: "🔗",
+    requiredFields: ["title", "url"],
+    optionalFields: ["category", "description", "status", "pinned", "tags"],
     aliases: {
-      title: ['name', 'label', 'text', 'link_name', 'bookmark', 'link_title'],
-      url: ['link', 'href', 'address', 'uri', 'source'],
-      category: ['type', 'group', 'folder', 'cat'],
-      description: ['desc', 'note', 'notes', 'comment'],
-      status: ['state'],
-      pinned: ['pin', 'favorite', 'starred', 'fav'],
-      tags: ['tag', 'labels', 'keywords'],
+      title: ["name", "label", "text", "link_name", "bookmark", "link_title"],
+      url: ["link", "href", "address", "uri", "source"],
+      category: ["type", "group", "folder", "cat"],
+      description: ["desc", "note", "notes", "comment"],
+      status: ["state"],
+      pinned: ["pin", "favorite", "starred", "fav"],
+      tags: ["tag", "labels", "keywords"],
     },
     contentSignals: [/bookmark/i],
   },
   tasks: {
-    label: 'Tasks', emoji: '✅',
-    requiredFields: ['title'],
-    optionalFields: ['priority', 'status', 'dueDate', 'category', 'description', 'linkedProject', 'tags'],
+    label: "Tasks",
+    emoji: "✅",
+    requiredFields: ["title"],
+    optionalFields: [
+      "priority",
+      "status",
+      "dueDate",
+      "category",
+      "description",
+      "linkedProject",
+      "tags",
+    ],
     aliases: {
-      title: ['name', 'task', 'todo', 'item', 'subject', 'task_name', 'action', 'action_item'],
-      priority: ['prio', 'importance', 'urgency', 'level'],
-      status: ['state', 'done', 'completed', 'progress', 'checked'],
-      dueDate: ['due', 'deadline', 'due_date', 'duedate', 'date', 'target_date', 'end_date'],
-      category: ['type', 'group', 'cat', 'project', 'list', 'board'],
-      description: ['desc', 'note', 'notes', 'details', 'body', 'content'],
-      linkedProject: ['project', 'linked_project', 'projectName'],
-      tags: ['tag', 'labels'],
+      title: ["name", "task", "todo", "item", "subject", "task_name", "action", "action_item"],
+      priority: ["prio", "importance", "urgency", "level"],
+      status: ["state", "done", "completed", "progress", "checked"],
+      dueDate: ["due", "deadline", "due_date", "duedate", "date", "target_date", "end_date"],
+      category: ["type", "group", "cat", "project", "list", "board"],
+      description: ["desc", "note", "notes", "details", "body", "content"],
+      linkedProject: ["project", "linked_project", "projectName"],
+      tags: ["tag", "labels"],
     },
-    contentSignals: [/todo|to-do|to do/i, /in.?progress|done|blocked|pending/i, /high|medium|low|critical|urgent/i, /deadline|due/i],
+    contentSignals: [
+      /todo|to-do|to do/i,
+      /in.?progress|done|blocked|pending/i,
+      /high|medium|low|critical|urgent/i,
+      /deadline|due/i,
+    ],
   },
   repos: {
-    label: 'GitHub Repos', emoji: '🐙',
-    requiredFields: ['name'],
-    optionalFields: ['url', 'description', 'language', 'stars', 'forks', 'status', 'demoUrl', 'progress', 'topics', 'devPlatformUrl', 'deploymentUrl'],
+    label: "GitHub Repos",
+    emoji: "🐙",
+    requiredFields: ["name"],
+    optionalFields: [
+      "url",
+      "description",
+      "language",
+      "stars",
+      "forks",
+      "status",
+      "demoUrl",
+      "progress",
+      "topics",
+      "devPlatformUrl",
+      "deploymentUrl",
+    ],
     aliases: {
-      name: ['repo', 'repository', 'repo_name', 'project', 'full_name', 'repo name', 'repository name', 'project name'],
-      url: ['link', 'href', 'github_url', 'repo_url', 'html_url', 'clone_url', 'ssh_url', 'github url', 'github link', 'github_link', 'repo link', 'repo_link', 'repository url', 'repository link', 'git url', 'git link', 'source url', 'source link', 'code url', 'code link'],
-      description: ['desc', 'about', 'summary'],
-      language: ['lang', 'tech', 'primary_language', 'programming language'],
-      stars: ['star', 'stargazers', 'stargazers_count'],
-      forks: ['fork', 'forks_count'],
-      status: ['state', 'archived', 'visibility'],
-      demoUrl: ['demo', 'demo_url', 'homepage', 'live_url', 'demo url', 'live url', 'preview url', 'preview'],
-      progress: ['completion', 'percent'],
-      topics: ['tags', 'labels', 'keywords', 'topic'],
-      devPlatformUrl: ['dev_platform', 'dev_platform_url', 'platform_url', 'platform', 'dev_url', 'builder_url', 'builder', 'ide_url', 'ide', 'aistudio', 'ai_studio', 'bolt_url', 'lovable_url', 'replit_url', 'coding_platform', 'development_url', 'dev platform', 'development platform', 'code platform', 'dev platform url', 'lovable app', 'lovable_app', 'lovable project', 'lovable_project', 'lovable link', 'lovable url'],
-      deploymentUrl: ['deployment', 'deployment_url', 'deploy_url', 'gateway', 'gateway_url', 'hosting_url', 'published_url', 'published', 'live', 'live_url', 'production_url', 'production', 'cloudways', 'vercel', 'netlify', 'railway', 'render', 'fly', 'pages', 'cloudflare_pages', 'deployed', 'deploy gateway', 'deployment gateway', 'deployment gateway url', 'cloudflare page', 'cloudflare_page', 'cloudflare url', 'cloudflare_url', 'cf page', 'cf pages', 'pages url', 'pages_url', 'deployed url', 'deployed_url'],
+      name: [
+        "repo",
+        "repository",
+        "repo_name",
+        "project",
+        "full_name",
+        "repo name",
+        "repository name",
+        "project name",
+      ],
+      url: [
+        "link",
+        "href",
+        "github_url",
+        "repo_url",
+        "html_url",
+        "clone_url",
+        "ssh_url",
+        "github url",
+        "github link",
+        "github_link",
+        "repo link",
+        "repo_link",
+        "repository url",
+        "repository link",
+        "git url",
+        "git link",
+        "source url",
+        "source link",
+        "code url",
+        "code link",
+      ],
+      description: ["desc", "about", "summary"],
+      language: ["lang", "tech", "primary_language", "programming language"],
+      stars: ["star", "stargazers", "stargazers_count"],
+      forks: ["fork", "forks_count"],
+      status: ["state", "archived", "visibility"],
+      demoUrl: [
+        "demo",
+        "demo_url",
+        "homepage",
+        "live_url",
+        "demo url",
+        "live url",
+        "preview url",
+        "preview",
+      ],
+      progress: ["completion", "percent"],
+      topics: ["tags", "labels", "keywords", "topic"],
+      devPlatformUrl: [
+        "dev_platform",
+        "dev_platform_url",
+        "platform_url",
+        "platform",
+        "dev_url",
+        "builder_url",
+        "builder",
+        "ide_url",
+        "ide",
+        "aistudio",
+        "ai_studio",
+        "bolt_url",
+        "lovable_url",
+        "replit_url",
+        "coding_platform",
+        "development_url",
+        "dev platform",
+        "development platform",
+        "code platform",
+        "dev platform url",
+        "lovable app",
+        "lovable_app",
+        "lovable project",
+        "lovable_project",
+        "lovable link",
+        "lovable url",
+      ],
+      deploymentUrl: [
+        "deployment",
+        "deployment_url",
+        "deploy_url",
+        "gateway",
+        "gateway_url",
+        "hosting_url",
+        "published_url",
+        "published",
+        "live",
+        "live_url",
+        "production_url",
+        "production",
+        "cloudways",
+        "vercel",
+        "netlify",
+        "railway",
+        "render",
+        "fly",
+        "pages",
+        "cloudflare_pages",
+        "deployed",
+        "deploy gateway",
+        "deployment gateway",
+        "deployment gateway url",
+        "cloudflare page",
+        "cloudflare_page",
+        "cloudflare url",
+        "cloudflare_url",
+        "cf page",
+        "cf pages",
+        "pages url",
+        "pages_url",
+        "deployed url",
+        "deployed_url",
+      ],
     },
-    contentSignals: [/github\.com/i, /gitlab\.com/i, /bitbucket/i, /repository|repo/i, /stars?|forks?/i, /lovable\.dev\/projects/i, /\.pages\.dev/i],
+    contentSignals: [
+      /github\.com/i,
+      /gitlab\.com/i,
+      /bitbucket/i,
+      /repository|repo/i,
+      /stars?|forks?/i,
+      /lovable\.dev\/projects/i,
+      /\.pages\.dev/i,
+    ],
   },
   buildProjects: {
-    label: 'Build Projects', emoji: '🛠️',
-    requiredFields: ['name'],
-    optionalFields: ['platform', 'projectUrl', 'deployedUrl', 'description', 'techStack', 'status', 'nextSteps', 'githubRepo'],
+    label: "Build Projects",
+    emoji: "🛠️",
+    requiredFields: ["name"],
+    optionalFields: [
+      "platform",
+      "projectUrl",
+      "deployedUrl",
+      "description",
+      "techStack",
+      "status",
+      "nextSteps",
+      "githubRepo",
+    ],
     aliases: {
-      name: ['project', 'title', 'project_name', 'app_name'],
-      platform: ['tool', 'builder', 'framework'],
-      projectUrl: ['project_url', 'build_url', 'url'],
-      deployedUrl: ['deployed_url', 'live_url', 'demo', 'production_url'],
-      description: ['desc', 'about', 'summary'],
-      techStack: ['tech_stack', 'technologies', 'stack', 'tech'],
-      status: ['state', 'phase'],
-      nextSteps: ['next_steps', 'todo', 'next'],
-      githubRepo: ['github_repo', 'repo', 'github', 'repository'],
+      name: ["project", "title", "project_name", "app_name"],
+      platform: ["tool", "builder", "framework"],
+      projectUrl: ["project_url", "build_url", "url"],
+      deployedUrl: ["deployed_url", "live_url", "demo", "production_url"],
+      description: ["desc", "about", "summary"],
+      techStack: ["tech_stack", "technologies", "stack", "tech"],
+      status: ["state", "phase"],
+      nextSteps: ["next_steps", "todo", "next"],
+      githubRepo: ["github_repo", "repo", "github", "repository"],
     },
-    contentSignals: [/lovable|bolt|vercel|netlify|railway/i, /deployed|building|testing/i, /react|next\.?js|vue|angular|svelte/i],
+    contentSignals: [
+      /lovable|bolt|vercel|netlify|railway/i,
+      /deployed|building|testing/i,
+      /react|next\.?js|vue|angular|svelte/i,
+    ],
   },
   credentials: {
-    label: 'Credentials', emoji: '🔐',
-    requiredFields: ['label', 'service'],
-    optionalFields: ['url', 'username', 'password', 'apiKey', 'notes', 'category', 'tags'],
+    label: "Credentials",
+    emoji: "🔐",
+    requiredFields: ["label", "service"],
+    optionalFields: ["url", "username", "password", "apiKey", "notes", "category", "tags"],
     aliases: {
-      label: ['name', 'title', 'credential_name', 'account', 'account_name'],
-      service: ['provider', 'platform', 'app', 'site', 'website'],
-      url: ['link', 'login_url', 'site_url', 'address'],
-      username: ['user', 'login', 'email', 'user_name', 'account_name', 'login_email'],
-      password: ['pass', 'pwd', 'secret', 'passwd'],
-      apiKey: ['api_key', 'token', 'access_token', 'key', 'api_token', 'secret_key'],
-      notes: ['note', 'comment', 'description', 'desc'],
-      category: ['type', 'group', 'cat'],
-      tags: ['tag', 'labels'],
+      label: ["name", "title", "credential_name", "account", "account_name"],
+      service: ["provider", "platform", "app", "site", "website"],
+      url: ["link", "login_url", "site_url", "address"],
+      username: ["user", "login", "email", "user_name", "account_name", "login_email"],
+      password: ["pass", "pwd", "secret", "passwd"],
+      apiKey: ["api_key", "token", "access_token", "key", "api_token", "secret_key"],
+      notes: ["note", "comment", "description", "desc"],
+      category: ["type", "group", "cat"],
+      tags: ["tag", "labels"],
     },
     contentSignals: [/password|passwd|pwd/i, /api.?key|token|secret/i, /login|credential|auth/i],
   },
   payments: {
-    label: 'Payments', emoji: '💰',
-    requiredFields: ['title', 'amount'],
-    optionalFields: ['currency', 'type', 'status', 'category', 'from', 'to', 'dueDate', 'paidDate', 'recurring', 'notes'],
+    label: "Payments",
+    emoji: "💰",
+    requiredFields: ["title", "amount"],
+    optionalFields: [
+      "currency",
+      "type",
+      "status",
+      "category",
+      "from",
+      "to",
+      "dueDate",
+      "paidDate",
+      "recurring",
+      "notes",
+    ],
     aliases: {
-      title: ['name', 'description', 'item', 'payment', 'invoice', 'label', 'memo', 'transaction'],
-      amount: ['price', 'cost', 'value', 'total', 'sum', 'fee', 'charge', 'subtotal'],
-      currency: ['curr', 'money_type', 'currency_code'],
-      type: ['kind', 'payment_type', 'direction', 'txn_type'],
-      status: ['state', 'paid', 'payment_status'],
-      category: ['group', 'cat'],
-      from: ['sender', 'payer', 'source', 'client', 'buyer'],
-      to: ['receiver', 'payee', 'recipient', 'vendor', 'seller'],
-      dueDate: ['due', 'deadline', 'due_date', 'date', 'invoice_date', 'payment_deadline'],
-      paidDate: ['paid_date', 'paid_on', 'payment_date', 'settled_on'],
-      recurring: ['repeat', 'auto', 'subscription', 'recur'],
-      notes: ['note', 'comment', 'memo', 'desc'],
+      title: ["name", "description", "item", "payment", "invoice", "label", "memo", "transaction"],
+      amount: ["price", "cost", "value", "total", "sum", "fee", "charge", "subtotal"],
+      currency: ["curr", "money_type", "currency_code"],
+      type: ["kind", "payment_type", "direction", "txn_type"],
+      status: ["state", "paid", "payment_status"],
+      category: ["group", "cat"],
+      from: ["sender", "payer", "source", "client", "buyer"],
+      to: ["receiver", "payee", "recipient", "vendor", "seller"],
+      dueDate: ["due", "deadline", "due_date", "date", "invoice_date", "payment_deadline"],
+      paidDate: ["paid_date", "paid_on", "payment_date", "settled_on"],
+      recurring: ["repeat", "auto", "subscription", "recur"],
+      notes: ["note", "comment", "memo", "desc"],
     },
-    contentSignals: [/\$[\d,.]+|\d+\.\d{2}/i, /invoice|payment|paid|unpaid|overdue/i, /USD|EUR|GBP|JPY/i, /income|expense|subscription/i],
+    contentSignals: [
+      /\$[\d,.]+|\d+\.\d{2}/i,
+      /invoice|payment|paid|unpaid|overdue/i,
+      /USD|EUR|GBP|JPY/i,
+      /income|expense|subscription/i,
+    ],
   },
   notes: {
-    label: 'Notes', emoji: '📝',
-    requiredFields: ['title'],
-    optionalFields: ['content', 'color', 'pinned', 'tags'],
+    label: "Notes",
+    emoji: "📝",
+    requiredFields: ["title"],
+    optionalFields: ["content", "color", "pinned", "tags"],
     aliases: {
-      title: ['name', 'subject', 'heading', 'note_title'],
-      content: ['body', 'text', 'note', 'description', 'desc', 'details', 'message'],
-      color: ['colour', 'theme'],
-      pinned: ['pin', 'favorite', 'starred', 'fav'],
-      tags: ['tag', 'labels', 'keywords', 'categories'],
+      title: ["name", "subject", "heading", "note_title"],
+      content: ["body", "text", "note", "description", "desc", "details", "message"],
+      color: ["colour", "theme"],
+      pinned: ["pin", "favorite", "starred", "fav"],
+      tags: ["tag", "labels", "keywords", "categories"],
     },
     contentSignals: [/note|memo|journal/i],
   },
   ideas: {
-    label: 'Ideas', emoji: '💡',
-    requiredFields: ['title'],
-    optionalFields: ['description', 'category', 'priority', 'status', 'tags', 'linkedProject', 'votes'],
+    label: "Ideas",
+    emoji: "💡",
+    requiredFields: ["title"],
+    optionalFields: [
+      "description",
+      "category",
+      "priority",
+      "status",
+      "tags",
+      "linkedProject",
+      "votes",
+    ],
     aliases: {
-      title: ['name', 'idea', 'subject', 'concept', 'proposal'],
-      description: ['desc', 'details', 'body', 'content', 'notes'],
-      category: ['type', 'group', 'cat'],
-      priority: ['prio', 'importance'],
-      status: ['state', 'phase'],
-      tags: ['tag', 'labels'],
-      linkedProject: ['project', 'linked_project'],
-      votes: ['vote', 'score', 'rating', 'upvotes'],
+      title: ["name", "idea", "subject", "concept", "proposal"],
+      description: ["desc", "details", "body", "content", "notes"],
+      category: ["type", "group", "cat"],
+      priority: ["prio", "importance"],
+      status: ["state", "phase"],
+      tags: ["tag", "labels"],
+      linkedProject: ["project", "linked_project"],
+      votes: ["vote", "score", "rating", "upvotes"],
     },
     contentSignals: [/idea|concept|brainstorm|proposal/i, /exploring|validated|spark/i],
   },
   habits: {
-    label: 'Habits', emoji: '🔄',
-    requiredFields: ['name'],
-    optionalFields: ['icon', 'frequency', 'color'],
+    label: "Habits",
+    emoji: "🔄",
+    requiredFields: ["name"],
+    optionalFields: ["icon", "frequency", "color"],
     aliases: {
-      name: ['habit', 'title', 'label', 'activity', 'routine'],
-      icon: ['emoji'],
-      frequency: ['freq', 'interval', 'schedule', 'repeat'],
-      color: ['colour', 'theme'],
+      name: ["habit", "title", "label", "activity", "routine"],
+      icon: ["emoji"],
+      frequency: ["freq", "interval", "schedule", "repeat"],
+      color: ["colour", "theme"],
     },
     contentSignals: [/daily|weekly|monthly/i, /habit|routine|streak/i],
   },
@@ -202,28 +563,35 @@ export const TARGET_META: Record<ImportTarget, TargetMeta> = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function normalize(s: string): string {
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[_\s\-./\*#@!&^%$()]+/g, '');
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_\s\-./*#@!&^%$()]+/g, "");
 }
 
 const URL_REGEX = /https?:\/\/[^\s,;"'<>)}\]]+/gi;
-const EMAIL_REGEX = /[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/g;
+const EMAIL_REGEX = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
 const CURRENCY_REGEX = /(?:[$€£¥₹])\s*[\d,.]+|[\d,.]+\s*(?:USD|EUR|GBP|JPY|INR|AUD|CAD)/gi;
 
 function extractHostname(url: string): string {
   try {
-    return new URL(url).hostname.replace(/^www\./, '');
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch {
-    const match = url.match(/(?:https?:\/\/)?(?:www\.)?([^\/\s:]+)/);
+    const match = url.match(/(?:https?:\/\/)?(?:www\.)?([^/\s:]+)/);
     return match?.[1] || url;
   }
 }
 
 function prettifyHostname(hostname: string): string {
   return hostname
-    .replace(/\.(com|org|net|io|dev|co|app|me|info|biz|xyz|site|online|store|tech|ai|gg|tv|us|uk|de|fr|es|it|nl|br|ca|au|jp|kr|ru|in|cn)(\.[a-z]{2,3})?$/i, '')
+    .replace(
+      /\.(com|org|net|io|dev|co|app|me|info|biz|xyz|site|online|store|tech|ai|gg|tv|us|uk|de|fr|es|it|nl|br|ca|au|jp|kr|ru|in|cn)(\.[a-z]{2,3})?$/i,
+      "",
+    )
     .split(/[.\-_]/)
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(' ');
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
 }
 
 // ─── NLP Date Parsing ─────────────────────────────────────────────────────────
@@ -236,30 +604,33 @@ function parseNaturalDate(text: string): string | null {
   // ISO / standard date formats
   const isoMatch = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   if (isoMatch) return t;
-  const slashMatch = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+  const slashMatch = t.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{2,4})$/);
   if (slashMatch) {
-    const y = slashMatch[3].length === 2 ? '20' + slashMatch[3] : slashMatch[3];
-    return `${y}-${slashMatch[1].padStart(2, '0')}-${slashMatch[2].padStart(2, '0')}`;
+    const y = slashMatch[3].length === 2 ? "20" + slashMatch[3] : slashMatch[3];
+    return `${y}-${slashMatch[1].padStart(2, "0")}-${slashMatch[2].padStart(2, "0")}`;
   }
 
   // Relative dates
-  if (t === 'today' || t === 'now') return formatDate(now);
-  if (t === 'tomorrow' || t === 'tmr' || t === 'tmrw') return formatDate(addDays(now, 1));
-  if (t === 'yesterday') return formatDate(addDays(now, -1));
+  if (t === "today" || t === "now") return formatDate(now);
+  if (t === "tomorrow" || t === "tmr" || t === "tmrw") return formatDate(addDays(now, 1));
+  if (t === "yesterday") return formatDate(addDays(now, -1));
 
   // "in X days/weeks/months"
   const inMatch = t.match(/in\s+(\d+)\s+(day|week|month|hour|min)s?/);
   if (inMatch) {
     const n = parseInt(inMatch[1]);
-    if (inMatch[2] === 'day') return formatDate(addDays(now, n));
-    if (inMatch[2] === 'week') return formatDate(addDays(now, n * 7));
-    if (inMatch[2] === 'month') { now.setMonth(now.getMonth() + n); return formatDate(now); }
+    if (inMatch[2] === "day") return formatDate(addDays(now, n));
+    if (inMatch[2] === "week") return formatDate(addDays(now, n * 7));
+    if (inMatch[2] === "month") {
+      now.setMonth(now.getMonth() + n);
+      return formatDate(now);
+    }
     return formatDate(addDays(now, 1));
   }
 
   // "next Monday/Tuesday/etc"
-  const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const shortDays = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+  const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  const shortDays = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
   const nextMatch = t.match(/next\s+(\w+)/);
   if (nextMatch) {
     let targetDay = dayNames.indexOf(nextMatch[1]);
@@ -270,8 +641,11 @@ function parseNaturalDate(text: string): string | null {
       if (daysAhead <= 0) daysAhead += 7;
       return formatDate(addDays(now, daysAhead));
     }
-    if (nextMatch[1] === 'week') return formatDate(addDays(now, 7));
-    if (nextMatch[1] === 'month') { now.setMonth(now.getMonth() + 1); return formatDate(now); }
+    if (nextMatch[1] === "week") return formatDate(addDays(now, 7));
+    if (nextMatch[1] === "month") {
+      now.setMonth(now.getMonth() + 1);
+      return formatDate(now);
+    }
   }
 
   // "this Friday", "this weekend"
@@ -285,24 +659,50 @@ function parseNaturalDate(text: string): string | null {
       if (daysAhead < 0) daysAhead += 7;
       return formatDate(addDays(now, daysAhead));
     }
-    if (thisMatch[1] === 'weekend') {
+    if (thisMatch[1] === "weekend") {
       const daysToSat = (6 - now.getDay() + 7) % 7 || 7;
       return formatDate(addDays(now, daysToSat));
     }
   }
 
   // "end of week/month"
-  if (t.includes('end of week') || t === 'eow') {
+  if (t.includes("end of week") || t === "eow") {
     const daysToFri = (5 - now.getDay() + 7) % 7 || 7;
     return formatDate(addDays(now, daysToFri));
   }
-  if (t.includes('end of month') || t === 'eom') {
+  if (t.includes("end of month") || t === "eom") {
     return formatDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
   }
 
   // "March 5th", "Jan 15", "December 25 2026"
-  const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
-  const shortMonths = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+  const months = [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+  ];
+  const shortMonths = [
+    "jan",
+    "feb",
+    "mar",
+    "apr",
+    "may",
+    "jun",
+    "jul",
+    "aug",
+    "sep",
+    "oct",
+    "nov",
+    "dec",
+  ];
   const monthDateMatch = t.match(/(\w+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*(\d{4}))?/);
   if (monthDateMatch) {
     let monthIdx = months.indexOf(monthDateMatch[1]);
@@ -336,44 +736,44 @@ function addDays(date: Date, days: number): Date {
 }
 
 function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return date.toISOString().split("T")[0];
 }
 
 // ─── NLP Priority/Status Extraction ───────────────────────────────────────────
 
 function extractPriority(text: string): string | null {
   const t = text.toLowerCase();
-  if (/\b(critical|asap|urgent|emergency|p0)\b/.test(t)) return 'critical';
-  if (/\b(high|important|p1)\b/.test(t)) return 'high';
-  if (/\b(medium|moderate|normal|p2)\b/.test(t)) return 'medium';
-  if (/\b(low|minor|nice.?to.?have|p3|p4)\b/.test(t)) return 'low';
+  if (/\b(critical|asap|urgent|emergency|p0)\b/.test(t)) return "critical";
+  if (/\b(high|important|p1)\b/.test(t)) return "high";
+  if (/\b(medium|moderate|normal|p2)\b/.test(t)) return "medium";
+  if (/\b(low|minor|nice.?to.?have|p3|p4)\b/.test(t)) return "low";
   return null;
 }
 
 function extractStatus(text: string): string | null {
   const t = text.toLowerCase();
-  if (/\b(done|completed|finished|resolved|closed|shipped)\b/.test(t)) return 'done';
-  if (/\b(in.?progress|wip|working|started|ongoing|active)\b/.test(t)) return 'in-progress';
-  if (/\b(blocked|stuck|waiting|on.?hold|paused)\b/.test(t)) return 'blocked';
-  if (/\b(todo|to.?do|pending|planned|backlog|open|new)\b/.test(t)) return 'todo';
+  if (/\b(done|completed|finished|resolved|closed|shipped)\b/.test(t)) return "done";
+  if (/\b(in.?progress|wip|working|started|ongoing|active)\b/.test(t)) return "in-progress";
+  if (/\b(blocked|stuck|waiting|on.?hold|paused)\b/.test(t)) return "blocked";
+  if (/\b(todo|to.?do|pending|planned|backlog|open|new)\b/.test(t)) return "todo";
   return null;
 }
 
 function extractPaymentType(text: string): string | null {
   const t = text.toLowerCase();
-  if (/\b(income|revenue|earning|received|inflow|sale)\b/.test(t)) return 'income';
-  if (/\b(expense|cost|spend|paid|outflow|purchase|bought)\b/.test(t)) return 'expense';
-  if (/\b(subscription|sub|recurring|monthly|annual|yearly)\b/.test(t)) return 'subscription';
+  if (/\b(income|revenue|earning|received|inflow|sale)\b/.test(t)) return "income";
+  if (/\b(expense|cost|spend|paid|outflow|purchase|bought)\b/.test(t)) return "expense";
+  if (/\b(subscription|sub|recurring|monthly|annual|yearly)\b/.test(t)) return "subscription";
   return null;
 }
 
 function extractCurrency(text: string): string {
-  if (/[$]|USD/i.test(text)) return 'USD';
-  if (/[€]|EUR/i.test(text)) return 'EUR';
-  if (/[£]|GBP/i.test(text)) return 'GBP';
-  if (/[¥]|JPY/i.test(text)) return 'JPY';
-  if (/[₹]|INR/i.test(text)) return 'INR';
-  return 'USD';
+  if (/[$]|USD/i.test(text)) return "USD";
+  if (/[€]|EUR/i.test(text)) return "EUR";
+  if (/[£]|GBP/i.test(text)) return "GBP";
+  if (/[¥]|JPY/i.test(text)) return "JPY";
+  if (/[₹]|INR/i.test(text)) return "INR";
+  return "USD";
 }
 
 function extractAmount(text: string): number {
@@ -385,18 +785,20 @@ function extractAmount(text: string): number {
 /** Parses "1.234,56", "1,234.56", "1234,56 €", "€ 89,30" → number */
 function parseMoney(raw: string): number | null {
   if (!raw) return null;
-  let s = String(raw).replace(/[^\d.,\-]/g, '').trim();
+  let s = String(raw)
+    .replace(/[^\d.,-]/g, "")
+    .trim();
   if (!s) return null;
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
+  const lastComma = s.lastIndexOf(",");
+  const lastDot = s.lastIndexOf(".");
   if (lastComma > -1 && lastDot > -1) {
     // whichever comes last is the decimal separator
-    if (lastComma > lastDot) s = s.replace(/\./g, '').replace(',', '.');
-    else s = s.replace(/,/g, '');
+    if (lastComma > lastDot) s = s.replace(/\./g, "").replace(",", ".");
+    else s = s.replace(/,/g, "");
   } else if (lastComma > -1) {
     const decimals = s.length - lastComma - 1;
     // 1,234 → thousands grouping; 89,30 / 89,3 → decimal comma
-    s = decimals === 3 ? s.replace(/,/g, '') : s.replace(',', '.');
+    s = decimals === 3 ? s.replace(/,/g, "") : s.replace(",", ".");
   }
 
   const n = parseFloat(s);
@@ -405,17 +807,17 @@ function parseMoney(raw: string): number | null {
 
 /** Maps free-form / multilingual payment status text to paid | pending | overdue | cancelled */
 function normalizePaymentStatus(raw: string | undefined, context: string): string {
-  const t = `${raw || ''}`.toLowerCase().trim();
-  if (/^(paid|settled|complete[d]?|cleared|εξοφλ|πληρωμ)/.test(t) || t === 'true' || t === 'yes') return 'paid';
-  if (/^(overdue|late|past.?due|ληξιπρ)/.test(t)) return 'overdue';
-  if (/^(cancel|void|ακυρ)/.test(t)) return 'cancelled';
-  if (/^(pending|unpaid|due|open|outstanding|απλήρωτ|εκκρεμ|οφειλ)/.test(t)) return 'pending';
+  const t = `${raw || ""}`.toLowerCase().trim();
+  if (/^(paid|settled|complete[d]?|cleared|εξοφλ|πληρωμ)/.test(t) || t === "true" || t === "yes")
+    return "paid";
+  if (/^(overdue|late|past.?due|ληξιπρ)/.test(t)) return "overdue";
+  if (/^(cancel|void|ακυρ)/.test(t)) return "cancelled";
+  if (/^(pending|unpaid|due|open|outstanding|απλήρωτ|εκκρεμ|οφειλ)/.test(t)) return "pending";
   const c = context.toLowerCase();
-  if (/\b(paid|εξοφλήθηκε|εξοφληση|εξοφλημένο|πληρώθηκε)\b/.test(c)) return 'paid';
-  if (/\b(unpaid|outstanding|απλήρωτο|εκκρεμεί|οφειλή|πληρωτέο)\b/.test(c)) return 'pending';
-  return 'pending';
+  if (/\b(paid|εξοφλήθηκε|εξοφληση|εξοφλημένο|πληρώθηκε)\b/.test(c)) return "paid";
+  if (/\b(unpaid|outstanding|απλήρωτο|εκκρεμεί|οφειλή|πληρωτέο)\b/.test(c)) return "pending";
+  return "pending";
 }
-
 
 // ─── NLP Task Extraction (from natural language sentences) ────────────────────
 
@@ -427,7 +829,10 @@ interface NLPTaskResult {
 }
 
 function nlpExtractTask(line: string): NLPTaskResult {
-  let title = line.replace(/^[-*•▪▸►→]\s*/, '').replace(/^\d+[.)]\s*/, '').trim();
+  let title = line
+    .replace(/^[-*•▪▸►→]\s*/, "")
+    .replace(/^\d+[.)]\s*/, "")
+    .trim();
   let dueDate: string | undefined;
   let priority: string | undefined;
   let status: string | undefined;
@@ -445,7 +850,7 @@ function nlpExtractTask(line: string): NLPTaskResult {
       const parsed = parseNaturalDate(m[1].trim());
       if (parsed) {
         dueDate = parsed;
-        title = title.replace(m[0], '').trim();
+        title = title.replace(m[0], "").trim();
         break;
       }
     }
@@ -462,12 +867,12 @@ function nlpExtractTask(line: string): NLPTaskResult {
   for (const pat of prioPatterns) {
     const m = title.match(pat);
     if (m) {
-      if (m[1] === '!!' || m[1]?.startsWith('!!!')) {
-        priority = m[1].length >= 3 ? 'critical' : 'high';
+      if (m[1] === "!!" || m[1]?.startsWith("!!!")) {
+        priority = m[1].length >= 3 ? "critical" : "high";
       } else {
         priority = extractPriority(m[1] || m[0]) || undefined;
       }
-      title = title.replace(m[0], '').trim();
+      title = title.replace(m[0], "").trim();
       break;
     }
   }
@@ -482,7 +887,7 @@ function nlpExtractTask(line: string): NLPTaskResult {
     const m = title.match(pat);
     if (m) {
       status = extractStatus(m[1] || m[0]) || undefined;
-      title = title.replace(m[0], '').trim();
+      title = title.replace(m[0], "").trim();
       break;
     }
   }
@@ -492,7 +897,10 @@ function nlpExtractTask(line: string): NLPTaskResult {
   if (!status) status = extractStatus(title) || undefined;
 
   // Clean up trailing commas, extra spaces
-  title = title.replace(/[,;]+$/, '').replace(/\s{2,}/g, ' ').trim();
+  title = title
+    .replace(/[,;]+$/, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
   return { title, dueDate, priority, status };
 }
@@ -500,7 +908,8 @@ function nlpExtractTask(line: string): NLPTaskResult {
 // ─── Levenshtein Distance for Fuzzy Matching ──────────────────────────────────
 
 function levenshtein(a: string, b: string): number {
-  const m = a.length, n = b.length;
+  const m = a.length,
+    n = b.length;
   if (m === 0) return n;
   if (n === 0) return m;
   const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
@@ -508,9 +917,10 @@ function levenshtein(a: string, b: string): number {
   for (let j = 0; j <= n; j++) dp[0][j] = j;
   for (let i = 1; i <= m; i++) {
     for (let j = 1; j <= n; j++) {
-      dp[i][j] = a[i - 1] === b[j - 1]
-        ? dp[i - 1][j - 1]
-        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+      dp[i][j] =
+        a[i - 1] === b[j - 1]
+          ? dp[i - 1][j - 1]
+          : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
     }
   }
   return dp[m][n];
@@ -518,10 +928,15 @@ function levenshtein(a: string, b: string): number {
 
 // ─── Markdown Table Parser ────────────────────────────────────────────────────
 
-function parseMarkdownTable(text: string): { rows: Record<string, string>[]; fields: string[] } | null {
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+function parseMarkdownTable(
+  text: string,
+): { rows: Record<string, string>[]; fields: string[] } | null {
+  const lines = text
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
   // Find header row (contains |)
-  const headerIdx = lines.findIndex(l => /^\|?.+\|.+\|?$/.test(l));
+  const headerIdx = lines.findIndex((l) => /^\|?.+\|.+\|?$/.test(l));
   if (headerIdx === -1) return null;
 
   // Check for separator row (|---|---|)
@@ -529,7 +944,11 @@ function parseMarkdownTable(text: string): { rows: Record<string, string>[]; fie
   if (sepIdx >= lines.length || !/^\|?[\s\-:]+\|[\s\-:|]+\|?$/.test(lines[sepIdx])) return null;
 
   const parseRow = (line: string): string[] => {
-    return line.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+    return line
+      .replace(/^\|/, "")
+      .replace(/\|$/, "")
+      .split("|")
+      .map((c) => c.trim());
   };
 
   const headers = parseRow(lines[headerIdx]);
@@ -539,7 +958,9 @@ function parseMarkdownTable(text: string): { rows: Record<string, string>[]; fie
     if (!/\|/.test(lines[i])) break;
     const cells = parseRow(lines[i]);
     const row: Record<string, string> = {};
-    headers.forEach((h, j) => { if (cells[j]) row[h] = cells[j]; });
+    headers.forEach((h, j) => {
+      if (cells[j]) row[h] = cells[j];
+    });
     if (Object.keys(row).length > 0) rows.push(row);
   }
 
@@ -554,11 +975,11 @@ function parseHtmlTable(text: string): { rows: Record<string, string>[]; fields:
 
   const html = tableMatch[1];
   const extractCells = (row: string, tag: string): string[] => {
-    const regex = new RegExp(`<${tag}[^>]*>(.*?)<\/${tag}>`, 'gi');
+    const regex = new RegExp(`<${tag}[^>]*>(.*?)</${tag}>`, "gi");
     const cells: string[] = [];
     let m;
     while ((m = regex.exec(row)) !== null) {
-      cells.push(m[1].replace(/<[^>]+>/g, '').trim());
+      cells.push(m[1].replace(/<[^>]+>/g, "").trim());
     }
     return cells;
   };
@@ -567,19 +988,21 @@ function parseHtmlTable(text: string): { rows: Record<string, string>[]; fields:
   if (!rowMatches || rowMatches.length < 2) return null;
 
   // First row with <th> or first <tr> = headers
-  let headers = extractCells(rowMatches[0], 'th');
+  let headers = extractCells(rowMatches[0], "th");
   let dataStart = 1;
   if (headers.length === 0) {
-    headers = extractCells(rowMatches[0], 'td');
+    headers = extractCells(rowMatches[0], "td");
     dataStart = 1;
   }
   if (headers.length === 0) return null;
 
   const rows: Record<string, string>[] = [];
   for (let i = dataStart; i < rowMatches.length; i++) {
-    const cells = extractCells(rowMatches[i], 'td');
+    const cells = extractCells(rowMatches[i], "td");
     const row: Record<string, string> = {};
-    headers.forEach((h, j) => { if (cells[j]) row[h] = cells[j]; });
+    headers.forEach((h, j) => {
+      if (cells[j]) row[h] = cells[j];
+    });
     if (Object.keys(row).length > 0) rows.push(row);
   }
 
@@ -591,17 +1014,20 @@ function parseHtmlTable(text: string): { rows: Record<string, string>[]; fields:
 export interface ParsedData {
   rows: Record<string, string>[];
   sourceFields: string[];
-  detectedFormat: 'csv' | 'tsv' | 'json' | 'jsonlines' | 'text' | 'markdown' | 'html';
+  detectedFormat: "csv" | "tsv" | "json" | "jsonlines" | "text" | "markdown" | "html";
 }
 
 /**
  * Detect if a parsed TSV/CSV is actually a TRANSPOSED table.
  */
-function detectAndTranspose(rows: Record<string, string>[], sourceFields: string[]): Record<string, string>[] | null {
+function detectAndTranspose(
+  rows: Record<string, string>[],
+  sourceFields: string[],
+): Record<string, string>[] | null {
   if (rows.length < 2 || sourceFields.length < 2) return null;
   const labelHeader = sourceFields[0];
   const dataHeaders = sourceFields.slice(1);
-  const firstColValues = rows.map(r => r[labelHeader]?.trim()).filter(Boolean);
+  const firstColValues = rows.map((r) => r[labelHeader]?.trim()).filter(Boolean);
   if (firstColValues.length < 2) return null;
 
   const allAliases = new Set<string>();
@@ -609,11 +1035,11 @@ function detectAndTranspose(rows: Record<string, string>[], sourceFields: string
     const meta = TARGET_META[target];
     for (const field of [...meta.requiredFields, ...meta.optionalFields]) {
       allAliases.add(normalize(field));
-      for (const alias of (meta.aliases[field] || [])) allAliases.add(normalize(alias));
+      for (const alias of meta.aliases[field] || []) allAliases.add(normalize(alias));
     }
   }
 
-  const matchCount = firstColValues.filter(v => allAliases.has(normalize(v))).length;
+  const matchCount = firstColValues.filter((v) => allAliases.has(normalize(v))).length;
   if (matchCount < firstColValues.length * 0.3) return null;
 
   const transposed: Record<string, string>[] = [];
@@ -630,12 +1056,20 @@ function detectAndTranspose(rows: Record<string, string>[], sourceFields: string
 }
 
 function splitMatrixLine(line: string): string[] {
-  if (line.includes('\t')) return line.split('\t').map(c => c.trim());
-  return line.split(/ {2,}/).map(c => c.trim()).filter(Boolean);
+  if (line.includes("\t")) return line.split("\t").map((c) => c.trim());
+  return line
+    .split(/ {2,}/)
+    .map((c) => c.trim())
+    .filter(Boolean);
 }
 
-function parseTransposedMatrix(text: string): { rows: Record<string, string>[]; fields: string[] } | null {
-  const matrix = text.split('\n').map(l => splitMatrixLine(l)).filter(cells => cells.length >= 2);
+function parseTransposedMatrix(
+  text: string,
+): { rows: Record<string, string>[]; fields: string[] } | null {
+  const matrix = text
+    .split("\n")
+    .map((l) => splitMatrixLine(l))
+    .filter((cells) => cells.length >= 2);
   if (matrix.length < 2) return null;
 
   const aliases = new Set<string>();
@@ -646,8 +1080,8 @@ function parseTransposedMatrix(text: string): { rows: Record<string, string>[]; 
     }
   }
 
-  const labeledRows = matrix.filter(cells => aliases.has(normalize(cells[0])));
-  const maxCols = Math.max(...matrix.map(cells => cells.length));
+  const labeledRows = matrix.filter((cells) => aliases.has(normalize(cells[0])));
+  const maxCols = Math.max(...matrix.map((cells) => cells.length));
   if (labeledRows.length < Math.max(2, matrix.length * 0.45) || maxCols < 3) return null;
 
   const rows: Record<string, string>[] = [];
@@ -661,7 +1095,7 @@ function parseTransposedMatrix(text: string): { rows: Record<string, string>[]; 
     if (Object.keys(record).length > 0) rows.push(record);
   }
 
-  const fields = [...new Set(rows.flatMap(row => Object.keys(row)))];
+  const fields = [...new Set(rows.flatMap((row) => Object.keys(row)))];
   return rows.length > 0 ? { rows, fields } : null;
 }
 
@@ -671,108 +1105,128 @@ export function parseImportData(text: string, fileName?: string): ParsedData {
   // 0. Try HTML table
   const htmlResult = parseHtmlTable(trimmed);
   if (htmlResult && htmlResult.rows.length > 0) {
-    return { rows: htmlResult.rows, sourceFields: htmlResult.fields, detectedFormat: 'html' };
+    return { rows: htmlResult.rows, sourceFields: htmlResult.fields, detectedFormat: "html" };
   }
 
   // 0b. Try Markdown table
   const mdResult = parseMarkdownTable(trimmed);
   if (mdResult && mdResult.rows.length > 0) {
-    return { rows: mdResult.rows, sourceFields: mdResult.fields, detectedFormat: 'markdown' };
+    return { rows: mdResult.rows, sourceFields: mdResult.fields, detectedFormat: "markdown" };
   }
 
   // 0c. Try transposed spreadsheet-style paste: Field\tItem1\tItem2...
   const matrixResult = parseTransposedMatrix(trimmed);
   if (matrixResult && matrixResult.rows.length > 0) {
-    return { rows: matrixResult.rows, sourceFields: matrixResult.fields, detectedFormat: 'tsv' };
+    return { rows: matrixResult.rows, sourceFields: matrixResult.fields, detectedFormat: "tsv" };
   }
 
   // 1. Try JSON
-  if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
     try {
       let parsed = JSON.parse(trimmed);
       if (!Array.isArray(parsed)) parsed = [parsed];
       const rows = parsed.map((item: any) => {
         const obj: Record<string, string> = {};
         for (const [k, v] of Object.entries(item)) {
-          obj[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '');
+          obj[k] = Array.isArray(v) ? v.join(", ") : String(v ?? "");
         }
         return obj;
       });
-      const sourceFields: string[] = rows.length > 0 ? [...new Set(rows.flatMap((r: Record<string, string>) => Object.keys(r)))] as string[] : [];
-      return { rows, sourceFields, detectedFormat: 'json' };
-    } catch { /* fall through */ }
+      const sourceFields: string[] =
+        rows.length > 0
+          ? ([...new Set(rows.flatMap((r: Record<string, string>) => Object.keys(r)))] as string[])
+          : [];
+      return { rows, sourceFields, detectedFormat: "json" };
+    } catch {
+      /* fall through */
+    }
   }
 
   // 2. Try JSON Lines
-  const lines = trimmed.split('\n');
-  if (lines.length > 0 && lines[0].trim().startsWith('{')) {
+  const lines = trimmed.split("\n");
+  if (lines.length > 0 && lines[0].trim().startsWith("{")) {
     try {
-      const rows = lines.filter(l => l.trim()).map(l => {
-        const item = JSON.parse(l.trim());
-        const obj: Record<string, string> = {};
-        for (const [k, v] of Object.entries(item)) {
-          obj[k] = Array.isArray(v) ? v.join(', ') : String(v ?? '');
-        }
-        return obj;
-      });
-      const sourceFields = rows.length > 0 ? [...new Set(rows.flatMap((r: Record<string, string>) => Object.keys(r)))] : [];
-      return { rows, sourceFields, detectedFormat: 'jsonlines' };
-    } catch { /* fall through */ }
+      const rows = lines
+        .filter((l) => l.trim())
+        .map((l) => {
+          const item = JSON.parse(l.trim());
+          const obj: Record<string, string> = {};
+          for (const [k, v] of Object.entries(item)) {
+            obj[k] = Array.isArray(v) ? v.join(", ") : String(v ?? "");
+          }
+          return obj;
+        });
+      const sourceFields =
+        rows.length > 0
+          ? [...new Set(rows.flatMap((r: Record<string, string>) => Object.keys(r)))]
+          : [];
+      return { rows, sourceFields, detectedFormat: "jsonlines" };
+    } catch {
+      /* fall through */
+    }
   }
 
   // 3. Auto-detect delimiter and try CSV/TSV
-  const delimiter = detectDelimiter(lines[0] || '');
-  const isTSV = delimiter === '\t' || fileName?.endsWith('.tsv');
+  const delimiter = detectDelimiter(lines[0] || "");
+  const isTSV = delimiter === "\t" || fileName?.endsWith(".tsv");
   const result = Papa.parse(trimmed, {
     header: true,
     skipEmptyLines: true,
     delimiter: delimiter || undefined,
     dynamicTyping: false,
-    transformHeader: (h: string) => h.trim().replace(/^["']|["']$/g, ''),
+    transformHeader: (h: string) => h.trim().replace(/^["']|["']$/g, ""),
   });
 
   if (result.data.length > 0 && result.meta.fields && result.meta.fields.length > 1) {
-    const rows = (result.data as Record<string, string>[]).map(r => {
+    const rows = (result.data as Record<string, string>[]).map((r) => {
       const obj: Record<string, string> = {};
-      for (const [k, v] of Object.entries(r)) obj[k] = String(v ?? '').trim();
+      for (const [k, v] of Object.entries(r)) obj[k] = String(v ?? "").trim();
       return obj;
     });
 
     const transposed = detectAndTranspose(rows, result.meta.fields);
     if (transposed) {
-      const newSourceFields = [...new Set(transposed.flatMap(r => Object.keys(r)))];
-      return { rows: transposed, sourceFields: newSourceFields, detectedFormat: isTSV ? 'tsv' : 'csv' };
+      const newSourceFields = [...new Set(transposed.flatMap((r) => Object.keys(r)))];
+      return {
+        rows: transposed,
+        sourceFields: newSourceFields,
+        detectedFormat: isTSV ? "tsv" : "csv",
+      };
     }
 
-    return { rows, sourceFields: result.meta.fields, detectedFormat: isTSV ? 'tsv' : 'csv' };
+    return { rows, sourceFields: result.meta.fields, detectedFormat: isTSV ? "tsv" : "csv" };
   }
 
   // 4. Smart plain-text
   const plainRows = smartParsePlainText(lines);
   if (plainRows.length > 0) {
-    const sourceFields = [...new Set(plainRows.flatMap(r => Object.keys(r)))];
-    return { rows: plainRows, sourceFields, detectedFormat: 'text' };
+    const sourceFields = [...new Set(plainRows.flatMap((r) => Object.keys(r)))];
+    return { rows: plainRows, sourceFields, detectedFormat: "text" };
   }
 
-  const nonEmpty = lines.filter(l => l.trim());
+  const nonEmpty = lines.filter((l) => l.trim());
   const plainRows2 = smartParsePlainText(nonEmpty);
   if (plainRows2.length > 0) {
-    const sourceFields = [...new Set(plainRows2.flatMap(r => Object.keys(r)))];
-    return { rows: plainRows2, sourceFields, detectedFormat: 'text' };
+    const sourceFields = [...new Set(plainRows2.flatMap((r) => Object.keys(r)))];
+    return { rows: plainRows2, sourceFields, detectedFormat: "text" };
   }
 
   // 5. Last fallback
-  const fallbackRows = nonEmpty.map(l => ({ item: l.trim() }));
-  return { rows: fallbackRows, sourceFields: ['item'], detectedFormat: 'text' };
+  const fallbackRows = nonEmpty.map((l) => ({ item: l.trim() }));
+  return { rows: fallbackRows, sourceFields: ["item"], detectedFormat: "text" };
 }
 
 function detectDelimiter(line: string): string {
-  const candidates = [',', ';', '\t', '|'];
-  let best = ',';
+  const candidates = [",", ";", "\t", "|"];
+  let best = ",";
   let bestCount = 0;
   for (const d of candidates) {
-    const count = (line.match(new RegExp(d === '|' ? '\\|' : d === '\t' ? '\t' : d, 'g')) || []).length;
-    if (count > bestCount) { bestCount = count; best = d; }
+    const count = (line.match(new RegExp(d === "|" ? "\\|" : d === "\t" ? "\t" : d, "g")) || [])
+      .length;
+    if (count > bestCount) {
+      bestCount = count;
+      best = d;
+    }
   }
   return best;
 }
@@ -785,8 +1239,11 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
   };
 
   // ── Strategy 1: Multi-block key:value data ──
-  const rawText = lines.join('\n');
-  const blocks = rawText.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+  const rawText = lines.join("\n");
+  const blocks = rawText
+    .split(/\n\s*\n/)
+    .map((b) => b.trim())
+    .filter(Boolean);
 
   if (blocks.length >= 1) {
     const kvBlocks: Record<string, string>[] = [];
@@ -794,9 +1251,12 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
     let totalLines = 0;
 
     for (const block of blocks) {
-      const blockLines = block.split('\n').map(l => l.trim()).filter(Boolean);
+      const blockLines = block
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean);
       totalLines += blockLines.length;
-      const kvMatches = blockLines.filter(l => isKvLine(l));
+      const kvMatches = blockLines.filter((l) => isKvLine(l));
       totalKvLines += kvMatches.length;
 
       if (kvMatches.length >= 1) {
@@ -806,8 +1266,14 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
           if (isKvLine(l)) {
             const m = l.match(kvRegex);
             if (m) obj[m[1].trim()] = m[2].trim();
-          } else if (!headerUsed && l.trim() && !l.startsWith('#') && !l.startsWith('---') && !/^https?:/i.test(l.trim())) {
-            obj['__header__'] = l.replace(/^[-*•▪▸►→#]+\s*/, '').trim();
+          } else if (
+            !headerUsed &&
+            l.trim() &&
+            !l.startsWith("#") &&
+            !l.startsWith("---") &&
+            !/^https?:/i.test(l.trim())
+          ) {
+            obj["__header__"] = l.replace(/^[-*•▪▸►→#]+\s*/, "").trim();
             headerUsed = true;
           }
         }
@@ -816,12 +1282,18 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
     }
 
     if (totalKvLines > 0 && totalKvLines >= totalLines * 0.35 && kvBlocks.length > 0) {
-      return kvBlocks.map(block => {
+      return kvBlocks.map((block) => {
         const normalized: Record<string, string> = {};
         for (const [rawKey, val] of Object.entries(block)) {
-          if (rawKey === '__header__') {
-            if (!Object.keys(block).some(k => ['name', 'site', 'website', 'title', 'domain'].some(a => normalize(k).includes(a)))) {
-              normalized['name'] = val;
+          if (rawKey === "__header__") {
+            if (
+              !Object.keys(block).some((k) =>
+                ["name", "site", "website", "title", "domain"].some((a) =>
+                  normalize(k).includes(a),
+                ),
+              )
+            ) {
+              normalized["name"] = val;
             }
             continue;
           }
@@ -843,7 +1315,10 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
   if (urlLines.length > 0 && urlLines.length >= lines.length * 0.3) {
     return urlLines.map(({ line, urls }) => {
       const url = urls[0];
-      const textWithoutUrl = line.replace(url, '').replace(/[-,|:•▪▸►→*]\s*/g, '').trim();
+      const textWithoutUrl = line
+        .replace(url, "")
+        .replace(/[-,|:•▪▸►→*]\s*/g, "")
+        .trim();
       const hostname = extractHostname(url);
       const name = textWithoutUrl || prettifyHostname(hostname);
       return { name, url };
@@ -855,7 +1330,10 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
   const categorizedLines: Record<string, string>[] = [];
   for (const l of lines) {
     if (!l.trim()) continue;
-    const clean = l.replace(/^[-*•▪▸►→]\s*/, '').replace(/^\d+[.)]\s*/, '').trim();
+    const clean = l
+      .replace(/^[-*•▪▸►→]\s*/, "")
+      .replace(/^\d+[.)]\s*/, "")
+      .trim();
 
     // Check for payment-like lines: "$500 from Client" or "Pay $200 to Vendor"
     const amountMatch = clean.match(CURRENCY_REGEX);
@@ -863,9 +1341,18 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
       CURRENCY_REGEX.lastIndex = 0;
       const amount = extractAmount(clean);
       if (amount > 0) {
-        const title = clean.replace(CURRENCY_REGEX, '').replace(/^\s*[-–—:,]+\s*/, '').trim() || 'Payment';
+        const title =
+          clean
+            .replace(CURRENCY_REGEX, "")
+            .replace(/^\s*[-–—:,]+\s*/, "")
+            .trim() || "Payment";
         CURRENCY_REGEX.lastIndex = 0;
-        categorizedLines.push({ title, amount: String(amount), currency: extractCurrency(clean), __type: 'payments' });
+        categorizedLines.push({
+          title,
+          amount: String(amount),
+          currency: extractCurrency(clean),
+          __type: "payments",
+        });
         continue;
       }
     }
@@ -885,7 +1372,11 @@ function smartParsePlainText(lines: string[]): Record<string, string>[] {
 
 // ─── Content-Aware Auto-detection ─────────────────────────────────────────────
 
-function scoreCategory(sourceFields: string[], rows: Record<string, string>[], target: ImportTarget): number {
+function scoreCategory(
+  sourceFields: string[],
+  rows: Record<string, string>[],
+  target: ImportTarget,
+): number {
   const meta = TARGET_META[target];
   const allFields = [...meta.requiredFields, ...meta.optionalFields];
   let score = 0;
@@ -931,26 +1422,51 @@ function scoreCategory(sourceFields: string[], rows: Record<string, string>[], t
 
   // --- Content value scoring ---
   const sampleRows = rows.slice(0, Math.min(10, rows.length));
-  const allValues = sampleRows.flatMap(r => Object.values(r)).filter(Boolean).join(' ');
+  const allValues = sampleRows
+    .flatMap((r) => Object.values(r))
+    .filter(Boolean)
+    .join(" ");
 
   for (const signal of meta.contentSignals) {
-    const matches = allValues.match(new RegExp(signal.source, signal.flags.includes('g') ? signal.flags : signal.flags + 'g'));
+    const matches = allValues.match(
+      new RegExp(signal.source, signal.flags.includes("g") ? signal.flags : signal.flags + "g"),
+    );
     if (matches) score += Math.min(matches.length * 2, 10);
   }
 
   // --- Detect GitHub/repo signals in content ---
-  const githubUrlCount = sampleRows.filter(r => Object.values(r).some(v => /github\.com/i.test(v))).length;
-  const lovableUrlCount = sampleRows.filter(r => Object.values(r).some(v => /lovable\.dev\/projects/i.test(v))).length;
-  const pagesDevCount = sampleRows.filter(r => Object.values(r).some(v => /\.pages\.dev/i.test(v))).length;
+  const githubUrlCount = sampleRows.filter((r) =>
+    Object.values(r).some((v) => /github\.com/i.test(v)),
+  ).length;
+  const lovableUrlCount = sampleRows.filter((r) =>
+    Object.values(r).some((v) => /lovable\.dev\/projects/i.test(v)),
+  ).length;
+  const pagesDevCount = sampleRows.filter((r) =>
+    Object.values(r).some((v) => /\.pages\.dev/i.test(v)),
+  ).length;
   const isGitHubData = githubUrlCount > sampleRows.length * 0.3;
-  const hasRepoFieldSignals = sourceFields.some(f => {
+  const hasRepoFieldSignals = sourceFields.some((f) => {
     const n = normalize(f);
-    return ['repositoryname', 'reponame', 'githublink', 'githuburl', 'cloudflarepage', 'lovableapp', 'lovableproject', 'pagesurl'].some(kw => n.includes(kw));
+    return [
+      "repositoryname",
+      "reponame",
+      "githublink",
+      "githuburl",
+      "cloudflarepage",
+      "lovableapp",
+      "lovableproject",
+      "pagesurl",
+    ].some((kw) => n.includes(kw));
   });
-  const hasLanguageField = sourceFields.some(f => normalize(f) === 'language' || normalize(f) === 'lang' || normalize(f) === 'programminglanguage');
+  const hasLanguageField = sourceFields.some(
+    (f) =>
+      normalize(f) === "language" ||
+      normalize(f) === "lang" ||
+      normalize(f) === "programminglanguage",
+  );
 
   // --- Special boosts ---
-  if (target === 'repos') {
+  if (target === "repos") {
     // Massive boost when GitHub URLs dominate the data
     if (isGitHubData) score += 50;
     if (hasRepoFieldSignals) score += 30;
@@ -958,28 +1474,59 @@ function scoreCategory(sourceFields: string[], rows: Record<string, string>[], t
     if (lovableUrlCount > 0) score += lovableUrlCount * 3;
     if (pagesDevCount > 0) score += pagesDevCount * 3;
     // Boost for "Repository" appearing in field names
-    const repoFieldCount = sourceFields.filter(f => /repo|repository/i.test(f)).length;
+    const repoFieldCount = sourceFields.filter((f) => /repo|repository/i.test(f)).length;
     if (repoFieldCount > 0) score += repoFieldCount * 10;
   }
 
-  if (target === 'websites') {
+  if (target === "websites") {
     // PENALIZE websites when data is clearly GitHub repos
     if (isGitHubData) score -= 40;
     if (hasRepoFieldSignals) score -= 30;
     if (hasLanguageField) score -= 20;
 
-    const urlCount = sampleRows.filter(r => Object.values(r).some(v => URL_REGEX.test(v))).length;
+    const urlCount = sampleRows.filter((r) =>
+      Object.values(r).some((v) => URL_REGEX.test(v)),
+    ).length;
     URL_REGEX.lastIndex = 0;
     // Only boost URLs if NOT GitHub data
     if (!isGitHubData && urlCount > sampleRows.length * 0.5) score += 15;
-    const hasNameAndUrl = sourceFields.some(f => normalize(f) === 'name' || normalize(f) === 'site' || normalize(f) === 'website' || normalize(f) === 'domain') &&
-                          sourceFields.some(f => normalize(f) === 'url' || normalize(f) === 'link' || normalize(f) === 'href' || normalize(f) === 'address');
+    const hasNameAndUrl =
+      sourceFields.some(
+        (f) =>
+          normalize(f) === "name" ||
+          normalize(f) === "site" ||
+          normalize(f) === "website" ||
+          normalize(f) === "domain",
+      ) &&
+      sourceFields.some(
+        (f) =>
+          normalize(f) === "url" ||
+          normalize(f) === "link" ||
+          normalize(f) === "href" ||
+          normalize(f) === "address",
+      );
     if (hasNameAndUrl && !isGitHubData) score += 10;
-    const websiteKeywords = ['wpadmin', 'wordpress', 'hosting', 'hostingprovider', 'wpusername', 'wppassword', 'siteurl', 'adminurl', 'hostinglogin', 'cpanel', 'nameserver', 'dns', 'ssl'];
-    const keywordHits = sourceFields.filter(f => websiteKeywords.some(kw => normalize(f).includes(kw))).length;
+    const websiteKeywords = [
+      "wpadmin",
+      "wordpress",
+      "hosting",
+      "hostingprovider",
+      "wpusername",
+      "wppassword",
+      "siteurl",
+      "adminurl",
+      "hostinglogin",
+      "cpanel",
+      "nameserver",
+      "dns",
+      "ssl",
+    ];
+    const keywordHits = sourceFields.filter((f) =>
+      websiteKeywords.some((kw) => normalize(f).includes(kw)),
+    ).length;
     if (keywordHits > 0) score += keywordHits * 8;
-    const multiUrlRows = sampleRows.filter(r => {
-      const allVals = Object.values(r).join(' ');
+    const multiUrlRows = sampleRows.filter((r) => {
+      const allVals = Object.values(r).join(" ");
       const matches = allVals.match(URL_REGEX);
       URL_REGEX.lastIndex = 0;
       return matches && matches.length >= 2;
@@ -987,38 +1534,56 @@ function scoreCategory(sourceFields: string[], rows: Record<string, string>[], t
     if (multiUrlRows > 0 && !isGitHubData) score += 12;
   }
 
-  if (target === 'links') {
+  if (target === "links") {
     // Penalize links for GitHub/repo data
     if (isGitHubData) score -= 30;
     if (hasRepoFieldSignals) score -= 20;
-    const hasWebsiteSignals = sourceFields.some(f => ['site', 'website', 'domain', 'hosting', 'wp', 'wpadmin', 'wordpress', 'hostingprovider', 'wpusername', 'wppassword', 'adminurl'].some(kw => normalize(f).includes(kw)));
+    const hasWebsiteSignals = sourceFields.some((f) =>
+      [
+        "site",
+        "website",
+        "domain",
+        "hosting",
+        "wp",
+        "wpadmin",
+        "wordpress",
+        "hostingprovider",
+        "wpusername",
+        "wppassword",
+        "adminurl",
+      ].some((kw) => normalize(f).includes(kw)),
+    );
     if (hasWebsiteSignals) score -= 15;
   }
 
-  if (target === 'buildProjects') {
+  if (target === "buildProjects") {
     // Penalize buildProjects when it's clearly repos
     if (isGitHubData && hasRepoFieldSignals) score -= 20;
   }
 
-  if (target === 'credentials') {
-    const hasWebsiteSignals = sourceFields.some(f => ['hosting', 'wpadmin', 'wordpress', 'hostingprovider', 'siteurl'].some(kw => normalize(f).includes(kw)));
+  if (target === "credentials") {
+    const hasWebsiteSignals = sourceFields.some((f) =>
+      ["hosting", "wpadmin", "wordpress", "hostingprovider", "siteurl"].some((kw) =>
+        normalize(f).includes(kw),
+      ),
+    );
     if (hasWebsiteSignals) score -= 10;
     if (isGitHubData) score -= 20;
   }
 
   // Boost payments when currency/amount patterns found
-  if (target === 'payments') {
+  if (target === "payments") {
     const hasCurrency = CURRENCY_REGEX.test(allValues);
     CURRENCY_REGEX.lastIndex = 0;
     if (hasCurrency) score += 15;
-    const paymentMarkers = sampleRows.filter(r => r.__type === 'payments').length;
+    const paymentMarkers = sampleRows.filter((r) => r.__type === "payments").length;
     if (paymentMarkers > 0) score += paymentMarkers * 5;
     if (isGitHubData) score -= 20;
   }
 
   // Boost tasks when NLP markers found
-  if (target === 'tasks') {
-    const taskMarkers = sampleRows.filter(r => r.dueDate || r.priority || r.status).length;
+  if (target === "tasks") {
+    const taskMarkers = sampleRows.filter((r) => r.dueDate || r.priority || r.status).length;
     if (taskMarkers > 0) score += taskMarkers * 3;
     if (isGitHubData) score -= 20;
   }
@@ -1029,13 +1594,16 @@ function scoreCategory(sourceFields: string[], rows: Record<string, string>[], t
 export interface DetectionResult {
   target: ImportTarget;
   score: number;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
   fieldMap: Record<string, string>;
   validCount: number;
 }
 
-export function autoDetectWithConfidence(sourceFields: string[], rows: Record<string, string>[]): DetectionResult[] {
-  const results = (Object.keys(TARGET_META) as ImportTarget[]).map(t => {
+export function autoDetectWithConfidence(
+  sourceFields: string[],
+  rows: Record<string, string>[],
+): DetectionResult[] {
+  const results = (Object.keys(TARGET_META) as ImportTarget[]).map((t) => {
     const score = scoreCategory(sourceFields, rows, t);
     const fieldMap = autoMapFields(sourceFields, t);
     const items = normalizeItems(rows, t, fieldMap);
@@ -1049,9 +1617,14 @@ export function autoDetectWithConfidence(sourceFields: string[], rows: Record<st
 
   return results.map((r, i) => ({
     ...r,
-    confidence: i === 0
-      ? (gap > 8 && r.validCount > 0 ? 'high' : gap > 3 && r.validCount > 0 ? 'medium' : 'low')
-      : 'low' as const,
+    confidence:
+      i === 0
+        ? gap > 8 && r.validCount > 0
+          ? "high"
+          : gap > 3 && r.validCount > 0
+            ? "medium"
+            : "low"
+        : ("low" as const),
   }));
 }
 
@@ -1059,7 +1632,10 @@ export function autoDetectCategory(sourceFields: string[]): ImportTarget {
   return autoDetectWithConfidence(sourceFields, [])[0].target;
 }
 
-export function autoMapFields(sourceFields: string[], target: ImportTarget): Record<string, string> {
+export function autoMapFields(
+  sourceFields: string[],
+  target: ImportTarget,
+): Record<string, string> {
   const meta = TARGET_META[target];
   const allTargetFields = [...meta.requiredFields, ...meta.optionalFields];
   const map: Record<string, string> = {};
@@ -1068,28 +1644,39 @@ export function autoMapFields(sourceFields: string[], target: ImportTarget): Rec
   // Pass 1: exact match
   for (const tf of allTargetFields) {
     const normalTf = normalize(tf);
-    const match = sourceFields.find(sf => !usedSource.has(sf) && normalize(sf) === normalTf);
-    if (match) { map[tf] = match; usedSource.add(match); }
+    const match = sourceFields.find((sf) => !usedSource.has(sf) && normalize(sf) === normalTf);
+    if (match) {
+      map[tf] = match;
+      usedSource.add(match);
+    }
   }
 
   // Pass 2: alias match
   for (const tf of allTargetFields) {
     if (map[tf]) continue;
     const aliasList = (meta.aliases[tf] || []).map(normalize);
-    const match = sourceFields.find(sf => !usedSource.has(sf) && aliasList.includes(normalize(sf)));
-    if (match) { map[tf] = match; usedSource.add(match); }
+    const match = sourceFields.find(
+      (sf) => !usedSource.has(sf) && aliasList.includes(normalize(sf)),
+    );
+    if (match) {
+      map[tf] = match;
+      usedSource.add(match);
+    }
   }
 
   // Pass 3: partial/contains match
   for (const tf of allTargetFields) {
     if (map[tf]) continue;
     const normalTf = normalize(tf);
-    const match = sourceFields.find(sf => {
+    const match = sourceFields.find((sf) => {
       if (usedSource.has(sf)) return false;
       const n = normalize(sf);
       return n.includes(normalTf) || normalTf.includes(n);
     });
-    if (match) { map[tf] = match; usedSource.add(match); }
+    if (match) {
+      map[tf] = match;
+      usedSource.add(match);
+    }
   }
 
   // Pass 4: fuzzy match (Levenshtein ≤ 2)
@@ -1097,12 +1684,15 @@ export function autoMapFields(sourceFields: string[], target: ImportTarget): Rec
     if (map[tf]) continue;
     const normalTf = normalize(tf);
     if (normalTf.length < 4) continue;
-    const match = sourceFields.find(sf => {
+    const match = sourceFields.find((sf) => {
       if (usedSource.has(sf)) return false;
       const n = normalize(sf);
       return n.length > 3 && levenshtein(n, normalTf) <= 2;
     });
-    if (match) { map[tf] = match; usedSource.add(match); }
+    if (match) {
+      map[tf] = match;
+      usedSource.add(match);
+    }
   }
 
   // Pass 5: single-field fallback
@@ -1117,27 +1707,27 @@ export function autoMapFields(sourceFields: string[], target: ImportTarget): Rec
 
 // ─── Normalization ────────────────────────────────────────────────────────────
 
-function normalizeWebsiteStatus(value: string): 'active' | 'maintenance' | 'down' | 'archived' {
-  const v = normalize(value || 'active');
-  if (['maintenance', 'maint', 'updating'].includes(v)) return 'maintenance';
-  if (['down', 'offline', 'outage', 'inactive'].includes(v)) return 'down';
-  if (['archived', 'archive', 'retired'].includes(v)) return 'archived';
-  return 'active';
+function normalizeWebsiteStatus(value: string): "active" | "maintenance" | "down" | "archived" {
+  const v = normalize(value || "active");
+  if (["maintenance", "maint", "updating"].includes(v)) return "maintenance";
+  if (["down", "offline", "outage", "inactive"].includes(v)) return "down";
+  if (["archived", "archive", "retired"].includes(v)) return "archived";
+  return "active";
 }
 
 export function normalizeItems(
   rows: Record<string, string>[],
   target: ImportTarget,
-  fieldMap: Record<string, string>
+  fieldMap: Record<string, string>,
 ): Record<string, any>[] {
-  const now = new Date().toISOString().split('T')[0];
+  const now = new Date().toISOString().split("T")[0];
   const meta = TARGET_META[target];
   const fieldAliasMap = new Map<string, Set<string>>();
   const allTargetFields = [...meta.requiredFields, ...meta.optionalFields];
   for (const tf of allTargetFields) {
     const aliases = new Set<string>();
     aliases.add(normalize(tf));
-    for (const a of (meta.aliases[tf] || [])) aliases.add(normalize(a));
+    for (const a of meta.aliases[tf] || []) aliases.add(normalize(a));
     fieldAliasMap.set(tf, aliases);
   }
 
@@ -1159,10 +1749,17 @@ export function normalizeItems(
         if (aliases.has(nk) && row[k]?.trim()) return row[k].trim();
       }
     }
-    return '';
+    return "";
   };
-  const toArray = (val: string) => val ? val.split(/[,;|]/).map(s => s.trim()).filter(Boolean) : [];
-  const toBool = (val: string) => val ? ['true', '1', 'yes', 'on'].includes(val.toLowerCase()) : false;
+  const toArray = (val: string) =>
+    val
+      ? val
+          .split(/[,;|]/)
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+  const toBool = (val: string) =>
+    val ? ["true", "1", "yes", "on"].includes(val.toLowerCase()) : false;
 
   const extractUrl = (row: Record<string, string>): string => {
     for (const v of Object.values(row)) {
@@ -1171,171 +1768,243 @@ export function normalizeItems(
       URL_REGEX.lastIndex = 0;
       if (m) return m[0];
     }
-    return '';
+    return "";
   };
 
   const nameFromUrl = (url: string): string => {
-    if (!url) return '';
+    if (!url) return "";
     return prettifyHostname(extractHostname(url));
   };
 
-  return rows.map(row => {
-    switch (target) {
-      case 'websites': {
-        let url = get(row, 'url') || extractUrl(row);
-        let name = get(row, 'name') || nameFromUrl(url) || '';
-        const domainLikeName = name.trim().match(/^(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?$/i);
-        const urlLikeAdmin = get(row, 'wpAdminUrl') || get(row, 'hostingLoginUrl');
-        if (!url && domainLikeName) {
-          url = name.trim();
-        } else if (!url && urlLikeAdmin) {
-          url = urlLikeAdmin;
+  return rows
+    .map((row) => {
+      switch (target) {
+        case "websites": {
+          let url = get(row, "url") || extractUrl(row);
+          let name = get(row, "name") || nameFromUrl(url) || "";
+          const domainLikeName = name.trim().match(/^(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?$/i);
+          const urlLikeAdmin = get(row, "wpAdminUrl") || get(row, "hostingLoginUrl");
+          if (!url && domainLikeName) {
+            url = name.trim();
+          } else if (!url && urlLikeAdmin) {
+            url = urlLikeAdmin;
+          }
+          if (!name) {
+            name = nameFromUrl(url) || "Unnamed";
+          }
+          if (!url && URL_REGEX.test(name)) {
+            url = name;
+            name = nameFromUrl(url);
+          }
+          URL_REGEX.lastIndex = 0;
+          if (url && !url.startsWith("http")) url = "https://" + url;
+          let wpAdminUrl = get(row, "wpAdminUrl");
+          let hostingLoginUrl = get(row, "hostingLoginUrl");
+          if (wpAdminUrl && !wpAdminUrl.startsWith("http")) wpAdminUrl = "https://" + wpAdminUrl;
+          if (hostingLoginUrl && !hostingLoginUrl.startsWith("http"))
+            hostingLoginUrl = "https://" + hostingLoginUrl;
+          return {
+            name,
+            url,
+            wpAdminUrl,
+            wpUsername: get(row, "wpUsername"),
+            wpPassword: get(row, "wpPassword"),
+            hostingProvider: get(row, "hostingProvider"),
+            hostingLoginUrl,
+            hostingUsername: get(row, "hostingUsername"),
+            hostingPassword: get(row, "hostingPassword"),
+            category: get(row, "category") || "Personal",
+            status: normalizeWebsiteStatus(get(row, "status")),
+            notes: get(row, "notes"),
+            plugins: toArray(get(row, "plugins")),
+            tags: toArray(get(row, "tags")),
+            dateAdded: now,
+            lastUpdated: now,
+          };
         }
-        if (!name) {
-          name = nameFromUrl(url) || 'Unnamed';
+        case "links": {
+          let url = get(row, "url") || extractUrl(row);
+          let title = get(row, "title") || nameFromUrl(url) || "Untitled";
+          if (!url && URL_REGEX.test(title)) {
+            url = title;
+            title = nameFromUrl(url);
+          }
+          URL_REGEX.lastIndex = 0;
+          if (url && !url.startsWith("http")) url = "https://" + url;
+          return {
+            title,
+            url,
+            category: get(row, "category") || "Other",
+            status: get(row, "status") || "active",
+            description: get(row, "description"),
+            dateAdded: now,
+            pinned: toBool(get(row, "pinned")),
+            tags: toArray(get(row, "tags")),
+          };
         }
-        if (!url && URL_REGEX.test(name)) { url = name; name = nameFromUrl(url); }
-        URL_REGEX.lastIndex = 0;
-        if (url && !url.startsWith('http')) url = 'https://' + url;
-        let wpAdminUrl = get(row, 'wpAdminUrl');
-        let hostingLoginUrl = get(row, 'hostingLoginUrl');
-        if (wpAdminUrl && !wpAdminUrl.startsWith('http')) wpAdminUrl = 'https://' + wpAdminUrl;
-        if (hostingLoginUrl && !hostingLoginUrl.startsWith('http')) hostingLoginUrl = 'https://' + hostingLoginUrl;
-        return {
-          name, url,
-          wpAdminUrl, wpUsername: get(row, 'wpUsername'), wpPassword: get(row, 'wpPassword'),
-          hostingProvider: get(row, 'hostingProvider'), hostingLoginUrl,
-          hostingUsername: get(row, 'hostingUsername'), hostingPassword: get(row, 'hostingPassword'),
-          category: get(row, 'category') || 'Personal', status: normalizeWebsiteStatus(get(row, 'status')),
-          notes: get(row, 'notes'), plugins: toArray(get(row, 'plugins')),
-          tags: toArray(get(row, 'tags')), dateAdded: now, lastUpdated: now,
-        };
-      }
-      case 'links': {
-        let url = get(row, 'url') || extractUrl(row);
-        let title = get(row, 'title') || nameFromUrl(url) || 'Untitled';
-        if (!url && URL_REGEX.test(title)) { url = title; title = nameFromUrl(url); }
-        URL_REGEX.lastIndex = 0;
-        if (url && !url.startsWith('http')) url = 'https://' + url;
-        return {
-          title, url,
-          category: get(row, 'category') || 'Other', status: get(row, 'status') || 'active',
-          description: get(row, 'description'), dateAdded: now,
-          pinned: toBool(get(row, 'pinned')), tags: toArray(get(row, 'tags')),
-        };
-      }
-      case 'tasks': {
-        // Use NLP extraction for richer parsing
-        const rawTitle = get(row, 'title') || Object.values(row).find(v => v?.trim()) || 'Untitled';
-        const nlp = nlpExtractTask(rawTitle);
-        const rawDueDate = get(row, 'dueDate');
-        const parsedDueDate = rawDueDate ? (parseNaturalDate(rawDueDate) || rawDueDate) : nlp.dueDate;
+        case "tasks": {
+          // Use NLP extraction for richer parsing
+          const rawTitle =
+            get(row, "title") || Object.values(row).find((v) => v?.trim()) || "Untitled";
+          const nlp = nlpExtractTask(rawTitle);
+          const rawDueDate = get(row, "dueDate");
+          const parsedDueDate = rawDueDate
+            ? parseNaturalDate(rawDueDate) || rawDueDate
+            : nlp.dueDate;
 
-        return {
-          title: nlp.title || rawTitle,
-          priority: get(row, 'priority') || nlp.priority || 'medium',
-          status: get(row, 'status') || nlp.status || 'todo',
-          dueDate: parsedDueDate || now,
-          category: get(row, 'category') || 'General',
-          description: get(row, 'description'),
-          linkedProject: get(row, 'linkedProject'),
-          subtasks: [], tags: toArray(get(row, 'tags')), createdAt: now,
-        };
-      }
-      case 'repos':
-        return {
-          name: get(row, 'name') || 'unnamed-repo', url: get(row, 'url') || extractUrl(row),
-          description: get(row, 'description'), language: get(row, 'language') || 'TypeScript',
-          stars: parseInt(get(row, 'stars')) || 0, forks: parseInt(get(row, 'forks')) || 0,
-          status: get(row, 'status') || 'active', demoUrl: get(row, 'demoUrl'),
-          progress: parseInt(get(row, 'progress')) || 0,
-          topics: toArray(get(row, 'topics')), lastUpdated: now,
-          devPlatformUrl: get(row, 'devPlatformUrl'),
-          deploymentUrl: get(row, 'deploymentUrl'),
-        };
-      case 'buildProjects':
-        return {
-          name: get(row, 'name') || 'Unnamed', platform: get(row, 'platform') || 'other',
-          projectUrl: get(row, 'projectUrl'), deployedUrl: get(row, 'deployedUrl'),
-          description: get(row, 'description'), techStack: toArray(get(row, 'techStack')),
-          status: get(row, 'status') || 'building', startedDate: now, lastWorkedOn: now,
-          nextSteps: get(row, 'nextSteps'), githubRepo: get(row, 'githubRepo'),
-        };
-      case 'credentials':
-        return {
-          label: get(row, 'label') || get(row, 'name') || 'Untitled',
-          service: get(row, 'service') || get(row, 'provider') || get(row, 'platform') || '',
-          url: get(row, 'url') || extractUrl(row), username: get(row, 'username'), password: get(row, 'password'),
-          apiKey: get(row, 'apiKey'), notes: get(row, 'notes'),
-          category: get(row, 'category') || 'Other',
-          tags: toArray(get(row, 'tags')), createdAt: now,
-        };
-      case 'payments': {
-        const amountStr = get(row, 'amount');
-        const allVals = Object.values(row).join(' ');
-        const amount = amountStr ? (parseMoney(amountStr) ?? extractAmount(allVals)) : extractAmount(allVals);
-        const rawDueDate = get(row, 'dueDate');
-        const rawPaidDate = get(row, 'paidDate');
-        const status = normalizePaymentStatus(get(row, 'status'), allVals);
-        const dueDate = rawDueDate ? (parseNaturalDate(rawDueDate) || rawDueDate) : now;
-        const paidDate = rawPaidDate
-          ? (parseNaturalDate(rawPaidDate) || rawPaidDate)
-          : (status === 'paid' ? (dueDate || now) : '');
-        const isOverdue = status === 'pending' && !!dueDate && dueDate < now;
-        return {
-          title: get(row, 'title') || 'Untitled', amount,
-          currency: get(row, 'currency') || extractCurrency(allVals),
-          type: get(row, 'type') || extractPaymentType(allVals) || 'expense',
-          status: isOverdue ? 'overdue' : status,
-          category: get(row, 'category') || 'Other',
-          from: get(row, 'from'), to: get(row, 'to'),
-          dueDate,
-          paidDate, linkedProject: '',
-          recurring: toBool(get(row, 'recurring')), recurringInterval: '',
-          notes: get(row, 'notes'), createdAt: now,
-        };
-      }
+          return {
+            title: nlp.title || rawTitle,
+            priority: get(row, "priority") || nlp.priority || "medium",
+            status: get(row, "status") || nlp.status || "todo",
+            dueDate: parsedDueDate || now,
+            category: get(row, "category") || "General",
+            description: get(row, "description"),
+            linkedProject: get(row, "linkedProject"),
+            subtasks: [],
+            tags: toArray(get(row, "tags")),
+            createdAt: now,
+          };
+        }
+        case "repos":
+          return {
+            name: get(row, "name") || "unnamed-repo",
+            url: get(row, "url") || extractUrl(row),
+            description: get(row, "description"),
+            language: get(row, "language") || "TypeScript",
+            stars: parseInt(get(row, "stars")) || 0,
+            forks: parseInt(get(row, "forks")) || 0,
+            status: get(row, "status") || "active",
+            demoUrl: get(row, "demoUrl"),
+            progress: parseInt(get(row, "progress")) || 0,
+            topics: toArray(get(row, "topics")),
+            lastUpdated: now,
+            devPlatformUrl: get(row, "devPlatformUrl"),
+            deploymentUrl: get(row, "deploymentUrl"),
+          };
+        case "buildProjects":
+          return {
+            name: get(row, "name") || "Unnamed",
+            platform: get(row, "platform") || "other",
+            projectUrl: get(row, "projectUrl"),
+            deployedUrl: get(row, "deployedUrl"),
+            description: get(row, "description"),
+            techStack: toArray(get(row, "techStack")),
+            status: get(row, "status") || "building",
+            startedDate: now,
+            lastWorkedOn: now,
+            nextSteps: get(row, "nextSteps"),
+            githubRepo: get(row, "githubRepo"),
+          };
+        case "credentials":
+          return {
+            label: get(row, "label") || get(row, "name") || "Untitled",
+            service: get(row, "service") || get(row, "provider") || get(row, "platform") || "",
+            url: get(row, "url") || extractUrl(row),
+            username: get(row, "username"),
+            password: get(row, "password"),
+            apiKey: get(row, "apiKey"),
+            notes: get(row, "notes"),
+            category: get(row, "category") || "Other",
+            tags: toArray(get(row, "tags")),
+            createdAt: now,
+          };
+        case "payments": {
+          const amountStr = get(row, "amount");
+          const allVals = Object.values(row).join(" ");
+          const amount = amountStr
+            ? (parseMoney(amountStr) ?? extractAmount(allVals))
+            : extractAmount(allVals);
+          const rawDueDate = get(row, "dueDate");
+          const rawPaidDate = get(row, "paidDate");
+          const status = normalizePaymentStatus(get(row, "status"), allVals);
+          const dueDate = rawDueDate ? parseNaturalDate(rawDueDate) || rawDueDate : now;
+          const paidDate = rawPaidDate
+            ? parseNaturalDate(rawPaidDate) || rawPaidDate
+            : status === "paid"
+              ? dueDate || now
+              : "";
+          const isOverdue = status === "pending" && !!dueDate && dueDate < now;
+          return {
+            title: get(row, "title") || "Untitled",
+            amount,
+            currency: get(row, "currency") || extractCurrency(allVals),
+            type: get(row, "type") || extractPaymentType(allVals) || "expense",
+            status: isOverdue ? "overdue" : status,
+            category: get(row, "category") || "Other",
+            from: get(row, "from"),
+            to: get(row, "to"),
+            dueDate,
+            paidDate,
+            linkedProject: "",
+            recurring: toBool(get(row, "recurring")),
+            recurringInterval: "",
+            notes: get(row, "notes"),
+            createdAt: now,
+          };
+        }
 
-      case 'notes':
-        return {
-          title: get(row, 'title') || Object.values(row).find(v => v?.trim()) || 'Untitled',
-          content: get(row, 'content') || '', color: get(row, 'color') || 'blue',
-          pinned: toBool(get(row, 'pinned')),
-          tags: toArray(get(row, 'tags')), createdAt: now, updatedAt: now,
-        };
-      case 'ideas':
-        return {
-          title: get(row, 'title') || Object.values(row).find(v => v?.trim()) || 'Untitled',
-          description: get(row, 'description') || '', category: get(row, 'category') || 'General',
-          priority: get(row, 'priority') || 'medium', status: get(row, 'status') || 'spark',
-          tags: toArray(get(row, 'tags')), linkedProject: get(row, 'linkedProject'),
-          votes: parseInt(get(row, 'votes')) || 0, createdAt: now, updatedAt: now,
-        };
-      case 'habits':
-        return {
-          name: get(row, 'name') || Object.values(row).find(v => v?.trim()) || 'Untitled',
-          icon: get(row, 'icon') || '🎯', frequency: get(row, 'frequency') || 'daily',
-          completions: [], streak: 0, color: get(row, 'color') || '', createdAt: now,
-        };
-      default:
-        return {};
-    }
-  }).filter(item => {
-    const meta = TARGET_META[target];
-    const filledRequired = meta.requiredFields.filter(f => {
-      const val = (item as Record<string, unknown>)[f];
-      return val !== undefined && val !== null && val !== '' && val !== 'Unnamed' && val !== 'Untitled' && val !== 'unnamed-repo';
+        case "notes":
+          return {
+            title: get(row, "title") || Object.values(row).find((v) => v?.trim()) || "Untitled",
+            content: get(row, "content") || "",
+            color: get(row, "color") || "blue",
+            pinned: toBool(get(row, "pinned")),
+            tags: toArray(get(row, "tags")),
+            createdAt: now,
+            updatedAt: now,
+          };
+        case "ideas":
+          return {
+            title: get(row, "title") || Object.values(row).find((v) => v?.trim()) || "Untitled",
+            description: get(row, "description") || "",
+            category: get(row, "category") || "General",
+            priority: get(row, "priority") || "medium",
+            status: get(row, "status") || "spark",
+            tags: toArray(get(row, "tags")),
+            linkedProject: get(row, "linkedProject"),
+            votes: parseInt(get(row, "votes")) || 0,
+            createdAt: now,
+            updatedAt: now,
+          };
+        case "habits":
+          return {
+            name: get(row, "name") || Object.values(row).find((v) => v?.trim()) || "Untitled",
+            icon: get(row, "icon") || "🎯",
+            frequency: get(row, "frequency") || "daily",
+            completions: [],
+            streak: 0,
+            color: get(row, "color") || "",
+            createdAt: now,
+          };
+        default:
+          return {};
+      }
+    })
+    .filter((item) => {
+      const meta = TARGET_META[target];
+      const filledRequired = meta.requiredFields.filter((f) => {
+        const val = (item as Record<string, unknown>)[f];
+        return (
+          val !== undefined &&
+          val !== null &&
+          val !== "" &&
+          val !== "Unnamed" &&
+          val !== "Untitled" &&
+          val !== "unnamed-repo"
+        );
+      });
+      if (filledRequired.length > 0) return true;
+      const allVals = Object.values(item)
+        .filter((v) => typeof v === "string" && v.trim())
+        .join(" ");
+      return URL_REGEX.test(allVals) || allVals.length > 10;
     });
-    if (filledRequired.length > 0) return true;
-    const allVals = Object.values(item).filter(v => typeof v === 'string' && v.trim()).join(' ');
-    return URL_REGEX.test(allVals) || allVals.length > 10;
-  });
 }
 
 export function generateTemplate(target: ImportTarget): string {
   const meta = TARGET_META[target];
   const headers = [...meta.requiredFields, ...meta.optionalFields];
-  return headers.join(',') + '\n' + headers.map(() => '').join(',');
+  return headers.join(",") + "\n" + headers.map(() => "").join(",");
 }
 
 // ─── Multi-Category Split ─────────────────────────────────────────────────────
@@ -1343,7 +2012,7 @@ export function generateTemplate(target: ImportTarget): string {
 interface SplitCategory {
   target: ImportTarget;
   meta: TargetMeta;
-  confidence: 'high' | 'medium' | 'low';
+  confidence: "high" | "medium" | "low";
   items: Record<string, any>[];
   fieldMap: Record<string, string>;
   score: number;
@@ -1354,10 +2023,13 @@ interface SplitCategory {
  * mixed types (e.g., some rows have URLs → websites, some have amounts → payments).
  * Returns null if data is homogeneous (single category is better).
  */
-function tryMultiCategorySplit(rows: Record<string, string>[], sourceFields: string[]): SplitCategory[] | null {
+function tryMultiCategorySplit(
+  rows: Record<string, string>[],
+  sourceFields: string[],
+): SplitCategory[] | null {
   // Only attempt multi-split for plain-text parsed data with __type markers
   // or when rows have very different signatures
-  const typeMarked = rows.filter(r => r.__type);
+  const typeMarked = rows.filter((r) => r.__type);
   if (typeMarked.length > 0) {
     // Group by __type
     const groups = new Map<string, Record<string, string>[]>();
@@ -1385,7 +2057,7 @@ function tryMultiCategorySplit(rows: Record<string, string>[], sourceFields: str
           categories.push({
             target,
             meta: TARGET_META[target],
-            confidence: 'high',
+            confidence: "high",
             items,
             fieldMap,
             score: 100,
@@ -1395,14 +2067,14 @@ function tryMultiCategorySplit(rows: Record<string, string>[], sourceFields: str
 
       // Process unmarked rows through normal detection
       if (unmarked.length > 0) {
-        const sf = [...new Set(unmarked.flatMap(r => Object.keys(r)))];
+        const sf = [...new Set(unmarked.flatMap((r) => Object.keys(r)))];
         const detections = autoDetectWithConfidence(sf, unmarked);
         const best = detections[0];
         if (best && best.validCount > 0) {
           const items = normalizeItems(unmarked, best.target, best.fieldMap);
           if (items.length > 0) {
             // Merge if same target exists
-            const existing = categories.find(c => c.target === best.target);
+            const existing = categories.find((c) => c.target === best.target);
             if (existing) {
               existing.items.push(...items);
             } else {
@@ -1433,15 +2105,15 @@ function tryMultiCategorySplit(rows: Record<string, string>[], sourceFields: str
     const hasStrongSingleCategory = Boolean(
       topDetection &&
       topDetection.validCount >= Math.max(2, Math.ceil(rows.length * 0.66)) &&
-      topDetection.score - (secondDetection?.score ?? 0) >= 8
+      topDetection.score - (secondDetection?.score ?? 0) >= 8,
     );
 
     if (hasStrongSingleCategory) {
       return null;
     }
 
-    const rowSignatures = rows.map(row => {
-      const values = Object.values(row).join(' ');
+    const rowSignatures = rows.map((row) => {
+      const values = Object.values(row).join(" ");
       const hasUrl = URL_REGEX.test(values);
       URL_REGEX.lastIndex = 0;
       const hasCurrency = CURRENCY_REGEX.test(values);
@@ -1449,11 +2121,11 @@ function tryMultiCategorySplit(rows: Record<string, string>[], sourceFields: str
       const hasEmail = EMAIL_REGEX.test(values);
       EMAIL_REGEX.lastIndex = 0;
 
-      if (hasCurrency) return 'payments';
-      if (hasUrl && (row.username || row.password || row.wpAdminUrl)) return 'websites';
-      if (hasUrl) return 'links';
-      if (hasEmail && (row.password || row.apiKey)) return 'credentials';
-      return 'tasks';
+      if (hasCurrency) return "payments";
+      if (hasUrl && (row.username || row.password || row.wpAdminUrl)) return "websites";
+      if (hasUrl) return "links";
+      if (hasEmail && (row.password || row.apiKey)) return "credentials";
+      return "tasks";
     });
 
     const uniqueTypes = new Set(rowSignatures);
@@ -1469,14 +2141,14 @@ function tryMultiCategorySplit(rows: Record<string, string>[], sourceFields: str
       for (const [type, groupRows] of groups) {
         const target = type as ImportTarget;
         if (!TARGET_META[target]) continue;
-        const sf = [...new Set(groupRows.flatMap(r => Object.keys(r)))];
+        const sf = [...new Set(groupRows.flatMap((r) => Object.keys(r)))];
         const fieldMap = autoMapFields(sf, target);
         const items = normalizeItems(groupRows, target, fieldMap);
         if (items.length > 0) {
           categories.push({
             target,
             meta: TARGET_META[target],
-            confidence: items.length >= 2 ? 'medium' : 'low',
+            confidence: items.length >= 2 ? "medium" : "low",
             items,
             fieldMap,
             score: items.length * 10,
@@ -1512,13 +2184,14 @@ export function autonomousImport(text: string, fileName?: string): AutonomousImp
       const totalItems = dump.reduce((sum, c) => sum + c.items.length, 0);
       return {
         categories: dump.sort((a, b) => b.items.length - a.items.length),
-        parsedData: { rows: [], sourceFields: [], format: 'text' } as any,
+        parsedData: { rows: [], sourceFields: [], format: "text" } as any,
         totalItems,
         expressReady: true,
       };
     }
-  } catch { /* fall through to generic pipeline */ }
-
+  } catch {
+    /* fall through to generic pipeline */
+  }
 
   const parsedData = parseImportData(text, fileName);
 
@@ -1530,7 +2203,7 @@ export function autonomousImport(text: string, fileName?: string): AutonomousImp
   const multiSplit = tryMultiCategorySplit(parsedData.rows, parsedData.sourceFields);
   if (multiSplit && multiSplit.length > 0) {
     const totalItems = multiSplit.reduce((sum, c) => sum + c.items.length, 0);
-    const allHigh = multiSplit.every(c => c.confidence === 'high');
+    const allHigh = multiSplit.every((c) => c.confidence === "high");
     return {
       categories: multiSplit.sort((a, b) => b.items.length - a.items.length),
       parsedData,
@@ -1546,7 +2219,12 @@ export function autonomousImport(text: string, fileName?: string): AutonomousImp
 
   for (const det of detections.slice(0, 3)) {
     const items = normalizeItems(parsedData.rows, det.target, det.fieldMap);
-    if (items.length > 0 && (!bestResult || items.length > bestResult.items.length || (items.length === bestResult.items.length && det.score > bestResult.score))) {
+    if (
+      items.length > 0 &&
+      (!bestResult ||
+        items.length > bestResult.items.length ||
+        (items.length === bestResult.items.length && det.score > bestResult.score))
+    ) {
       bestResult = {
         target: det.target,
         meta: TARGET_META[det.target],
@@ -1559,11 +2237,11 @@ export function autonomousImport(text: string, fileName?: string): AutonomousImp
   }
 
   if (!bestResult || bestResult.items.length === 0) {
-    const allValues = parsedData.rows.flatMap(r => Object.values(r)).join(' ');
+    const allValues = parsedData.rows.flatMap((r) => Object.values(r)).join(" ");
     const hasUrls = URL_REGEX.test(allValues);
     URL_REGEX.lastIndex = 0;
     const hasGitHub = /github\.com/i.test(allValues);
-    const fallbackTarget: ImportTarget = hasGitHub ? 'repos' : hasUrls ? 'websites' : 'tasks';
+    const fallbackTarget: ImportTarget = hasGitHub ? "repos" : hasUrls ? "websites" : "tasks";
     const fieldMap = autoMapFields(parsedData.sourceFields, fallbackTarget);
     const items = normalizeItems(parsedData.rows, fallbackTarget, fieldMap);
     if (items.length > 0) {
@@ -1571,7 +2249,7 @@ export function autonomousImport(text: string, fileName?: string): AutonomousImp
         target: fallbackTarget,
         meta: TARGET_META[fallbackTarget],
         items,
-        confidence: 'medium',
+        confidence: "medium",
         fieldMap,
         score: 0,
       };
@@ -1580,7 +2258,8 @@ export function autonomousImport(text: string, fileName?: string): AutonomousImp
 
   const categories = bestResult ? [bestResult] : [];
   const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
-  const expressReady = categories.length === 1 && categories[0].confidence === 'high' && totalItems > 0;
+  const expressReady =
+    categories.length === 1 && categories[0].confidence === "high" && totalItems > 0;
 
   return { categories, parsedData, totalItems, expressReady };
 }

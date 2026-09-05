@@ -29,9 +29,7 @@ export default class RouteErrorBoundary extends React.Component<Props, State> {
             <div className="w-14 h-14 mx-auto rounded-2xl bg-destructive/10 flex items-center justify-center">
               <AlertTriangle className="w-7 h-7 text-destructive" />
             </div>
-            <h2 className="text-lg font-semibold text-foreground">
-              Something went wrong
-            </h2>
+            <h2 className="text-lg font-semibold text-foreground">Something went wrong</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
               {this.state.error.message}
             </p>

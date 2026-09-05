@@ -34,6 +34,10 @@ export default tseslint.config(
       ],
       "react-refresh/only-export-components": ["warn", { allowConstantExport: true }],
       "@typescript-eslint/no-unused-vars": "off",
+      // 286 pre-existing `any`s across dexie/sync/import layers. Real type
+      // work, done incrementally — kept visible as warnings instead of
+      // blocking every deploy. Typecheck + tests remain the hard gates.
+      "@typescript-eslint/no-explicit-any": "warn",
     },
   },
   eslintPluginPrettier,

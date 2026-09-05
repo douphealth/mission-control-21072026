@@ -5,11 +5,11 @@
 //   3. What comes next       → future timed work, then the score-ordered queue
 // Pure and testable: no React, no I/O. The component is a thin view over this.
 
-import type { WorkItem } from '@/lib/workQueue';
-import type { AttentionItem } from '@/lib/whyNow';
-import { reasonsOf, type ScoreDimension } from '@/lib/priorityEngine';
+import type { WorkItem } from "@/lib/workQueue";
+import type { AttentionItem } from "@/lib/whyNow";
+import { reasonsOf, type ScoreDimension } from "@/lib/priorityEngine";
 
-export type TimelineKind = 'flag' | 'task' | 'reminder' | 'payment' | 'decision';
+export type TimelineKind = "flag" | "task" | "reminder" | "payment" | "decision";
 
 export interface TimelineEntry {
   id: string;
@@ -17,7 +17,7 @@ export interface TimelineEntry {
   time?: string;
   title: string;
   kind: TimelineKind;
-  severity?: 'critical' | 'warning' | 'info';
+  severity?: "critical" | "warning" | "info";
   /** Explainable "why is this here" lines — same dimensions the engine scored. */
   reasons: string[];
   section: string;
@@ -35,7 +35,7 @@ export interface Timeline {
 
 /** Current local time as HH:MM — never UTC. */
 export function hhmmNow(d: Date = new Date()): string {
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
 const DEFAULT_FLAG_LIMIT = 4;
@@ -48,15 +48,17 @@ function reasonsFor(item: WorkItem, today: string): string[] {
   }
   const out: string[] = [];
   if (item.overdueDays > 0) {
-    out.push(item.overdueDays === 1 ? 'overdue since yesterday' : `${item.overdueDays} days overdue`);
+    out.push(
+      item.overdueDays === 1 ? "overdue since yesterday" : `${item.overdueDays} days overdue`,
+    );
   } else if (item.due === today) {
-    out.push('due today');
+    out.push("due today");
   } else if (item.scheduled === today) {
-    out.push('planned for today');
+    out.push("planned for today");
   }
-  if (item.kind === 'decision') out.push('blocks other work until decided');
-  if (item.kind === 'payment') out.push('money has a hard deadline');
-  return out.length > 0 ? out.slice(0, 3) : ['top of your queue right now'];
+  if (item.kind === "decision") out.push("blocks other work until decided");
+  if (item.kind === "payment") out.push("money has a hard deadline");
+  return out.length > 0 ? out.slice(0, 3) : ["top of your queue right now"];
 }
 
 function toEntry(i: WorkItem, today: string): TimelineEntry {
@@ -65,7 +67,7 @@ function toEntry(i: WorkItem, today: string): TimelineEntry {
     time: i.time,
     title: i.title,
     kind: i.kind,
-    severity: i.overdueDays > 0 ? 'critical' : undefined,
+    severity: i.overdueDays > 0 ? "critical" : undefined,
     reasons: reasonsFor(i, today),
     section: sectionFor(i),
     workItem: i,
@@ -87,7 +89,7 @@ export function buildTimeline(input: {
   const flags: TimelineEntry[] = input.attention.slice(0, flagLimit).map((a) => ({
     id: a.id,
     title: a.title,
-    kind: 'flag' as const,
+    kind: "flag" as const,
     severity: a.severity,
     reasons: a.detail ? [a.detail] : [],
     section: a.section,
@@ -96,9 +98,9 @@ export function buildTimeline(input: {
 
   const timed = input.items
     .filter((i) => !!i.time)
-    .sort((a, b) => (a.time ?? '').localeCompare(b.time ?? ''));
-  const elapsedTimed = timed.filter((i) => (i.time ?? '') < input.nowTime);
-  const upcomingTimed = timed.filter((i) => (i.time ?? '') >= input.nowTime);
+    .sort((a, b) => (a.time ?? "").localeCompare(b.time ?? ""));
+  const elapsedTimed = timed.filter((i) => (i.time ?? "") < input.nowTime);
+  const upcomingTimed = timed.filter((i) => (i.time ?? "") >= input.nowTime);
   const untimed = input.items
     .filter((i) => !i.time)
     .sort((a, b) => b.score - a.score)
@@ -126,15 +128,15 @@ export function buildTimeline(input: {
 
 function sectionFor(i: WorkItem): string {
   switch (i.kind) {
-    case 'task':
-      return 'tasks';
-    case 'reminder':
-      return 'reminders';
-    case 'payment':
-      return 'payments';
-    case 'decision':
-      return 'decisions';
+    case "task":
+      return "tasks";
+    case "reminder":
+      return "reminders";
+    case "payment":
+      return "payments";
+    case "decision":
+      return "decisions";
     default:
-      return 'tasks';
+      return "tasks";
   }
 }

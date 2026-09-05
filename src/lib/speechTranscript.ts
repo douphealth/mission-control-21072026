@@ -10,16 +10,16 @@ export interface RecognitionResultLike {
 const SPACE_RE = /\s+/g;
 
 function normalizeWhitespace(text: string): string {
-  return text.replace(SPACE_RE, ' ').trim();
+  return text.replace(SPACE_RE, " ").trim();
 }
 
 function normalizeToken(token: string): string {
-  return token.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+  return token.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
 }
 
 function splitWords(text: string): string[] {
   const normalized = normalizeWhitespace(text);
-  return normalized ? normalized.split(' ') : [];
+  return normalized ? normalized.split(" ") : [];
 }
 
 function tokensMatch(a: string, b: string): boolean {
@@ -43,7 +43,7 @@ function countWordOverlap(existingWords: string[], incomingWords: string[]): num
 
 export function compressRepeatedPhrases(text: string): string {
   const words = splitWords(text);
-  if (!words.length) return '';
+  if (!words.length) return "";
 
   const output: string[] = [];
   let i = 0;
@@ -82,7 +82,7 @@ export function compressRepeatedPhrases(text: string): string {
     i += 1;
   }
 
-  return normalizeWhitespace(output.join(' '));
+  return normalizeWhitespace(output.join(" "));
 }
 
 export function appendSpeechSegment(existing: string, incoming: string): string {
@@ -103,7 +103,7 @@ export function appendSpeechSegment(existing: string, incoming: string): string 
   }
 
   const overlap = countWordOverlap(baseWords, nextWords);
-  const merged = [...baseWords, ...nextWords.slice(overlap)].join(' ');
+  const merged = [...baseWords, ...nextWords.slice(overlap)].join(" ");
   return compressRepeatedPhrases(merged);
 }
 
@@ -118,7 +118,7 @@ export function buildRecognitionSnapshot(
 
   for (let i = lastFinalResultIndex; i < results.length; i++) {
     const result = results[i];
-    const text = normalizeWhitespace(result?.[0]?.transcript ?? '');
+    const text = normalizeWhitespace(result?.[0]?.transcript ?? "");
     if (!text) continue;
 
     if (result.isFinal) {
@@ -131,7 +131,7 @@ export function buildRecognitionSnapshot(
 
   return {
     transcript: nextTranscript,
-    interim: compressRepeatedPhrases(interimSegments.join(' ')),
+    interim: compressRepeatedPhrases(interimSegments.join(" ")),
     nextFinalResultIndex,
   };
 }

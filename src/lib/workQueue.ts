@@ -2,16 +2,16 @@
 // One queue for everything that can demand attention: tasks, reminders,
 // payments due, and open decisions. One scoring function, one set of actions.
 
-import type { Task, Reminder, Payment, Decision } from '@/lib/db';
-import { todayISO, daysOverdue, PRIORITY_RANK } from '@/lib/overdue';
-import { daysSinceTouch, isOpen } from '@/lib/triage';
-import { scoreItem, reasonsOf, type ScoreResult } from '@/lib/priorityEngine';
+import type { Task, Reminder, Payment, Decision } from "@/lib/db";
+import { todayISO, daysOverdue, PRIORITY_RANK } from "@/lib/overdue";
+import { daysSinceTouch, isOpen } from "@/lib/triage";
+import { scoreItem, reasonsOf, type ScoreResult } from "@/lib/priorityEngine";
 
-export type { ScoreDimension, ScoreResult } from '@/lib/priorityEngine';
-export { reasonsOf as explainScore } from '@/lib/priorityEngine';
+export type { ScoreDimension, ScoreResult } from "@/lib/priorityEngine";
+export { reasonsOf as explainScore } from "@/lib/priorityEngine";
 
-export type WorkKind = 'task' | 'reminder' | 'payment' | 'decision';
-export type WorkBucket = 'now' | 'today' | 'later';
+export type WorkKind = "task" | "reminder" | "payment" | "decision";
+export type WorkBucket = "now" | "today" | "later";
 
 export interface WorkItem {
   id: string;
@@ -19,10 +19,10 @@ export interface WorkItem {
   refId: string;
   title: string;
   subtitle?: string;
-  due?: string;            // YYYY-MM-DD hard deadline
-  time?: string;           // HH:MM
-  priority: 'critical' | 'high' | 'medium' | 'low';
-  context?: string;        // project / website / category
+  due?: string; // YYYY-MM-DD hard deadline
+  time?: string; // HH:MM
+  priority: "critical" | "high" | "medium" | "low";
+  context?: string; // project / website / category
   overdueDays: number;
   staleDays: number;
   score: number;
@@ -33,7 +33,7 @@ export interface WorkItem {
   /** Hidden from Now/Today until this date. */
   notBefore?: string;
   /** Explainable score breakdown — mirrors the engine dimensions. */
-  scoreDimensions?: ScoreResult['dimensions'];
+  scoreDimensions?: ScoreResult["dimensions"];
   raw: any;
 }
 
@@ -50,11 +50,16 @@ function scoreOf(input: {
   return scoreItem(input);
 }
 
-function bucketOf(item: { due?: string; overdueDays: number; today: string; kind: WorkKind }): WorkBucket {
-  if (item.overdueDays > 0) return 'today';
-  if (item.due && item.due <= item.today) return 'today';
-  if (item.kind === 'decision') return 'today';
-  return 'later';
+function bucketOf(item: {
+  due?: string;
+  overdueDays: number;
+  today: string;
+  kind: WorkKind;
+}): WorkBucket {
+  if (item.overdueDays > 0) return "today";
+  if (item.due && item.due <= item.today) return "today";
+  if (item.kind === "decision") return "today";
+  return "later";
 }
 
 export function buildWorkQueue(input: {
@@ -84,7 +89,7 @@ export function buildWorkQueue(input: {
       due: t.dueDate || undefined,
       scheduled,
       today,
-      kind: 'task' as const,
+      kind: "task" as const,
       pinned: committed,
     };
     const scored = scoreOf(base);
@@ -92,7 +97,7 @@ export function buildWorkQueue(input: {
     const deferred = !!notBefore && notBefore > today;
     items.push({
       id: `task:${t.id}`,
-      kind: 'task',
+      kind: "task",
       refId: t.id,
       title: t.title,
       subtitle: t.description?.slice(0, 120) || undefined,
@@ -104,12 +109,8 @@ export function buildWorkQueue(input: {
       staleDays: stale,
       score: scored.score,
       scoreDimensions: scored.dimensions,
-      bucket: deferred && !committed
-        ? 'later'
-        : committed || plannedNow
-          ? 'today'
-          : bucketOf(base),
-      source: 'Tasks',
+      bucket: deferred && !committed ? "later" : committed || plannedNow ? "today" : bucketOf(base),
+      source: "Tasks",
       scheduled,
       notBefore,
       raw: t,
@@ -117,84 +118,116 @@ export function buildWorkQueue(input: {
   }
 
   for (const r of input.reminders ?? []) {
-    if (r.status !== 'pending') continue;
-    const due = (r.remindAt || '').slice(0, 10);
-    const overdue = due && due < today
-      ? Math.round((new Date(`${today}T00:00:00`).getTime() - new Date(`${due}T00:00:00`).getTime()) / 86_400_000)
-      : 0;
-    const base = { priority: 'medium', overdueDays: overdue, staleDays: 0, due, today, kind: 'reminder' as const };
+    if (r.status !== "pending") continue;
+    const due = (r.remindAt || "").slice(0, 10);
+    const overdue =
+      due && due < today
+        ? Math.round(
+            (new Date(`${today}T00:00:00`).getTime() - new Date(`${due}T00:00:00`).getTime()) /
+              86_400_000,
+          )
+        : 0;
+    const base = {
+      priority: "medium",
+      overdueDays: overdue,
+      staleDays: 0,
+      due,
+      today,
+      kind: "reminder" as const,
+    };
     const scored = scoreOf(base);
     items.push({
       id: `reminder:${r.id}`,
-      kind: 'reminder',
+      kind: "reminder",
       refId: r.id,
       title: r.title,
       subtitle: r.notes,
       due,
-      time: (r.remindAt || '').slice(11, 16) || undefined,
-      priority: 'medium',
-      context: 'Reminder',
+      time: (r.remindAt || "").slice(11, 16) || undefined,
+      priority: "medium",
+      context: "Reminder",
       overdueDays: overdue,
       staleDays: 0,
       score: scored.score,
       scoreDimensions: scored.dimensions,
       bucket: bucketOf(base),
-      source: 'Reminders',
+      source: "Reminders",
       raw: r,
     });
   }
 
   for (const p of input.payments ?? []) {
-    if (p.status !== 'pending' && p.status !== 'overdue') continue;
-    const due = (p.dueDate || '').slice(0, 10);
+    if (p.status !== "pending" && p.status !== "overdue") continue;
+    const due = (p.dueDate || "").slice(0, 10);
     if (!due) continue;
-    const overdue = due < today
-      ? Math.round((new Date(`${today}T00:00:00`).getTime() - new Date(`${due}T00:00:00`).getTime()) / 86_400_000)
-      : 0;
-    const base = { priority: overdue > 0 ? 'critical' : 'high', overdueDays: overdue, staleDays: 0, due, today, kind: 'payment' as const };
+    const overdue =
+      due < today
+        ? Math.round(
+            (new Date(`${today}T00:00:00`).getTime() - new Date(`${due}T00:00:00`).getTime()) /
+              86_400_000,
+          )
+        : 0;
+    const base = {
+      priority: overdue > 0 ? "critical" : "high",
+      overdueDays: overdue,
+      staleDays: 0,
+      due,
+      today,
+      kind: "payment" as const,
+    };
     const scored = scoreOf(base);
     items.push({
       id: `payment:${p.id}`,
-      kind: 'payment',
+      kind: "payment",
       refId: p.id,
       title: p.title,
-      subtitle: `${p.amount ?? ''} ${(p as any).currency ?? ''}`.trim() || undefined,
+      subtitle: `${p.amount ?? ""} ${(p as any).currency ?? ""}`.trim() || undefined,
       due,
-      priority: base.priority as WorkItem['priority'],
-      context: p.category || 'Payment',
+      priority: base.priority as WorkItem["priority"],
+      context: p.category || "Payment",
       overdueDays: overdue,
       staleDays: 0,
       score: scored.score,
       scoreDimensions: scored.dimensions,
       bucket: bucketOf(base),
-      source: 'Payments',
+      source: "Payments",
       raw: p,
     });
   }
 
   for (const d of input.decisions ?? []) {
-    if (d.status !== 'open') continue;
-    const base = { priority: d.severity, overdueDays: 0, staleDays: 0, due: undefined, today, kind: 'decision' as const };
+    if (d.status !== "open") continue;
+    const base = {
+      priority: d.severity,
+      overdueDays: 0,
+      staleDays: 0,
+      due: undefined,
+      today,
+      kind: "decision" as const,
+    };
     const scored = scoreOf(base);
     items.push({
       id: `decision:${d.id}`,
-      kind: 'decision',
+      kind: "decision",
       refId: d.id,
       title: d.title,
       subtitle: d.recommendation || d.context,
       priority: d.severity,
-      context: 'Decision',
+      context: "Decision",
       overdueDays: 0,
       staleDays: 0,
       score: scored.score,
       scoreDimensions: scored.dimensions,
-      bucket: 'today',
-      source: 'Decision Center',
+      bucket: "today",
+      source: "Decision Center",
       raw: d,
     });
   }
 
-  return items.sort((a, b) => b.score - a.score || (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9));
+  return items.sort(
+    (a, b) =>
+      b.score - a.score || (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9),
+  );
 }
 
 export interface WorkQueues {
@@ -205,8 +238,8 @@ export interface WorkQueues {
 }
 
 export function splitQueue(items: WorkItem[]): WorkQueues {
-  const today = items.filter((i) => i.bucket === 'today');
-  const later = items.filter((i) => i.bucket === 'later');
+  const today = items.filter((i) => i.bucket === "today");
+  const later = items.filter((i) => i.bucket === "later");
   const now = today[0] ?? later[0];
   return {
     now,

@@ -121,7 +121,10 @@ export default function MobileBottomNav() {
       <nav className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)*0.5+0.5rem)] lg:hidden">
         <div className="mobile-liquid-bar rounded-[24px] px-2 py-1.5">
           <div className="flex items-stretch justify-around gap-1">
-            <button onClick={() => go("dashboard")} className={tabCls(activeSection === "dashboard")}>
+            <button
+              onClick={() => go("dashboard")}
+              className={tabCls(activeSection === "dashboard")}
+            >
               <Home size={20} strokeWidth={activeSection === "dashboard" ? 2.4 : 1.7} />
               <span className="text-[10px] font-medium leading-none">Home</span>
             </button>

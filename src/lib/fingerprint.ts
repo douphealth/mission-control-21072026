@@ -3,12 +3,12 @@
 // many scanners observe it or how many times they run.
 
 export function normalizeFingerprintPart(part: unknown): string {
-  if (part == null) return '';
+  if (part == null) return "";
   return String(part)
     .toLowerCase()
-    .replace(/https?:\/\//g, '')
-    .replace(/[\s_]+/g, ' ')
-    .replace(/[^a-z0-9 ./:-]/g, '')
+    .replace(/https?:\/\//g, "")
+    .replace(/[\s_]+/g, " ")
+    .replace(/[^a-z0-9 ./:-]/g, "")
     .trim();
 }
 
@@ -19,7 +19,7 @@ function fnv1a(input: string): string {
     hash ^= input.charCodeAt(i);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
-  return hash.toString(16).padStart(8, '0');
+  return hash.toString(16).padStart(8, "0");
 }
 
 /**
@@ -27,8 +27,8 @@ function fnv1a(input: string): string {
  * device, in any order-independent scan.
  */
 export function fingerprint(kind: string, parts: unknown[]): string {
-  const body = parts.map(normalizeFingerprintPart).filter(Boolean).join('|');
-  return `${normalizeFingerprintPart(kind) || 'finding'}:${fnv1a(body)}`;
+  const body = parts.map(normalizeFingerprintPart).filter(Boolean).join("|");
+  return `${normalizeFingerprintPart(kind) || "finding"}:${fnv1a(body)}`;
 }
 
 export const SEVERITY_RANK = { low: 1, medium: 2, high: 3, critical: 4 } as const;
@@ -41,7 +41,11 @@ export function isSuppressed(
 ): boolean {
   const ts = now.getTime();
   if (record.cooldownUntil && new Date(record.cooldownUntil).getTime() > ts) return true;
-  if (record.status === 'later' && record.deferUntil && new Date(`${record.deferUntil}T23:59:59`).getTime() > ts) {
+  if (
+    record.status === "later" &&
+    record.deferUntil &&
+    new Date(`${record.deferUntil}T23:59:59`).getTime() > ts
+  ) {
     return true;
   }
   return false;
@@ -56,7 +60,7 @@ export function isRegression(
   incomingSeverity: Severity | undefined,
   now: Date = new Date(),
 ): boolean {
-  const resolved = record.status === 'acted' || record.status === 'ignored';
+  const resolved = record.status === "acted" || record.status === "ignored";
   if (!resolved) return false;
   const worse =
     !!incomingSeverity && SEVERITY_RANK[incomingSeverity] > SEVERITY_RANK[record.severity];
