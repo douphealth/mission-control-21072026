@@ -9,7 +9,14 @@ function Ring({ pct, size = 76, stroke = 8 }: { pct: number; size?: number; stro
   const c = 2 * Math.PI * r;
   return (
     <svg width={size} height={size} className="-rotate-90">
-      <circle cx={size / 2} cy={size / 2} r={r} strokeWidth={stroke} className="stroke-white/15" fill="none" />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        strokeWidth={stroke}
+        className="stroke-white/15"
+        fill="none"
+      />
       <circle
         cx={size / 2}
         cy={size / 2}
@@ -53,7 +60,14 @@ export default function DailyHero({
   const userName = useSettingsStore((s) => s.userName);
 
   const hour = new Date().getHours();
-  const greet = hour < 5 ? "Still up" : hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
+  const greet =
+    hour < 5
+      ? "Still up"
+      : hour < 12
+        ? "Good morning"
+        : hour < 18
+          ? "Good afternoon"
+          : "Good evening";
   const dateLabel = new Date(`${today}T00:00:00`).toLocaleDateString(undefined, {
     weekday: "long",
     day: "numeric",
@@ -133,7 +147,15 @@ export default function DailyHero({
           {now ? (
             <>
               <button
-                onClick={() => setActiveSection(now.kind === "decision" ? "decisions" : now.kind === "payment" ? "payments" : "tasks")}
+                onClick={() =>
+                  setActiveSection(
+                    now.kind === "decision"
+                      ? "decisions"
+                      : now.kind === "payment"
+                        ? "payments"
+                        : "tasks",
+                  )
+                }
                 className="block w-full text-left"
               >
                 <h2 className="font-display text-[19px] font-bold leading-snug tracking-tight sm:text-[24px]">
@@ -177,8 +199,8 @@ export default function DailyHero({
                 Nothing is demanding your attention
               </h2>
               <p className="mt-1 text-[12px] text-white/60">
-                No deadlines, no overdue work, no open exceptions. Capture the next thing — or, if this
-                is a new device, sign in above to restore your data.
+                No deadlines, no overdue work, no open exceptions. Capture the next thing — or, if
+                this is a new device, sign in above to restore your data.
               </p>
               <button
                 onClick={() => setActiveSection("review")}

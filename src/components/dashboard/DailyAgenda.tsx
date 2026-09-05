@@ -16,8 +16,12 @@ export default function DailyAgenda({ rows }: { rows: AgendaRow[] }) {
     <section className="enterprise-card rounded-[28px] p-5 sm:p-6">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Agenda</div>
-          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">Timed today</h3>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Agenda
+          </div>
+          <h3 className="font-display text-[17px] font-extrabold tracking-tight text-foreground">
+            Timed today
+          </h3>
         </div>
         <button
           onClick={() => setActiveSection("calendar")}
@@ -43,8 +47,12 @@ export default function DailyAgenda({ rows }: { rows: AgendaRow[] }) {
                 {r.time}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12.5px] font-semibold text-foreground">{r.title}</span>
-                <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">{r.kind}</span>
+                <span className="block truncate text-[12.5px] font-semibold text-foreground">
+                  {r.title}
+                </span>
+                <span className="block text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {r.kind}
+                </span>
               </span>
               <Clock size={13} className="shrink-0 text-muted-foreground" />
             </button>

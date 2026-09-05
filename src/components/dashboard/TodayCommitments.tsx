@@ -36,7 +36,9 @@ function Row({
       </button>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${KIND_TONE[item.kind]}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${KIND_TONE[item.kind]}`}
+          >
             {item.kind}
           </span>
           {item.overdueDays > 0 && (
@@ -45,9 +47,13 @@ function Row({
             </span>
           )}
         </div>
-        <div className="mt-1 text-[13px] font-semibold leading-snug text-foreground">{item.title}</div>
+        <div className="mt-1 text-[13px] font-semibold leading-snug text-foreground">
+          {item.title}
+        </div>
         {!compact && (
-          <div className="mt-1 text-[11px] text-muted-foreground">{whyNow(item, today).join(" · ")}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {whyNow(item, today).join(" · ")}
+          </div>
         )}
       </div>
       <div className="flex shrink-0 items-center gap-1">
@@ -93,7 +99,9 @@ export default function TodayCommitments({
     <section className="enterprise-card rounded-[28px] p-5 sm:p-6">
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">Today</div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
+            Today
+          </div>
           <h3 className="font-display text-[19px] font-extrabold tracking-tight text-foreground sm:text-[22px]">
             Your three commitments
           </h3>

@@ -29,7 +29,6 @@ import { actOnDecision, deferDecision } from "@/lib/decisions";
 import { buildTimeline, hhmmNow, type Timeline } from "@/lib/timeline";
 import type { Task } from "@/lib/db";
 
-
 export function useDailyOps() {
   const tasks = useTasks();
   const reminders = useReminders();
@@ -81,7 +80,6 @@ export function useDailyOps() {
     [stream, websites, tasks],
   );
 
-
   const briefing = useMemo(() => buildBriefing(tasks as Task[], today), [tasks, today]);
 
   /** True first-run: zero rows in every core table. Drives the gorgeous
@@ -131,7 +129,13 @@ export function useDailyOps() {
       if (t.status === "done") continue;
       const day = t.scheduledAt || t.dueDate;
       if (day !== today || !t.startTime) continue;
-      rows.push({ id: `t:${t.id}`, time: t.startTime, title: t.title, kind: "Task", section: "tasks" });
+      rows.push({
+        id: `t:${t.id}`,
+        time: t.startTime,
+        title: t.title,
+        kind: "Task",
+        section: "tasks",
+      });
     }
     for (const r of reminders) {
       if (r.status !== "pending" || !r.remindAt) continue;
@@ -147,7 +151,13 @@ export function useDailyOps() {
     for (const p of payments) {
       if (p.status !== "pending" && p.status !== "overdue") continue;
       if ((p.dueDate || "").slice(0, 10) !== today) continue;
-      rows.push({ id: `p:${p.id}`, time: "—", title: p.title, kind: "Payment due", section: "payments" });
+      rows.push({
+        id: `p:${p.id}`,
+        time: "—",
+        title: p.title,
+        kind: "Payment due",
+        section: "payments",
+      });
     }
     return rows.sort((a, b) => a.time.localeCompare(b.time)).slice(0, 6);
   }, [tasks, reminders, payments, today]);

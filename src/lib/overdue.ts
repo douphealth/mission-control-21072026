@@ -2,7 +2,7 @@
 // Single source of truth for "what needs my attention today", used by the
 // daily briefing banner, the reminder loop and the email digest.
 
-import type { Task } from '@/lib/db';
+import type { Task } from "@/lib/db";
 
 export const PRIORITY_RANK: Record<string, number> = {
   critical: 0,
@@ -14,8 +14,8 @@ export const PRIORITY_RANK: Record<string, number> = {
 /** Format a Date as YYYY-MM-DD in *local* time (never via toISOString). */
 export function fmtLocal(d: Date): string {
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -41,7 +41,7 @@ function sortTasks(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const p = (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9);
     if (p !== 0) return p;
-    return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
+    return (a.dueDate || "9999").localeCompare(b.dueDate || "9999");
   });
 }
 
@@ -56,12 +56,12 @@ export interface DailyBriefing {
 export function buildBriefing(tasks: Task[], today = todayISO()): DailyBriefing {
   const tomorrow = addDaysLocal(today, 1);
 
-  const open = tasks.filter((t) => t.status !== 'done');
+  const open = tasks.filter((t) => t.status !== "done");
   const overdue = sortTasks(open.filter((t) => t.dueDate && t.dueDate < today));
   const dueToday = sortTasks(open.filter((t) => t.dueDate === today));
   const dueTomorrow = sortTasks(open.filter((t) => t.dueDate === tomorrow));
   const completedToday = tasks.filter(
-    (t) => t.status === 'done' && (t.completedAt || '').slice(0, 10) === today,
+    (t) => t.status === "done" && (t.completedAt || "").slice(0, 10) === today,
   ).length;
 
   return {
@@ -75,8 +75,8 @@ export function buildBriefing(tasks: Task[], today = todayISO()): DailyBriefing 
 
 function line(task: Task, today: string): string {
   const d = daysOverdue(task, today);
-  const age = d > 0 ? ` — ${d} day${d === 1 ? '' : 's'} overdue` : '';
-  const time = task.startTime ? ` at ${task.startTime}` : '';
+  const age = d > 0 ? ` — ${d} day${d === 1 ? "" : "s"} overdue` : "";
+  const time = task.startTime ? ` at ${task.startTime}` : "";
   return `• [${task.priority.toUpperCase()}] ${task.title} (due ${task.dueDate}${time})${age}`;
 }
 
@@ -85,37 +85,37 @@ export function buildDigestText(b: DailyBriefing, today = todayISO()): string {
   const parts: string[] = [
     `MISSION CONTROL — DAILY TASK DIGEST`,
     today,
-    '',
+    "",
     `Overdue: ${b.overdue.length}   Due today: ${b.dueToday.length}   Due tomorrow: ${b.dueTomorrow.length}   Completed today: ${b.completedToday}`,
-    '',
+    "",
   ];
 
   if (b.overdue.length) {
-    parts.push(`OVERDUE (${b.overdue.length})`, '─────────────────────────');
-    parts.push(...b.overdue.map((t) => line(t, today)), '');
+    parts.push(`OVERDUE (${b.overdue.length})`, "─────────────────────────");
+    parts.push(...b.overdue.map((t) => line(t, today)), "");
   }
   if (b.dueToday.length) {
-    parts.push(`DUE TODAY (${b.dueToday.length})`, '─────────────────────────');
-    parts.push(...b.dueToday.map((t) => line(t, today)), '');
+    parts.push(`DUE TODAY (${b.dueToday.length})`, "─────────────────────────");
+    parts.push(...b.dueToday.map((t) => line(t, today)), "");
   }
   if (b.dueTomorrow.length) {
-    parts.push(`DUE TOMORROW (${b.dueTomorrow.length})`, '─────────────────────────');
-    parts.push(...b.dueTomorrow.map((t) => line(t, today)), '');
+    parts.push(`DUE TOMORROW (${b.dueTomorrow.length})`, "─────────────────────────");
+    parts.push(...b.dueTomorrow.map((t) => line(t, today)), "");
   }
   if (!b.overdue.length && !b.dueToday.length) {
-    parts.push('Nothing overdue and nothing due today. You are clear. ✅', '');
+    parts.push("Nothing overdue and nothing due today. You are clear. ✅", "");
   }
 
-  parts.push('— Sent from Mission Control');
-  return parts.join('\n');
+  parts.push("— Sent from Mission Control");
+  return parts.join("\n");
 }
 
 export function buildDigestSubject(b: DailyBriefing, today = todayISO()): string {
   if (b.overdue.length) {
-    return `⚠️ ${b.overdue.length} overdue task${b.overdue.length === 1 ? '' : 's'} — Mission Control ${today}`;
+    return `⚠️ ${b.overdue.length} overdue task${b.overdue.length === 1 ? "" : "s"} — Mission Control ${today}`;
   }
   if (b.dueToday.length) {
-    return `${b.dueToday.length} task${b.dueToday.length === 1 ? '' : 's'} due today — Mission Control ${today}`;
+    return `${b.dueToday.length} task${b.dueToday.length === 1 ? "" : "s"} due today — Mission Control ${today}`;
   }
   return `All clear — Mission Control ${today}`;
 }

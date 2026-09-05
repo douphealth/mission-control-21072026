@@ -2,20 +2,20 @@
 // Every create / update / delete / decision / sync event is recorded locally so
 // the user can always answer "what changed, when, and can I get it back?".
 
-import { db, genId, type AuditEntry } from '@/lib/db';
-import { redactSecrets, isSecretKey, REDACTED } from '@/lib/secrets';
+import { db, genId, type AuditEntry } from "@/lib/db";
+import { redactSecrets, isSecretKey, REDACTED } from "@/lib/secrets";
 
 const MAX_ENTRIES = 2000;
 
 function deviceLabel(): string {
-  if (typeof navigator === 'undefined') return 'server';
+  if (typeof navigator === "undefined") return "server";
   const ua = navigator.userAgent;
-  if (/iPhone|iPad|Android/i.test(ua)) return 'mobile';
-  return 'desktop';
+  if (/iPhone|iPad|Android/i.test(ua)) return "mobile";
+  return "desktop";
 }
 
 export async function logAudit(entry: {
-  action: AuditEntry['action'];
+  action: AuditEntry["action"];
   collection: string;
   recordId: string;
   label: string;
@@ -34,7 +34,10 @@ export async function logAudit(entry: {
     });
     const count = await db.auditLog.count();
     if (count > MAX_ENTRIES) {
-      const stale = await db.auditLog.orderBy('at').limit(count - MAX_ENTRIES).toArray();
+      const stale = await db.auditLog
+        .orderBy("at")
+        .limit(count - MAX_ENTRIES)
+        .toArray();
       await db.auditLog.bulkDelete(stale.map((e) => e.id));
     }
   } catch {
@@ -48,7 +51,7 @@ export async function logAudit(entry: {
  * payload and the current record's values are kept for them.
  */
 export function stripRedactedFields<T>(snapshot: T, current?: any, depth = 0): T {
-  if (depth > 8 || snapshot == null || typeof snapshot !== 'object') return snapshot;
+  if (depth > 8 || snapshot == null || typeof snapshot !== "object") return snapshot;
   if (Array.isArray(snapshot)) return snapshot as T;
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(snapshot as Record<string, unknown>)) {
@@ -57,7 +60,7 @@ export function stripRedactedFields<T>(snapshot: T, current?: any, depth = 0): T
       continue;
     }
     out[key] =
-      value && typeof value === 'object' && !Array.isArray(value)
+      value && typeof value === "object" && !Array.isArray(value)
         ? stripRedactedFields(value, current?.[key], depth + 1)
         : value;
   }
@@ -72,7 +75,7 @@ export async function restoreFromAudit(entry: AuditEntry): Promise<boolean> {
   const current = await table.get(entry.recordId).catch(() => undefined);
   await table.put(stripRedactedFields(entry.before, current));
   await logAudit({
-    action: 'update',
+    action: "update",
     collection: entry.collection,
     recordId: entry.recordId,
     label: `Restored: ${entry.label}`,
@@ -81,13 +84,13 @@ export async function restoreFromAudit(entry: AuditEntry): Promise<boolean> {
 }
 
 export function describeAudit(entry: AuditEntry): string {
-  const verb: Record<AuditEntry['action'], string> = {
-    create: 'Created',
-    update: 'Updated',
-    delete: 'Deleted',
-    decision: 'Decision',
-    sync: 'Sync',
-    import: 'Imported',
+  const verb: Record<AuditEntry["action"], string> = {
+    create: "Created",
+    update: "Updated",
+    delete: "Deleted",
+    decision: "Decision",
+    sync: "Sync",
+    import: "Imported",
   };
   return `${verb[entry.action] ?? entry.action} · ${entry.label}`;
 }

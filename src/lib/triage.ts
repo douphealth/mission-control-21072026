@@ -2,8 +2,8 @@
 // Implements the review loop: staleness detection, the Eisenhower matrix and
 // the archive (instead of an ever-growing overdue graveyard).
 
-import type { Task } from '@/lib/db';
-import { todayISO, daysOverdue, addDaysLocal, PRIORITY_RANK } from '@/lib/overdue';
+import type { Task } from "@/lib/db";
+import { todayISO, daysOverdue, addDaysLocal, PRIORITY_RANK } from "@/lib/overdue";
 
 export const STALE_DAYS = 14;
 export const ROT_DAYS = 30;
@@ -13,7 +13,7 @@ export function isArchived(t: Task): boolean {
 }
 
 export function isOpen(t: Task): boolean {
-  return t.status !== 'done' && !isArchived(t);
+  return t.status !== "done" && !isArchived(t);
 }
 
 export function lastTouched(t: Task): string {
@@ -36,13 +36,33 @@ export function isRotten(t: Task, today = todayISO()): boolean {
   return isOpen(t) && daysOverdue(t, today) >= ROT_DAYS;
 }
 
-export type Quadrant = 'do' | 'schedule' | 'delegate' | 'later';
+export type Quadrant = "do" | "schedule" | "delegate" | "later";
 
 export const QUADRANTS: { id: Quadrant; label: string; hint: string; accent: string }[] = [
-  { id: 'do', label: 'Do now', hint: 'Urgent + Important', accent: 'text-red-500 bg-red-500/10 border-red-500/20' },
-  { id: 'schedule', label: 'Schedule', hint: 'Important, not urgent', accent: 'text-blue-500 bg-blue-500/10 border-blue-500/20' },
-  { id: 'delegate', label: 'Delegate / batch', hint: 'Urgent, not important', accent: 'text-amber-500 bg-amber-500/10 border-amber-500/20' },
-  { id: 'later', label: 'Drop or defer', hint: 'Neither', accent: 'text-muted-foreground bg-secondary/60 border-border/30' },
+  {
+    id: "do",
+    label: "Do now",
+    hint: "Urgent + Important",
+    accent: "text-red-500 bg-red-500/10 border-red-500/20",
+  },
+  {
+    id: "schedule",
+    label: "Schedule",
+    hint: "Important, not urgent",
+    accent: "text-blue-500 bg-blue-500/10 border-blue-500/20",
+  },
+  {
+    id: "delegate",
+    label: "Delegate / batch",
+    hint: "Urgent, not important",
+    accent: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+  },
+  {
+    id: "later",
+    label: "Drop or defer",
+    hint: "Neither",
+    accent: "text-muted-foreground bg-secondary/60 border-border/30",
+  },
 ];
 
 export function isUrgent(t: Task, today = todayISO()): boolean {
@@ -54,23 +74,23 @@ export function isUrgent(t: Task, today = todayISO()): boolean {
 
 export function isImportant(t: Task): boolean {
   if ((t as any).important === true) return true;
-  return t.priority === 'critical' || t.priority === 'high';
+  return t.priority === "critical" || t.priority === "high";
 }
 
 export function quadrantOf(t: Task, today = todayISO()): Quadrant {
   const u = isUrgent(t, today);
   const i = isImportant(t);
-  if (u && i) return 'do';
-  if (!u && i) return 'schedule';
-  if (u && !i) return 'delegate';
-  return 'later';
+  if (u && i) return "do";
+  if (!u && i) return "schedule";
+  if (u && !i) return "delegate";
+  return "later";
 }
 
 export function sortByPriority(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => {
     const p = (PRIORITY_RANK[a.priority] ?? 9) - (PRIORITY_RANK[b.priority] ?? 9);
     if (p !== 0) return p;
-    return (a.dueDate || '9999').localeCompare(b.dueDate || '9999');
+    return (a.dueDate || "9999").localeCompare(b.dueDate || "9999");
   });
 }
 

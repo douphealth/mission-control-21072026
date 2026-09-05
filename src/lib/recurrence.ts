@@ -3,10 +3,10 @@
  * Used by both CalendarPage (visual) and GCal sync (push).
  */
 
-import type { Task } from '@/lib/db';
+import type { Task } from "@/lib/db";
 
 export interface RecurrenceInstance {
-  date: string;        // YYYY-MM-DD
+  date: string; // YYYY-MM-DD
   occurrenceIndex: number;
 }
 
@@ -17,23 +17,23 @@ export interface RecurrenceInstance {
 export function expandRecurringTask(
   task: Task,
   rangeStart: string, // YYYY-MM-DD
-  rangeEnd: string,   // YYYY-MM-DD
+  rangeEnd: string, // YYYY-MM-DD
   maxOccurrences = 365,
 ): RecurrenceInstance[] {
   if (!task.recurring || !task.recurringInterval || !task.dueDate) return [];
 
   const instances: RecurrenceInstance[] = [];
-  const rStart = new Date(rangeStart + 'T00:00:00');
-  const rEnd = new Date(rangeEnd + 'T00:00:00');
-  const baseDate = new Date((task.startDate || task.dueDate) + 'T00:00:00');
+  const rStart = new Date(rangeStart + "T00:00:00");
+  const rEnd = new Date(rangeEnd + "T00:00:00");
+  const baseDate = new Date((task.startDate || task.dueDate) + "T00:00:00");
 
   // End conditions
-  const endByDate = task.recurringEndType === 'date' && task.recurringEndDate
-    ? new Date(task.recurringEndDate + 'T00:00:00')
-    : null;
-  const endByCount = task.recurringEndType === 'count' && task.recurringEndCount
-    ? task.recurringEndCount
-    : null;
+  const endByDate =
+    task.recurringEndType === "date" && task.recurringEndDate
+      ? new Date(task.recurringEndDate + "T00:00:00")
+      : null;
+  const endByCount =
+    task.recurringEndType === "count" && task.recurringEndCount ? task.recurringEndCount : null;
 
   // Counts *actual* occurrences (weekend days skipped by a "weekdays" rule are
   // not occurrences, so they must not consume the end-count budget).
@@ -56,7 +56,7 @@ export function expandRecurringTask(
     if (d > rEnd) break;
 
     const isWeekday = d.getDay() >= 1 && d.getDay() <= 5;
-    const isOccurrence = task.recurringInterval !== 'weekdays' || isWeekday;
+    const isOccurrence = task.recurringInterval !== "weekdays" || isWeekday;
 
     if (isOccurrence) {
       if (d >= rStart) {
@@ -67,23 +67,23 @@ export function expandRecurringTask(
 
     // Advance to next candidate date
     switch (task.recurringInterval) {
-      case 'daily':
-      case 'weekdays':
+      case "daily":
+      case "weekdays":
         current.setDate(current.getDate() + 1);
         break;
-      case 'weekly':
+      case "weekly":
         current.setDate(current.getDate() + 7);
         break;
-      case 'biweekly':
+      case "biweekly":
         current.setDate(current.getDate() + 14);
         break;
-      case 'monthly':
+      case "monthly":
         advanceMonths(current, 1, baseDayOfMonth);
         break;
-      case 'yearly':
+      case "yearly":
         advanceYears(current, 1, baseDayOfMonth, baseDate.getMonth());
         break;
-      case 'custom':
+      case "custom":
         current.setDate(current.getDate() + (task.recurringCustomDays || 1));
         break;
       default:
@@ -112,8 +112,8 @@ function advanceYears(d: Date, years: number, anchorDay: number, anchorMonth: nu
 
 function fmtDate(d: Date): string {
   const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -127,30 +127,47 @@ export function toRRule(task: Task): string | null {
   let interval = 1;
 
   switch (task.recurringInterval) {
-    case 'daily': freq = 'DAILY'; break;
-    case 'weekdays': freq = 'WEEKLY'; return `RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR${rruleEnd(task)}`;
-    case 'weekly': freq = 'WEEKLY'; break;
-    case 'biweekly': freq = 'WEEKLY'; interval = 2; break;
-    case 'monthly': freq = 'MONTHLY'; break;
-    case 'yearly': freq = 'YEARLY'; break;
-    case 'custom': freq = 'DAILY'; interval = task.recurringCustomDays || 1; break;
-    default: return null;
+    case "daily":
+      freq = "DAILY";
+      break;
+    case "weekdays":
+      freq = "WEEKLY";
+      return `RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR${rruleEnd(task)}`;
+    case "weekly":
+      freq = "WEEKLY";
+      break;
+    case "biweekly":
+      freq = "WEEKLY";
+      interval = 2;
+      break;
+    case "monthly":
+      freq = "MONTHLY";
+      break;
+    case "yearly":
+      freq = "YEARLY";
+      break;
+    case "custom":
+      freq = "DAILY";
+      interval = task.recurringCustomDays || 1;
+      break;
+    default:
+      return null;
   }
 
   const parts = [`RRULE:FREQ=${freq}`];
   if (interval > 1) parts.push(`INTERVAL=${interval}`);
-  parts.push(rruleEnd(task).replace(/^;/, ''));
+  parts.push(rruleEnd(task).replace(/^;/, ""));
 
-  return parts.filter(Boolean).join(';');
+  return parts.filter(Boolean).join(";");
 }
 
 function rruleEnd(task: Task): string {
-  if (task.recurringEndType === 'date' && task.recurringEndDate) {
-    const d = task.recurringEndDate.replace(/-/g, '');
+  if (task.recurringEndType === "date" && task.recurringEndDate) {
+    const d = task.recurringEndDate.replace(/-/g, "");
     return `;UNTIL=${d}T235959Z`;
   }
-  if (task.recurringEndType === 'count' && task.recurringEndCount) {
+  if (task.recurringEndType === "count" && task.recurringEndCount) {
     return `;COUNT=${task.recurringEndCount}`;
   }
-  return '';
+  return "";
 }
