@@ -18,6 +18,7 @@ import { toast } from "sonner";
 import type { Task } from "@/lib/db";
 import { useUpdateItem, genId } from "@/hooks/useTableData";
 import { softDeleteTasks } from "@/lib/taskActions";
+import WorkBlocksEditor from "@/components/WorkBlocksEditor";
 import { todayISO } from "@/lib/overdue";
 import { addDaysISO } from "@/lib/triage";
 import { Button } from "@/components/ui/button";
