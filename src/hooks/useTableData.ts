@@ -55,7 +55,12 @@ export const useSEOChanges = () =>
   useLiveQuery(() => db.seoChanges.toArray(), []) ?? (EMPTY as SEOChange[]);
 export const useSEOVisibilityChecks = () =>
   useLiveQuery(() => db.seoVisibilityChecks.toArray(), []) ?? (EMPTY as SEOVisibilityCheck[]);
-export const useTasks = () => useLiveQuery(() => db.tasks.toArray(), []) ?? (EMPTY as Task[]);
+/** Live tasks, excluding soft-deleted ones (see `useTrashedTasks`). */
+export const useTasks = () =>
+  useLiveQuery(() => db.tasks.filter((t) => !t.deletedAt).toArray(), []) ?? (EMPTY as Task[]);
+/** Tasks in the Trash — restorable for 30 days. */
+export const useTrashedTasks = () =>
+  useLiveQuery(() => db.tasks.filter((t) => !!t.deletedAt).toArray(), []) ?? (EMPTY as Task[]);
 export const useRepos = () => useLiveQuery(() => db.repos.toArray(), []) ?? (EMPTY as GitHubRepo[]);
 export const useBuildProjects = () =>
   useLiveQuery(() => db.buildProjects.toArray(), []) ?? (EMPTY as BuildProject[]);
