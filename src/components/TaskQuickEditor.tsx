@@ -205,21 +205,14 @@ export default function TaskQuickEditor({
           </div>
         </div>
 
-        {/* Dates */}
+        {/* Deadline vs. time allocation — two different things, kept apart */}
         <div className="mt-3">
-          <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">Schedule</div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mb-1.5 text-[11px] font-semibold text-muted-foreground">
+            Deadline &amp; effort
+          </div>
+          <div className="grid grid-cols-3 gap-2">
             <label className="text-[10px] text-muted-foreground">
-              Start
-              <input
-                type="date"
-                value={task.startDate || ""}
-                onChange={(e) => void patch({ startDate: e.target.value })}
-                className="mt-1 w-full rounded-xl border border-border/50 bg-secondary/40 px-2 py-2 text-xs text-foreground outline-none focus:border-primary/60"
-              />
-            </label>
-            <label className="text-[10px] text-muted-foreground">
-              Due
+              Due (deadline)
               <input
                 type="date"
                 value={task.dueDate || ""}
@@ -228,23 +221,36 @@ export default function TaskQuickEditor({
               />
             </label>
             <label className="text-[10px] text-muted-foreground">
-              Start time
-              <input
-                type="time"
-                value={task.startTime || ""}
-                onChange={(e) => void patch({ startTime: e.target.value, allDay: false })}
+              Estimate
+              <select
+                value={task.estimateMin ?? ""}
+                onChange={(e) =>
+                  void patch({ estimateMin: e.target.value ? Number(e.target.value) : undefined } as Partial<Task>)
+                }
                 className="mt-1 w-full rounded-xl border border-border/50 bg-secondary/40 px-2 py-2 text-xs text-foreground outline-none focus:border-primary/60"
-              />
+              >
+                <option value="">— (30 min)</option>
+                {[15, 30, 45, 60, 90, 120, 180, 240, 480].map((m) => (
+                  <option key={m} value={m}>
+                    {m < 60 ? `${m} min` : `${m / 60}h`}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="text-[10px] text-muted-foreground">
-              End time
-              <input
-                type="time"
-                value={task.endTime || ""}
-                onChange={(e) => void patch({ endTime: e.target.value, allDay: false })}
+              Area <span className="opacity-70">(view filter)</span>
+              <select
+                value={task.area ?? "work"}
+                onChange={(e) => void patch({ area: e.target.value as Task["area"] } as Partial<Task>)}
                 className="mt-1 w-full rounded-xl border border-border/50 bg-secondary/40 px-2 py-2 text-xs text-foreground outline-none focus:border-primary/60"
-              />
+              >
+                <option value="work">Work</option>
+                <option value="personal">Personal</option>
+              </select>
             </label>
+          </div>
+          <div className="mt-3">
+            <WorkBlocksEditor task={task} />
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
             {[
