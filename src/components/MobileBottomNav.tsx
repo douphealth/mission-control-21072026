@@ -30,6 +30,7 @@ import {
   Home,
 } from "lucide-react";
 import { useState } from "react";
+import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 
 const moreItems = [
   { id: "tasks", label: "Tasks", icon: CheckSquare },
