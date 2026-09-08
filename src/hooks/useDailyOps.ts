@@ -107,12 +107,13 @@ export function useDailyOps() {
 
   /** Outcomes = tasks explicitly chosen for today (pinned or with a block/plan
    *  for today). The engine fills in when nothing has been chosen yet. */
+  const dayItems = useMemo(
+    () => (queues.now ? [queues.now, ...queues.today] : queues.today),
+    [queues.now, queues.today],
+  );
   const chosenOutcomes = useMemo(
-    () =>
-      queues.today.filter(
-        (i) => i.kind === "task" && isPlannedToday(i.raw as Task, today),
-      ),
-    [queues.today, today],
+    () => dayItems.filter((i) => i.kind === "task" && isPlannedToday(i.raw as Task, today)),
+    [dayItems, today],
   );
   const commitments = useMemo(
     () => (chosenOutcomes.length ? chosenOutcomes.slice(0, 5) : queues.today.slice(0, 3)),
@@ -136,12 +137,12 @@ export function useDailyOps() {
     () =>
       buildTimeline({
         // The whole day, including the item promoted to "next action".
-        items: queues.now ? [queues.now, ...queues.today] : queues.today,
+        items: dayItems,
         attention,
         nowTime: hhmmNow(),
         today,
       }),
-    [queues.now, queues.today, attention, today],
+    [dayItems, attention, today],
   );
 
   /** Fixed commitments from Google Calendar (read-only, never tasks). */
