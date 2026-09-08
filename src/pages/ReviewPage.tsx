@@ -32,6 +32,7 @@ import type { Quadrant } from "@/lib/triage";
 import { useReviewStore } from "@/stores/reviewStore";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import TaskQuickEditor from "@/components/TaskQuickEditor";
+import DayClose from "@/components/DayClose";
 
 function daysAgoLabel(iso: string | null) {
   if (!iso) return "never";
@@ -127,8 +128,10 @@ export default function ReviewPage() {
   const updateItem = useUpdateItem();
   const cd = useConfirmDialog();
   const today = todayISO();
-  const { lastWeeklyReview, lastShutdown, markWeeklyReview, markShutdown } = useReviewStore();
+  const { lastWeeklyReview, markWeeklyReview } = useReviewStore();
   const [showArchive, setShowArchive] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const trashed = useTrashedTasks();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [matrixSearch, setMatrixSearch] = useState("");
@@ -239,11 +242,6 @@ export default function ReviewPage() {
     markWeeklyReview(today);
     toast.success("Weekly review logged. Inbox is clear.");
   }, [markWeeklyReview, today]);
-
-  const finishShutdown = useCallback(async () => {
-    markShutdown(today);
-    toast.success("Day closed. Tomorrow is planned.");
-  }, [markShutdown, today]);
 
   const tomorrowPlan = useMemo(
     () => sortByPriority(q.matrix.do.concat(q.matrix.schedule)).slice(0, 3),
