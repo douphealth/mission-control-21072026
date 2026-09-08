@@ -218,7 +218,7 @@ const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = 
     pattern: /overdue|late|past\s*due/i,
     handler: (ctx) => {
       const today = todayISO();
-      const overdue = ctx.tasks.filter((t: any) => t.status !== "done" && t.dueDate < today);
+      const overdue = ctx.tasks.filter((t: any) => t.status !== "done" && !!t.dueDate && t.dueDate < today);
       return overdue.map((t: any) => ({
         id: `overdue-${t.id}`,
         type: "data" as const,

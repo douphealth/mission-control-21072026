@@ -426,7 +426,7 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
     const inProgress = tasks.filter((t) => t.status === "in-progress");
     const todo = tasks.filter((t) => t.status === "todo");
     const dueToday = tasks.filter((t) => t.dueDate === today && t.status !== "done").length;
-    const overdue = tasks.filter((t) => t.dueDate < today && t.status !== "done").length;
+    const overdue = tasks.filter((t) => !!t.dueDate && t.dueDate < today && t.status !== "done").length;
     const completedToday = tasks.filter((t) => t.completedAt === today).length;
     const income = payments
       .filter((p) => p.type === "income" && p.status === "paid")
