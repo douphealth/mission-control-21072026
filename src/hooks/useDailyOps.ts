@@ -48,8 +48,8 @@ export function useDailyOps() {
   const stream = useStreamItems();
   const validations = useValidations();
   const { area, workdayStart, workdayEnd } = usePlanStore();
-  const gcal = useGoogleCalendar({ enabled: isGCalConnected() });
-  const gcalEvents = gcal.events;
+  const gcal = useGoogleCalendar({ autoFetch: isGCalConnected() });
+  const gcalEvents = gcal.rawEvents;
 
   /** Area is a visibility filter, never a permission. */
   const tasks = useMemo(() => allTasks.filter((t) => inArea(t, area)), [allTasks, area]);
@@ -312,10 +312,20 @@ export function useDailyOps() {
     agenda,
     waiting,
     inbox,
+    inboxTasks,
     openDecisions,
     complete,
     schedule,
     commit,
+    // Today-centred additions
+    nextAction,
+    outcomesAreChosen,
+    fixed,
+    capacity,
+    suggestedPlan,
+    area,
+    gcalConnected: gcal.connected,
+    allTasks,
   };
 }
 
