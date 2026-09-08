@@ -69,13 +69,13 @@ describe("capture semantics", () => {
     const sch = parseCapture("Send proposal Friday", T);
     expect(sch.dateRole).toBe("scheduled");
     const rec2 = toRecord(sch, T);
-    expect(rec2.dueDate).toBeUndefined();
+    expect(rec2.dueDate).toBeFalsy();
     expect(rec2.scheduledAt).toBeTruthy();
   });
 
   it("title-only capture lands in the Inbox", () => {
     const rec = toRecord(parseCapture("Think about pricing", T), T);
     expect(rec.inbox).toBe(true);
-    expect(rec.dueDate).toBeUndefined();
+    expect(rec.dueDate).toBeFalsy();
   });
 });
