@@ -28,9 +28,13 @@ import { todayISO, addDaysLocal, buildBriefing } from "@/lib/overdue";
 import { actOnDecision, deferDecision } from "@/lib/decisions";
 import { buildTimeline, hhmmNow, type Timeline } from "@/lib/timeline";
 import type { Task } from "@/lib/db";
+import { computeCapacity, fixedEventsFor, isPlannedToday, suggestOutcomes } from "@/lib/planning";
+import { usePlanStore, inArea } from "@/stores/planStore";
+import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
+import { isGCalConnected } from "@/lib/googleCalendar";
 
 export function useDailyOps() {
-  const tasks = useTasks();
+  const allTasks = useTasks();
   const reminders = useReminders();
   const payments = usePayments();
   const decisions = useDecisions();
@@ -43,6 +47,12 @@ export function useDailyOps() {
   const seoSnapshots = useSEOSnapshots();
   const stream = useStreamItems();
   const validations = useValidations();
+  const { area, workdayStart, workdayEnd } = usePlanStore();
+  const gcal = useGoogleCalendar({ enabled: isGCalConnected() });
+  const gcalEvents = gcal.events;
+
+  /** Area is a visibility filter, never a permission. */
+  const tasks = useMemo(() => allTasks.filter((t) => inArea(t, area)), [allTasks, area]);
 
   const today = todayISO();
 
@@ -95,8 +105,29 @@ export function useDailyOps() {
     [tasks, reminders, payments, decisions, websites, notes],
   );
 
-  const commitments = useMemo(() => queues.today.slice(0, 3), [queues.today]);
-  const upNext = useMemo(() => queues.today.slice(3), [queues.today]);
+  /** Outcomes = tasks explicitly chosen for today (pinned or with a block/plan
+   *  for today). The engine fills in when nothing has been chosen yet. */
+  const chosenOutcomes = useMemo(
+    () =>
+      queues.today.filter(
+        (i) => i.kind === "task" && isPlannedToday(i.raw as Task, today),
+      ),
+    [queues.today, today],
+  );
+  const commitments = useMemo(
+    () => (chosenOutcomes.length ? chosenOutcomes.slice(0, 5) : queues.today.slice(0, 3)),
+    [chosenOutcomes, queues.today],
+  );
+  const outcomesAreChosen = chosenOutcomes.length > 0;
+  const upNext = useMemo(
+    () => queues.today.filter((i) => !commitments.some((c) => c.id === i.id)),
+    [queues.today, commitments],
+  );
+  /** One clear next action: the top of what was chosen, else the engine's #1. */
+  const nextAction = useMemo(
+    () => commitments.find((i) => i.kind === "task" && (i.raw as Task).status !== "blocked") ?? queues.now ?? null,
+    [commitments, queues.now],
+  );
 
   /** The unified Today timeline: attention flags + timed commitments + the
    *  engine-ordered queue, one chronology with a NOW marker. Replaces the
@@ -112,11 +143,63 @@ export function useDailyOps() {
     [queues.today, attention, today],
   );
 
+  /** Fixed commitments from Google Calendar (read-only, never tasks). */
+  const fixed = useMemo(() => fixedEventsFor(gcalEvents, today), [gcalEvents, today]);
+
+  /** Available time vs selected work — the "is this realistic?" answer. */
+  const capacity = useMemo(
+    () =>
+      computeCapacity({
+        tasks,
+        fixed,
+        today,
+        nowHHMM: hhmmNow(),
+        workdayStart,
+        workdayEnd,
+      }),
+    [tasks, fixed, today, workdayStart, workdayEnd],
+  );
+
+  /** Deterministic plan suggestion — preview only, applied on confirmation. */
+  const suggestedPlan = useMemo(
+    () =>
+      suggestOutcomes(
+        queues.today
+          .filter((i) => i.kind === "task" && !isPlannedToday(i.raw as Task, today))
+          .map((i) => ({
+            task: i.raw as Task,
+            score: i.score,
+            reasons: [
+              i.overdueDays > 0
+                ? `${i.overdueDays}d overdue`
+                : i.due === today
+                  ? "due today"
+                  : i.priority === "critical" || i.priority === "high"
+                    ? `${i.priority} priority`
+                    : "highest in your queue",
+            ],
+          })),
+        Math.max(0, capacity.availableMin - capacity.plannedMin),
+        Math.max(0, 3 - chosenOutcomes.length),
+      ),
+    [queues.today, today, capacity.availableMin, capacity.plannedMin, chosenOutcomes.length],
+  );
+
   const waiting = useMemo(() => tasks.filter((t) => t.status === "blocked").length, [tasks]);
-  const inbox = useMemo(
-    () => tasks.filter((t) => t.status === "todo" && !t.dueDate).length,
+  /** Inbox: captured but undecided — no deadline, no plan, no block. */
+  const inboxTasks = useMemo(
+    () =>
+      tasks.filter(
+        (t) =>
+          t.status === "todo" &&
+          !t.dueDate &&
+          !t.scheduledAt &&
+          !(t.blocks && t.blocks.length) &&
+          !t.archived,
+      ),
     [tasks],
   );
+  const inbox = inboxTasks.length;
   const openDecisions = useMemo(
     () => decisions.filter((d) => d.status === "open").length,
     [decisions],
