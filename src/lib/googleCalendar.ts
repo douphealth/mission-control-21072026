@@ -287,6 +287,18 @@ export function gcalTaskSummary(task: {
   return `📋 ${task.title}`;
 }
 
+/** Personal items can be mirrored as an opaque "Busy" slot: availability
+ *  without exposing the title or notes. Off = mirrored like any other task. */
+export function shouldProjectAsBusy(task: { area?: string }): boolean {
+  if ((task.area ?? "work") !== "personal") return false;
+  try {
+    const raw = localStorage.getItem("mc-plan-v1");
+    return raw ? JSON.parse(raw)?.state?.personalAsBusy !== false : true;
+  } catch {
+    return true;
+  }
+}
+
 export async function pushTasksToGCal(
   tasks: {
     id: string;
@@ -305,6 +317,9 @@ export async function pushTasksToGCal(
     recurringEndDate?: string;
     recurringEndCount?: number;
     recurringCustomDays?: number;
+    area?: string;
+    blocks?: { date: string; start: string; end: string; done?: boolean }[];
+    deletedAt?: string;
   }[],
 ): Promise<Map<string, string>> {
   const { toRRule } = await import("@/lib/recurrence");
@@ -313,18 +328,28 @@ export async function pushTasksToGCal(
 
   for (const task of tasks) {
     if (task.gcalEventId && !task.gcalEventId.startsWith("mc")) continue;
+    if (task.deletedAt) continue;
 
     try {
-      // Every task lands on the calendar — undated ones are placed on today.
-      const eventDate = task.startDate || task.dueDate || today;
-      const isAllDay = task.allDay !== false && !task.startTime;
+      // Time allocation comes from the next open work block when one exists;
+      // the deadline is shown in the title, never used to place a block.
+      const nextBlock = [...(task.blocks ?? [])]
+        .filter((b) => !b.done)
+        .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`))[0];
+      const eventDate = nextBlock?.date || task.startDate || task.dueDate || today;
+      const startTime = nextBlock?.start ?? task.startTime;
+      const endTime = nextBlock?.end ?? task.endTime;
+      const isAllDay = !nextBlock && task.allDay !== false && !task.startTime;
       const isOverdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
-      const eventBody: any = {
-        summary: gcalTaskSummary(task),
-        description: task.description || "",
-        // 11 = tomato (overdue), 10 = basil (done), 9 = blueberry (normal)
-        colorId: isOverdue ? "11" : task.status === "done" ? "10" : "9",
-      };
+      const busy = shouldProjectAsBusy(task);
+      const eventBody: any = busy
+        ? { summary: "Busy", description: "", transparency: "opaque", visibility: "private", colorId: "8" }
+        : {
+            summary: gcalTaskSummary(task),
+            description: task.description || "",
+            // 11 = tomato (overdue), 10 = basil (done), 9 = blueberry (normal)
+            colorId: isOverdue ? "11" : task.status === "done" ? "10" : "9",
+          };
       if (isAllDay) {
         eventBody.start = { date: eventDate };
         eventBody.end = { date: nextDateISO(eventDate) };
