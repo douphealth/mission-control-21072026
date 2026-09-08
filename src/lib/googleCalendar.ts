@@ -356,10 +356,10 @@ export async function pushTasksToGCal(
       } else {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
         eventBody.start = {
-          dateTime: `${eventDate}T${task.startTime || "09:00"}:00`,
+          dateTime: `${eventDate}T${startTime || "09:00"}:00`,
           timeZone: tz,
         };
-        eventBody.end = { dateTime: `${eventDate}T${task.endTime || "10:00"}:00`, timeZone: tz };
+        eventBody.end = { dateTime: `${eventDate}T${endTime || "10:00"}:00`, timeZone: tz };
       }
       if (task.recurring && task.recurringInterval) {
         const rrule = toRRule(task as any);
