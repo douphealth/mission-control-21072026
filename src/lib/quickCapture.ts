@@ -4,7 +4,7 @@
 // default; nothing is lost (unknown → task, never dropped).
 
 import { todayISO, addDaysLocal, fmtLocal } from "@/lib/overdue";
-import { parseDuration } from "@/lib/planning";
+import { parseDuration, hhmmToMin, minToHHMM, DEFAULT_ESTIMATE_MIN } from "@/lib/planning";
 import type { TaskArea } from "@/lib/db";
 
 export type CaptureTarget = "tasks" | "notes" | "ideas" | "links" | "reminders";
@@ -193,18 +193,36 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
 export function toRecord(p: ParsedCapture, today = todayISO()): Record<string, unknown> {
   const nowIso = new Date().toISOString();
   switch (p.target) {
-    case "tasks":
+    case "tasks": {
+      const isDeadline = p.dateRole === "deadline";
+      const scheduled = p.due && !isDeadline ? p.due : undefined;
+      // A block is only created when the user gave a time; otherwise the day is a plan.
+      const blocks =
+        scheduled && p.time
+          ? [
+              {
+                id: `blk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+                date: scheduled,
+                start: p.time,
+                end: minToHHMM(hhmmToMin(p.time) + (p.durationMin ?? DEFAULT_ESTIMATE_MIN)),
+              },
+            ]
+          : undefined;
       return {
         title: p.title,
         priority: p.priority ?? "medium",
         status: "todo",
-        // Natural-language dates are planning intent, not fabricated deadlines.
-        // A real dueDate is set explicitly in the task editor.
-        dueDate: "",
-        scheduledAt: p.due,
-        notBefore: p.due && p.due > today ? p.due : undefined,
+        // Only an explicit "by/due <date>" becomes a hard deadline; the chip made this visible.
+        dueDate: isDeadline ? p.due : "",
+        scheduledAt: scheduled,
+        notBefore: scheduled && scheduled > today ? scheduled : undefined,
         reviewAt: p.due,
         startTime: p.time,
+        estimateMin: p.durationMin,
+        blocks,
+        area: p.area,
+        // No date at all → it lands in the Inbox until you decide.
+        inbox: !p.due,
         category: "",
         description: p.tags?.join(", ") ?? "",
         linkedProject: "",
@@ -213,6 +231,7 @@ export function toRecord(p: ParsedCapture, today = todayISO()): Record<string, u
         touchedAt: today,
         tags: p.tags,
       };
+    }
     case "reminders":
       return {
         title: p.title,
