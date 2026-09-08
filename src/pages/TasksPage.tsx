@@ -125,7 +125,7 @@ function getStatus(id: string) {
 }
 
 function isOverdue(t: Task) {
-  return t.status !== "done" && t.dueDate < today;
+  return t.status !== "done" && !!t.dueDate && t.dueDate < today;
 }
 function isToday(t: Task) {
   return t.dueDate === today && t.status !== "done";
