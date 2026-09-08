@@ -203,7 +203,7 @@ export default function DailyBriefingBanner() {
 
       <div className="space-y-2 px-2.5 py-2.5 sm:px-4 sm:py-3">
         {shown.map((t) => (
-          <TaskRow key={t.id} task={t} overdue={t.dueDate < today} />
+          <TaskRow key={t.id} task={t} overdue={!!t.dueDate && t.dueDate < today} />
         ))}
         {briefing.total > 2 && (
           <button

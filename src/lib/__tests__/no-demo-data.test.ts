@@ -23,7 +23,7 @@ describe("production trust guarantees", () => {
 
   it("the canonical home leads with Now / Today, not analytics", () => {
     const src = read("src/pages/DashboardHome.tsx");
-    expect(src).toMatch(/DailyHero/);
+    expect(src).toMatch(/TodayPlan/);
     expect(src).toMatch(/TodayTimeline/);
     // The unified timeline replaces the three siloed panels.
     expect(src).not.toMatch(/TodayCommitments/);
