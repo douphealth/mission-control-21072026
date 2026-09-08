@@ -135,12 +135,13 @@ export function useDailyOps() {
   const timeline = useMemo<Timeline>(
     () =>
       buildTimeline({
-        items: queues.today,
+        // The whole day, including the item promoted to "next action".
+        items: queues.now ? [queues.now, ...queues.today] : queues.today,
         attention,
         nowTime: hhmmNow(),
         today,
       }),
-    [queues.today, attention, today],
+    [queues.now, queues.today, attention, today],
   );
 
   /** Fixed commitments from Google Calendar (read-only, never tasks). */
