@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
-import { useTasks, useUpdateItem, useDeleteItem } from "@/hooks/useTableData";
+import { useTasks, useTrashedTasks, useUpdateItem } from "@/hooks/useTableData";
+import { softDeleteTasks, purgeTasks, restoreTasks, TRASH_RETENTION_DAYS } from "@/lib/taskActions";
 import { todayISO, daysOverdue } from "@/lib/overdue";
 import {
   buildReviewQueues,
@@ -124,7 +125,6 @@ function TaskRow({
 export default function ReviewPage() {
   const tasks = useTasks();
   const updateItem = useUpdateItem();
-  const deleteItem = useDeleteItem();
   const cd = useConfirmDialog();
   const today = todayISO();
   const { lastWeeklyReview, lastShutdown, markWeeklyReview, markShutdown } = useReviewStore();

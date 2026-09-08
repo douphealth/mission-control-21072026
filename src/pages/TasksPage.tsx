@@ -2,7 +2,6 @@ import {
   useTasks,
   useAddItem,
   useUpdateItem,
-  useDeleteItem,
   useDuplicateItem,
 } from "@/hooks/useTableData";
 import { useState, useRef, useCallback, useMemo, useEffect, memo } from "react";
@@ -1574,7 +1573,6 @@ export default function TasksPage() {
   const tasks = useTasks();
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
-  const deleteItem = useDeleteItem();
   const duplicateItem = useDuplicateItem();
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;

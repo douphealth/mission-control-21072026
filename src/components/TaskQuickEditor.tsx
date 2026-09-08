@@ -40,7 +40,6 @@ export default function TaskQuickEditor({
   onClose: () => void;
 }) {
   const updateItem = useUpdateItem();
-  const deleteItem = useDeleteItem();
   const today = todayISO();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
