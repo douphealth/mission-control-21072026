@@ -47,7 +47,7 @@ import {
   requestNotificationPermission,
 } from "@/lib/notifications";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
-import { deleteGCalEvent } from "@/lib/googleCalendar";
+import { softDeleteTasks } from "@/lib/taskActions";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1751,51 +1751,17 @@ export default function TasksPage() {
   );
 
   const cd = useConfirmDialog();
-  const handleDelete = useCallback(
-    async (id: string) => {
-      cd.confirm({
-        title: "Delete Task",
-        description: "This task and its subtasks will be permanently removed.",
-        onConfirm: async () => {
-          const task = tasks.find((item) => item.id === id);
-          if (task?.gcalEventId) {
-            try {
-              await deleteGCalEvent(task.gcalEventId);
-            } catch (error) {
-              console.warn("Failed to delete Google Calendar mirror event", error);
-            }
-          }
-          await deleteItem("tasks", id);
-          toast.success("Task deleted");
-        },
-      });
-    },
-    [deleteItem, cd, tasks],
-  );
+  // Deletes are recoverable (Trash, 30 days) — no confirmation needed, Undo is in the toast.
+  const handleDelete = useCallback(async (id: string) => {
+    await softDeleteTasks([id]);
+  }, []);
 
-  const handleBulkDelete = useCallback(() => {
+  const handleBulkDelete = useCallback(async () => {
     const ids = Array.from(selectedIds);
     if (ids.length === 0) return;
-    cd.confirm({
-      title: `Delete ${ids.length} task${ids.length > 1 ? "s" : ""}?`,
-      description: "These tasks will be permanently removed.",
-      onConfirm: async () => {
-        for (const id of ids) {
-          const task = tasks.find((item) => item.id === id);
-          if (task?.gcalEventId) {
-            try {
-              await deleteGCalEvent(task.gcalEventId);
-            } catch (error) {
-              console.warn("Failed to delete Google Calendar mirror event", error);
-            }
-          }
-          await deleteItem("tasks", id);
-        }
-        toast.success(`Deleted ${ids.length} task${ids.length > 1 ? "s" : ""}`);
-        exitBulk();
-      },
-    });
-  }, [selectedIds, cd, deleteItem, exitBulk, tasks]);
+    await softDeleteTasks(ids);
+    exitBulk();
+  }, [selectedIds, exitBulk]);
 
   const handleDuplicate = useCallback(
     async (id: string) => {

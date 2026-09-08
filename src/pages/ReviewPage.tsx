@@ -205,18 +205,20 @@ export default function ReviewPage() {
     [updateItem, today],
   );
 
-  const onDelete = useCallback(
+  const onDelete = useCallback((t: Task) => softDeleteTasks([t.id]), []);
+
+  const onPurge = useCallback(
     (t: Task) => {
       cd.confirm({
-        title: "Delete task",
-        description: `"${t.title}" will be permanently removed.`,
+        title: "Delete forever",
+        description: `"${t.title}" will be permanently removed. This cannot be undone.`,
         onConfirm: async () => {
-          await deleteItem("tasks", t.id);
-          toast.success("Deleted");
+          await purgeTasks([t.id]);
+          toast.success("Permanently deleted");
         },
       });
     },
-    [cd, deleteItem],
+    [cd],
   );
 
   const purgeAllRotten = useCallback(() => {
