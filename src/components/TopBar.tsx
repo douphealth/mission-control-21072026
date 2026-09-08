@@ -2,6 +2,7 @@ import { useTasks, useExportAllData } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { todayISO } from "@/lib/overdue";
+import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 import { Search, Bell, Plus, Menu, Download, Mail, History } from "lucide-react";
 import { forwardRef, lazy, Suspense, useState, useEffect } from "react";
 

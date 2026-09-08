@@ -148,7 +148,9 @@ export default function MobileBottomNav() {
             <button
               onClick={() => {
                 setMoreOpen(false);
-                setImportModalOpen(true);
+                // Capture is a title, not a form: jump to the home input.
+                setActiveSection("dashboard");
+                requestAnimationFrame(() => window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT)));
               }}
               aria-label="Capture"
               className="relative -mt-6 flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.85)] transition active:scale-90 touch-manipulation"
