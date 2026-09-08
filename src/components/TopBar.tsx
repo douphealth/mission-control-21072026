@@ -2,6 +2,7 @@ import { useTasks, useExportAllData } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { todayISO } from "@/lib/overdue";
+import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 import { Search, Bell, Plus, Menu, Download, Mail, History } from "lucide-react";
 import { forwardRef, lazy, Suspense, useState, useEffect } from "react";
 
@@ -74,10 +75,20 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
         e.preventDefault();
         setQuickAddOpen(true);
       }
+      // Plain "N" outside any text field → jump to capture on the home screen.
+      if (e.key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        const el = document.activeElement as HTMLElement | null;
+        const typing =
+          !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+        if (typing) return;
+        e.preventDefault();
+        setActiveSection("dashboard");
+        requestAnimationFrame(() => window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT)));
+      }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [setCommandPaletteOpen]);
+  }, [setCommandPaletteOpen, setActiveSection]);
 
   useEffect(() => {
     if (!quickAddOpen) return;

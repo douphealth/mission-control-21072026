@@ -13,7 +13,7 @@ export function isArchived(t: Task): boolean {
 }
 
 export function isOpen(t: Task): boolean {
-  return t.status !== "done" && !isArchived(t);
+  return t.status !== "done" && !isArchived(t) && !t.deletedAt;
 }
 
 export function lastTouched(t: Task): string {

@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
-import { useTasks, useUpdateItem, useDeleteItem } from "@/hooks/useTableData";
+import { useTasks, useTrashedTasks, useUpdateItem } from "@/hooks/useTableData";
+import { softDeleteTasks, purgeTasks, restoreTasks, TRASH_RETENTION_DAYS } from "@/lib/taskActions";
 import { todayISO, daysOverdue } from "@/lib/overdue";
 import {
   buildReviewQueues,
@@ -31,6 +32,7 @@ import type { Quadrant } from "@/lib/triage";
 import { useReviewStore } from "@/stores/reviewStore";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import TaskQuickEditor from "@/components/TaskQuickEditor";
+import DayClose from "@/components/DayClose";
 
 function daysAgoLabel(iso: string | null) {
   if (!iso) return "never";
@@ -124,11 +126,12 @@ function TaskRow({
 export default function ReviewPage() {
   const tasks = useTasks();
   const updateItem = useUpdateItem();
-  const deleteItem = useDeleteItem();
   const cd = useConfirmDialog();
   const today = todayISO();
-  const { lastWeeklyReview, lastShutdown, markWeeklyReview, markShutdown } = useReviewStore();
+  const { lastWeeklyReview, markWeeklyReview } = useReviewStore();
   const [showArchive, setShowArchive] = useState(false);
+  const [showTrash, setShowTrash] = useState(false);
+  const trashed = useTrashedTasks();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [matrixSearch, setMatrixSearch] = useState("");
@@ -205,18 +208,20 @@ export default function ReviewPage() {
     [updateItem, today],
   );
 
-  const onDelete = useCallback(
+  const onDelete = useCallback((t: Task) => softDeleteTasks([t.id]), []);
+
+  const onPurge = useCallback(
     (t: Task) => {
       cd.confirm({
-        title: "Delete task",
-        description: `"${t.title}" will be permanently removed.`,
+        title: "Delete forever",
+        description: `"${t.title}" will be permanently removed. This cannot be undone.`,
         onConfirm: async () => {
-          await deleteItem("tasks", t.id);
-          toast.success("Deleted");
+          await purgeTasks([t.id]);
+          toast.success("Permanently deleted");
         },
       });
     },
-    [cd, deleteItem],
+    [cd],
   );
 
   const purgeAllRotten = useCallback(() => {
@@ -237,11 +242,6 @@ export default function ReviewPage() {
     markWeeklyReview(today);
     toast.success("Weekly review logged. Inbox is clear.");
   }, [markWeeklyReview, today]);
-
-  const finishShutdown = useCallback(async () => {
-    markShutdown(today);
-    toast.success("Day closed. Tomorrow is planned.");
-  }, [markShutdown, today]);
 
   const tomorrowPlan = useMemo(
     () => sortByPriority(q.matrix.do.concat(q.matrix.schedule)).slice(0, 3),
@@ -469,51 +469,32 @@ export default function ReviewPage() {
         </div>
       </section>
 
-      {/* ── 4. Shutdown ── */}
-      <section className="card-elevated space-y-3 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              <Moon size={15} className="text-indigo-400" /> Daily shutdown
-            </h2>
-            <p className="text-[11px] text-muted-foreground">
-              Last closed {daysAgoLabel(lastShutdown)}. Pick the three that matter tomorrow.
-            </p>
-          </div>
-          <button
-            onClick={finishShutdown}
-            className="flex items-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-secondary/70"
-          >
-            Close the day <ArrowRight size={13} />
-          </button>
-        </div>
-        <div className="space-y-2">
-          {tomorrowPlan.map((t, i) => (
-            <div
-              key={t.id}
-              className="flex items-center gap-3 rounded-2xl border border-border/30 bg-secondary/30 p-3"
-            >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[11px] font-bold text-primary">
-                {i + 1}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-                {t.title}
-              </span>
-              <button
-                onClick={() => onPush(t, 1)}
-                className="rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
+      {/* ── 4. Close the day — every unfinished item gets a deliberate choice ── */}
+      <DayClose tasks={tasks} />
+
+      {/* ── 4b. Tomorrow's top three (preview only) ── */}
+      {tomorrowPlan.length > 0 && (
+        <section className="card-elevated space-y-3 p-4">
+          <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Moon size={15} className="text-indigo-400" /> Likely top three tomorrow
+          </h2>
+          <div className="space-y-2">
+            {tomorrowPlan.map((t, i) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-3 rounded-2xl border border-border/30 bg-secondary/30 p-3"
               >
-                Tomorrow
-              </button>
-            </div>
-          ))}
-          {!tomorrowPlan.length && (
-            <p className="py-4 text-center text-xs text-muted-foreground">
-              Nothing important pending. Enjoy the evening.
-            </p>
-          )}
-        </div>
-      </section>
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-[11px] font-bold text-primary">
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+                  {t.title}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── 5. Archive ── */}
       <section className="card-elevated space-y-3 p-4">
@@ -544,6 +525,7 @@ export default function ReviewPage() {
                 </button>
                 <button
                   onClick={() => onDelete(t)}
+                  title="Move to Trash"
                   className="rounded-xl bg-destructive/10 px-2.5 py-1.5 text-[11px] text-destructive"
                 >
                   <Trash2 size={12} />
@@ -552,6 +534,52 @@ export default function ReviewPage() {
             ))}
             {!archived.length && (
               <p className="py-4 text-center text-xs text-muted-foreground">Archive is empty.</p>
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* ── 6. Trash — recoverable deletes ── */}
+      <section className="card-elevated space-y-3 p-4">
+        <button
+          onClick={() => setShowTrash((s) => !s)}
+          className="flex w-full items-center justify-between gap-2"
+        >
+          <span className="flex items-center gap-2 text-sm font-bold text-foreground">
+            <Trash2 size={15} className="text-muted-foreground" /> Trash ({trashed.length})
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {showTrash ? "Hide" : `Show · kept ${TRASH_RETENTION_DAYS} days`}
+          </span>
+        </button>
+        {showTrash && (
+          <div className="space-y-2">
+            {trashed.map((t) => (
+              <div
+                key={t.id}
+                className="flex items-center gap-3 rounded-2xl border border-border/20 bg-secondary/20 p-3"
+              >
+                <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+                  {t.title}
+                  <span className="ml-2 text-[10px]">deleted {daysAgoLabel(t.deletedAt!.slice(0, 10))}</span>
+                </span>
+                <button
+                  onClick={() => restoreTasks([t.id])}
+                  className="flex items-center gap-1 rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-foreground transition hover:bg-secondary/70"
+                >
+                  <Undo2 size={12} /> Restore
+                </button>
+                <button
+                  onClick={() => onPurge(t)}
+                  title="Delete forever"
+                  className="rounded-xl bg-destructive/10 px-2.5 py-1.5 text-[11px] font-semibold text-destructive"
+                >
+                  Forever
+                </button>
+              </div>
+            ))}
+            {!trashed.length && (
+              <p className="py-4 text-center text-xs text-muted-foreground">Trash is empty.</p>
             )}
           </div>
         )}

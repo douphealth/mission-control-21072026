@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
-import { useUpdateItem, useDeleteItem, genId } from "@/hooks/useTableData";
+import { useUpdateItem, genId } from "@/hooks/useTableData";
+import { softDeleteTasks } from "@/lib/taskActions";
 import { todayISO } from "@/lib/overdue";
 import { addDaysISO } from "@/lib/triage";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,6 @@ export default function TaskQuickEditor({
   onClose: () => void;
 }) {
   const updateItem = useUpdateItem();
-  const deleteItem = useDeleteItem();
   const today = todayISO();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
@@ -378,10 +378,10 @@ export default function TaskQuickEditor({
           )}
           <button
             onClick={async () => {
-              await deleteItem("tasks", task.id);
-              toast.success("Deleted");
+              await softDeleteTasks([task.id]);
               onClose();
             }}
+            title="Moves to Trash — recoverable for 30 days"
             className="ml-auto flex items-center gap-1.5 rounded-xl bg-destructive/10 px-3 py-2 text-[12px] font-semibold text-destructive transition hover:bg-destructive/20"
           >
             <Trash2 size={13} /> Delete

@@ -93,6 +93,35 @@ function writeDirtyRecords(records: DirtyRecordMap) {
   } catch {
     /* ignore */
   }
+  dirtyListeners.forEach((cb) => cb());
+}
+
+// ─── Per-record sync state ───────────────────────────────────────────────────
+// "saved"   → on this device (Dexie) and not waiting for the cloud
+// "pending" → journaled, will be pushed / retried
+// "failed"  → the last push attempt errored (still journaled, retry available)
+export type RecordSyncState = "saved" | "pending" | "failed" | "local-only";
+const dirtyListeners = new Set<() => void>();
+
+export function onDirtyRecordsChange(cb: () => void) {
+  dirtyListeners.add(cb);
+  return () => {
+    dirtyListeners.delete(cb);
+  };
+}
+
+export function getRecordSyncState(collection: string, recordId: string): RecordSyncState {
+  if (!COLLECTIONS[collection]) return "saved";
+  if (!userId) return "local-only";
+  const entry = readDirtyRecords()[recordKey(collection, recordId)];
+  if (!entry) return "saved";
+  return status === "error" || retryAttempt >= MAX_RETRY_ATTEMPTS ? "failed" : "pending";
+}
+
+/** Manual retry after a failed push — resets the backoff and pushes now. */
+export async function retryCloudPush(): Promise<void> {
+  retryAttempt = 0;
+  await flushCloudChanges();
 }
 
 function claimPendingDirtyRecords() {
@@ -158,6 +187,7 @@ function setStatus(next: CloudStatus, err: string | null = null) {
   status = next;
   lastError = err;
   listeners.forEach((cb) => cb(status, lastError));
+  dirtyListeners.forEach((cb) => cb());
   // Reliability indicators: the cockpit always knows what is synced.
   void (async () => {
     try {

@@ -113,8 +113,8 @@ async function run(request: Request) {
   const weekEnd = isoDay(7);
   const weekStart = isoDay(-6);
 
-  const open = tasks.filter((t) => t && t.status !== "done");
-  const done = tasks.filter((t) => t?.status === "done");
+  const open = tasks.filter((t) => t && t.status !== "done" && !(t as { deletedAt?: string }).deletedAt);
+  const done = tasks.filter((t) => t?.status === "done" && !(t as { deletedAt?: string }).deletedAt);
 
   const overdue = sortTasks(open.filter((t) => t.dueDate && t.dueDate < today));
   const dueToday = sortTasks(open.filter((t) => t.dueDate === today));

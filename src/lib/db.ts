@@ -277,6 +277,28 @@ export interface Task {
   reviewAt?: string; // YYYY-MM-DD — next review checkpoint
   /** Manual pin into TODAY's three commitments */
   committedOn?: string; // YYYY-MM-DD
+  /** Estimated effort in minutes — drives the capacity check. */
+  estimateMin?: number;
+  /** Work blocks: when you intend to work. Moving a block never touches dueDate. */
+  blocks?: WorkBlock[];
+  /** Visibility filter only — NOT a permission. */
+  area?: TaskArea;
+  /** Captured with a title only; still needs a decision (date / block / drop). */
+  inbox?: boolean;
+  /** Soft delete — restorable from Trash for 30 days, then purged. */
+  deletedAt?: string; // ISO timestamp
+  /** Accountable person for shared work (free text for now). */
+  owner?: string;
+}
+
+export type TaskArea = "personal" | "work";
+
+export interface WorkBlock {
+  id: string;
+  date: string; // YYYY-MM-DD
+  start: string; // HH:MM
+  end: string; // HH:MM
+  done?: boolean;
 }
 
 export interface GitHubRepo {
