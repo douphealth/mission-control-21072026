@@ -52,6 +52,7 @@ import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { setGCalConfig } from "@/lib/googleCalendar";
 import SupabaseSyncConsole from "@/components/SupabaseSyncConsole";
 import AccessibilityPanel from "@/components/AccessibilityPanel";
+import PlanningSettings from "@/components/PlanningSettings";
 import ConnectionsPanel from "@/components/ConnectionsPanel";
 
 import { toast } from "sonner";
@@ -415,6 +416,9 @@ export default function SettingsPage() {
             {activeTab === "accessibility" && (
               <div key="accessibility" {...fadeIn}>
                 <AccessibilityPanel />
+                <div className="mt-4">
+                  <PlanningSettings />
+                </div>
               </div>
             )}
 
