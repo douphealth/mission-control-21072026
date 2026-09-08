@@ -4,17 +4,28 @@
 // default; nothing is lost (unknown → task, never dropped).
 
 import { todayISO, addDaysLocal, fmtLocal } from "@/lib/overdue";
+import { parseDuration } from "@/lib/planning";
+import type { TaskArea } from "@/lib/db";
 
 export type CaptureTarget = "tasks" | "notes" | "ideas" | "links" | "reminders";
+export type DateRole = "deadline" | "scheduled";
 
 export interface ParsedCapture {
   target: CaptureTarget;
   title: string;
   priority?: "critical" | "high" | "medium" | "low";
-  /** YYYY-MM-DD planning date. For tasks this never becomes a hard deadline. */
+  /** YYYY-MM-DD. Its meaning is `dateRole` — shown and editable before saving. */
   due?: string;
+  /** "by Friday" / "due …" → deadline. Anything else → scheduled (planning intent). */
+  dateRole?: DateRole;
+  /** The words that produced `due`, so the chip can show what was interpreted. */
+  dateText?: string;
   /** HH:MM if a time was recognized. */
   time?: string;
+  /** Estimated duration in minutes ("45 min", "1h"). */
+  durationMin?: number;
+  /** Visibility area ("Work" / "Personal" as a trailing word or #tag). */
+  area?: TaskArea;
   url?: string;
   tags?: string[];
 }
@@ -76,20 +87,42 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
     }
   }
 
+  // Duration first so "45 min" is never mistaken for a time or a day count.
+  const dur = parseDuration(text);
+  if (dur) text = text.replace(dur.match, " ").replace(/\s+/g, " ").trim();
+
   let due: string | undefined;
+  let dateText: string | undefined;
   for (const [re, delta] of DAY_WORDS) {
-    if (re.test(text)) {
+    const m = text.match(re);
+    if (m) {
       due = addDaysLocal(today, delta);
+      dateText = m[0];
       break;
     }
   }
   if (!due) {
     const inDays = text.match(/\bin\s+(\d{1,3})\s+days?\b/i);
-    if (inDays) due = addDaysLocal(today, Math.min(365, parseInt(inDays[1], 10)));
+    if (inDays) {
+      due = addDaysLocal(today, Math.min(365, parseInt(inDays[1], 10)));
+      dateText = inDays[0];
+    }
   }
   if (!due) {
     const wd = text.match(WEEKDAY_RE);
-    if (wd) due = nextWeekday(wd[1], today);
+    if (wd) {
+      due = nextWeekday(wd[1], today);
+      dateText = wd[0].trim();
+    }
+  }
+  // "by Friday" / "due Friday" / "deadline Friday" means a real deadline.
+  // "on Friday" / bare "Friday" is when you intend to work — a plan, not a promise.
+  let dateRole: DateRole | undefined;
+  if (due && dateText) {
+    const esc = dateText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    dateRole = new RegExp(`\\b(by|due|deadline|before|until)\\s+${esc}`, "i").test(text)
+      ? "deadline"
+      : "scheduled";
   }
 
   let time: string | undefined;
@@ -111,13 +144,25 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
     .replace(/\s+/g, " ")
     .trim();
 
+  let area: TaskArea | undefined;
+  if (tags.includes("work")) area = "work";
+  if (tags.includes("personal")) area = "personal";
+  const trailingArea = text.match(/[,\s]+(work|personal)\s*$/i);
+  if (trailingArea) {
+    area = trailingArea[1].toLowerCase() as TaskArea;
+    text = text.slice(0, trailingArea.index).trim();
+  }
+
   const title =
     text
+      .replace(/\b(by|due|deadline|before|until|on)\s+(?=(today|tonight|tomorrow|next week|next month|mon|tue|wed|thu|fri|sat|sun))/gi, " ")
       .replace(/\b(today|tonight|tomorrow|day after tomorrow|next week|next month)\b/gi, " ")
       .replace(/\bin\s+\d{1,3}\s+days?\b/gi, " ")
       .replace(WEEKDAY_RE, " ")
       .replace(TIME_RE, " ")
       .replace(/\b(urgent|asap|critical|important|priority|someday|maybe|eventually)\b/gi, " ")
+      .replace(/[,\s]+$/g, "")
+      .replace(/\s+,/g, ",")
       .replace(/\s+/g, " ")
       .trim() || (urlMatch ? urlMatch[0] : raw.trim());
 
@@ -129,10 +174,17 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
 
   const out: ParsedCapture = { target, title };
   if (priority) out.priority = priority;
-  if (due) out.due = due;
+  if (due) {
+    out.due = due;
+    out.dateRole = dateRole;
+    out.dateText = dateText;
+  }
   if (time) out.time = time;
+  if (dur) out.durationMin = dur.minutes;
+  if (area) out.area = area;
   if (urlMatch) out.url = urlMatch[0];
-  if (tags.length) out.tags = tags;
+  if (tags.length) out.tags = tags.filter((t) => t !== "work" && t !== "personal");
+  if (out.tags && !out.tags.length) delete out.tags;
   if (target === "reminders" && !time) out.time = "09:00";
   return out;
 }
