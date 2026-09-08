@@ -60,7 +60,7 @@ const moreItems = [
 ];
 
 export default function MobileBottomNav() {
-  const { activeSection, setActiveSection, setImportModalOpen, setCommandPaletteOpen } =
+  const { activeSection, setActiveSection, setCommandPaletteOpen } =
     useNavigationStore();
   const tasks = useTasks();
   const decisions = useDecisions();
