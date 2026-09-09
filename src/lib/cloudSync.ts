@@ -323,7 +323,14 @@ export async function requestEmailCode(email: string): Promise<{ ok: boolean; er
     setStatus("connecting");
     const { error } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { shouldCreateUser: true },
+      options: {
+        shouldCreateUser: true,
+        // Land the magic link on the origin the user is actually using —
+        // NOT the platform-locked Site URL (which points at lovable.app).
+        // The Supabase dashboard's "Email OTP" setting decides whether the
+        // user receives a 6-digit code or a magic link; we support both.
+        emailRedirectTo: window.location.origin,
+      },
     });
     if (error) {
       setStatus("error", error.message);
@@ -348,6 +355,42 @@ export async function verifyEmailCode(
       token: code.trim(),
       type: "email",
     });
+    if (error) return { ok: false, error: error.message };
+    await startCloudSync(true);
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
+/**
+ * Magic-link exchange — for users whose email contains a "Log In" LINK
+ * instead of a 6-digit code (Supabase "Email OTP" toggle off).
+ *
+ * The platform-locked Site URL points at lovable.app, so links often land on
+ * a different origin than the one where the user requested the code. The
+ * fix works entirely in the browser:
+ *   1. Client boots with detectSessionInUrl — links consumed automatically
+ *      on the origin they land on.
+ *   2. If the link landed on ANOTHER origin, the user copies the link from
+ *      the email and pastes it here; we extract the token and exchange it
+ *      directly against the auth server (implicit flow — no PKCE verifier
+ *      needed, so it works cross-origin).
+ */
+export async function verifyMagicLink(linkUrl: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const url = new URL(linkUrl.trim());
+    // Token may be in the hash (implicit) or query (server callback).
+    const params = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.search);
+    const token = params.get("token") ?? new URLSearchParams(url.search).get("token");
+    const type = (params.get("type") ?? "magiclink").toLowerCase();
+    if (!token) {
+      return {
+        ok: false,
+        error: "No sign-in token found in that link. Paste the full link from the email.",
+      };
+    }
+    const { error } = await supabase.auth.verifyOtp({ type: type as any, token_hash: token });
     if (error) return { ok: false, error: error.message };
     await startCloudSync(true);
     return { ok: true };

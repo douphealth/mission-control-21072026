@@ -1,11 +1,13 @@
 // ─── EmailSignInDialog — the OAuth-free backup path ──────────────────────────
 // Google OAuth is broken server-side (missing client secret in Supabase).
-// Email code sign-in needs zero server configuration and restores the same
-// account-scoped cloud backup. This dialog is the working fallback.
+// Email sign-in needs zero server configuration and restores the same
+// account-scoped cloud backup. Depending on the Supabase project's
+// "Email OTP" setting, the user receives EITHER a 6-digit code OR a
+// "Log In" magic link. This dialog supports BOTH.
 
 import { useEffect, useState } from "react";
-import { Cloud, Loader2, Mail, ShieldCheck, X } from "lucide-react";
-import { requestEmailCode, verifyEmailCode, onCloudStatus } from "@/lib/cloudSync";
+import { Cloud, Loader2, Mail, ShieldCheck, X, Link2 } from "lucide-react";
+import { requestEmailCode, verifyEmailCode, verifyMagicLink, onCloudStatus } from "@/lib/cloudSync";
 
 export default function EmailSignInDialog({
   open,
@@ -20,6 +22,8 @@ export default function EmailSignInDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [mode, setMode] = useState<"code" | "link">("code");
+  const [link, setLink] = useState("");
 
   useEffect(
     () =>
@@ -47,6 +51,19 @@ export default function EmailSignInDialog({
   };
 
   const verify = async () => {
+    if (mode === "link") {
+      if (!link.trim().startsWith("http")) {
+        setError("Paste the full “Log In” link from the email");
+        return;
+      }
+      setBusy(true);
+      setError(null);
+      const r = await verifyMagicLink(link);
+      setBusy(false);
+      if (r.ok) onClose();
+      else setError(r.error ?? "That link did not work");
+      return;
+    }
     if (code.trim().length < 6) {
       setError("Enter the 6-digit code from the email");
       return;
@@ -131,19 +148,68 @@ export default function EmailSignInDialog({
                 {sent ? "Code sent to " : "Enter the code sent to "}
                 <strong className="text-foreground">{email}</strong>
               </p>
-              <input
-                autoFocus
-                inputMode="numeric"
-                maxLength={6}
-                value={code}
-                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") verify();
-                }}
-                placeholder="••••••"
-                className="h-13 w-full rounded-2xl border border-border/70 bg-background px-4 text-center font-mono text-[22px] font-bold tracking-[0.4em] text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/50"
-                style={{ height: 52 }}
-              />
+
+              {/* Mode toggle: code vs link */}
+              <div className="flex gap-1 rounded-xl bg-secondary p-1 text-[11px] font-bold">
+                <button
+                  onClick={() => setMode("code")}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 transition ${
+                    mode === "code"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  <ShieldCheck size={12} /> 6-digit code
+                </button>
+                <button
+                  onClick={() => setMode("link")}
+                  className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 transition ${
+                    mode === "link"
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  <Link2 size={12} /> I got a link
+                </button>
+              </div>
+
+              {mode === "code" ? (
+                <input
+                  autoFocus
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") verify();
+                  }}
+                  placeholder="••••••"
+                  className="h-13 w-full rounded-2xl border border-border/70 bg-background px-4 text-center font-mono text-[22px] font-bold tracking-[0.4em] text-foreground outline-none placeholder:text-muted-foreground/40 focus:border-primary/50"
+                  style={{ height: 52 }}
+                />
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 rounded-2xl border border-border/70 bg-background px-3 focus-within:border-primary/50">
+                    <Link2 size={15} className="shrink-0 text-muted-foreground" />
+                    <input
+                      autoFocus
+                      type="text"
+                      value={link}
+                      onChange={(e) => setLink(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") verify();
+                      }}
+                      placeholder="Paste the “Log In” link from the email"
+                      className="h-11 min-w-0 flex-1 bg-transparent text-[12px] text-foreground outline-none placeholder:text-muted-foreground/50"
+                    />
+                  </div>
+                  <p className="text-[10.5px] leading-relaxed text-muted-foreground/70">
+                    Got a “Log In” button instead of numbers? Paste the full link here — it signs
+                    you in from any origin.
+                  </p>
+                </>
+              )}
+
               {error && <p className="text-[11px] font-semibold text-destructive">{error}</p>}
               <button
                 onClick={verify}
@@ -157,6 +223,7 @@ export default function EmailSignInDialog({
                 onClick={() => {
                   setStage("email");
                   setCode("");
+                  setLink("");
                   setError(null);
                 }}
                 className="w-full text-center text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"

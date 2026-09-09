@@ -75,6 +75,14 @@ function createSupabaseClient() {
       storage: brokeredPreviewStorage(),
       persistSession: true,
       autoRefreshToken: true,
+      // Magic-link sign-in: consume the token hash on whichever origin the
+      // link lands on (pages.dev OR lovable.app) instead of ignoring it.
+      detectSessionInUrl: true,
+      // PKCE: the verifier lives in browser storage of the ORIGIN THAT SENT
+      // the request. Since links are delivered cross-origin (Site URL is
+      // locked to lovable.app by the platform), implicit flow is the only
+      // mode that can complete on either origin.
+      flowType: "implicit",
     },
   });
 }
