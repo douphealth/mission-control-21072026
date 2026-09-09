@@ -377,25 +377,102 @@ export async function verifyEmailCode(
  *      directly against the auth server (implicit flow — no PKCE verifier
  *      needed, so it works cross-origin).
  */
-export async function verifyMagicLink(linkUrl: string): Promise<{ ok: boolean; error?: string }> {
+/**
+ * Verify a pasted email link, with a self-healing ladder:
+ *  1. Unwrap mail-client tracking wrappers (Gmail "?u=", Apple Mail redirects)
+ *  2. Try every token type Supabase uses (magiclink, signup, invite, recovery, email_change)
+ *  3. If the token is expired/used, auto-send a fresh link to the same email —
+ *     a dead paste instantly becomes a new email in the user's inbox.
+ */
+export async function verifyMagicLink(
+  linkUrl: string,
+  email?: string,
+): Promise<{ ok: boolean; error?: string; resent?: boolean; email?: string }> {
   try {
-    const url = new URL(linkUrl.trim());
-    // Token may be in the hash (implicit) or query (server callback).
-    const params = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.search);
-    const token = params.get("token") ?? new URLSearchParams(url.search).get("token");
-    const type = (params.get("type") ?? "magiclink").toLowerCase();
+    let url: URL;
+    try {
+      url = new URL(linkUrl.trim());
+    } catch {
+      return {
+        ok: false,
+        error: "That doesn't look like a link. Paste the full Log In link from the email.",
+      };
+    }
+
+    // 1 ─ Unwrap common mail-client redirect wrappers.
+    const unwrapped = unwrapMailLink(url.href);
+    if (unwrapped) url = new URL(unwrapped);
+
+    // 2 ─ Extract token+type from hash (implicit flow) or query (server callback).
+    const fromParams = (u: URL) => {
+      const hash = u.hash.startsWith("#") ? u.hash.slice(1) : u.search;
+      const params = new URLSearchParams(hash);
+      const token =
+        params.get("token_hash") ??
+        params.get("token") ??
+        new URLSearchParams(u.search).get("token_hash");
+      const type = (params.get("type") ?? "magiclink").toLowerCase();
+      return { token, type } as const;
+    };
+
+    const { token, type } = fromParams(url);
     if (!token) {
       return {
         ok: false,
         error: "No sign-in token found in that link. Paste the full link from the email.",
       };
     }
-    const { error } = await supabase.auth.verifyOtp({ type: type as any, token_hash: token });
-    if (error) return { ok: false, error: error.message };
-    await startCloudSync(true);
-    return { ok: true };
+
+    // 3 ─ Try the extracted type first, then every other type.
+    const types = [type, "magiclink", "signup", "invite", "recovery", "email_change"].filter(
+      (t, idx, arr) => arr.indexOf(t) === idx,
+    );
+    let lastError = "";
+    for (const t of types) {
+      const { error } = await supabase.auth.verifyOtp({ type: t as any, token_hash: token });
+      if (!error) {
+        await startCloudSync(true);
+        return { ok: true };
+      }
+      lastError = error.message;
+      // Token invalid/expired/consumed → stop trying permutations, go to resend.
+      if (/expired|invalid|used|already|token/i.test(error.message)) break;
+    }
+
+    // 4 ─ Self-heal: token dead → send a fresh link automatically.
+    if (email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      const fresh = await requestEmailCode(email);
+      if (fresh.ok) {
+        return {
+          ok: false,
+          resent: true,
+          email,
+          error: `That link was already used or expired — a fresh one is on its way to ${email}. Check your inbox and paste the new link.`,
+        };
+      }
+    }
+
+    return { ok: false, error: lastError || "Email link is invalid or has expired" };
   } catch (e: any) {
     return { ok: false, error: String(e?.message ?? e) };
+  }
+}
+
+/** Peel mail-client tracking wrappers down to the embedded destination URL. */
+function unwrapMailLink(href: string): string | null {
+  try {
+    const u = new URL(href);
+    // Gmail-style: https://cpp.googleusercontent.com/...?u=<encoded>
+    const inner = u.searchParams.get("u");
+    if (inner && inner.startsWith("http")) return decodeURIComponent(inner);
+    // Generic ?url= / ?redirect= / ?dest= wrappers
+    for (const k of ["url", "redirect", "dest", "target", "continue"]) {
+      const v = u.searchParams.get(k);
+      if (v && v.startsWith("http")) return decodeURIComponent(v);
+    }
+    return null;
+  } catch {
+    return null;
   }
 }
 

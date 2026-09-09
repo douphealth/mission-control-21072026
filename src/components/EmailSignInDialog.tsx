@@ -58,10 +58,16 @@ export default function EmailSignInDialog({
       }
       setBusy(true);
       setError(null);
-      const r = await verifyMagicLink(link);
+      const r = await verifyMagicLink(link, email);
       setBusy(false);
       if (r.ok) onClose();
-      else setError(r.error ?? "That link did not work");
+      else if (r.resent) {
+        // Fresh link auto-sent — flip back to the link tab with a clean slate.
+        setLink("");
+        setStage("code");
+        setSent(true);
+        setError(r.error ?? null);
+      } else setError(r.error ?? "That link did not work");
       return;
     }
     if (code.trim().length < 6) {
