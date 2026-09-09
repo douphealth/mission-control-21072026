@@ -23,7 +23,7 @@ import { brokeredPreviewStorage } from "./previewAuthStorage";
 // Client-safe: it ships to browsers in the JS bundle by definition.
 const DEFAULT_SUPABASE_URL = "https://qmhuzbumfqjgpbeqdcjp.supabase.co";
 const DEFAULT_SUPABASE_PUBLISHABLE_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtaHV6YnVtZnFqZ3BiZXFkY2pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU0ODU5MjYsImV4cCI6MTg3MTMwMTkyNn0.qAhBNb4qXGfnH0U1M3FhU_TKPLBMKqmcbgt5vLzE";
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFtaHV6YnVtZnFqZ3BiZXFkY2pwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ2ODAzMDksImV4cCI6MjEwMDI1NjMwOX0.dNUd3Cwxy6yn1zI_dSIolnhtw_npw6SoKmcbgt5vLzE";
 
 function isNewSupabaseApiKey(value: string): boolean {
   return value.startsWith("sb_publishable_") || value.startsWith("sb_secret_");
