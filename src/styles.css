@@ -825,3 +825,279 @@ h3,
 .mobile-top-glass {
   -webkit-backdrop-filter: blur(30px) saturate(1.45);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRISM v2 — premium depth layer (additive; layered on the base tokens)
+   Animated aurora, gradient hairlines, light-sweep hovers, richer controls.
+   Every rule is additive — components keep their existing classes and
+   structure. Motion respects prefers-reduced-motion and the a11y toggles.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* 1 · Ambient aurora — slow-drifting light behind everything.
+      transform/opacity only: GPU-cheap, no layout, no repaint of content. */
+.prism-aurora {
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 32% at 18% 12%, hsl(var(--primary) / 0.16), transparent 70%),
+    radial-gradient(34% 30% at 85% 18%, hsl(var(--info) / 0.13), transparent 70%),
+    radial-gradient(40% 36% at 70% 88%, hsl(var(--violet) / 0.11), transparent 72%),
+    radial-gradient(30% 26% at 8% 82%, hsl(var(--rose) / 0.07), transparent 70%);
+  animation: prism-drift 36s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes prism-drift {
+  0% {
+    transform: translate3d(-2%, -1.5%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(1.5%, 1%, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(-1%, 2%, 0) scale(1.02);
+  }
+}
+
+/* 2 · Film-grain depth — fixed, ultra-subtle, kills the "flat digital" feel. */
+.prism-grain {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");
+}
+
+/* 3 · Gradient hairline + inner glow for the card family.
+      Uses ::before so original borders/background stay as the base coat. */
+.card-elevated,
+.card-glass,
+.widget-card,
+.stat-card {
+  position: relative;
+}
+.card-elevated::before,
+.card-glass::before,
+.widget-card::before,
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    135deg,
+    hsl(var(--primary) / 0.28),
+    hsl(var(--border) / 0.1) 30%,
+    hsl(var(--border) / 0.05) 70%,
+    hsl(var(--info) / 0.22)
+  );
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+  transition: opacity 250ms ease;
+}
+/* Top edge catch-light, like glass lit from above */
+.card-elevated::after,
+.card-glass::after,
+.widget-card::after,
+.stat-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.07), transparent 22%);
+  opacity: 0.8;
+}
+.dark .card-elevated::after,
+.dark .card-glass::after,
+.dark .widget-card::after,
+.dark .stat-card::after {
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.05), transparent 18%);
+}
+
+/* 4 · Light-sweep hover — a sheen that glides across the card once. */
+.card-elevated,
+.stat-card,
+.widget-card {
+  overflow: hidden;
+}
+.card-elevated > .prism-sweep,
+.stat-card > .prism-sweep,
+.widget-card > .prism-sweep {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 55%;
+  left: -60%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    hsl(0 0% 100% / 0.14) 45%,
+    hsl(0 0% 100% / 0.22) 50%,
+    transparent
+  );
+  transform: skewX(-18deg);
+  pointer-events: none;
+}
+.card-elevated:hover > .prism-sweep,
+.stat-card:hover > .prism-sweep,
+.widget-card:hover > .prism-sweep {
+  animation: prism-sweep 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes prism-sweep {
+  from {
+    left: -60%;
+  }
+  to {
+    left: 130%;
+  }
+}
+
+/* 5 · Buttons — bloom on hover, confident press. */
+.btn-primary {
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms ease,
+    filter 220ms ease;
+}
+.btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.22), transparent 55%);
+  pointer-events: none;
+}
+.btn-primary:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.12) brightness(1.05);
+  box-shadow:
+    var(--shadow-primary),
+    0 0 0 1px hsl(var(--primary) / 0.25);
+}
+.btn-primary:active {
+  transform: translateY(0) scale(0.98);
+}
+.btn-secondary {
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease,
+    box-shadow 200ms ease;
+}
+.btn-secondary:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--primary) / 0.35);
+  box-shadow: var(--shadow-sm);
+}
+.btn-secondary:active {
+  transform: translateY(0) scale(0.98);
+}
+
+/* 6 · Nav active state — luminous pill. */
+.nav-item-active {
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--primary) / 0.08),
+    inset 0 1px 0 hsl(0 0% 100% / 0.1),
+    0 8px 28px -12px hsl(var(--primary) / 0.55);
+}
+
+/* 7 · Inputs — focus bloom. */
+.input-base {
+  transition:
+    border-color 180ms ease,
+    box-shadow 220ms ease,
+    background 180ms ease;
+}
+.input-base:focus {
+  border-color: hsl(var(--primary) / 0.55);
+  box-shadow:
+    0 0 0 3px hsl(var(--primary) / 0.14),
+    0 2px 12px -4px hsl(var(--primary) / 0.25);
+}
+
+/* 8 · Badges — soft glass chips. */
+.badge {
+  border: 1px solid hsl(0 0% 100% / 0.12);
+  backdrop-filter: blur(6px);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.1);
+}
+
+/* 9 · Headings — tighter display optical rhythm. */
+h1,
+h2,
+h3,
+.font-display {
+  text-wrap: balance;
+}
+
+/* 10 · Numbers never jitter — all data columns are tabular. */
+.tabular-nums,
+table,
+.font-mono {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 11 · Motion hygiene — OS preference + a11y panel both silence v2 motion. */
+@media (prefers-reduced-motion: reduce) {
+  .prism-aurora {
+    animation: none;
+  }
+  .card-elevated:hover > .prism-sweep,
+  .stat-card:hover > .prism-sweep,
+  .widget-card:hover > .prism-sweep {
+    animation: none;
+  }
+  .btn-primary,
+  .btn-secondary {
+    transition: none;
+  }
+}
+.a11y-reduce-motion .prism-aurora,
+.a11y-reduce-motion .card-elevated:hover > .prism-sweep,
+.a11y-reduce-motion .stat-card:hover > .prism-sweep,
+.a11y-reduce-motion .widget-card:hover > .prism-sweep {
+  animation: none !important;
+}
+/* High-contrast mode: strip the decorative layer entirely. */
+.a11y-contrast .prism-aurora,
+.a11y-contrast .prism-grain {
+  display: none;
+}
+.a11y-contrast .card-elevated::before,
+.a11y-contrast .card-glass::before,
+.a11y-contrast .widget-card::before,
+.a11y-contrast .stat-card::before,
+.a11y-contrast .card-elevated::after,
+.a11y-contrast .card-glass::after,
+.a11y-contrast .widget-card::after,
+.a11y-contrast .stat-card::after {
+  display: none;
+}
+
+/* 12 · Print — clean documents, no glass. */
+@media print {
+  .prism-aurora,
+  .prism-grain {
+    display: none;
+  }
+  .card-elevated,
+  .card-glass,
+  .widget-card,
+  .stat-card {
+    backdrop-filter: none;
+    box-shadow: none;
+    border: 1px solid hsl(var(--border));
+  }
+}

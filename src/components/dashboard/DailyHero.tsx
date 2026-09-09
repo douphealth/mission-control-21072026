@@ -79,17 +79,25 @@ export default function DailyHero({
 
   return (
     <section
-      className="relative overflow-hidden rounded-[28px] p-5 text-white sm:rounded-[34px] sm:p-8"
-      style={{ background: "linear-gradient(150deg,#0b1220,#0f172a 45%,#0b2b28)" }}
+      className="group relative overflow-hidden rounded-[28px] p-5 text-white sm:rounded-[34px] sm:p-8"
+      style={{
+        background: "linear-gradient(155deg,#070d1a 0%,#0b1220 38%,#0a1f22 68%,#0b2b28 100%)",
+      }}
     >
+      {/* Slow-drifting light field — two orbs + an aurora veil */}
       <div
-        className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full opacity-50 blur-2xl"
+        className="pointer-events-none absolute -right-24 -top-32 h-96 w-96 rounded-full opacity-60 blur-3xl animate-[prism-drift_36s_ease-in-out_infinite_alternate]"
         style={{ background: "radial-gradient(circle,#10b981,transparent 65%)" }}
       />
       <div
-        className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full opacity-40 blur-2xl"
+        className="pointer-events-none absolute -bottom-36 -left-24 h-96 w-96 rounded-full opacity-50 blur-3xl animate-[prism-drift_44s_ease-in-out_infinite_alternate-reverse]"
         style={{ background: "radial-gradient(circle,#6366f1,transparent 65%)" }}
       />
+      <div
+        className="pointer-events-none absolute -bottom-24 right-10 h-72 w-72 rounded-full opacity-30 blur-3xl animate-[prism-drift_52s_ease-in-out_infinite_alternate]"
+        style={{ background: "radial-gradient(circle,#38bdf8,transparent 65%)" }}
+      />
+      {/* Fine dot matrix */}
       <div
         className="pointer-events-none absolute inset-0 opacity-[0.10]"
         style={{
@@ -97,6 +105,13 @@ export default function DailyHero({
           backgroundSize: "22px 22px",
         }}
       />
+      {/* Top catch-light — glass lit from above */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 h-32 opacity-70"
+        style={{ background: "linear-gradient(180deg,rgba(255,255,255,0.09),transparent)" }}
+      />
+      {/* One-shot light sweep across the hero on hover */}
+      <div className="pointer-events-none absolute inset-y-0 w-1/3 -left-1/2 skew-x-[-18deg] bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100 group-hover:animate-[prism-sweep_1.1s_cubic-bezier(0.22,1,0.36,1)]" />
 
       <div className="relative">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -139,9 +154,15 @@ export default function DailyHero({
         </p>
 
         {/* NOW — the single most important thing */}
-        <div className="mt-5 rounded-[24px] border border-white/15 bg-white/[0.08] p-4 backdrop-blur-xl sm:p-5">
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-300">
-            <Sparkles size={11} /> Do this now
+        <div className="relative mt-5 overflow-hidden rounded-[24px] border border-white/15 bg-white/[0.08] p-4 backdrop-blur-xl transition-colors duration-300 hover:border-emerald-300/30 hover:bg-white/[0.11] sm:p-5">
+          {/* Glass catch-light on the NOW card too */}
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 h-16 opacity-60"
+            style={{ background: "linear-gradient(180deg,rgba(255,255,255,0.10),transparent)" }}
+          />
+          <div className="relative mb-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[10px] font-bold uppercase tracking-widest text-emerald-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+            <span className="absolute inset-0 rounded-full bg-emerald-400/20 animate-[pulse-ring_2.4s_ease-in-out_infinite]" />
+            <Sparkles size={11} className="relative" /> Do this now
           </div>
 
           {now ? (
@@ -175,19 +196,20 @@ export default function DailyHero({
               <div className="mobile-rail mt-4 sm:flex sm:flex-wrap sm:gap-2.5 sm:overflow-visible sm:px-0">
                 <button
                   onClick={() => onComplete(now)}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-[13px] font-bold text-slate-900 shadow-lg transition active:scale-[0.97]"
+                  className="group/btn relative inline-flex items-center gap-2 overflow-hidden rounded-2xl bg-white px-4 py-3 text-[13px] font-bold text-slate-900 shadow-lg shadow-emerald-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-emerald-400/30 active:scale-[0.97] active:translate-y-0"
                 >
-                  <CheckCircle2 size={15} /> Complete
+                  <span className="absolute inset-0 -left-full bg-gradient-to-r from-transparent via-emerald-200/60 to-transparent transition-transform duration-700 group-hover/btn:translate-x-full" />
+                  <CheckCircle2 size={15} className="relative" /> Complete
                 </button>
                 <button
                   onClick={() => (onDockFocus ? onDockFocus() : setActiveSection("focus"))}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-[13px] font-semibold backdrop-blur transition active:scale-[0.97]"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-[13px] font-semibold backdrop-blur transition-all duration-200 hover:-translate-y-0.5 hover:border-white/25 hover:bg-white/[0.15] active:translate-y-0 active:scale-[0.97]"
                 >
                   <Timer size={15} /> {onDockFocus ? "Focus here" : "Focus 25m"}
                 </button>
                 <button
                   onClick={() => onPlan(now, 1)}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] font-medium text-white/80 transition active:scale-[0.97]"
+                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-[13px] font-medium text-white/80 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/10 hover:text-white active:translate-y-0 active:scale-[0.97]"
                 >
                   <CalendarClock size={15} /> Plan tomorrow
                 </button>

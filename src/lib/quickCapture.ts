@@ -155,7 +155,10 @@ export function parseCapture(raw: string, today = todayISO()): ParsedCapture {
 
   const title =
     text
-      .replace(/\b(by|due|deadline|before|until|on)\s+(?=(today|tonight|tomorrow|next week|next month|mon|tue|wed|thu|fri|sat|sun))/gi, " ")
+      .replace(
+        /\b(by|due|deadline|before|until|on)\s+(?=(today|tonight|tomorrow|next week|next month|mon|tue|wed|thu|fri|sat|sun))/gi,
+        " ",
+      )
       .replace(/\b(today|tonight|tomorrow|day after tomorrow|next week|next month)\b/gi, " ")
       .replace(/\bin\s+\d{1,3}\s+days?\b/gi, " ")
       .replace(WEEKDAY_RE, " ")

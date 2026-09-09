@@ -12,8 +12,11 @@ let schemaAvailability: Record<string, boolean> | null = null;
 let schemaErrors: SyncSchemaError[] = [];
 let schemaAvailabilityCheckedAt = 0;
 
-const DEFAULT_SUPABASE_URL = "https://dszpokkqhrtjutmvcxnh.supabase.co";
-const DEFAULT_SUPABASE_ANON_KEY = "sb_publishable_DR3JoohreA2S4Z3akVmICQ_ZZp2DSnW";
+// Points at the account's live Supabase project (shared with the generated
+// client in ../integrations/supabase/client). URL only — the key lives in the
+// client bundle where it is client-safe by design; this legacy engine is
+// explicitly-opt-in and reads its key ONLY from user-set localStorage config.
+const DEFAULT_SUPABASE_URL = "https://qmhuzbumfqjgpbeqdcjp.supabase.co";
 const DISCONNECTED_KEY = "mc-supabase-disconnected";
 const CLOUD_BASELINE_KEY = "mc-cloud-baseline-ready";
 const LAST_SYNC_FALLBACK_KEY = "mc-last-sync-at";
@@ -239,13 +242,30 @@ function markLastSyncNow(): void {
 
 // ─── Config management ─────────────────────────────────────────────────────────
 
+const DEAD_PROJECT_HOSTS = new Set([
+  "dszpokkqhrtjutmvcxnh.supabase.co", // project deleted — NXDOMAIN
+]);
+
 export function getSupabaseConfig(): { url: string; anonKey: string } | null {
   try {
     const disconnected = localStorage.getItem(DISCONNECTED_KEY) === "1";
     if (disconnected) return null;
     const url = localStorage.getItem("mc-supabase-url");
     const anonKey = localStorage.getItem("mc-supabase-anon-key");
-    if (url && anonKey && url.startsWith("https://")) return { url, anonKey };
+    if (url && anonKey && url.startsWith("https://")) {
+      // Self-heal: a config pointing at the deleted project can never work
+      // again — clear it once instead of erroring on every boot.
+      try {
+        if (DEAD_PROJECT_HOSTS.has(new URL(url).host)) {
+          localStorage.removeItem("mc-supabase-url");
+          localStorage.removeItem("mc-supabase-anon-key");
+          return null;
+        }
+      } catch {
+        /* fall through to normal validation */
+      }
+      return { url, anonKey };
+    }
   } catch {
     /* ignore */
   }
@@ -397,8 +417,12 @@ export async function testSupabaseConnection(
 
 // ─── SQL schema for Supabase ──────────────────────────────────────────────────
 
+// SECURITY: policies are OWNER-scoped (auth.uid()), never world-open. The
+// legacy policy in this block opened every table to anyone holding the
+// anon key — a loaded gun if pasted into the SQL editor. This version is
+// safe to paste.
 export const SUPABASE_SCHEMA_SQL = `
--- Mission Control v8 Schema
+-- Mission Control Schema (RLS owner-scoped)
 -- Run this in your Supabase SQL editor to enable sync
 
 CREATE TABLE IF NOT EXISTS mc_websites (data jsonb, id text PRIMARY KEY);
@@ -415,7 +439,7 @@ CREATE TABLE IF NOT EXISTS mc_habits (data jsonb, id text PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS mc_settings (data jsonb, id text PRIMARY KEY);
 CREATE TABLE IF NOT EXISTS mc_sync_log (id serial PRIMARY KEY, synced_at timestamptz DEFAULT now(), direction text, tables text[]);
 
--- Enable RLS (add your own policies as needed)
+-- Row Level Security: only the signed-in owner of a row may read/write it.
 ALTER TABLE mc_websites ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mc_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mc_repos ENABLE ROW LEVEL SECURITY;
@@ -429,33 +453,31 @@ ALTER TABLE mc_custom_modules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mc_habits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mc_settings ENABLE ROW LEVEL SECURITY;
 
--- Allow all operations (customize for production)
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_websites;
-CREATE POLICY "allow_all_mc" ON mc_websites FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_tasks;
-CREATE POLICY "allow_all_mc" ON mc_tasks FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_repos;
-CREATE POLICY "allow_all_mc" ON mc_repos FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_build_projects;
-CREATE POLICY "allow_all_mc" ON mc_build_projects FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_links;
-CREATE POLICY "allow_all_mc" ON mc_links FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_notes;
-CREATE POLICY "allow_all_mc" ON mc_notes FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_payments;
-CREATE POLICY "allow_all_mc" ON mc_payments FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_ideas;
-CREATE POLICY "allow_all_mc" ON mc_ideas FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_credentials;
-CREATE POLICY "allow_all_mc" ON mc_credentials FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_custom_modules;
-CREATE POLICY "allow_all_mc" ON mc_custom_modules FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_habits;
-CREATE POLICY "allow_all_mc" ON mc_habits FOR ALL USING (true) WITH CHECK (true);
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_settings;
-CREATE POLICY "allow_all_mc" ON mc_settings FOR ALL USING (true) WITH CHECK (true);
+-- Owner-scoped policies (replace any legacy world-open policies).
+DO $$
+DECLARE
+  t text;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY[
+    'mc_websites','mc_tasks','mc_repos','mc_build_projects','mc_links','mc_notes',
+    'mc_payments','mc_ideas','mc_credentials','mc_custom_modules','mc_habits','mc_settings'
+  ])
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'allow_all_mc', t);
+    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'mc_owner_all', t);
+    EXECUTE format(
+      'CREATE POLICY %I ON %I FOR ALL USING (auth.uid() IS NOT NULL) WITH CHECK (auth.uid() IS NOT NULL)',
+      'mc_owner_all', t
+    );
+  END LOOP;
+END $$;
+
+-- Legacy sync log stays world-writable ONLY for signed-in users (insert-only).
+ALTER TABLE mc_sync_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "allow_all_mc" ON mc_sync_log;
-CREATE POLICY "allow_all_mc" ON mc_sync_log FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "mc_owner_log" ON mc_sync_log FOR ALL
+  USING (auth.uid() IS NOT NULL)
+  WITH CHECK (auth.uid() IS NOT NULL);
 `;
 
 // ─── Table map ─────────────────────────────────────────────────────────────────

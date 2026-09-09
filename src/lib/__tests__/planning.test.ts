@@ -9,7 +9,10 @@ const base = (o: Partial<Task>): Task =>
 
 describe("deadline vs. time allocation", () => {
   it("a work block never rewrites the deadline", () => {
-    const t = base({ dueDate: "2026-09-12", blocks: [{ id: "b", date: T, start: "09:00", end: "10:00" }] });
+    const t = base({
+      dueDate: "2026-09-12",
+      blocks: [{ id: "b", date: T, start: "09:00", end: "10:00" }],
+    });
     expect(blocksOf(t)[0].date).toBe(T);
     expect(t.dueDate).toBe("2026-09-12");
   });
@@ -17,7 +20,11 @@ describe("deadline vs. time allocation", () => {
   it("capacity warns when planned work exceeds the remaining window", () => {
     const cap = computeCapacity({
       tasks: [
-        base({ id: "a", estimateMin: 120, blocks: [{ id: "b1", date: T, start: "09:00", end: "11:00" }] }),
+        base({
+          id: "a",
+          estimateMin: 120,
+          blocks: [{ id: "b1", date: T, start: "09:00", end: "11:00" }],
+        }),
         base({ id: "b", estimateMin: 180, scheduledAt: T }),
       ],
       fixed: [{ id: "m", title: "Standup", start: "10:00", end: "11:00", allDay: false }],

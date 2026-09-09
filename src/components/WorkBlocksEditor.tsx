@@ -2,8 +2,20 @@
 // deadline is never touched from here.
 import { Plus, Trash2, CheckCircle2, Scissors } from "lucide-react";
 import type { Task } from "@/lib/db";
-import { blockMinutes, fmtMinutes, hhmmToMin, minToHHMM, DEFAULT_ESTIMATE_MIN } from "@/lib/planning";
-import { addBlock, moveBlock, removeBlock, completeBlock, splitBlockToTomorrow } from "@/lib/taskActions";
+import {
+  blockMinutes,
+  fmtMinutes,
+  hhmmToMin,
+  minToHHMM,
+  DEFAULT_ESTIMATE_MIN,
+} from "@/lib/planning";
+import {
+  addBlock,
+  moveBlock,
+  removeBlock,
+  completeBlock,
+  splitBlockToTomorrow,
+} from "@/lib/taskActions";
 import { todayISO } from "@/lib/overdue";
 import { usePlanStore } from "@/stores/planStore";
 
@@ -75,7 +87,10 @@ export default function WorkBlocksEditor({ task }: { task: Task }) {
               onChange={(e) => {
                 const len = blockMinutes(b);
                 bump("blockMoves");
-                void moveBlock(task, b.id, { start: e.target.value, end: minToHHMM(hhmmToMin(e.target.value) + len) });
+                void moveBlock(task, b.id, {
+                  start: e.target.value,
+                  end: minToHHMM(hhmmToMin(e.target.value) + len),
+                });
               }}
               className={inputCls}
               aria-label="Block start"
@@ -89,20 +104,37 @@ export default function WorkBlocksEditor({ task }: { task: Task }) {
               className={inputCls}
               aria-label="Block end"
             />
-            <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{fmtMinutes(blockMinutes(b))}</span>
+            <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
+              {fmtMinutes(blockMinutes(b))}
+            </span>
             {!b.done && (
               <>
-                <button onClick={() => void completeBlock(task, b.id)} title="Block done (task stays open)" aria-label="Mark block done" className="rounded-md p-1 text-muted-foreground hover:text-emerald-500">
+                <button
+                  onClick={() => void completeBlock(task, b.id)}
+                  title="Block done (task stays open)"
+                  aria-label="Mark block done"
+                  className="rounded-md p-1 text-muted-foreground hover:text-emerald-500"
+                >
                   <CheckCircle2 size={13} />
                 </button>
                 {blockMinutes(b) >= 30 && (
-                  <button onClick={() => void splitBlockToTomorrow(task, b.id, today)} title="Split: half now, half tomorrow" aria-label="Split block" className="rounded-md p-1 text-muted-foreground hover:text-foreground">
+                  <button
+                    onClick={() => void splitBlockToTomorrow(task, b.id, today)}
+                    title="Split: half now, half tomorrow"
+                    aria-label="Split block"
+                    className="rounded-md p-1 text-muted-foreground hover:text-foreground"
+                  >
                     <Scissors size={13} />
                   </button>
                 )}
               </>
             )}
-            <button onClick={() => void removeBlock(task, b.id)} title="Remove block" aria-label="Remove block" className="rounded-md p-1 text-muted-foreground hover:text-destructive">
+            <button
+              onClick={() => void removeBlock(task, b.id)}
+              title="Remove block"
+              aria-label="Remove block"
+              className="rounded-md p-1 text-muted-foreground hover:text-destructive"
+            >
               <Trash2 size={13} />
             </button>
           </li>

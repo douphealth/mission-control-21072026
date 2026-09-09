@@ -79,8 +79,7 @@ export function buildWorkQueue(input: {
     const committed = t.committedOn === today;
     // Work blocks are the primary planning signal; scheduledAt is the legacy one.
     const openBlockDays = (t.blocks ?? []).filter((b) => !b.done).map((b) => b.date);
-    const scheduled =
-      openBlockDays.length ? [...openBlockDays].sort()[0] : t.scheduledAt;
+    const scheduled = openBlockDays.length ? [...openBlockDays].sort()[0] : t.scheduledAt;
     // A task planned for today — or missed on a prior planned day — must
     // resurface. A planning date is not a deadline, so it affects inclusion,
     // never overdue math.

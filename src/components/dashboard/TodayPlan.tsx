@@ -33,10 +33,14 @@ export function SyncDot({ id }: { id: string }) {
     <button
       type="button"
       onClick={state === "failed" ? () => void retryCloudPush() : undefined}
-      title={state === "failed" ? "Cloud save failed — click to retry" : "Saved here · syncing to cloud"}
+      title={
+        state === "failed" ? "Cloud save failed — click to retry" : "Saved here · syncing to cloud"
+      }
       aria-label={state === "failed" ? "Sync failed, retry" : "Pending sync"}
       className={`inline-flex h-4 shrink-0 items-center gap-1 rounded-full px-1.5 text-[9px] font-bold uppercase tracking-wide ${
-        state === "failed" ? "bg-destructive/10 text-destructive" : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        state === "failed"
+          ? "bg-destructive/10 text-destructive"
+          : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
       }`}
     >
       {state === "failed" ? "retry" : "pending"}
@@ -50,11 +54,19 @@ function DueBadge({ due, today }: { due?: string; today: string }) {
   return (
     <span
       className={`inline-flex items-center gap-1 text-[10.5px] font-semibold ${
-        overdue ? "text-destructive" : due === today ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"
+        overdue
+          ? "text-destructive"
+          : due === today
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-muted-foreground"
       }`}
     >
       {overdue && <AlertTriangle size={10} aria-hidden />}
-      {overdue ? `overdue · was due ${due.slice(5)}` : due === today ? "due today" : `due ${due.slice(5)}`}
+      {overdue
+        ? `overdue · was due ${due.slice(5)}`
+        : due === today
+          ? "due today"
+          : `due ${due.slice(5)}`}
     </span>
   );
 }
@@ -123,7 +135,10 @@ export default function TodayPlan({
           </p>
           {next ? (
             <>
-              <h1 id="today-heading" className="mt-1 font-display text-[22px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[26px]">
+              <h1
+                id="today-heading"
+                className="mt-1 font-display text-[22px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[26px]"
+              >
                 {next.title}
               </h1>
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
@@ -138,7 +153,10 @@ export default function TodayPlan({
               </div>
             </>
           ) : (
-            <h1 id="today-heading" className="mt-1 font-display text-[22px] font-extrabold tracking-tight text-foreground">
+            <h1
+              id="today-heading"
+              className="mt-1 font-display text-[22px] font-extrabold tracking-tight text-foreground"
+            >
               Nothing chosen yet
             </h1>
           )}
@@ -175,7 +193,9 @@ export default function TodayPlan({
             )}
           </span>
           {over ? (
-            <span className="font-bold text-destructive">over by {fmtMinutes(capacity.overMin)}</span>
+            <span className="font-bold text-destructive">
+              over by {fmtMinutes(capacity.overMin)}
+            </span>
           ) : (
             <span className="text-muted-foreground">realistic</span>
           )}
@@ -189,8 +209,8 @@ export default function TodayPlan({
         {over && (
           <p className="mt-2 flex items-start gap-1.5 text-[11.5px] text-foreground/85">
             <AlertTriangle size={12} className="mt-0.5 shrink-0 text-destructive" aria-hidden />
-            Your selected work exceeds today's available time. Choose what to move — deadlines
-            stay where they are.
+            Your selected work exceeds today's available time. Choose what to move — deadlines stay
+            where they are.
           </p>
         )}
       </div>
@@ -225,7 +245,9 @@ export default function TodayPlan({
                 <CheckCircle2 size={12} />
               </button>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold text-foreground">{item.title}</div>
+                <div className="truncate text-[13.5px] font-semibold text-foreground">
+                  {item.title}
+                </div>
                 <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10.5px] text-muted-foreground">
                   {item.kind === "task" && <span>{fmtMinutes(estimateOf(item.raw as Task))}</span>}
                   <DueBadge due={item.due} today={today} />
@@ -262,14 +284,19 @@ export default function TodayPlan({
                 className="flex items-center gap-3 rounded-2xl border border-dashed border-border/60 px-3 py-2.5"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13.5px] font-semibold text-foreground">{s.task.title}</div>
+                  <div className="truncate text-[13.5px] font-semibold text-foreground">
+                    {s.task.title}
+                  </div>
                   <div className="mt-0.5 text-[10.5px] text-muted-foreground">
                     {fmtMinutes(s.minutes)} · because {s.reason}
                   </div>
                 </div>
                 <button
                   onClick={() =>
-                    updateItem<Task>("tasks", s.task.id, { committedOn: today, inbox: false } as Partial<Task>)
+                    updateItem<Task>("tasks", s.task.id, {
+                      committedOn: today,
+                      inbox: false,
+                    } as Partial<Task>)
                   }
                   title="Pin just this one"
                   className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
@@ -283,7 +310,10 @@ export default function TodayPlan({
             <li className="rounded-2xl border border-dashed border-border/60 px-3 py-4 text-center text-[12px] text-muted-foreground">
               Nothing queued for today. Capture something with{" "}
               <kbd className="rounded border border-border/60 px-1 text-[10px]">N</kbd> or{" "}
-              <button onClick={() => setActiveSection("tasks")} className="font-semibold text-primary underline-offset-2 hover:underline">
+              <button
+                onClick={() => setActiveSection("tasks")}
+                className="font-semibold text-primary underline-offset-2 hover:underline"
+              >
                 pick from Tasks
               </button>
               .
@@ -312,7 +342,9 @@ export default function TodayPlan({
                 <span className="w-[92px] shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
                   {f.allDay ? "all day" : `${f.start}–${f.end}`}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-medium text-foreground">{f.title}</span>
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">
+                  {f.title}
+                </span>
                 {f.htmlLink && (
                   <a
                     href={f.htmlLink}

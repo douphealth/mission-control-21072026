@@ -34,7 +34,10 @@ export async function softDeleteTasks(ids: string[], label?: string): Promise<vo
 export async function restoreTasks(ids: string[]): Promise<void> {
   const { updateItem } = useDataStore.getState();
   for (const id of ids)
-    await updateItem<Task>("tasks", id, { deletedAt: undefined, touchedAt: todayISO() } as Partial<Task>);
+    await updateItem<Task>("tasks", id, {
+      deletedAt: undefined,
+      touchedAt: todayISO(),
+    } as Partial<Task>);
   toast.success(ids.length === 1 ? "Restored" : `${ids.length} restored`);
 }
 
@@ -60,7 +63,9 @@ export function newBlockId() {
 
 export async function setBlocks(task: Task, blocks: WorkBlock[]): Promise<void> {
   const { updateItem } = useDataStore.getState();
-  const first = [...blocks].sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`))[0];
+  const first = [...blocks].sort((a, b) =>
+    `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`),
+  )[0];
   await updateItem<Task>("tasks", task.id, {
     blocks,
     // Keep legacy planning fields coherent for older views; dueDate untouched.
@@ -80,11 +85,17 @@ export async function moveBlock(
   blockId: string,
   patch: Partial<Pick<WorkBlock, "date" | "start" | "end">>,
 ): Promise<void> {
-  await setBlocks(task, (task.blocks ?? []).map((b) => (b.id === blockId ? { ...b, ...patch } : b)));
+  await setBlocks(
+    task,
+    (task.blocks ?? []).map((b) => (b.id === blockId ? { ...b, ...patch } : b)),
+  );
 }
 
 export async function removeBlock(task: Task, blockId: string): Promise<void> {
-  await setBlocks(task, (task.blocks ?? []).filter((b) => b.id !== blockId));
+  await setBlocks(
+    task,
+    (task.blocks ?? []).filter((b) => b.id !== blockId),
+  );
 }
 
 /** Completing a block never completes the task — the user decides that. */
@@ -137,7 +148,9 @@ export async function rescheduleToTomorrow(task: Task, today = todayISO()): Prom
     scheduledAt: tomorrow,
     notBefore: tomorrow,
     inbox: false,
-    blocks: (task.blocks ?? []).map((b) => (b.date === today && !b.done ? { ...b, date: tomorrow } : b)),
+    blocks: (task.blocks ?? []).map((b) =>
+      b.date === today && !b.done ? { ...b, date: tomorrow } : b,
+    ),
   } as Partial<Task>);
 }
 

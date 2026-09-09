@@ -4,7 +4,8 @@ const inputCls =
   "rounded-xl border border-border/50 bg-secondary/40 px-2 py-2 text-xs text-foreground outline-none focus:border-primary/60";
 
 export default function PlanningSettings() {
-  const { workdayStart, workdayEnd, personalAsBusy, setWorkday, setPersonalAsBusy } = usePlanStore();
+  const { workdayStart, workdayEnd, personalAsBusy, setWorkday, setPersonalAsBusy } =
+    usePlanStore();
   return (
     <div className="card-elevated space-y-4 p-4">
       <div>

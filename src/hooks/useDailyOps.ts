@@ -126,7 +126,10 @@ export function useDailyOps() {
   );
   /** One clear next action: the top of what was chosen, else the engine's #1. */
   const nextAction = useMemo(
-    () => commitments.find((i) => i.kind === "task" && (i.raw as Task).status !== "blocked") ?? queues.now ?? null,
+    () =>
+      commitments.find((i) => i.kind === "task" && (i.raw as Task).status !== "blocked") ??
+      queues.now ??
+      null,
     [commitments, queues.now],
   );
 
