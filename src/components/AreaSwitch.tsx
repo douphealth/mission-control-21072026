@@ -24,7 +24,9 @@ export default function AreaSwitch({ className = "" }: { className?: string }) {
           aria-checked={area === o.id}
           onClick={() => setArea(o.id)}
           className={`rounded-[10px] px-2.5 py-1 text-[11px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 ${
-            area === o.id ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+            area === o.id
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
           }`}
         >
           {o.label}

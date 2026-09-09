@@ -33,8 +33,7 @@ export function blocksOf(t: Task): WorkBlock[] {
   const day = t.scheduledAt || (t.startTime ? t.dueDate : undefined);
   if (!day || !t.startTime) return [];
   const start = t.startTime;
-  const end =
-    t.endTime || minToHHMM(hhmmToMin(start) + (t.estimateMin ?? DEFAULT_ESTIMATE_MIN));
+  const end = t.endTime || minToHHMM(hhmmToMin(start) + (t.estimateMin ?? DEFAULT_ESTIMATE_MIN));
   return [{ id: `legacy:${t.id}`, date: day, start, end }];
 }
 
@@ -80,7 +79,14 @@ export function fixedEventsFor(events: GoogleCalendarEvent[], today: string): Fi
     if (ev.status === "cancelled") continue;
     if (ev.start.date) {
       if (ev.start.date <= today && (ev.end.date ?? ev.start.date) > today) {
-        out.push({ id: ev.id, title: ev.summary || "(busy)", start: "00:00", end: "23:59", allDay: true, htmlLink: ev.htmlLink });
+        out.push({
+          id: ev.id,
+          title: ev.summary || "(busy)",
+          start: "00:00",
+          end: "23:59",
+          allDay: true,
+          htmlLink: ev.htmlLink,
+        });
       }
       continue;
     }
@@ -132,7 +138,9 @@ export function computeCapacity(input: {
     if (e > s) fixedMin += e - s;
   }
   const items = input.tasks
-    .filter((t) => t.status !== "done" && !t.archived && !t.deletedAt && isPlannedToday(t, input.today))
+    .filter(
+      (t) => t.status !== "done" && !t.archived && !t.deletedAt && isPlannedToday(t, input.today),
+    )
     .map((t) => ({
       task: t,
       minutes: remainingMinutes(t, input.today),

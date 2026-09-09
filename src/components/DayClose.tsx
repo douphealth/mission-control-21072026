@@ -1,18 +1,21 @@
 // Evening review: every unfinished item planned for today gets a deliberate
 // decision. Nothing rolls forward silently.
 import { useMemo, useState } from "react";
-import { Moon, ArrowRight, CheckCircle2, Inbox, CalendarClock, Scissors, Trash2 } from "lucide-react";
+import {
+  Moon,
+  ArrowRight,
+  CheckCircle2,
+  Inbox,
+  CalendarClock,
+  Scissors,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
 import { todayISO } from "@/lib/overdue";
 import { isPlannedToday, estimateOf, fmtMinutes } from "@/lib/planning";
 import { isOpen } from "@/lib/triage";
-import {
-  rescheduleToTomorrow,
-  reduceScope,
-  sendToInbox,
-  softDeleteTasks,
-} from "@/lib/taskActions";
+import { rescheduleToTomorrow, reduceScope, sendToInbox, softDeleteTasks } from "@/lib/taskActions";
 import { useUpdateItem } from "@/hooks/useTableData";
 import { usePlanStore } from "@/stores/planStore";
 
@@ -36,9 +39,13 @@ export default function DayClose({ tasks, compact = false }: { tasks: Task[]; co
 
   const act = async (t: Task, choice: string) => {
     if (choice === "done") {
-      await updateItem<Task>("tasks", t.id, { status: "done", completedAt: new Date().toISOString() });
+      await updateItem<Task>("tasks", t.id, {
+        status: "done",
+        completedAt: new Date().toISOString(),
+      });
     } else if (choice === "reschedule") await rescheduleToTomorrow(t, today);
-    else if (choice === "reduce") await reduceScope(t, Math.max(15, Math.round(estimateOf(t) / 2 / 5) * 5));
+    else if (choice === "reduce")
+      await reduceScope(t, Math.max(15, Math.round(estimateOf(t) / 2 / 5) * 5));
     else if (choice === "inbox") await sendToInbox(t);
     else if (choice === "delete") await softDeleteTasks([t.id]);
     setDecided((d) => ({ ...d, [t.id]: choice }));
@@ -47,7 +54,9 @@ export default function DayClose({ tasks, compact = false }: { tasks: Task[]; co
   const finish = () => {
     markDayClose(today);
     toast.success(
-      essentialDone > 0 ? "Your essential commitments are complete." : "Day closed. Tomorrow has a plan.",
+      essentialDone > 0
+        ? "Your essential commitments are complete."
+        : "Day closed. Tomorrow has a plan.",
     );
   };
 
@@ -81,25 +90,52 @@ export default function DayClose({ tasks, compact = false }: { tasks: Task[]; co
       ) : (
         <ul className="space-y-2">
           {remaining.map((t) => (
-            <li
-              key={t.id}
-              className="rounded-2xl border border-border/30 bg-secondary/30 p-3"
-            >
+            <li key={t.id} className="rounded-2xl border border-border/30 bg-secondary/30 p-3">
               <div className="flex items-center gap-2">
                 <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
                   {t.title}
                 </span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">{fmtMinutes(estimateOf(t))}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">
+                  {fmtMinutes(estimateOf(t))}
+                </span>
                 {t.dueDate && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground">due {t.dueDate}</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    due {t.dueDate}
+                  </span>
                 )}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
-                <Choice icon={<CheckCircle2 size={12} />} label="Done" tone="ok" onClick={() => act(t, "done")} />
-                <Choice icon={<CalendarClock size={12} />} label="Tomorrow" hint="deadline unchanged" onClick={() => act(t, "reschedule")} />
-                <Choice icon={<Scissors size={12} />} label="Reduce" hint="halve the estimate" onClick={() => act(t, "reduce")} />
-                <Choice icon={<Inbox size={12} />} label="Inbox" hint="undecided, no date" onClick={() => act(t, "inbox")} />
-                <Choice icon={<Trash2 size={12} />} label="Delete" tone="danger" hint="Trash, 30 days" onClick={() => act(t, "delete")} />
+                <Choice
+                  icon={<CheckCircle2 size={12} />}
+                  label="Done"
+                  tone="ok"
+                  onClick={() => act(t, "done")}
+                />
+                <Choice
+                  icon={<CalendarClock size={12} />}
+                  label="Tomorrow"
+                  hint="deadline unchanged"
+                  onClick={() => act(t, "reschedule")}
+                />
+                <Choice
+                  icon={<Scissors size={12} />}
+                  label="Reduce"
+                  hint="halve the estimate"
+                  onClick={() => act(t, "reduce")}
+                />
+                <Choice
+                  icon={<Inbox size={12} />}
+                  label="Inbox"
+                  hint="undecided, no date"
+                  onClick={() => act(t, "inbox")}
+                />
+                <Choice
+                  icon={<Trash2 size={12} />}
+                  label="Delete"
+                  tone="danger"
+                  hint="Trash, 30 days"
+                  onClick={() => act(t, "delete")}
+                />
               </div>
             </li>
           ))}

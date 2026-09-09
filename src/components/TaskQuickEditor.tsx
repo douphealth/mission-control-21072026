@@ -226,7 +226,9 @@ export default function TaskQuickEditor({
               <select
                 value={task.estimateMin ?? ""}
                 onChange={(e) =>
-                  void patch({ estimateMin: e.target.value ? Number(e.target.value) : undefined } as Partial<Task>)
+                  void patch({
+                    estimateMin: e.target.value ? Number(e.target.value) : undefined,
+                  } as Partial<Task>)
                 }
                 className="mt-1 w-full rounded-xl border border-border/50 bg-secondary/40 px-2 py-2 text-xs text-foreground outline-none focus:border-primary/60"
               >
@@ -242,7 +244,9 @@ export default function TaskQuickEditor({
               Area <span className="opacity-70">(view filter)</span>
               <select
                 value={task.area ?? "work"}
-                onChange={(e) => void patch({ area: e.target.value as Task["area"] } as Partial<Task>)}
+                onChange={(e) =>
+                  void patch({ area: e.target.value as Task["area"] } as Partial<Task>)
+                }
                 className="mt-1 w-full rounded-xl border border-border/50 bg-secondary/40 px-2 py-2 text-xs text-foreground outline-none focus:border-primary/60"
               >
                 <option value="work">Work</option>

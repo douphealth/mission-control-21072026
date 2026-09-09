@@ -561,7 +561,9 @@ export default function ReviewPage() {
               >
                 <span className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
                   {t.title}
-                  <span className="ml-2 text-[10px]">deleted {daysAgoLabel(t.deletedAt!.slice(0, 10))}</span>
+                  <span className="ml-2 text-[10px]">
+                    deleted {daysAgoLabel(t.deletedAt!.slice(0, 10))}
+                  </span>
                 </span>
                 <button
                   onClick={() => restoreTasks([t.id])}

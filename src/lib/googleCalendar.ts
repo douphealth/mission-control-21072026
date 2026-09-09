@@ -343,7 +343,13 @@ export async function pushTasksToGCal(
       const isOverdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
       const busy = shouldProjectAsBusy(task);
       const eventBody: any = busy
-        ? { summary: "Busy", description: "", transparency: "opaque", visibility: "private", colorId: "8" }
+        ? {
+            summary: "Busy",
+            description: "",
+            transparency: "opaque",
+            visibility: "private",
+            colorId: "8",
+          }
         : {
             summary: gcalTaskSummary(task),
             description: task.description || "",

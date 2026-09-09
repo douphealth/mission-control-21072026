@@ -43,7 +43,9 @@ const TARGET_META: Record<CaptureTarget, { icon: typeof ListChecks; label: strin
     links: { icon: Link2, label: "Link", tone: "text-emerald-500" },
   };
 
-type Overrides = Partial<Pick<ParsedCapture, "due" | "dateRole" | "durationMin" | "area" | "priority" | "target">>;
+type Overrides = Partial<
+  Pick<ParsedCapture, "due" | "dateRole" | "durationMin" | "area" | "priority" | "target">
+>;
 
 export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boolean }) {
   const [text, setText] = useState("");
@@ -67,7 +69,7 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
     const merged: ParsedCapture = { ...parsed, ...ov };
     if (!merged.area && areaFilter !== "all") merged.area = areaFilter;
     if (merged.due && !merged.dateRole) merged.dateRole = "scheduled";
-    if (ov.due === "" as never) {
+    if (ov.due === ("" as never)) {
       delete merged.due;
       delete merged.dateRole;
       delete merged.dateText;
@@ -88,9 +90,12 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
     try {
       await addItem(preview.target, toRecord(preview) as never);
       const isInbox = preview.target === "tasks" && !preview.due;
-      toast.success(isInbox ? "Captured to Inbox" : `${TARGET_META[preview.target].label} captured`, {
-        description: preview.title.slice(0, 60),
-      });
+      toast.success(
+        isInbox ? "Captured to Inbox" : `${TARGET_META[preview.target].label} captured`,
+        {
+          description: preview.title.slice(0, 60),
+        },
+      );
       if (startedAt.current) bump("captureMsTotal", Date.now() - startedAt.current);
       bump("captures");
       reset();
@@ -133,12 +138,22 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
           disabled={!preview || saving}
           className="flex h-9 shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-3.5 text-[12px] font-bold text-primary-foreground transition disabled:opacity-40 enabled:hover:shadow-[var(--shadow-primary)] enabled:active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
-          {saving ? "…" : <><CheckCircle2 size={13} /> Save</>}
+          {saving ? (
+            "…"
+          ) : (
+            <>
+              <CheckCircle2 size={13} /> Save
+            </>
+          )}
         </button>
       </div>
 
       {preview && meta && (
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5 pl-0 sm:pl-12" role="group" aria-label="Interpreted details — click a chip to change it">
+        <div
+          className="mt-2.5 flex flex-wrap items-center gap-1.5 pl-0 sm:pl-12"
+          role="group"
+          aria-label="Interpreted details — click a chip to change it"
+        >
           {/* Target */}
           <Chip
             tone={meta.tone}
@@ -146,7 +161,10 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
             label={meta.label}
             onClick={() => {
               const order: CaptureTarget[] = ["tasks", "notes", "ideas", "reminders", "links"];
-              setOv((o) => ({ ...o, target: order[(order.indexOf(preview.target) + 1) % order.length] }));
+              setOv((o) => ({
+                ...o,
+                target: order[(order.indexOf(preview.target) + 1) % order.length],
+              }));
             }}
             hint="Click to change where this lands"
           />
@@ -165,7 +183,9 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
               onClick={() =>
                 setOv((o) => ({
                   ...o,
-                  dateRole: (preview.dateRole === "deadline" ? "scheduled" : "deadline") as DateRole,
+                  dateRole: (preview.dateRole === "deadline"
+                    ? "scheduled"
+                    : "deadline") as DateRole,
                 }))
               }
               onClear={() => setOv((o) => ({ ...o, due: "" as never }))}

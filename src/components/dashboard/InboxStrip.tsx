@@ -16,13 +16,23 @@ export default function InboxStrip({ tasks, today }: { tasks: Task[]; today: str
     updateItem<Task>("tasks", t.id, { committedOn: today, inbox: false } as Partial<Task>);
   const later = (t: Task) => {
     const d = addDaysLocal(today, 1);
-    return updateItem<Task>("tasks", t.id, { scheduledAt: d, notBefore: d, inbox: false } as Partial<Task>);
+    return updateItem<Task>("tasks", t.id, {
+      scheduledAt: d,
+      notBefore: d,
+      inbox: false,
+    } as Partial<Task>);
   };
 
   return (
-    <section className="enterprise-card rounded-[24px] p-3.5 sm:p-4" aria-labelledby="inbox-heading">
+    <section
+      className="enterprise-card rounded-[24px] p-3.5 sm:p-4"
+      aria-labelledby="inbox-heading"
+    >
       <div className="flex items-center justify-between">
-        <h2 id="inbox-heading" className="flex items-center gap-2 text-[12.5px] font-bold text-foreground">
+        <h2
+          id="inbox-heading"
+          className="flex items-center gap-2 text-[12.5px] font-bold text-foreground"
+        >
           <Inbox size={14} className="text-muted-foreground" /> Inbox
           <span className="rounded-full bg-secondary px-1.5 text-[10px] font-bold text-muted-foreground">
             {tasks.length}
@@ -40,15 +50,33 @@ export default function InboxStrip({ tasks, today }: { tasks: Task[]; today: str
       </div>
       <ul className="mt-2 space-y-1">
         {shown.map((t) => (
-          <li key={t.id} className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-secondary/50">
+          <li
+            key={t.id}
+            className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-secondary/50"
+          >
             <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{t.title}</span>
-            <button onClick={() => pin(t)} title="Do today" aria-label={`Do “${t.title}” today`} className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary">
+            <button
+              onClick={() => pin(t)}
+              title="Do today"
+              aria-label={`Do “${t.title}” today`}
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary"
+            >
               <Pin size={13} />
             </button>
-            <button onClick={() => later(t)} title="Tomorrow" aria-label={`Plan “${t.title}” for tomorrow`} className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground">
+            <button
+              onClick={() => later(t)}
+              title="Tomorrow"
+              aria-label={`Plan “${t.title}” for tomorrow`}
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+            >
               <CalendarClock size={13} />
             </button>
-            <button onClick={() => softDeleteTasks([t.id])} title="Delete (recoverable)" aria-label={`Delete “${t.title}”`} className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive">
+            <button
+              onClick={() => softDeleteTasks([t.id])}
+              title="Delete (recoverable)"
+              aria-label={`Delete “${t.title}”`}
+              className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            >
               <Trash2 size={13} />
             </button>
           </li>

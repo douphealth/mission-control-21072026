@@ -79,7 +79,11 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
       if (e.key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         const el = document.activeElement as HTMLElement | null;
         const typing =
-          !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
+          !!el &&
+          (el.tagName === "INPUT" ||
+            el.tagName === "TEXTAREA" ||
+            el.tagName === "SELECT" ||
+            el.isContentEditable);
         if (typing) return;
         e.preventDefault();
         setActiveSection("dashboard");

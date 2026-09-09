@@ -60,7 +60,11 @@ export default function DashboardHome() {
     <div className="flex flex-col gap-4 pb-8 sm:gap-5">
       <div className="flex items-center justify-between gap-3">
         <p className="text-[12px] text-muted-foreground">
-          {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
+          {new Date().toLocaleDateString(undefined, {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+          })}
         </p>
         <div className="flex items-center gap-2">
           <AreaSwitch />
@@ -77,7 +81,11 @@ export default function DashboardHome() {
       <QuickCaptureBar />
 
       {dockItem && (
-        <FocusDock item={dockItem} onDone={() => setDockItem(null)} onClose={() => setDockItem(null)} />
+        <FocusDock
+          item={dockItem}
+          onDone={() => setDockItem(null)}
+          onClose={() => setDockItem(null)}
+        />
       )}
 
       {ops.isEmpty ? (
@@ -116,11 +124,16 @@ export default function DashboardHome() {
                 Operational pulses — not needed to pick your next action
               </span>
             </span>
-            <ChevronDown size={16} className={`text-muted-foreground transition-transform ${showMore ? "rotate-180" : ""}`} />
+            <ChevronDown
+              size={16}
+              className={`text-muted-foreground transition-transform ${showMore ? "rotate-180" : ""}`}
+            />
           </button>
           {showMore && (
             <div className="mt-4">
-              <Suspense fallback={<div className="h-40 animate-pulse rounded-[28px] bg-muted/30" />}>
+              <Suspense
+                fallback={<div className="h-40 animate-pulse rounded-[28px] bg-muted/30" />}
+              >
                 <BelowFold ops={ops} />
               </Suspense>
             </div>
@@ -147,7 +160,10 @@ export default function DashboardHome() {
               </span>
             </span>
           </span>
-          <ChevronDown size={16} className={`text-muted-foreground transition-transform ${showInsights ? "rotate-180" : ""}`} />
+          <ChevronDown
+            size={16}
+            className={`text-muted-foreground transition-transform ${showInsights ? "rotate-180" : ""}`}
+          />
         </button>
         {showInsights && (
           <div className="mt-4">

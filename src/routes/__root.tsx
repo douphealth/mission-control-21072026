@@ -129,6 +129,10 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        {/* Ambient depth layers — sit behind all content, above nothing.
+            Purely decorative; removed by print + a11y-contrast modes. */}
+        <div className="prism-aurora" aria-hidden="true" />
+        <div className="prism-grain" aria-hidden="true" />
         {children}
         <Scripts />
       </body>
