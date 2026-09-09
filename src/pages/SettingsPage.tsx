@@ -63,7 +63,6 @@ const tabs = [
   { id: "accessibility", label: "Accessibility", icon: Accessibility },
   { id: "connections", label: "Connections", icon: Plug },
   { id: "google-calendar", label: "Google Calendar", icon: Calendar },
-  { id: "supabase", label: "Cloud Sync", icon: Cloud },
   { id: "security", label: "Security", icon: Shield },
   { id: "data", label: "Data", icon: Database },
   { id: "about", label: "About", icon: Info },
@@ -1072,7 +1071,7 @@ export default function SettingsPage() {
                       { label: "Framework", value: "React 18 + TypeScript + Vite" },
                       { label: "Styling", value: "Tailwind CSS + Framer Motion" },
                       { label: "Storage", value: "IndexedDB (Dexie.js) — Offline-first" },
-                      { label: "Cloud Sync", value: "Supabase (optional)" },
+                      { label: "Cloud Sync", value: "Mission Control Cloud" },
                       { label: "Encryption", value: "AES-256-GCM via Web Crypto" },
                       { label: "Layout", value: "react-grid-layout — Drag & Drop" },
                     ].map(({ label, value }) => (

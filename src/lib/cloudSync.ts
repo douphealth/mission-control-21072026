@@ -66,6 +66,14 @@ let pushAgain = false;
 let realtimeBound = false;
 let started = false;
 
+function cloudErrorMessage(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : String(error ?? "");
+  if (/Missing Supabase environment variable|Connect Supabase/i.test(message)) {
+    return "Mission Control Cloud is temporarily unavailable. Your changes are safe on this device and will retry automatically.";
+  }
+  return message || fallback;
+}
+
 const listeners = new Set<(s: CloudStatus, err: string | null) => void>();
 
 function recordKey(collection: string, recordId: string) {
@@ -304,7 +312,7 @@ export async function signInToCloud() {
 
     await startCloudSync(true);
   } catch (e: any) {
-    setStatus("error", e?.message ?? "Sign-in failed");
+    setStatus("error", cloudErrorMessage(e, "Sign-in failed"));
   }
 }
 
@@ -470,8 +478,9 @@ export async function pullFromCloud(): Promise<{
     setStatus("synced");
     return { ok: true, restored, remoteRows: rows.length };
   } catch (e: any) {
-    setStatus("error", e?.message ?? "Restore failed");
-    return { ok: false, restored: 0, remoteRows: 0, error: e?.message };
+    const message = cloudErrorMessage(e, "Restore failed");
+    setStatus("error", message);
+    return { ok: false, restored: 0, remoteRows: 0, error: message };
   }
 }
 
@@ -555,7 +564,7 @@ async function pushNow(): Promise<void> {
     retryAttempt = 0;
     setStatus("synced");
   } catch (e: any) {
-    setStatus(navigator.onLine ? "error" : "offline", e?.message ?? "Backup failed");
+    setStatus(navigator.onLine ? "error" : "offline", cloudErrorMessage(e, "Backup failed"));
     scheduleRetry();
   } finally {
     pushing = false;
