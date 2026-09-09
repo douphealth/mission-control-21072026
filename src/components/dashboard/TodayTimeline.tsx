@@ -79,9 +79,7 @@ function EntryRow({
   const w = entry.workItem;
   return (
     <div
-      className={`group relative flex items-start gap-3 rounded-2xl border p-3.5 transition hover:border-primary/30 hover:shadow-[0_16px_36px_-28px_hsl(var(--primary)/0.8)] ${
-        isNow ? "border-primary/40 bg-primary/[0.04]" : "border-border/60 bg-background/60"
-      }`}
+      className={`zen-row group relative flex items-start gap-3 rounded-2xl border p-3.5 ${isNow ? "now border-primary/40" : "border-border/60"}`}
     >
       {/* time gutter */}
       <span className="flex h-9 w-14 shrink-0 items-center justify-center rounded-xl bg-secondary text-[11px] font-extrabold tabular-nums text-foreground">
@@ -95,11 +93,7 @@ function EntryRow({
           >
             {ks.label}
           </span>
-          {isNow && (
-            <span className="flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-primary-foreground">
-              <span className="h-1 w-1 animate-pulse rounded-full bg-primary-foreground" /> Now
-            </span>
-          )}
+          {isNow && <span className="living-badge">Now</span>}
           {w && w.overdueDays > 0 && (
             <span className="rounded-full bg-destructive/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-destructive">
               {w.overdueDays}d late
@@ -168,13 +162,12 @@ export default function TodayTimeline({
   const { entries, nowIndex, counts } = timeline;
 
   return (
-    <section className="enterprise-card rounded-[28px] p-5 sm:p-6">
+    <section className="zen-card enterprise-card relative rounded-[28px] p-5 sm:p-6">
+      <div className="zen-glow-spot -top-16 -right-10" aria-hidden />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-muted-foreground">
-            Today
-          </div>
-          <h3 className="font-display text-[19px] font-extrabold tracking-tight text-foreground sm:text-[22px]">
+          <div className="zen-label text-[10px] font-bold uppercase tracking-[0.16em]">Today</div>
+          <h3 className="title-grad font-display text-[19px] font-extrabold tracking-tight sm:text-[22px]">
             One timeline
           </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -193,7 +186,7 @@ export default function TodayTimeline({
       <div className="relative space-y-2.5">
         {/* rail */}
         <div
-          className="absolute top-2 bottom-2 left-[27px] w-px bg-border/50 sm:left-[31px]"
+          className="zen-rail absolute top-2 bottom-2 left-[27px] w-px sm:left-[31px]"
           aria-hidden
         />
 
