@@ -437,7 +437,7 @@ export interface UserSettings {
   id: string;
   userName: string;
   userRole: string;
-  theme: "light" | "dark" | "system";
+  theme: "light" | "dark" | "sage" | "system";
   sidebarCollapsed: boolean;
   dashboardLayout: WidgetLayout[];
   supabaseUrl?: string;

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, forwardRef } from "react";
 import {
   Moon,
   Sun,
+  Leaf,
   Download,
   Upload,
   Trash2,
@@ -69,6 +70,7 @@ const tabs = [
 ];
 
 const themes = [
+  { id: "sage", label: "Sage", icon: Leaf },
   { id: "light", label: "Light", icon: Sun },
   { id: "dark", label: "Dark", icon: Moon },
   { id: "system", label: "System", icon: Monitor },

@@ -5,14 +5,16 @@ import { create } from "zustand";
 import { db } from "@/lib/db";
 import type { UserSettings } from "@/lib/db";
 
+export type ThemeName = "light" | "dark" | "sage" | "system";
+
 interface SettingsState {
   userName: string;
   userRole: string;
-  theme: "light" | "dark" | "system";
+  theme: ThemeName;
   isLoading: boolean;
 
   // Actions
-  setTheme: (t: "light" | "dark" | "system") => void;
+  setTheme: (t: ThemeName) => void;
   toggleTheme: () => void;
   updateSettings: (changes: Partial<UserSettings>) => Promise<void>;
   loadSettings: () => Promise<void>;
@@ -31,7 +33,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   },
 
   toggleTheme: () => {
-    const next = get().theme === "dark" ? "light" : "dark";
+    const order: ThemeName[] = ["dark", "sage", "light"];
+    const idx = order.indexOf(get().theme === "system" ? "dark" : get().theme);
+    const next = order[(idx + 1) % order.length];
     get().setTheme(next);
   },
 
@@ -51,20 +55,28 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       set({
         userName: settings.userName || "Alex",
         userRole: settings.userRole || "Digital Creator & Developer",
-        theme: settings.theme || "dark",
+        theme: settings.theme || "sage",
         isLoading: false,
       });
-      applyTheme(settings.theme || "dark");
+      applyTheme(settings.theme || "sage");
     } else {
       set({ isLoading: false });
-      applyTheme("dark");
+      // New users get the SOTA Sage editorial skin by default.
+      applyTheme("sage");
     }
   },
 }));
 
-function applyTheme(theme: "light" | "dark" | "system") {
+function applyTheme(theme: ThemeName) {
+  const root = document.documentElement;
+  if (theme === "sage") {
+    root.classList.remove("dark");
+    root.setAttribute("data-theme", "sage");
+    return;
+  }
+  root.removeAttribute("data-theme");
   const isDark =
     theme === "dark" ||
     (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.classList.toggle("dark", isDark);
+  root.classList.toggle("dark", isDark);
 }

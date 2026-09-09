@@ -12,6 +12,7 @@ import { useState, useEffect } from "react";
 import {
   Home,
   CheckSquare,
+  Leaf,
   Calendar,
   FileText,
   Timer,
@@ -567,9 +568,15 @@ export default function Sidebar() {
               <button
                 onClick={toggleTheme}
                 className="p-1.5 rounded-lg text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
-                title={theme === "dark" ? "Light mode" : "Dark mode"}
+                title={`Theme: ${theme} — click to switch`}
               >
-                {theme === "dark" ? <Sun size={14} /> : <Moon size={14} />}
+                {theme === "dark" ? (
+                  <Sun size={14} />
+                ) : theme === "sage" ? (
+                  <Leaf size={14} />
+                ) : (
+                  <Moon size={14} />
+                )}
               </button>
             </div>
           )}
@@ -577,9 +584,15 @@ export default function Sidebar() {
             <button
               onClick={toggleTheme}
               className="w-full flex items-center justify-center py-2.5 rounded-xl text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all"
-              title={theme === "dark" ? "Light mode" : "Dark mode"}
+              title={`Theme: ${theme} — click to switch`}
             >
-              {theme === "dark" ? <Sun size={15} /> : <Moon size={15} />}
+              {theme === "dark" ? (
+                <Sun size={15} />
+              ) : theme === "sage" ? (
+                <Leaf size={15} />
+              ) : (
+                <Moon size={15} />
+              )}
             </button>
           )}
         </div>
