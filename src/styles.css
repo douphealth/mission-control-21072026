@@ -1342,3 +1342,245 @@ table,
     box-shadow: none;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZEN v2 — calm, deep-focus home surface (additive layer, Sep 9 2026)
+   Applies to: TodayPlan, TodayTimeline, InsightsPanel, DashboardLayout.
+   Zero structural changes — pure class/layer upgrades. Motion respects
+   prefers-reduced-motion, high-contrast, print.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Living gradient card tops ─────────────────────────────────────── */
+.zen-card {
+  position: relative;
+}
+.zen-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 88px;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    hsl(var(--primary) / 0.055),
+    hsl(var(--primary) / 0.018) 55%,
+    transparent
+  );
+  pointer-events: none;
+}
+.zen-card > * {
+  position: relative;
+}
+
+/* ── 2. Living NOW beacon ─────────────────────────────────────────────── */
+@keyframes zen-beacon {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.9;
+  }
+  50% {
+    transform: scale(1.28);
+    opacity: 0.55;
+  }
+}
+.living-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.1);
+  border: 1px solid hsl(var(--primary) / 0.25);
+}
+.living-badge::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 10px 1px hsl(var(--primary) / 0.75);
+  animation: zen-beacon 2.6s ease-in-out infinite;
+}
+
+/* ── 3. Gradient section headers ─────────────────────────────────────── */
+.zen-label {
+  background: linear-gradient(
+    92deg,
+    hsl(var(--foreground)),
+    hsl(var(--foreground) / 0.78) 45%,
+    hsl(var(--primary) / 0.85)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  padding-bottom: 2px;
+}
+
+/* ── 4. Luxury capacity bar ──────────────────────────────────────────── */
+@keyframes zen-glint {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+.zen-cap-bar {
+  position: relative;
+  height: 7px;
+  border-radius: 999px;
+  background: hsl(var(--secondary) / 0.85);
+  overflow: hidden;
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+.zen-cap-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--primary) / 0.85),
+    hsl(var(--primary)) 55%,
+    hsl(217 91% 60% / 0.95)
+  );
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.45);
+  transition: width 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.zen-cap-fill::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(
+    100deg,
+    transparent,
+    hsl(0 0% 100% / 0.32),
+    transparent
+  );
+  animation: zen-glint 2.8s ease-in-out infinite;
+}
+.zen-cap-fill.over {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--destructive) / 0.85),
+    hsl(var(--destructive))
+  );
+  box-shadow: 0 0 12px hsl(var(--destructive) / 0.5);
+}
+.zen-cap-fill.over::after {
+  display: none;
+}
+
+/* ── 5. Refined timeline rows ─────────────────────────────────────────── */
+.zen-row {
+  position: relative;
+  border-radius: 18px;
+  padding: 0.55rem 0.8rem;
+  transition:
+    background 0.25s ease,
+    box-shadow 0.25s ease,
+    transform 0.25s ease;
+}
+.zen-row:hover {
+  background: hsl(var(--card) / 0.6);
+  box-shadow: 0 6px 22px hsl(var(--foreground) / 0.07);
+  transform: translateY(-1px);
+}
+.zen-row.now {
+  background: hsl(var(--primary) / 0.07);
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--primary) / 0.16),
+    0 8px 26px hsl(var(--primary) / 0.1);
+  border-radius: 18px;
+}
+
+/* ── 6. Outcome pills (Today's outcomes list) ─────────────────────────── */
+.zen-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 16px;
+  background: hsl(var(--card) / 0.55);
+  border: 1px solid hsl(var(--border) / 0.45);
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    transform 0.25s ease;
+}
+.zen-pill:hover {
+  border-color: hsl(var(--primary) / 0.35);
+  background: hsl(var(--primary) / 0.06);
+  transform: translateY(-1px);
+}
+
+/* ── 7. Pulse chips for insights strips (Findings / Reminders / Notes) ── */
+.zen-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.6);
+  background: hsl(var(--secondary) / 0.5);
+}
+
+/* ── 8. Timeline rail: gradient instead of flat line ─────────────────── */
+.zen-rail {
+  background: linear-gradient(
+    180deg,
+    transparent,
+    hsl(var(--primary) / 0.4) 12%,
+    hsl(var(--border)) 82%,
+    transparent
+  ) !important;
+}
+
+/* ── 9. Ambient section glow behind "One timeline" ────────────────────── */
+.zen-glow-spot {
+  position: absolute;
+  width: 420px;
+  height: 200px;
+  border-radius: 999px;
+  background: radial-gradient(
+    ellipse at center,
+    hsl(var(--primary) / 0.1),
+    transparent 70%
+  );
+  filter: blur(40px);
+  pointer-events: none;
+}
+
+/* ── 10. Motion / a11y guard ──────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .living-badge::before {
+    animation: none;
+  }
+  .zen-cap-fill::after {
+    animation: none;
+  }
+}
+@media (prefers-contrast: more) {
+  .zen-label {
+    background: none;
+    -webkit-text-fill-color: initial;
+    color: hsl(var(--foreground));
+  }
+}
+@media print {
+  .living-badge::before,
+  .zen-cap-fill::after,
+  .zen-glow-spot {
+    display: none;
+  }
+}

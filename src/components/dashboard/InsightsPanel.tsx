@@ -101,9 +101,7 @@ const PRI: Record<string, { hue: keyof typeof HUES; lbl: string }> = {
 const SectionTitle = ({ title, sub, onAction, actionLabel = "View all", invert }: any) => (
   <div className="flex items-start justify-between mb-5">
     <div>
-      <h3
-        className={`text-[15px] font-bold tracking-tight ${invert ? "text-white" : "text-foreground"}`}
-      >
+      <h3 className={`text-[15px] font-bold tracking-tight ${invert ? "text-white" : "zen-label"}`}>
         {title}
       </h3>
       {sub && (
@@ -901,7 +899,7 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
         {!highlightsOnly && (
           <>
             {/* ═══ KANBAN — the centerpiece from the Dribbble reference ═══ */}
-            <div {...fu(8)} className="enterprise-card rounded-[28px] p-6 sm:p-7">
+            <div {...fu(8)} className="zen-card enterprise-card relative rounded-[28px] p-6 sm:p-7">
               <div className="flex items-start justify-between flex-wrap gap-4 mb-6">
                 <div>
                   <div className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
@@ -1019,7 +1017,10 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
             {/* ═══ FINANCE + SCHEDULE + HABITS ═══ */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
               {/* Finance */}
-              <div {...fu(13)} className="lg:col-span-5 enterprise-card rounded-[28px] p-6 sm:p-7">
+              <div
+                {...fu(13)}
+                className="lg:col-span-5 zen-card enterprise-card relative rounded-[28px] p-6 sm:p-7"
+              >
                 <SectionTitle
                   title="Finance"
                   sub="Income, expenses & profit"
@@ -1075,7 +1076,10 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
               </div>
 
               {/* Schedule */}
-              <div {...fu(14)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+              <div
+                {...fu(14)}
+                className="lg:col-span-4 zen-card enterprise-card relative rounded-[28px] p-6 sm:p-7"
+              >
                 <SectionTitle
                   title="Upcoming"
                   sub={`${upcoming.length} deadlines`}
@@ -1192,7 +1196,10 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
             </div>
 
             {/* ═══ PORTFOLIO SEO PULSE ═══ */}
-            <div {...fu(15)} className="enterprise-card rounded-[28px] p-6 sm:p-7">
+            <div
+              {...fu(15)}
+              className="zen-card enterprise-card relative rounded-[28px] p-6 sm:p-7"
+            >
               <SectionTitle
                 title="Portfolio SEO pulse"
                 sub={`${seoEvidenceSiteIds.size}/${websites.length} sites have observations · ${seoOpenIssues.length} open issues · ${seoOpenActions.length} open actions`}
@@ -1299,7 +1306,10 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
             {/* ═══ IDEAS + NOTES + PLATFORMS ═══ */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
               {/* Ideas */}
-              <div {...fu(16)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+              <div
+                {...fu(16)}
+                className="lg:col-span-4 zen-card enterprise-card relative rounded-[28px] p-6 sm:p-7"
+              >
                 <SectionTitle
                   title="Top ideas"
                   sub="Voted by team"
@@ -1347,7 +1357,10 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
               </div>
 
               {/* Notes */}
-              <div {...fu(17)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+              <div
+                {...fu(17)}
+                className="lg:col-span-4 zen-card enterprise-card relative rounded-[28px] p-6 sm:p-7"
+              >
                 <SectionTitle
                   title="Pinned notes"
                   sub={`${pinnedNotes.length} pinned`}
@@ -1393,7 +1406,10 @@ const InsightsPanel = forwardRef<HTMLDivElement, { highlightsOnly?: boolean }>(
               </div>
 
               {/* Platforms */}
-              <div {...fu(18)} className="lg:col-span-4 enterprise-card rounded-[28px] p-6 sm:p-7">
+              <div
+                {...fu(18)}
+                className="lg:col-span-4 zen-card enterprise-card relative rounded-[28px] p-6 sm:p-7"
+              >
                 <SectionTitle
                   title="Platforms"
                   sub="System status"

@@ -126,13 +126,14 @@ export default function TodayPlan({
   };
 
   return (
-    <section className="enterprise-card rounded-[24px] p-4 sm:p-5" aria-labelledby="today-heading">
+    <section
+      className="zen-card enterprise-card rounded-[24px] p-4 sm:p-5"
+      aria-labelledby="today-heading"
+    >
       {/* ── Next action ── */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Do next
-          </p>
+          <p className="zen-label text-[10.5px] font-bold uppercase tracking-[0.14em]">Do next</p>
           {next ? (
             <>
               <h1
@@ -200,9 +201,9 @@ export default function TodayPlan({
             <span className="text-muted-foreground">realistic</span>
           )}
         </div>
-        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-secondary" aria-hidden>
+        <div className="mt-2 zen-cap-bar" aria-hidden>
           <div
-            className={`h-full rounded-full transition-[width] duration-500 ${over ? "bg-destructive" : "bg-primary"}`}
+            className={`zen-cap-fill ${over ? "over" : ""}`}
             style={{ width: `${Math.min(100, capacity.ratio * 100)}%` }}
           />
         </div>
@@ -218,7 +219,7 @@ export default function TodayPlan({
       {/* ── Outcomes ── */}
       <div className="mt-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
+          <h2 className="zen-label text-[10.5px] font-bold uppercase tracking-[0.14em]">
             {outcomesAreChosen ? "Today's outcomes" : "Suggested for today"}
           </h2>
           {!outcomesAreChosen && suggestedPlan.length > 0 && (
@@ -233,10 +234,7 @@ export default function TodayPlan({
 
         <ul className="mt-2 space-y-1.5">
           {(outcomesAreChosen ? commitments : []).map((item) => (
-            <li
-              key={item.id}
-              className="group flex items-center gap-3 rounded-2xl border border-border/40 bg-background/50 px-3 py-2.5 transition hover:border-primary/30"
-            >
+            <li key={item.id} className="zen-pill group">
               <button
                 onClick={() => onComplete(item)}
                 aria-label={`Mark “${item.title}” done`}
