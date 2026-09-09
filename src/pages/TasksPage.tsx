@@ -844,14 +844,20 @@ const KanbanCard = memo(function KanbanCard({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       className={`
-        bg-card/90 backdrop-blur-sm rounded-2xl border transition-all duration-200 group cursor-grab active:cursor-grabbing select-none
-        ${overdue ? "border-red-500/40 shadow-red-500/10" : "border-border/40"}
-        ${todayTask ? "border-amber-500/50 shadow-amber-500/10" : ""}
+        kanban-card group cursor-grab active:cursor-grabbing select-none
+        ${overdue ? "!border-red-500/40" : ""}
+        ${todayTask ? "!border-amber-500/50" : ""}
         ${task.status === "done" ? "opacity-60" : ""}
-        ${isDragging ? "opacity-40" : ""}
-        shadow-lg hover:shadow-xl hover:border-primary/30 hover:-translate-y-0.5
+        ${isDragging ? "dragging" : ""}
       `}
-      style={{ borderLeft: `3px solid ${pr.color}` }}
+      style={{
+        borderLeft: `3px solid ${pr.color}`,
+        boxShadow: overdue
+          ? "0 4px 18px -8px hsl(0 74% 55% / 0.4)"
+          : todayTask
+            ? "0 4px 18px -8px hsl(36 94% 58% / 0.4)"
+            : undefined,
+      }}
     >
       {/* Card header */}
       <div className="p-3.5 pb-2">
@@ -1064,16 +1070,31 @@ function KanbanColumn({
       onDragOver={handleDragOver}
       onDragLeave={() => setDragOver(false)}
       onDrop={handleDrop}
-      className={`flex-1 min-w-[240px] sm:min-w-[260px] max-w-[320px] flex flex-col rounded-2xl transition-all duration-200 snap-start ${dragOver ? "ring-2 ring-inset ring-primary/40 bg-primary/5" : ""}`}
+      className={`kanban-col flex-1 min-w-[240px] sm:min-w-[260px] max-w-[320px] flex flex-col snap-start ${dragOver ? "drag-over" : ""}`}
+      style={{ ["--col-accent" as string]: status.color }}
     >
       {/* Column header */}
       <div
-        className={`flex items-center justify-between px-4 py-3.5 rounded-t-2xl bg-gradient-to-r ${status.bg}`}
+        className="flex items-center justify-between px-4 py-3.5 rounded-t-[21px]"
+        style={{
+          background: `linear-gradient(90deg, ${status.color}1f, transparent 70%)`,
+        }}
       >
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ background: status.color }} />
-          <span className="text-sm font-bold text-foreground">{status.label}</span>
-          <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-card/60 text-muted-foreground">
+          <span
+            className="w-2.5 h-2.5 rounded-full"
+            style={{
+              background: status.color,
+              boxShadow: `0 0 10px ${status.color}99`,
+            }}
+          />
+          <span className="text-sm font-bold text-foreground font-display tracking-tight">
+            {status.label}
+          </span>
+          <span
+            className="text-[11px] font-bold px-2 py-0.5 rounded-full tabular-nums"
+            style={{ background: `${status.color}1a`, color: status.color }}
+          >
             {tasks.length}
           </span>
         </div>
@@ -1087,7 +1108,7 @@ function KanbanColumn({
 
       {/* Drop zone */}
       <div
-        className={`flex-1 p-2.5 space-y-2.5 overflow-y-auto min-h-[120px] rounded-b-2xl border border-t-0 transition-colors ${dragOver ? "border-primary/30 bg-primary/3" : "border-border/30 bg-secondary/20"}`}
+        className={`flex-1 p-2.5 space-y-2.5 overflow-y-auto min-h-[120px] rounded-b-[21px] transition-colors ${dragOver ? "bg-primary/3" : "bg-transparent"}`}
       >
         <>
           {tasks.map((t) => (
@@ -1112,9 +1133,24 @@ function KanbanColumn({
         </>
         {tasks.length === 0 && (
           <div
-            className={`flex items-center justify-center h-20 rounded-xl border-2 border-dashed transition-colors ${dragOver ? "border-primary/40 text-primary" : "border-border/30 text-muted-foreground"}`}
+            className={`relative flex flex-col items-center justify-center gap-1 h-24 rounded-xl border-2 border-dashed transition-all duration-200 ${dragOver ? "border-primary/50 text-primary bg-primary/5" : "border-border/30 text-muted-foreground/60"}`}
           >
-            <p className="text-xs font-medium">{dragOver ? "Drop here" : "Empty"}</p>
+            <span
+              className="w-1.5 h-1.5 rounded-full transition-all"
+              style={{
+                background: dragOver ? status.color : "currentColor",
+                opacity: dragOver ? 1 : 0.35,
+                boxShadow: dragOver ? `0 0 10px ${status.color}` : undefined,
+              }}
+            />
+            <p className="text-xs font-semibold">
+              {dragOver
+                ? "Drop here"
+                : tasks.length === 0 && status.id === "done"
+                  ? "Nothing done yet"
+                  : "Nothing here"}
+            </p>
+            {!dragOver && <p className="text-[10px] opacity-60">Drag cards or + to add</p>}
           </div>
         )}
       </div>
@@ -1935,11 +1971,11 @@ export default function TasksPage() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
-            <Target size={22} className="text-primary" />
+          <h1 className="title-grad text-2xl font-extrabold flex items-center gap-2 sm:text-3xl">
+            <Target size={24} className="text-primary" style={{ WebkitTextFillColor: "initial" }} />
             Task Manager
           </h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
+          <p className="text-sm text-muted-foreground mt-1">
             {stats.open} open · {stats.done} done
             {stats.overdue > 0 && (
               <span className="text-red-400 font-semibold"> · ⚠ {stats.overdue} overdue</span>
@@ -1961,37 +1997,33 @@ export default function TasksPage() {
       </div>
 
       {/* ── Stats bar — horizontally scrollable on mobile ── */}
-      <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:overflow-visible">
+      <div className="flex gap-2.5 overflow-x-auto pb-1 hide-scrollbar sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:overflow-visible">
         {[
-          { label: "Total", value: stats.total, color: "text-foreground", bg: "bg-secondary/60" },
-          { label: "Open", value: stats.open, color: "text-indigo-400", bg: "bg-indigo-500/10" },
+          {
+            label: "Total",
+            value: stats.total,
+            accent: "hsl(var(--foreground))",
+          },
+          { label: "Open", value: stats.open, accent: "hsl(245 80% 65%)" },
           {
             label: "In Progress",
             value: tasksByStatus["in-progress"].length,
-            color: "text-amber-400",
-            bg: "bg-amber-500/10",
+            accent: "hsl(36 94% 58%)",
           },
-          { label: "Blocked", value: stats.blocked, color: "text-red-400", bg: "bg-red-500/10" },
-          { label: "Done", value: stats.done, color: "text-emerald-400", bg: "bg-emerald-500/10" },
-          {
-            label: "Overdue",
-            value: stats.overdue,
-            color: "text-red-400 font-bold",
-            bg: "bg-red-500/15",
-          },
-          {
-            label: "Critical",
-            value: stats.critical,
-            color: "text-orange-400 font-bold",
-            bg: "bg-orange-500/10",
-          },
+          { label: "Blocked", value: stats.blocked, accent: "hsl(0 74% 55%)" },
+          { label: "Done", value: stats.done, accent: "hsl(152 68% 46%)" },
+          { label: "Overdue", value: stats.overdue, accent: "hsl(0 74% 55%)" },
+          { label: "Critical", value: stats.critical, accent: "hsl(24 90% 55%)" },
         ].map((s) => (
           <div
             key={s.label}
-            className={`${s.bg} rounded-xl p-2.5 text-center min-w-[72px] flex-shrink-0 sm:flex-shrink sm:min-w-0`}
+            className="stat-tile min-w-[88px] flex-shrink-0 sm:flex-shrink sm:min-w-0"
+            style={{ ["--tile-accent" as string]: s.accent }}
           >
-            <div className={`text-lg sm:text-xl font-extrabold ${s.color}`}>{s.value}</div>
-            <div className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">
+            <div className="stat-num" style={{ color: s.accent }}>
+              {s.value}
+            </div>
+            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
               {s.label}
             </div>
           </div>
@@ -2000,10 +2032,10 @@ export default function TasksPage() {
 
       {/* ── Progress bar ── */}
       <div className="flex items-center gap-3">
-        <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-          <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-400" />
+        <div className="progress-luxe flex-1">
+          <div className="progress-luxe-fill" style={{ width: `${stats.pct}%` }} />
         </div>
-        <span className="text-xs font-bold text-muted-foreground shrink-0">
+        <span className="text-xs font-bold text-muted-foreground shrink-0 tabular-nums">
           {stats.pct}% complete
         </span>
       </div>

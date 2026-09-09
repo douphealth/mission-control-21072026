@@ -1101,3 +1101,244 @@ table,
     border: 1px solid hsl(var(--border));
   }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRISM v2.1 — Task Manager premium surfaces
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Gradient display title with a live shimmer */
+.title-grad {
+  background: linear-gradient(
+    100deg,
+    hsl(var(--foreground)),
+    hsl(var(--primary)) 35%,
+    hsl(var(--info)) 65%,
+    hsl(var(--foreground))
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: prism-title-shimmer 7s ease-in-out infinite;
+}
+@keyframes prism-title-shimmer {
+  0%,
+  100% {
+    background-position: 0% center;
+  }
+  50% {
+    background-position: 100% center;
+  }
+}
+
+/* Hero stat tiles — glass, accent-tinted, numbered big */
+.stat-tile {
+  position: relative;
+  overflow: hidden;
+  border-radius: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--hairline-color);
+  background: var(--surface-raised);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 260ms ease,
+    border-color 220ms ease;
+}
+.stat-tile:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: var(--shadow-md);
+  border-color: color-mix(in srgb, var(--tile-accent, hsl(var(--primary))) 45%, transparent);
+}
+.stat-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    120% 100% at 0% 0%,
+    color-mix(in srgb, var(--tile-accent, hsl(var(--primary))) 16%, transparent),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+.stat-tile::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--tile-accent, hsl(var(--primary))),
+    transparent
+  );
+  opacity: 0.7;
+}
+.stat-tile .stat-num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.45rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+/* Kanban column — floating glass rail with accent top bar */
+.kanban-col {
+  position: relative;
+  border-radius: 22px;
+  border: 1px solid var(--hairline-color);
+  background: var(--surface-panel);
+  backdrop-filter: blur(18px) saturate(1.35);
+  box-shadow: var(--shadow-xs);
+  transition:
+    border-color 200ms ease,
+    box-shadow 260ms ease,
+    background 200ms ease;
+}
+.kanban-col:hover {
+  border-color: color-mix(in srgb, var(--col-accent, hsl(var(--primary))) 35%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+.kanban-col::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 14%;
+  right: 14%;
+  height: 3px;
+  border-radius: 0 0 999px 999px;
+  background: linear-gradient(90deg, transparent, var(--col-accent, hsl(var(--primary))), transparent);
+  opacity: 0.75;
+}
+.kanban-col.drag-over {
+  border-color: color-mix(in srgb, var(--col-accent, hsl(var(--primary))) 60%, transparent);
+  box-shadow:
+    var(--shadow-md),
+    0 0 0 3px color-mix(in srgb, var(--col-accent, hsl(var(--primary))) 18%, transparent);
+}
+
+/* Kanban card — hover lift + accent edge */
+.kanban-card {
+  position: relative;
+  border-radius: 16px;
+  border: 1px solid var(--hairline-color);
+  background: hsl(var(--card) / 0.85);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-xs);
+  transition:
+    transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms ease,
+    border-color 200ms ease;
+}
+.kanban-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+  border-color: hsl(var(--primary) / 0.3);
+}
+.kanban-card.dragging {
+  transform: scale(1.03) rotate(1.5deg);
+  box-shadow: var(--shadow-lg);
+  opacity: 0.85;
+}
+
+/* Progress track — glinting fill */
+.progress-luxe {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+  border: 1px solid var(--hairline-color);
+}
+.progress-luxe-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    hsl(var(--success)),
+    hsl(var(--primary)) 60%,
+    hsl(var(--info))
+  );
+  box-shadow: 0 0 16px hsl(var(--primary) / 0.45);
+  transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.progress-luxe-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    hsl(0 0% 100% / 0.35) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+  border-radius: inherit;
+}
+
+/* Chip / pill family for filters */
+.chip-luxe {
+  border-radius: 999px;
+  padding: 0.375rem 0.875rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition:
+    background 180ms ease,
+    color 180ms ease,
+    border-color 180ms ease,
+    transform 160ms ease;
+}
+.chip-luxe:hover {
+  transform: translateY(-1px);
+}
+.chip-luxe[data-active="true"] {
+  background: color-mix(in srgb, hsl(var(--primary)) 14%, transparent);
+  color: hsl(var(--primary));
+  border-color: color-mix(in srgb, hsl(var(--primary)) 32%, transparent);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.1), 0 4px 14px -8px hsl(var(--primary) / 0.5);
+}
+
+/* a11y + print hygiene for the new layer */
+.a11y-contrast .stat-tile::before,
+.a11y-contrast .kanban-col::before,
+.a11y-contrast .progress-luxe-fill::after {
+  display: none;
+}
+.a11y-reduce-motion .title-grad,
+.a11y-reduce-motion .progress-luxe-fill::after,
+.a11y-reduce-motion .stat-tile,
+.a11y-reduce-motion .kanban-card,
+.a11y-reduce-motion .chip-luxe:hover {
+  animation: none !important;
+  transition: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .title-grad,
+  .progress-luxe-fill::after {
+    animation: none;
+  }
+  .stat-tile,
+  .kanban-card {
+    transition: none;
+  }
+}
+@media print {
+  .title-grad {
+    -webkit-text-fill-color: hsl(var(--foreground));
+  }
+  .stat-tile,
+  .kanban-col,
+  .kanban-card {
+    backdrop-filter: none;
+    box-shadow: none;
+  }
+}
