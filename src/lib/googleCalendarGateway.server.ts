@@ -15,7 +15,14 @@ function credentials() {
   const calendarApiKey = process.env.GOOGLE_CALENDAR_API_KEY;
 
   if (!lovableApiKey || !calendarApiKey) {
-    throw new Error("Google Calendar connector is not linked to this project.");
+    // Honest, actionable message instead of a generic crash: the Google
+    // Calendar connector is a Lovable Cloud feature. On standalone
+    // deployments (pages.dev, local, custom domains) the connector's
+    // secrets are never present, so say exactly that — not "check your
+    // env vars".
+    throw new Error(
+      "Google Calendar sync runs through the Lovable Cloud connector, which is only available on lovable.app deployments. Your other data (tasks, notes, finances, cloud backup) syncs normally here.",
+    );
   }
 
   return { lovableApiKey, calendarApiKey };
