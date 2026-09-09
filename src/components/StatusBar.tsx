@@ -1,20 +1,11 @@
 import { useState, useEffect } from "react";
-import { WifiOff, Database, Cloud, Check, Loader2, AlertCircle } from "lucide-react";
-import {
-  getSupabaseProjectHost,
-  isSupabaseConnected,
-  testSupabaseConnection,
-  getSupabaseConfig,
-} from "@/lib/supabase";
+import { WifiOff, Database, Check, Loader2, AlertCircle } from "lucide-react";
 import { onSaveStatus } from "@/stores/dataStore";
 import { CloudBackupBadge } from "@/components/CloudBackupBanner";
 
 export default function StatusBar() {
   const [online, setOnline] = useState(navigator.onLine);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [cloudState, setCloudState] = useState<
-    "offline" | "not-configured" | "ready" | "schema-missing" | "error"
-  >("not-configured");
 
   useEffect(() => {
     const on = () => setOnline(true);
@@ -28,31 +19,6 @@ export default function StatusBar() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    const check = async () => {
-      if (!navigator.onLine) {
-        if (!cancelled) setCloudState("offline");
-        return;
-      }
-      const config = getSupabaseConfig();
-      if (!config) {
-        if (!cancelled) setCloudState("not-configured");
-        return;
-      }
-      const result = await testSupabaseConnection(config.url, config.anonKey);
-      if (!cancelled) {
-        setCloudState(result.ok ? "ready" : result.connectionOk ? "schema-missing" : "error");
-      }
-    };
-    void check();
-    const interval = window.setInterval(check, 120000);
-    return () => {
-      cancelled = true;
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
     return onSaveStatus((status) => {
       setSaveStatus(status);
       if (status === "saved") {
@@ -61,8 +27,6 @@ export default function StatusBar() {
       }
     });
   }, []);
-
-  const supabaseConnected = isSupabaseConnected();
 
   return (
     <footer className="enterprise-panel sticky bottom-0 z-20 hidden lg:flex border-x-0 border-b-0 rounded-none shadow-none px-5 h-8 items-center justify-between text-[11px] text-muted-foreground/70">
@@ -84,26 +48,6 @@ export default function StatusBar() {
           <Database size={10} /> IndexedDB
         </span>
         <CloudBackupBadge />
-        {supabaseConnected && (
-          <span
-            className={`flex items-center gap-1 ${
-              cloudState === "ready"
-                ? "text-success/70"
-                : cloudState === "schema-missing" || cloudState === "error"
-                  ? "text-destructive/70"
-                  : "text-muted-foreground/60"
-            }`}
-          >
-            <Cloud size={10} /> Supabase · {getSupabaseProjectHost()}{" "}
-            {cloudState === "ready"
-              ? "ready"
-              : cloudState === "schema-missing"
-                ? "schema missing"
-                : cloudState === "error"
-                  ? "error"
-                  : ""}
-          </span>
-        )}
         {saveStatus === "saving" && (
           <span className="flex items-center gap-1 text-amber-500/70 animate-pulse">
             <Loader2 size={10} className="animate-spin" /> Saving…
