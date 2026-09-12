@@ -162,7 +162,7 @@ export default function TodayTimeline({
   const { entries, nowIndex, counts } = timeline;
 
   return (
-    <section className="zen-card enterprise-card relative rounded-[28px] p-5 sm:p-6">
+    <section className="zen-card v10-card enterprise-card relative rounded-[28px] p-5 sm:p-6">
       <div className="zen-glow-spot -top-16 -right-10" aria-hidden />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>

@@ -127,7 +127,7 @@ export default function TodayPlan({
 
   return (
     <section
-      className="zen-card enterprise-card rounded-[24px] p-4 sm:p-5"
+      className="zen-card v10-card enterprise-card rounded-[24px] p-4 sm:p-5"
       aria-labelledby="today-heading"
     >
       {/* ── Next action ── */}
@@ -138,7 +138,7 @@ export default function TodayPlan({
             <>
               <h1
                 id="today-heading"
-                className="mt-1 font-display text-[22px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[26px]"
+                className="title-grad mt-1 font-display text-[22px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[26px]"
               >
                 {next.title}
               </h1>

@@ -109,7 +109,10 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
   const isTask = preview?.target === "tasks";
 
   return (
-    <section className="enterprise-card rounded-[24px] p-3 sm:p-4" aria-label="Quick capture">
+    <section
+      className="enterprise-card v10-card rounded-[24px] p-3 sm:p-4"
+      aria-label="Quick capture"
+    >
       <div className="flex items-center gap-3">
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <CornerDownLeft size={15} />
@@ -136,7 +139,7 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
         <button
           onClick={save}
           disabled={!preview || saving}
-          className="flex h-9 shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-3.5 text-[12px] font-bold text-primary-foreground transition disabled:opacity-40 enabled:hover:shadow-[var(--shadow-primary)] enabled:active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="v10-btn-sheen flex h-9 shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-3.5 text-[12px] font-bold text-primary-foreground transition disabled:opacity-40 enabled:hover:shadow-[var(--shadow-primary)] enabled:active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
         >
           {saving ? (
             "…"
