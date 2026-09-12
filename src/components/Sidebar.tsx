@@ -296,7 +296,7 @@ export default function Sidebar() {
                         ${(item as any).indent && !isCollapsed ? "ml-5 border-l border-sidebar-border/40 pl-4" : ""}
                         ${
                           active
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35"
+                            ? "v10-nav-active bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35"
                             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground"
                         }`}
                       style={
@@ -402,7 +402,7 @@ export default function Sidebar() {
                       className={`w-full flex items-center gap-3 px-3 py-2 text-[13px] font-medium rounded-xl transition-all
                         ${
                           active
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35"
+                            ? "v10-nav-active bg-sidebar-primary text-sidebar-primary-foreground shadow-lg ring-1 ring-sidebar-primary/35"
                             : "text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
                         }`}
                     >

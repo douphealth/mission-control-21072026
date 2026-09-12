@@ -25,7 +25,7 @@ export default function InboxStrip({ tasks, today }: { tasks: Task[]; today: str
 
   return (
     <section
-      className="enterprise-card rounded-[24px] p-3.5 sm:p-4"
+      className="enterprise-card v10-card rounded-[24px] p-3.5 sm:p-4"
       aria-labelledby="inbox-heading"
     >
       <div className="flex items-center justify-between">

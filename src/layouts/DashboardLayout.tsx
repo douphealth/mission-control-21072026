@@ -83,15 +83,16 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
 function LoadingSkeleton() {
   return (
     <div className="animate-pulse space-y-4 p-2">
-      <div className="h-8 bg-muted/50 rounded-xl w-48" />
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="h-8 rounded-xl bg-muted/50 w-48" />
+      <div className="v10-skeleton h-24" />
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-32 bg-muted/30 rounded-2xl" />
+          <div key={i} className="v10-skeleton h-32" />
         ))}
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="h-64 bg-muted/30 rounded-2xl" />
-        <div className="h-64 bg-muted/30 rounded-2xl" />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="v10-skeleton h-64" />
+        <div className="v10-skeleton h-64" />
       </div>
     </div>
   );
@@ -137,15 +138,16 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="enterprise-shell flex h-screen overflow-hidden bg-background">
+    <div className="enterprise-shell relative flex h-screen overflow-hidden bg-background">
+      <div className="v10-aurora-bg" aria-hidden />
       <a href="#main-content" className="a11y-skip-link">
         Skip to content
       </a>
       {/* Hide sidebar on mobile — use bottom nav instead */}
-      <div className="hidden lg:block">
+      <div className="relative z-[1] hidden lg:block">
         <Sidebar />
       </div>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <div className="relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
         <main
           id="main-content"

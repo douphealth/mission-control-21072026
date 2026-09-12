@@ -147,88 +147,93 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DARK theme — Midnight Emerald Glass
+   DARK theme — v10 "Aurora Command Deck" (deep-space glass)
    ═══════════════════════════════════════════════════════════════════════════ */
 .dark {
-  --background: 222 40% 4%;
-  --foreground: 210 30% 92%;
-  --card: 222 34% 8%;
-  --card-foreground: 210 25% 94%;
-  --popover: 222 38% 7%;
-  --popover-foreground: 210 25% 94%;
-  --primary: 158 84% 45%;
-  --primary-foreground: 222 40% 4%;
-  --secondary: 220 22% 14%;
-  --secondary-foreground: 210 20% 86%;
-  --muted: 220 20% 12%;
-  --muted-foreground: 218 12% 58%;
-  --accent: 158 84% 45%;
-  --accent-foreground: 222 40% 4%;
-  --destructive: 0 74% 55%;
+  --background: 228 45% 3.5%;
+  --foreground: 213 32% 93%;
+  --card: 227 38% 7%;
+  --card-foreground: 213 28% 94%;
+  --popover: 227 42% 6%;
+  --popover-foreground: 213 28% 94%;
+  --primary: 163 88% 47%;
+  --primary-foreground: 228 45% 3.5%;
+  --secondary: 226 26% 13%;
+  --secondary-foreground: 211 22% 87%;
+  --muted: 226 24% 11%;
+  --muted-foreground: 219 14% 60%;
+  --accent: 163 88% 47%;
+  --accent-foreground: 228 45% 3.5%;
+  --destructive: 0 76% 58%;
   --destructive-foreground: 0 0% 100%;
-  --border: 220 20% 18%;
-  --input: 220 20% 16%;
-  --ring: 158 84% 45%;
+  --border: 226 24% 16%;
+  --input: 226 24% 14%;
+  --ring: 163 88% 47%;
 
-  --sidebar-background: 222 44% 3%;
-  --sidebar-foreground: 214 16% 68%;
-  --sidebar-primary: 158 84% 45%;
-  --sidebar-primary-foreground: 222 40% 4%;
-  --sidebar-accent: 158 60% 12%;
-  --sidebar-accent-foreground: 158 84% 68%;
-  --sidebar-border: 220 22% 12%;
-  --sidebar-ring: 158 84% 45%;
+  --sidebar-background: 229 47% 2.6%;
+  --sidebar-foreground: 213 16% 66%;
+  --sidebar-primary: 163 88% 47%;
+  --sidebar-primary-foreground: 228 45% 3.5%;
+  --sidebar-accent: 165 55% 10%;
+  --sidebar-accent-foreground: 165 80% 70%;
+  --sidebar-border: 226 22% 10%;
+  --sidebar-ring: 163 88% 47%;
 
-  --success: 152 68% 46%;
+  --success: 152 70% 48%;
   --success-foreground: 0 0% 100%;
-  --warning: 36 94% 58%;
-  --warning-foreground: 36 92% 10%;
-  --info: 212 90% 62%;
-  --info-foreground: 0 0% 100%;
-  --violet: 262 84% 68%;
-  --violet-foreground: 0 0% 100%;
-  --rose: 346 84% 60%;
+  --warning: 38 95% 60%;
+  --warning-foreground: 38 92% 10%;
+  --info: 199 95% 64%;
+  --info-foreground: 228 45% 3.5%;
+  --violet: 258 88% 72%;
+  --violet-foreground: 258 60% 9%;
+  --rose: 344 88% 64%;
   --rose-foreground: 0 0% 100%;
 
-  --shadow-xs: 0 1px 2px 0 hsl(222 60% 2% / 0.4);
-  --shadow-sm: 0 2px 8px -2px hsl(222 60% 2% / 0.45), 0 1px 2px hsl(222 60% 2% / 0.35);
-  --shadow-md: 0 12px 32px -12px hsl(222 60% 2% / 0.6), 0 4px 12px -4px hsl(222 60% 2% / 0.4);
-  --shadow-lg: 0 30px 60px -20px hsl(222 60% 2% / 0.75), 0 12px 24px -8px hsl(222 60% 2% / 0.5);
-  --shadow-primary: 0 20px 50px -18px hsl(158 84% 42% / 0.55), 0 0 0 1px hsl(158 84% 42% / 0.2);
-  --shadow-violet: 0 20px 44px -14px hsl(262 84% 68% / 0.45);
-  --shadow-rose: 0 20px 44px -14px hsl(346 84% 60% / 0.45);
-  --shadow-info: 0 20px 44px -14px hsl(212 90% 62% / 0.45);
-  --shadow-warning: 0 20px 44px -14px hsl(36 94% 58% / 0.45);
+  --shadow-xs: 0 1px 2px 0 hsl(229 60% 1% / 0.5);
+  --shadow-sm: 0 2px 10px -2px hsl(229 60% 1% / 0.5), 0 1px 2px hsl(229 60% 1% / 0.4);
+  --shadow-md: 0 14px 36px -12px hsl(229 60% 1% / 0.65), 0 4px 12px -4px hsl(229 60% 1% / 0.45);
+  --shadow-lg: 0 34px 70px -22px hsl(229 60% 1% / 0.8), 0 12px 26px -8px hsl(229 60% 1% / 0.5);
+  --shadow-primary: 0 18px 46px -16px hsl(163 88% 42% / 0.6), 0 0 0 1px hsl(163 88% 47% / 0.22);
+  --shadow-violet: 0 20px 44px -14px hsl(258 88% 60% / 0.5);
+  --shadow-rose: 0 20px 44px -14px hsl(344 88% 55% / 0.5);
+  --shadow-info: 0 20px 44px -14px hsl(199 95% 55% / 0.5);
+  --shadow-warning: 0 20px 44px -14px hsl(38 95% 50% / 0.5);
 
   --gradient-primary: linear-gradient(
     135deg,
-    hsl(158 84% 38%),
-    hsl(172 78% 44%) 55%,
-    hsl(190 88% 50%)
+    hsl(158 88% 44%),
+    hsl(172 82% 46%) 55%,
+    hsl(196 95% 52%)
   );
-  --gradient-violet: linear-gradient(135deg, hsl(262 84% 62%), hsl(280 82% 68%));
-  --gradient-rose: linear-gradient(135deg, hsl(346 84% 56%), hsl(354 82% 64%));
-  --gradient-info: linear-gradient(135deg, hsl(212 90% 58%), hsl(198 92% 62%));
-  --gradient-amber: linear-gradient(135deg, hsl(36 94% 54%), hsl(44 96% 60%));
-  --gradient-dark: linear-gradient(160deg, hsl(222 44% 6%), hsl(220 36% 9%) 55%, hsl(222 44% 5%));
-  --gradient-subtle: linear-gradient(135deg, hsl(158 84% 42% / 0.1), hsl(198 90% 50% / 0.04));
+  --gradient-violet: linear-gradient(135deg, hsl(258 88% 66%), hsl(276 86% 72%));
+  --gradient-rose: linear-gradient(135deg, hsl(344 88% 58%), hsl(352 86% 66%));
+  --gradient-info: linear-gradient(135deg, hsl(199 95% 56%), hsl(187 92% 60%));
+  --gradient-amber: linear-gradient(135deg, hsl(38 95% 54%), hsl(48 96% 60%));
+  --gradient-dark: linear-gradient(160deg, hsl(229 47% 5.5%), hsl(227 38% 8.5%) 55%, hsl(229 47% 4.5%));
+  --gradient-subtle: linear-gradient(135deg, hsl(163 88% 45% / 0.12), hsl(196 95% 50% / 0.05));
   --gradient-aurora:
-    radial-gradient(1200px 600px at 12% -10%, hsl(158 84% 42% / 0.18), transparent 60%),
-    radial-gradient(900px 500px at 100% 10%, hsl(212 90% 62% / 0.12), transparent 60%),
-    radial-gradient(700px 500px at 60% 110%, hsl(262 84% 68% / 0.1), transparent 60%);
+    radial-gradient(1200px 600px at 12% -10%, hsl(163 88% 45% / 0.16), transparent 60%),
+    radial-gradient(900px 500px at 100% 10%, hsl(199 95% 58% / 0.12), transparent 60%),
+    radial-gradient(700px 500px at 60% 110%, hsl(258 88% 65% / 0.1), transparent 60%);
   --gradient-mesh:
-    radial-gradient(1200px 700px at 10% -10%, hsl(158 84% 42% / 0.12), transparent 55%),
-    radial-gradient(1000px 700px at 100% 0%, hsl(212 90% 62% / 0.1), transparent 55%),
-    radial-gradient(900px 700px at 50% 110%, hsl(262 84% 68% / 0.08), transparent 55%),
-    linear-gradient(180deg, hsl(222 44% 4%), hsl(222 44% 3%));
+    radial-gradient(1300px 760px at 8% -12%, hsl(163 88% 40% / 0.11), transparent 52%),
+    radial-gradient(1100px 700px at 100% -2%, hsl(199 95% 52% / 0.09), transparent 52%),
+    radial-gradient(950px 700px at 52% 112%, hsl(258 88% 60% / 0.07), transparent 55%),
+    linear-gradient(180deg, hsl(228 45% 3.5%), hsl(229 47% 2.6%));
 
   --surface-1: hsl(0 0% 100% / 0.05);
   --surface-2: hsl(0 0% 100% / 0.03);
-  --surface-raised: linear-gradient(180deg, hsl(0 0% 100% / 0.05), hsl(0 0% 100% / 0.02));
-  --surface-panel: hsl(0 0% 100% / 0.03);
-  --hairline-color: hsl(0 0% 100% / 0.08);
-  --hairline: 1px solid hsl(0 0% 100% / 0.08);
+  --surface-raised: linear-gradient(
+    180deg,
+    hsl(0 0% 100% / 0.06),
+    hsl(0 0% 100% / 0.024)
+  );
+  --surface-panel: hsl(0 0% 100% / 0.035);
+  --hairline-color: hsl(0 0% 100% / 0.09);
+  --hairline: 1px solid hsl(0 0% 100% / 0.09);
 }
+
 
 @layer base {
   * {
@@ -1706,4 +1711,287 @@ table,
     --muted-foreground: 145 14% 26%;
     --border: 70 20% 70%;
   }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   V10 — AURORA COMMAND DECK (additive layer)
+   Premium micro-interactions + ambient depth for the daily surfaces.
+   Everything here is opt-in via class names; existing rules untouched.
+   All motion respects prefers-reduced-motion and .a11y-reduce-motion.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── A1. Ambient aurora keyframes ──────────────────────────────────────── */
+@keyframes aurora-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
+  50% { transform: translate3d(0, -1.5%, 0) scale(1.06); opacity: 0.8; }
+}
+@keyframes aurora-sheen {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes aurora-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35); }
+  50% { box-shadow: 0 0 0 6px hsl(var(--primary) / 0); }
+}
+@keyframes aurora-rise {
+  from { opacity: 0; transform: translateY(14px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes aurora-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── A2. Command deck cards: ambient aurora top edge on hover ─────────── */
+.v10-card {
+  position: relative;
+  transition:
+    transform 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.35s ease;
+}
+.v10-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    hsl(var(--primary) / 0.55) 30%,
+    hsl(var(--info) / 0.45) 60%,
+    transparent
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+.v10-card:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    var(--shadow-md),
+    0 0 0 1px hsl(var(--primary) / 0.08),
+    0 18px 44px -20px hsl(var(--primary) / 0.25);
+}
+.v10-card:hover::before {
+  opacity: 1;
+}
+
+/* ── A3. Hero NOW band — the signature surface ─────────────────────────── */
+.v10-hero {
+  position: relative;
+  overflow: hidden;
+}
+.v10-hero::after {
+  content: "";
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 130%;
+  background:
+    radial-gradient(50% 60% at 20% 0%, hsl(var(--primary) / 0.1), transparent 70%),
+    radial-gradient(40% 55% at 85% 10%, hsl(var(--info) / 0.08), transparent 70%),
+    radial-gradient(45% 60% at 55% 110%, hsl(var(--violet) / 0.07), transparent 70%);
+  pointer-events: none;
+}
+.v10-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── A4. Live clock / NOW chip glow ────────────────────────────────────── */
+.v10-now-chip {
+  animation: aurora-glow-pulse 3.2s ease-in-out infinite;
+}
+
+/* ── A5. Stat chips: compact metrics row ───────────────────────────────── */
+.v10-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border) / 0.7);
+  background: hsl(var(--card) / 0.55);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: hsl(var(--foreground) / 0.82);
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  cursor: default;
+}
+.v10-stat:hover {
+  border-color: hsl(var(--primary) / 0.4);
+  background: hsl(var(--primary) / 0.06);
+  transform: translateY(-1px);
+}
+.v10-stat[data-tone="good"] { color: hsl(var(--success)); border-color: hsl(var(--success) / 0.35); }
+.v10-stat[data-tone="warn"] { color: hsl(var(--warning)); border-color: hsl(var(--warning) / 0.35); }
+.v10-stat[data-tone="bad"] { color: hsl(var(--destructive)); border-color: hsl(var(--destructive) / 0.35); }
+.v10-stat[data-tone="info"] { color: hsl(var(--info)); border-color: hsl(var(--info) / 0.35); }
+.v10-stat[data-tone="violet"] { color: hsl(var(--violet)); border-color: hsl(var(--violet) / 0.35); }
+
+/* ── A6. Progress ring + day progress bar ──────────────────────────────── */
+.v10-progress-track {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: hsl(var(--muted) / 0.8);
+  overflow: hidden;
+}
+.v10-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--gradient-primary);
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.55);
+  transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.v10-progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    hsl(0 0% 100% / 0.28) 50%,
+    transparent 70%
+  );
+  background-size: 200% 100%;
+  animation: aurora-shimmer 2.8s linear infinite;
+}
+
+/* ── A7. Premium buttons: sheen sweep on hover ──────────────────────────── */
+.v10-btn-sheen {
+  position: relative;
+  overflow: hidden;
+}
+.v10-btn-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 35%,
+    hsl(0 0% 100% / 0.22) 50%,
+    transparent 65%
+  );
+  background-size: 220% 100%;
+  background-position: -120% 0;
+  transition: background-position 0.6s ease;
+  pointer-events: none;
+}
+.v10-btn-sheen:hover::after {
+  background-position: 120% 0;
+}
+
+/* ── A8. Sidebar active rail: aurora indicator ──────────────────────────── */
+.v10-nav-active {
+  position: relative;
+}
+.v10-nav-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--gradient-primary);
+  box-shadow: 0 0 10px 1px hsl(var(--primary) / 0.6);
+}
+
+/* ── A9. Enter animation for section switches ──────────────────────────── */
+.v10-rise {
+  animation: aurora-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.v10-rise-1 { animation-delay: 0.05s; }
+.v10-rise-2 { animation-delay: 0.1s; }
+.v10-rise-3 { animation-delay: 0.16s; }
+
+/* ── A10. Skeleton shimmer upgrade ─────────────────────────────────────── */
+.v10-skeleton {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--muted) / 0.55);
+  border-radius: 18px;
+}
+.v10-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    hsl(var(--foreground) / 0.05) 50%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: aurora-shimmer 1.8s linear infinite;
+}
+
+/* ── A11. Ambient aurora backdrop for the app shell ─────────────────────── */
+.v10-aurora-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 34% at 8% -6%, hsl(var(--primary) / 0.14), transparent 70%),
+    radial-gradient(36% 30% at 96% -4%, hsl(var(--info) / 0.11), transparent 70%),
+    radial-gradient(40% 36% at 50% 108%, hsl(var(--violet) / 0.09), transparent 70%);
+  animation: aurora-drift 26s ease-in-out infinite;
+}
+
+/* ── A12. Focus glow ring for keyboard users ────────────────────────────── */
+.v10-focusable:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px hsl(var(--background)),
+    0 0 0 4px hsl(var(--primary) / 0.55),
+    0 0 18px hsl(var(--primary) / 0.35);
+  border-radius: inherit;
+}
+
+/* ── A13. Toast premium skin ───────────────────────────────────────────── */
+[data-sonner-toast] {
+  border-radius: 16px !important;
+  border: 1px solid hsl(var(--border) / 0.8) !important;
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--shadow-lg) !important;
+}
+
+/* ── A14. Motion guards ─────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .v10-card,
+  .v10-card:hover {
+    transform: none;
+  }
+  .v10-card::before,
+  .v10-progress-fill::after,
+  .v10-skeleton::after,
+  .v10-btn-sheen::after,
+  .v10-aurora-bg,
+  .v10-now-chip {
+    animation: none !important;
+  }
+  .v10-rise,
+  .v10-rise-1,
+  .v10-rise-2,
+  .v10-rise-3 {
+    animation: none !important;
+  }
+}
+.a11y-reduce-motion .v10-card,
+.a11y-reduce-motion .v10-card:hover {
+  transform: none;
+}
+.a11y-reduce-motion .v10-aurora-bg,
+.a11y-reduce-motion .v10-now-chip,
+.a11y-reduce-motion .v10-rise,
+.a11y-reduce-motion .v10-rise-1,
+.a11y-reduce-motion .v10-rise-2,
+.a11y-reduce-motion .v10-rise-3 {
+  animation: none !important;
 }
