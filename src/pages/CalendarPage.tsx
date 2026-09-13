@@ -35,6 +35,9 @@ import { expandRecurringTask } from "@/lib/recurrence";
 import { isGCalConnected, getGCalConfig, setGCalConfig } from "@/lib/googleCalendar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ListTodo, LogIn, ChevronDown } from "lucide-react";
+import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+
+import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -605,6 +608,7 @@ export default function CalendarPage() {
   const gtasks = useGoogleTasksCalendar();
   const [gtPickerOpen, setGtPickerOpen] = useState(false);
   const [gcalPickerOpen, setGcalPickerOpen] = useState(false);
+  const [gtSetupOpen, setGtSetupOpen] = useState(false);
 
   const googleEvents: CalEvent[] = useMemo(
     () =>
@@ -943,21 +947,31 @@ export default function CalendarPage() {
                 Google Calendar sync is offline
               </div>
               <div className="text-[11px] text-muted-foreground">
-                {gcal.error || "The app cannot reach the Google Calendar backend yet."}
+                {gcal.error || "Connect your Google account to sync events."}
               </div>
             </div>
-            <button
-              onClick={() => void gcal.connect()}
-              disabled={gcal.connecting || gcal.syncing}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50"
-            >
-              {gcal.connecting || gcal.syncing ? (
-                <Loader2 size={10} className="animate-spin" />
-              ) : (
-                <RefreshCw size={10} />
-              )}
-              Retry
-            </button>
+            {!hasGoogleClientId() ? (
+              <button
+                onClick={() => setGtSetupOpen(true)}
+                disabled={gcal.connecting || gcal.syncing}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50"
+              >
+                <Settings size={10} /> Set up Google
+              </button>
+            ) : (
+              <button
+                onClick={() => void gcal.connect()}
+                disabled={gcal.connecting || gcal.syncing}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50"
+              >
+                {gcal.connecting || gcal.syncing ? (
+                  <Loader2 size={10} className="animate-spin" />
+                ) : (
+                  <RefreshCw size={10} />
+                )}
+                Retry
+              </button>
+            )}
           </div>
         )}
 
@@ -1051,15 +1065,28 @@ export default function CalendarPage() {
                 Show Google Tasks on calendar
               </div>
               <div className="text-[11px] text-muted-foreground">
-                Connect to display your Google Tasks with due dates.
+                {gtasks.error
+                  ? gtasks.error
+                  : hasGoogleClientId()
+                    ? "Connect to display your Google Tasks with due dates."
+                    : "One-time setup: paste your Google OAuth Client ID in Settings."}
               </div>
             </div>
-            <button
-              onClick={() => void gtasks.signIn()}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
-            >
-              <LogIn size={10} /> Connect
-            </button>
+            {!hasGoogleClientId() ? (
+              <button
+                onClick={() => setGtSetupOpen(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
+              >
+                <Settings size={10} /> Set up Google
+              </button>
+            ) : (
+              <button
+                onClick={() => void gtasks.signIn()}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
+              >
+                <LogIn size={10} /> Connect
+              </button>
+            )}
           </div>
         )}
 
@@ -1698,6 +1725,9 @@ export default function CalendarPage() {
           />
         )}
       </>
+
+      {/* Google OAuth Client ID Setup Modal */}
+      <GoogleSetupModal open={gtSetupOpen} onClose={() => setGtSetupOpen(false)} />
 
       {/* Event Modal */}
       <EventModal

@@ -11,8 +11,11 @@ import {
   LogOut,
   Trash2,
   ListTodo,
+  Settings,
 } from "lucide-react";
 import { toast } from "sonner";
+import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import {
   isSignedIn,
   refreshSignInState,
@@ -37,6 +40,7 @@ export default function GoogleTasksPage() {
   const [showCompleted, setShowCompleted] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
+  const [setupOpen, setSetupOpen] = useState(false);
   const oauth = getGoogleTasksOAuthDiagnostics();
 
   useEffect(() => {
@@ -171,11 +175,22 @@ export default function GoogleTasksPage() {
         )}
 
         <div className="card-elevated p-4 text-left space-y-2 border-primary/15 bg-primary/5">
-          <div className="text-sm font-semibold text-foreground">Managed Google connection</div>
+          <div className="text-sm font-semibold text-foreground">
+            {hasGoogleClientId() ? "Direct Google connection" : "One-time setup needed"}
+          </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            This now uses Lovable Cloud managed Google OAuth instead of the old hardcoded Google
-            Client ID that caused <code>origin_mismatch</code>.
+            {hasGoogleClientId()
+              ? "This app talks to Google directly from your browser using your own OAuth Client ID — no third-party servers."
+              : "Google integration runs directly in your browser and needs your own Google OAuth Client ID (3-minute setup, once)."}
           </p>
+          {!hasGoogleClientId() && (
+            <button
+              onClick={() => setSetupOpen(true)}
+              className="mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition"
+            >
+              <Settings size={13} /> Set up Google connection
+            </button>
+          )}
           <div className="rounded-xl bg-secondary/60 p-3 space-y-1">
             <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-bold">
               Current app origin
@@ -196,12 +211,21 @@ export default function GoogleTasksPage() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-2">
-          <button
-            onClick={handleSignIn}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
-          >
-            <LogIn size={16} /> Connect Google Tasks
-          </button>
+          {hasGoogleClientId() ? (
+            <button
+              onClick={handleSignIn}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
+            >
+              <LogIn size={16} /> Connect Google Tasks
+            </button>
+          ) : (
+            <button
+              onClick={() => setSetupOpen(true)}
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
+            >
+              <Settings size={16} /> Set up Google Connection
+            </button>
+          )}
           <button
             onClick={openStandalone}
             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-secondary/75 transition"
@@ -209,6 +233,8 @@ export default function GoogleTasksPage() {
             <ExternalLink size={16} /> Open standalone
           </button>
         </div>
+
+        <GoogleSetupModal open={setupOpen} onClose={() => setSetupOpen(false)} />
       </div>
     );
   }
