@@ -1,29 +1,33 @@
-// Google Tasks — uses Lovable Cloud managed Google OAuth.
-// This avoids the hardcoded Google Client ID/origin mismatch failure entirely.
+// Google Tasks — direct Google OAuth via Google Identity Services (GIS).
+// Works on ANY deployment (pages.dev, custom domains, localhost) — no Lovable
+// Cloud broker. The user's own OAuth Client ID is configured once in Settings
+// → Google Connection (or via VITE_GOOGLE_CLIENT_ID at build time).
 
-import { lovable } from "@/integrations/lovable";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  GOOGLE_SCOPES,
+  GTASKS_SCOPE,
+  clearGoogleToken,
+  fetchGoogleEmail,
+  getGoogleClientId,
+  getGoogleOrigin,
+  readGoogleToken,
+  requestGoogleToken,
+  validGoogleToken,
+} from "@/lib/googleDirectAuth";
+import type { StoredGoogleToken } from "@/lib/googleDirectAuth";
 
-const TASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
-const SCOPES = `openid email profile ${TASKS_SCOPE}`;
-const STORAGE_KEY = "google_tasks_token_v1";
-
-type StoredToken = { access_token: string; expires_at: number };
+const STORAGE_KEY = "google_tasks_email_v1";
 
 export function getGoogleTasksOAuthDiagnostics() {
-  if (typeof window === "undefined") {
-    return {
-      origin: "",
-      embedded: false,
-      scopes: SCOPES,
-      mode: "Lovable Cloud managed Google OAuth",
-    };
-  }
+  const origin = getGoogleOrigin();
+  const clientId = getGoogleClientId();
+  const hasId = /^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId);
   return {
-    origin: window.location.origin,
-    embedded: window.self !== window.top,
-    scopes: SCOPES,
-    mode: "Lovable Cloud managed Google OAuth",
+    origin,
+    embedded: typeof window !== "undefined" && window.self !== window.top,
+    scopes: GOOGLE_SCOPES,
+    mode: hasId ? "Direct Google OAuth (user Client ID)" : "Not configured",
+    clientIdConfigured: hasId,
   };
 }
 
@@ -31,24 +35,21 @@ function formatGoogleAuthError(error: unknown): Error {
   const raw =
     typeof error === "string"
       ? error
-      : error && typeof error === "object"
-        ? [
-            (error as any).message,
-            (error as any).error,
-            (error as any).type,
-            (error as any).details,
-          ]
-            .filter(Boolean)
-            .join(": ")
+      : error && typeof error === "object" && "message" in error
+        ? String((error as any).message)
         : "";
   const lower = raw.toLowerCase();
 
-  if (lower.includes("origin_mismatch") || lower.includes("origin mismatch")) {
+  if (
+    lower.includes("origin_mismatch") ||
+    lower.includes("invalid_origin") ||
+    lower.includes("origin mismatch")
+  ) {
     return new Error(
-      "Google rejected the old custom OAuth client. Refresh the app and try again — this screen now uses Lovable Cloud managed Google OAuth instead.",
+      `Google rejected this app origin (${originLabel()}). Open Google Cloud Console → Credentials → your OAuth client → add this origin under "Authorized JavaScript origins", then try again.`,
     );
   }
-  if (lower.includes("popup") || lower.includes("blocked")) {
+  if (lower.includes("popup")) {
     return new Error("Google sign-in popup was blocked. Allow popups for this site and try again.");
   }
   if (lower.includes("idpiframe") || lower.includes("iframe")) {
@@ -57,83 +58,70 @@ function formatGoogleAuthError(error: unknown): Error {
   return new Error(raw || "Google sign-in failed");
 }
 
-function readToken(): StoredToken | null {
+function originLabel(): string {
+  return getGoogleOrigin() || "this origin";
+}
+
+async function ensureToken(interactive = false): Promise<StoredGoogleToken> {
+  const token = validGoogleToken();
+  if (token) return token;
+  if (!interactive) throw new Error("Not connected to Google Tasks");
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const t = JSON.parse(raw) as StoredToken;
-    if (t.expires_at - 30_000 < Date.now()) return null;
-    return t;
+    return await requestGoogleToken({ scope: GTASKS_SCOPE });
+  } catch (err) {
+    throw formatGoogleAuthError(err);
+  }
+}
+
+export async function signIn(): Promise<void> {
+  if (typeof window === "undefined") {
+    throw new Error("Google sign-in is only available in the browser");
+  }
+  if (!getGoogleClientId()) {
+    throw new Error(
+      "Google isn't connected yet. Open Settings → Google Connection, paste your Google OAuth Client ID, then come back and press Connect.",
+    );
+  }
+  try {
+    const token = await requestGoogleToken({ prompt: "select_account" });
+    const email = await fetchGoogleEmail(token.access_token);
+    if (email) {
+      try {
+        localStorage.setItem(STORAGE_KEY, email);
+      } catch {
+        /* non-fatal */
+      }
+    }
+  } catch (err) {
+    throw formatGoogleAuthError(err);
+  }
+}
+
+export function isSignedIn(): boolean {
+  return readGoogleToken() !== null;
+}
+
+export async function refreshSignInState(): Promise<boolean> {
+  // GIS tokens cannot be silently renewed; a valid cached token is the
+  // only silent "connected" state. Never pops consent on background calls.
+  return validGoogleToken() !== null;
+}
+
+export function signedInEmail(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
   } catch {
     return null;
   }
 }
 
-function saveToken(access_token: string, expiresAt?: number) {
-  const t: StoredToken = { access_token, expires_at: expiresAt || Date.now() + 60 * 60 * 1000 };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(t));
-}
-
-async function persistProviderTokenFromSession(
-  fallbackToken?: string,
-): Promise<StoredToken | null> {
-  const { data } = await supabase.auth.getSession();
-  const session = data.session;
-  const providerToken = fallbackToken || session?.provider_token;
-  if (!providerToken) return readToken();
-  const expiresAt = session?.expires_at ? session.expires_at * 1000 : Date.now() + 60 * 60 * 1000;
-  saveToken(providerToken, expiresAt);
-  return readToken();
-}
-
-export async function refreshSignInState(): Promise<boolean> {
-  return (await persistProviderTokenFromSession()) !== null;
-}
-
-export function isSignedIn(): boolean {
-  return readToken() !== null;
-}
-
-export function signOut() {
-  localStorage.removeItem(STORAGE_KEY);
-  void supabase.auth.signOut();
-}
-
-export async function signIn(): Promise<void> {
-  if (typeof window === "undefined")
-    throw new Error("Google sign-in is only available in the browser");
-
-  const result = await lovable.auth.signInWithOAuth("google", {
-    redirect_uri: window.location.origin,
-    extraParams: {
-      prompt: "select_account consent",
-      access_type: "online",
-      include_granted_scopes: "true",
-      scope: SCOPES,
-    },
-  });
-
-  if ((result as any).error) {
-    throw formatGoogleAuthError((result as any).error);
+export function signOut(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* non-fatal */
   }
-
-  if ((result as any).redirected) {
-    return;
-  }
-
-  const fallbackToken = (result as any).tokens?.provider_token || (result as any).provider_token;
-  const token = await persistProviderTokenFromSession(fallbackToken);
-  if (!token) {
-    throw new Error(
-      "Google sign-in finished, but Google Tasks access was not granted. Please approve Tasks access and try again.",
-    );
-  }
-}
-
-async function ensureToken(): Promise<StoredToken> {
-  const token = readToken() || (await persistProviderTokenFromSession());
-  if (!token) throw new Error("Not signed in to Google Tasks");
-  return token;
+  clearGoogleToken();
 }
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -147,7 +135,7 @@ async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     },
   });
   if (res.status === 401) {
-    localStorage.removeItem(STORAGE_KEY);
+    clearGoogleToken();
     throw new Error("Google Tasks session expired — please sign in again");
   }
   if (!res.ok) {

@@ -250,6 +250,37 @@ export function onCloudStatus(cb: (s: CloudStatus, err: string | null) => void) 
 
 // ─── Auth helpers ────────────────────────────────────────────────────────────
 
+/** Publicly probe whether the Supabase project's Google OAuth provider is
+ * actually usable (enabled AND has a secret). `GET /auth/v1/settings` tells
+ * us `external.google`; `GET /auth/v1/authorize?provider=google` returns
+ * 400 "missing OAuth secret" when the secret is absent. Caches for 10 min. */
+let googleProviderCache: { ready: boolean; at: number } | null = null;
+async function isGoogleProviderReady(): Promise<boolean> {
+  if (googleProviderCache && Date.now() - googleProviderCache.at < 600_000) {
+    return googleProviderCache.ready;
+  }
+  try {
+    const { data } = await supabase.auth.getSession();
+    if (data.session) return true;
+    const cfgModule = await import("@/lib/supabase");
+    const cfg = cfgModule.getSupabaseConfig?.();
+    const supabaseUrl = cfg?.url || "";
+    if (!supabaseUrl) return false;
+    const res = await fetch(`${supabaseUrl}/auth/v1/authorize?provider=google`, {
+      method: "GET",
+      redirect: "manual",
+    });
+    // redirect:manual → type "opaqueredirect" (status 0) when configured;
+    // a visible 400 body means "missing OAuth secret".
+    const ready = res.type === "opaqueredirect" || res.status === 302 || res.status === 200;
+    googleProviderCache = { ready, at: Date.now() };
+    return ready;
+  } catch {
+    // Network failure probing — don't block sign-in on it.
+    return true;
+  }
+}
+
 async function waitForSession(ms = 8000): Promise<boolean> {
   const deadline = Date.now() + ms;
   while (Date.now() < deadline) {
@@ -269,6 +300,16 @@ export async function signInToCloud() {
     if (existing.data.session) {
       await startCloudSync(true);
       return;
+    }
+
+    // Pre-flight: does this Supabase project even have the Google provider
+    // configured? On standalone deployments (pages.dev etc.) the OAuth secret
+    // is absent, and lovable.auth would navigate the tab to /~oauth/… → 404.
+    // Probe the public auth settings first and fail fast with the honest,
+    // actionable signal instead of a dead-end navigation.
+    const providerReady = await isGoogleProviderReady();
+    if (!providerReady) {
+      throw new Error("GOOGLE_OAUTH_UNCONFIGURED");
     }
 
     let res: any = null;

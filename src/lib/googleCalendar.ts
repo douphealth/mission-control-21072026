@@ -1,13 +1,16 @@
-/** Google Calendar — server-side connector gateway integration. */
+/** Google Calendar — direct browser → Google API via Google Identity Services.
+ * Works on ANY deployment (pages.dev, custom domains, localhost). The user's
+ * own OAuth Client ID is configured once (Settings → Google Connection, or
+ * VITE_GOOGLE_CLIENT_ID at build time); tokens are issued in-browser. */
 
-import { lovable } from "@/integrations/lovable";
-import { supabase } from "@/integrations/supabase/client";
 import {
-  createOrUpdateGoogleCalendarEvent,
-  deleteGoogleCalendarEvent,
-  fetchGoogleCalendarEvents,
-  listGoogleCalendars,
-} from "@/lib/googleCalendar.functions";
+  GCAL_SCOPE,
+  ensureGoogleToken,
+  fetchGoogleEmail,
+  getGoogleClientId,
+  validGoogleToken,
+  type StoredGoogleToken,
+} from "@/lib/googleDirectAuth";
 
 const CONFIG_STORAGE_KEY = "mc_gcal_config";
 
@@ -93,70 +96,77 @@ export function clearGCalConfig(): void {
 }
 
 export function isGCalConnected(): boolean {
+  if (validGoogleToken() !== null) return true;
   const config = getGCalConfig();
   return Boolean(config.connectedEmail || config.lastSync);
 }
 
-async function ensureAppSession(): Promise<boolean> {
-  if (typeof window === "undefined")
-    throw new Error("Google Calendar sign-in is only available in the browser");
-
-  const current = await supabase.auth.getSession();
-  if (current.data.session) return true;
-
-  const result = await lovable.auth.signInWithOAuth("google", {
-    redirect_uri: window.location.origin,
-    extraParams: {
-      prompt: "select_account",
-    },
-  });
-
-  if ((result as any).error) {
-    const raw = (result as any).error?.message || String((result as any).error);
-    throw new Error(raw || "Google sign-in failed");
-  }
-
-  if ((result as any).redirected) return false;
-
-  const after = await supabase.auth.getSession();
-  return Boolean(after.data.session);
-}
-
-export async function connectGCal(): Promise<{ email?: string; redirected?: boolean }> {
-  const hasSession = await ensureAppSession();
-  if (!hasSession) return { redirected: true };
-
-  const calendars = await listCalendars();
-  const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
-  const writable = calendars.find((cal) => cal.id === "primary" || /@/.test(cal.id));
-  const email = primary?.id || writable?.id;
-  if (email) setGCalConfig({ connectedEmail: email });
-  return { email };
-}
-
-export function disconnectGCal(): void {
-  clearGCalConfig();
-}
-
 export class GCalAuthError extends Error {
-  constructor() {
+  constructor(message?: string) {
     super(
-      "Google Calendar is not connected. Open Settings → Google Calendar and connect your account.",
+      message ||
+        "Google Calendar is not connected. Open Settings → Google Connection and connect your account.",
     );
     this.name = "GCalAuthError";
   }
 }
 
-/** Server functions require a Supabase bearer token; bail out cleanly when signed out. */
-async function requireAppSession(): Promise<void> {
-  if (typeof window === "undefined") throw new GCalAuthError();
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) throw new GCalAuthError();
+async function ensureToken(interactive = false): Promise<StoredGoogleToken> {
+  const token = validGoogleToken();
+  if (token) return token;
+  try {
+    return await ensureGoogleToken({ interactive });
+  } catch (e: any) {
+    if (e?.message?.includes("popup")) throw new GCalAuthError(e.message);
+    throw new GCalAuthError(e?.message || "Google sign-in failed");
+  }
+}
+
+async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = await ensureToken();
+  const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
+    ...init,
+    headers: {
+      ...(init.headers || {}),
+      Authorization: `Bearer ${token.access_token}`,
+      "Content-Type": "application/json",
+    },
+  });
+  if (res.status === 401) {
+    localStorage.removeItem("mc_google_access_token_v1");
+    throw new GCalAuthError("Google Calendar session expired — please reconnect.");
+  }
+  if (res.status === 204) return undefined as T;
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`Google Calendar ${res.status}: ${text.slice(0, 600)}`);
+  }
+  if (!text) return undefined as T;
+  return JSON.parse(text) as T;
 }
 
 export async function listCalendars(): Promise<GoogleCalendarList[]> {
-  await requireAppSession();
-  return listGoogleCalendars() as Promise<GoogleCalendarList[]>;
+  const calendars: GoogleCalendarList[] = [];
+  let pageToken: string | undefined;
+  do {
+    const qs = new URLSearchParams({ maxResults: "250", showHidden: "true" });
+    if (pageToken) qs.set("pageToken", pageToken);
+    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(
+      `/users/me/calendarList?${qs.toString()}`,
+    );
+    calendars.push(
+      ...(data.items || []).map((cal: any) => ({
+        id: cal.id,
+        summary: cal.summary || cal.id,
+        backgroundColor: cal.backgroundColor,
+        foregroundColor: cal.foregroundColor,
+        primary: cal.primary || false,
+        selected: cal.selected !== false,
+      })),
+    );
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return calendars;
 }
 
 export async function fetchCalendarEvents(
@@ -165,10 +175,24 @@ export async function fetchCalendarEvents(
   timeMax: string,
   maxResults = 250,
 ): Promise<GoogleCalendarEvent[]> {
-  await requireAppSession();
-  return fetchGoogleCalendarEvents({
-    data: { calendarId, timeMin, timeMax, maxResults },
-  }) as Promise<GoogleCalendarEvent[]>;
+  const events: any[] = [];
+  let pageToken: string | undefined;
+  do {
+    const qs = new URLSearchParams({
+      timeMin,
+      timeMax,
+      maxResults: String(maxResults),
+      singleEvents: "true",
+      orderBy: "startTime",
+    });
+    if (pageToken) qs.set("pageToken", pageToken);
+    const data = await gcalApi<{ items?: any[]; nextPageToken?: string }>(
+      `/calendars/${encodeURIComponent(calendarId)}/events?${qs.toString()}`,
+    );
+    events.push(...(data.items || []).map((event) => ({ ...event, calendarId })));
+    pageToken = data.nextPageToken;
+  } while (pageToken);
+  return events;
 }
 
 export async function fetchAllEvents(
@@ -219,22 +243,63 @@ export async function createGCalEvent(
   },
   deterministicId?: string,
 ): Promise<GoogleCalendarEvent> {
-  await requireAppSession();
-  return createOrUpdateGoogleCalendarEvent({
-    data: { calendarId, event, deterministicId },
-  }) as Promise<GoogleCalendarEvent>;
+  const cal = encodeURIComponent(calendarId);
+  if (deterministicId) {
+    // Upsert semantics, same as the old server gateway: try POST-with-id
+    // (201), fall back to PUT (409 when the event already exists).
+    try {
+      return await gcalApi<GoogleCalendarEvent>(`/calendars/${cal}/events`, {
+        method: "POST",
+        body: JSON.stringify({ ...event, id: deterministicId }),
+      });
+    } catch (e: any) {
+      if (!/\(409\)/.test(e?.message || "")) throw e;
+      return gcalApi<GoogleCalendarEvent>(
+        `/calendars/${cal}/events/${encodeURIComponent(deterministicId)}`,
+        { method: "PUT", body: JSON.stringify(event) },
+      );
+    }
+  }
+  return gcalApi<GoogleCalendarEvent>(`/calendars/${cal}/events`, {
+    method: "POST",
+    body: JSON.stringify(event),
+  });
 }
 
 export async function deleteGCalEvent(eventId: string, calendarId = "primary"): Promise<boolean> {
   if (!eventId) return false;
   try {
-    await requireAppSession();
-    await deleteGoogleCalendarEvent({ data: { calendarId, eventId } });
+    await gcalApi<void>(
+      `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
+      { method: "DELETE" },
+    );
     return true;
   } catch (e: any) {
     if (/\b(?:404|410)\b/.test(e?.message || "")) return true;
     return false;
   }
+}
+
+export async function connectGCal(): Promise<{ email?: string; redirected?: boolean }> {
+  if (!getGoogleClientId()) {
+    throw new GCalAuthError(
+      "Google isn't connected yet. Open Settings → Google Connection, paste your Google OAuth Client ID, then press Connect.",
+    );
+  }
+  const token = await ensureToken(true);
+  const calendars = await listCalendars();
+  const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
+  const writable = calendars.find((cal) => cal.id === "primary" || /@/.test(cal.id));
+  const email = primary?.id || writable?.id;
+  const profileEmail = await fetchGoogleEmail(token.access_token);
+  if (profileEmail || email) {
+    setGCalConfig({ connectedEmail: profileEmail || email || null });
+  }
+  return { email: profileEmail || email, redirected: false };
+}
+
+export function disconnectGCal(): void {
+  clearGCalConfig();
 }
 
 export async function pushTaskToGCal(task: {
@@ -286,7 +351,6 @@ export function gcalTaskSummary(task: {
   }
   return `📋 ${task.title}`;
 }
-
 /** Personal items can be mirrored as an opaque "Busy" slot: availability
  *  without exposing the title or notes. Off = mirrored like any other task. */
 export function shouldProjectAsBusy(task: { area?: string }): boolean {

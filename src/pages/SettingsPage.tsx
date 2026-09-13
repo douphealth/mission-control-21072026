@@ -35,7 +35,10 @@ import {
   CloudOff,
   Check,
   X,
+  KeyRound,
 } from "lucide-react";
+import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import {
   getSupabaseConfig,
   setSupabaseConfig,
@@ -108,8 +111,9 @@ export default function SettingsPage() {
   const [confirmDelete, setConfirmDelete] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
 
-  // Google Calendar — auth is handled server-side via the Lovable connector.
+  // Google Calendar — direct OAuth via user's Client ID (Settings → Google Connection)
   const gcal = useGoogleCalendar({ autoFetch: false });
+  const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
 
   // Supabase state
   const [sbUrl, setSbUrl] = useState(getSupabaseConfig()?.url || "");
@@ -492,10 +496,16 @@ export default function SettingsPage() {
                   )}
                 </div>
 
-                {/* Connection Settings — connector-backed, zero config */}
+                {/* Connection Settings — direct OAuth, user's Client ID */}
                 <div className="card-elevated p-6 space-y-4">
                   <div className="flex items-center justify-between">
                     <h2 className="font-semibold text-lg">Connection</h2>
+                    <button
+                      onClick={() => setGoogleSetupOpen(true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
+                    >
+                      <KeyRound size={12} /> Client ID setup
+                    </button>
                   </div>
 
                   <div className="flex items-start gap-3 p-4 rounded-xl bg-emerald-500/5 border border-emerald-500/20">
@@ -520,6 +530,16 @@ export default function SettingsPage() {
                           Account: <span className="font-mono">{gcal.email}</span>
                         </div>
                       )}
+                      <div className="text-[10px] text-muted-foreground">
+                        OAuth Client ID:{" "}
+                        {hasGoogleClientId() ? (
+                          <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                            configured
+                          </span>
+                        ) : (
+                          <span className="text-amber-600 dark:text-amber-400">not set</span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -629,6 +649,11 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Google OAuth setup (reachable from the Google Calendar tab) */}
+            {activeTab === "google-calendar" && (
+              <GoogleSetupModal open={googleSetupOpen} onClose={() => setGoogleSetupOpen(false)} />
             )}
 
             {/* ─── Supabase Sync ─── */}
