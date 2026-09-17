@@ -1,6 +1,7 @@
 // Enterprise-grade IndexedDB persistence layer using Dexie.js
 // Replaces localStorage for all data — supports larger datasets, offline-first, and proper indexing.
 
+import "./bc-polyfill";
 import Dexie, { type Table } from "dexie";
 
 // ─── Core Entity Types ─────────────────────────────────────────────────────────

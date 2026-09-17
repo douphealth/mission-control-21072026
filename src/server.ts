@@ -1,15 +1,4 @@
-// Polyfill BroadcastChannel for Node.js SSR — Dexie requires it at module load
-// time, but Node only exposes it inside worker threads, not the main process.
-if (typeof globalThis.BroadcastChannel === "undefined") {
-  class SimpleBroadcastChannel {
-    constructor(public name: string) {}
-    postMessage() {}
-    onmessage = null;
-    close() {}
-  }
-  globalThis.BroadcastChannel = SimpleBroadcastChannel as any;
-}
-
+import "./lib/bc-polyfill";
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
