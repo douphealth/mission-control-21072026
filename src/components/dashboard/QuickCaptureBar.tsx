@@ -4,21 +4,7 @@
 // as a deadline or as a plan. Press N anywhere to focus it.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Bell,
-  CalendarDays,
-  CheckCircle2,
-  Clock,
-  CornerDownLeft,
-  Flag,
-  Inbox,
-  Lightbulb,
-  Link2,
-  ListChecks,
-  StickyNote,
-  Timer,
-  X,
-} from "lucide-react";
+import { Bell, CalendarDays, CircleCheck as CheckCircle2, Clock, CornerDownLeft, Flag, Inbox, Lightbulb, Link2, ListChecks, StickyNote, Timer, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   parseCapture,
@@ -110,11 +96,11 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
 
   return (
     <section
-      className="enterprise-card v10-card rounded-[24px] p-3 sm:p-4"
+      className="ultra-capture enterprise-card v10-card rounded-[24px] p-3 sm:p-4"
       aria-label="Quick capture"
     >
       <div className="flex items-center gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <span className="ultra-capture-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <CornerDownLeft size={15} />
         </span>
         <input

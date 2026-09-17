@@ -31,7 +31,7 @@ export default function FirstRunExperience() {
   const setActiveSection = useNavigationStore((s) => s.setActiveSection);
 
   return (
-    <section className="relative overflow-hidden rounded-[28px] border border-border/60 bg-card p-6 sm:p-10">
+    <section className="ultra-rise relative overflow-hidden rounded-[28px] border border-border/60 bg-card p-6 sm:p-10">
       <div className="pointer-events-none absolute -right-24 -top-32 h-80 w-80 rounded-full bg-primary/[0.07] blur-3xl" />
       <div className="pointer-events-none absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-accent/[0.06] blur-3xl" />
 

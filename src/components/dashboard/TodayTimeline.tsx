@@ -3,7 +3,7 @@
 // untimed (engine score). Answers "what now / what next / what needs me"
 // in one glance instead of three siloed panels.
 
-import { AlertTriangle, ArrowUpRight, CheckCircle2, Clock, Flag, Timer, Zap } from "lucide-react";
+import { TriangleAlert as AlertTriangle, ArrowUpRight, CircleCheck as CheckCircle2, Clock, Flag, Timer, Zap } from "lucide-react";
 import type { Timeline, TimelineEntry } from "@/lib/timeline";
 import type { WorkItem } from "@/lib/workQueue";
 import { useNavigationStore } from "@/stores/navigationStore";
@@ -79,7 +79,7 @@ function EntryRow({
   const w = entry.workItem;
   return (
     <div
-      className={`zen-row group relative flex items-start gap-3 rounded-2xl border p-3.5 ${isNow ? "now border-primary/40" : "border-border/60"}`}
+      className={`zen-row ultra-now-row group relative flex items-start gap-3 rounded-2xl border p-3.5 ${isNow ? "now border-primary/40" : "border-border/60"}`}
     >
       {/* time gutter */}
       <span className="flex h-9 w-14 shrink-0 items-center justify-center rounded-xl bg-secondary text-[11px] font-extrabold tabular-nums text-foreground">
@@ -162,7 +162,7 @@ export default function TodayTimeline({
   const { entries, nowIndex, counts } = timeline;
 
   return (
-    <section className="zen-card v10-card enterprise-card relative rounded-[28px] p-5 sm:p-6">
+    <section className="zen-card v10-card enterprise-card ultra-rise-3 relative rounded-[28px] p-5 sm:p-6">
       <div className="zen-glow-spot -top-16 -right-10" aria-hidden />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>

@@ -3,17 +3,7 @@
 // Calm hierarchy: titles dominate, metadata is secondary, one primary action.
 
 import { useState } from "react";
-import {
-  CheckCircle2,
-  ChevronRight,
-  Clock,
-  Pin,
-  PinOff,
-  Sparkles,
-  Timer,
-  AlertTriangle,
-  CalendarClock,
-} from "lucide-react";
+import { CircleCheck as CheckCircle2, ChevronRight, Clock, Pin, PinOff, Sparkles, Timer, TriangleAlert as AlertTriangle, CalendarClock } from "lucide-react";
 import { toast } from "sonner";
 import type { WorkItem } from "@/lib/workQueue";
 import type { Task } from "@/lib/db";
@@ -127,7 +117,7 @@ export default function TodayPlan({
 
   return (
     <section
-      className="zen-card v10-card enterprise-card rounded-[24px] p-4 sm:p-5"
+      className="zen-card v10-card enterprise-card ultra-rise-3 rounded-[24px] p-4 sm:p-5"
       aria-labelledby="today-heading"
     >
       {/* ── Next action ── */}
