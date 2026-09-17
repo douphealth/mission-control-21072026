@@ -5,6 +5,34 @@ import { DashboardProvider } from "@/contexts/DashboardContext";
 import DashboardLayout from "@/layouts/DashboardLayout";
 import React from "react";
 
+// ─── Global uncaught-error safety net ────────────────────────────────────────
+// Catches errors that React's error boundary misses (module load failures,
+// hydration crashes, async errors outside the render tree). Without this the
+// app goes blank with no visible feedback.
+if (typeof window !== "undefined") {
+  const showFatal = (msg: string, stack?: string) => {
+    const el = document.getElementById("mc-fatal");
+    if (!el) return;
+    el.style.display = "flex";
+    el.innerHTML = `
+      <div style="max-width:560px;padding:32px;background:#1a1d27;border:1px solid #ef4444;border-radius:16px;color:#f8fafc;font-family:system-ui">
+        <div style="font-size:24px;font-weight:800;margin-bottom:8px">Mission Control hit an error</div>
+        <div style="color:#ef4444;font-weight:700;font-size:14px;margin-bottom:12px">${msg}</div>
+        ${stack ? `<pre style="background:#0d0f14;padding:12px;border-radius:8;overflow:auto;font-size:11px;color:#94a3b8;white-space:pre-wrap;max-height:240px">${stack}</pre>` : ""}
+        <button onclick="location.reload()" style="margin-top:16px;padding:10px 20px;background:#3b5cf6;color:#fff;border:none;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px">Reload</button>
+      </div>`;
+  };
+  window.addEventListener("error", (e) => {
+    console.error("Fatal client error:", e.error ?? e.message);
+    showFatal(e.message, e.error?.stack);
+  });
+  window.addEventListener("unhandledrejection", (e) => {
+    console.error("Unhandled promise rejection:", e.reason);
+    const msg = e.reason?.message ?? String(e.reason ?? "Unknown error");
+    showFatal(msg, e.reason?.stack);
+  });
+}
+
 // ─── Error Boundary ──────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -15,7 +43,7 @@ class ErrorBoundary extends React.Component<
     return { error };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error("🔴 Mission Control Error:", error, info);
+    console.error("Mission Control Error:", error, info);
   }
   render() {
     if (this.state.error) {
@@ -42,7 +70,9 @@ class ErrorBoundary extends React.Component<
               color: "#f8fafc",
             }}
           >
-            <div style={{ fontSize: 32, marginBottom: 8 }}>💥 Mission Control Crashed</div>
+            <div style={{ fontSize: 24, fontWeight: 800, marginBottom: 8 }}>
+              Mission Control hit an error
+            </div>
             <div style={{ color: "#ef4444", fontWeight: 700, fontSize: 16, marginBottom: 12 }}>
               {err.message}
             </div>
@@ -78,7 +108,7 @@ class ErrorBoundary extends React.Component<
                 fontSize: 14,
               }}
             >
-              🔄 Reload App
+              Reload App
             </button>
           </div>
         </div>

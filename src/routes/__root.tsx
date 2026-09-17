@@ -129,6 +129,20 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
+        {/* Fatal error overlay — hidden by default, shown by the global error handler in App.tsx */}
+        <div
+          id="mc-fatal"
+          style={{
+            display: "none",
+            position: "fixed",
+            inset: 0,
+            zIndex: 99999,
+            background: "#0d0f14",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 24,
+          }}
+        />
         {/* Ambient depth layers — sit behind all content, above nothing.
             Purely decorative; removed by print + a11y-contrast modes. */}
         <div className="prism-aurora" aria-hidden="true" />
