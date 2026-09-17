@@ -4,7 +4,21 @@
 // as a deadline or as a plan. Press N anywhere to focus it.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Bell, CalendarDays, CircleCheck as CheckCircle2, Clock, CornerDownLeft, Flag, Inbox, Lightbulb, Link2, ListChecks, StickyNote, Timer, X } from "lucide-react";
+import {
+  Bell,
+  CalendarDays,
+  CircleCheck as CheckCircle2,
+  Clock,
+  CornerDownLeft,
+  Flag,
+  Inbox,
+  Lightbulb,
+  Link2,
+  ListChecks,
+  StickyNote,
+  Timer,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   parseCapture,

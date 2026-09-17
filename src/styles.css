@@ -210,7 +210,12 @@
   --gradient-rose: linear-gradient(135deg, hsl(344 88% 58%), hsl(352 86% 66%));
   --gradient-info: linear-gradient(135deg, hsl(199 95% 56%), hsl(187 92% 60%));
   --gradient-amber: linear-gradient(135deg, hsl(38 95% 54%), hsl(48 96% 60%));
-  --gradient-dark: linear-gradient(160deg, hsl(229 47% 5.5%), hsl(227 38% 8.5%) 55%, hsl(229 47% 4.5%));
+  --gradient-dark: linear-gradient(
+    160deg,
+    hsl(229 47% 5.5%),
+    hsl(227 38% 8.5%) 55%,
+    hsl(229 47% 4.5%)
+  );
   --gradient-subtle: linear-gradient(135deg, hsl(163 88% 45% / 0.12), hsl(196 95% 50% / 0.05));
   --gradient-aurora:
     radial-gradient(1200px 600px at 12% -10%, hsl(163 88% 45% / 0.16), transparent 60%),
@@ -224,16 +229,11 @@
 
   --surface-1: hsl(0 0% 100% / 0.05);
   --surface-2: hsl(0 0% 100% / 0.03);
-  --surface-raised: linear-gradient(
-    180deg,
-    hsl(0 0% 100% / 0.06),
-    hsl(0 0% 100% / 0.024)
-  );
+  --surface-raised: linear-gradient(180deg, hsl(0 0% 100% / 0.06), hsl(0 0% 100% / 0.024));
   --surface-panel: hsl(0 0% 100% / 0.035);
   --hairline-color: hsl(0 0% 100% / 0.09);
   --hairline: 1px solid hsl(0 0% 100% / 0.09);
 }
-
 
 @layer base {
   * {
@@ -1218,7 +1218,12 @@ table,
   right: 14%;
   height: 3px;
   border-radius: 0 0 999px 999px;
-  background: linear-gradient(90deg, transparent, var(--col-accent, hsl(var(--primary))), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--col-accent, hsl(var(--primary))),
+    transparent
+  );
   opacity: 0.75;
 }
 .kanban-col.drag-over {
@@ -1278,12 +1283,7 @@ table,
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 0%,
-    hsl(0 0% 100% / 0.35) 50%,
-    transparent 100%
-  );
+  background: linear-gradient(100deg, transparent 0%, hsl(0 0% 100% / 0.35) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2.4s linear infinite;
   border-radius: inherit;
@@ -1309,7 +1309,9 @@ table,
   background: color-mix(in srgb, hsl(var(--primary)) 14%, transparent);
   color: hsl(var(--primary));
   border-color: color-mix(in srgb, hsl(var(--primary)) 32%, transparent);
-  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.1), 0 4px 14px -8px hsl(var(--primary) / 0.5);
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.1),
+    0 4px 14px -8px hsl(var(--primary) / 0.5);
 }
 
 /* a11y + print hygiene for the new layer */
@@ -1464,20 +1466,11 @@ table,
   bottom: 0;
   left: 0;
   width: 34%;
-  background: linear-gradient(
-    100deg,
-    transparent,
-    hsl(0 0% 100% / 0.32),
-    transparent
-  );
+  background: linear-gradient(100deg, transparent, hsl(0 0% 100% / 0.32), transparent);
   animation: zen-glint 2.8s ease-in-out infinite;
 }
 .zen-cap-fill.over {
-  background: linear-gradient(
-    90deg,
-    hsl(var(--destructive) / 0.85),
-    hsl(var(--destructive))
-  );
+  background: linear-gradient(90deg, hsl(var(--destructive) / 0.85), hsl(var(--destructive)));
   box-shadow: 0 0 12px hsl(var(--destructive) / 0.5);
 }
 .zen-cap-fill.over::after {
@@ -1557,11 +1550,7 @@ table,
   width: 420px;
   height: 200px;
   border-radius: 999px;
-  background: radial-gradient(
-    ellipse at center,
-    hsl(var(--primary) / 0.1),
-    transparent 70%
-  );
+  background: radial-gradient(ellipse at center, hsl(var(--primary) / 0.1), transparent 70%);
   filter: blur(40px);
   pointer-events: none;
 }
@@ -1722,24 +1711,50 @@ table,
 
 /* ── A1. Ambient aurora keyframes ──────────────────────────────────────── */
 @keyframes aurora-drift {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.55; }
-  50% { transform: translate3d(0, -1.5%, 0) scale(1.06); opacity: 0.8; }
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translate3d(0, -1.5%, 0) scale(1.06);
+    opacity: 0.8;
+  }
 }
 @keyframes aurora-sheen {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
 }
 @keyframes aurora-glow-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35); }
-  50% { box-shadow: 0 0 0 6px hsl(var(--primary) / 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0.35);
+  }
+  50% {
+    box-shadow: 0 0 0 6px hsl(var(--primary) / 0);
+  }
 }
 @keyframes aurora-rise {
-  from { opacity: 0; transform: translateY(14px) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 @keyframes aurora-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ── A2. Command deck cards: ambient aurora top edge on hover ─────────── */
@@ -1827,11 +1842,26 @@ table,
   background: hsl(var(--primary) / 0.06);
   transform: translateY(-1px);
 }
-.v10-stat[data-tone="good"] { color: hsl(var(--success)); border-color: hsl(var(--success) / 0.35); }
-.v10-stat[data-tone="warn"] { color: hsl(var(--warning)); border-color: hsl(var(--warning) / 0.35); }
-.v10-stat[data-tone="bad"] { color: hsl(var(--destructive)); border-color: hsl(var(--destructive) / 0.35); }
-.v10-stat[data-tone="info"] { color: hsl(var(--info)); border-color: hsl(var(--info) / 0.35); }
-.v10-stat[data-tone="violet"] { color: hsl(var(--violet)); border-color: hsl(var(--violet) / 0.35); }
+.v10-stat[data-tone="good"] {
+  color: hsl(var(--success));
+  border-color: hsl(var(--success) / 0.35);
+}
+.v10-stat[data-tone="warn"] {
+  color: hsl(var(--warning));
+  border-color: hsl(var(--warning) / 0.35);
+}
+.v10-stat[data-tone="bad"] {
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.35);
+}
+.v10-stat[data-tone="info"] {
+  color: hsl(var(--info));
+  border-color: hsl(var(--info) / 0.35);
+}
+.v10-stat[data-tone="violet"] {
+  color: hsl(var(--violet));
+  border-color: hsl(var(--violet) / 0.35);
+}
 
 /* ── A6. Progress ring + day progress bar ──────────────────────────────── */
 .v10-progress-track {
@@ -1852,12 +1882,7 @@ table,
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 30%,
-    hsl(0 0% 100% / 0.28) 50%,
-    transparent 70%
-  );
+  background: linear-gradient(100deg, transparent 30%, hsl(0 0% 100% / 0.28) 50%, transparent 70%);
   background-size: 200% 100%;
   animation: aurora-shimmer 2.8s linear infinite;
 }
@@ -1871,12 +1896,7 @@ table,
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    100deg,
-    transparent 35%,
-    hsl(0 0% 100% / 0.22) 50%,
-    transparent 65%
-  );
+  background: linear-gradient(100deg, transparent 35%, hsl(0 0% 100% / 0.22) 50%, transparent 65%);
   background-size: 220% 100%;
   background-position: -120% 0;
   transition: background-position 0.6s ease;
@@ -1906,9 +1926,15 @@ table,
 .v10-rise {
   animation: aurora-rise 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.v10-rise-1 { animation-delay: 0.05s; }
-.v10-rise-2 { animation-delay: 0.1s; }
-.v10-rise-3 { animation-delay: 0.16s; }
+.v10-rise-1 {
+  animation-delay: 0.05s;
+}
+.v10-rise-2 {
+  animation-delay: 0.1s;
+}
+.v10-rise-3 {
+  animation-delay: 0.16s;
+}
 
 /* ── A10. Skeleton shimmer upgrade ─────────────────────────────────────── */
 .v10-skeleton {
@@ -2004,47 +2030,102 @@ table,
 
 /* ── U1. Keyframes ─────────────────────────────────────────────────────── */
 @keyframes ultra-rise {
-  from { opacity: 0; transform: translateY(18px) scale(0.97); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 @keyframes ultra-fade {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 @keyframes ultra-orb {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33%      { transform: translate(3%, -2%) scale(1.08); }
-  66%      { transform: translate(-2%, 1.5%) scale(0.95); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(3%, -2%) scale(1.08);
+  }
+  66% {
+    transform: translate(-2%, 1.5%) scale(0.95);
+  }
 }
 @keyframes ultra-orb-rev {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33%      { transform: translate(-3%, 2%) scale(1.05); }
-  66%      { transform: translate(2%, -1.5%) scale(0.92); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(-3%, 2%) scale(1.05);
+  }
+  66% {
+    transform: translate(2%, -1.5%) scale(0.92);
+  }
 }
 @keyframes ultra-sweep {
-  from { left: -60%; }
-  to   { left: 160%; }
+  from {
+    left: -60%;
+  }
+  to {
+    left: 160%;
+  }
 }
 @keyframes ultra-count {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 @keyframes ultra-ring-fill {
-  from { stroke-dashoffset: var(--ring-circumference); }
-  to   { stroke-dashoffset: var(--ring-offset); }
+  from {
+    stroke-dashoffset: var(--ring-circumference);
+  }
+  to {
+    stroke-dashoffset: var(--ring-offset);
+  }
 }
 @keyframes ultra-breathe {
-  0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0); }
-  50%      { box-shadow: 0 0 0 8px hsl(var(--primary) / 0.06); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 hsl(var(--primary) / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 8px hsl(var(--primary) / 0.06);
+  }
 }
 
 /* ── U2. Staggered entrance ────────────────────────────────────────────── */
-.ultra-rise { animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
-.ultra-rise-1 { animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both; }
-.ultra-rise-2 { animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both; }
-.ultra-rise-3 { animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both; }
-.ultra-rise-4 { animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both; }
-.ultra-fade   { animation: ultra-fade 0.7s ease both; }
+.ultra-rise {
+  animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.ultra-rise-1 {
+  animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.06s both;
+}
+.ultra-rise-2 {
+  animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+}
+.ultra-rise-3 {
+  animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
+}
+.ultra-rise-4 {
+  animation: ultra-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
+}
+.ultra-fade {
+  animation: ultra-fade 0.7s ease both;
+}
 
 /* ── U3. Hero — deep-space command deck ────────────────────────────────── */
 .ultra-hero {
@@ -2066,20 +2147,26 @@ table,
   will-change: transform;
 }
 .ultra-hero-orb--1 {
-  top: -120px; right: -80px;
-  width: 380px; height: 380px;
+  top: -120px;
+  right: -80px;
+  width: 380px;
+  height: 380px;
   background: radial-gradient(circle, hsl(163 88% 42% / 0.55), transparent 65%);
   animation: ultra-orb 22s ease-in-out infinite;
 }
 .ultra-hero-orb--2 {
-  bottom: -140px; left: -60px;
-  width: 340px; height: 340px;
+  bottom: -140px;
+  left: -60px;
+  width: 340px;
+  height: 340px;
   background: radial-gradient(circle, hsl(199 95% 52% / 0.4), transparent 65%);
   animation: ultra-orb-rev 28s ease-in-out infinite;
 }
 .ultra-hero-orb--3 {
-  bottom: -80px; right: 40px;
-  width: 260px; height: 260px;
+  bottom: -80px;
+  right: 40px;
+  width: 260px;
+  height: 260px;
   background: radial-gradient(circle, hsl(258 88% 60% / 0.3), transparent 65%);
   animation: ultra-orb 34s ease-in-out infinite;
 }
@@ -2114,7 +2201,10 @@ table,
   opacity: 1;
   animation: ultra-sweep 1.2s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.ultra-hero-content { position: relative; z-index: 1; }
+.ultra-hero-content {
+  position: relative;
+  z-index: 1;
+}
 
 /* ── U4. Glass stat tiles ──────────────────────────────────────────────── */
 .ultra-stat-grid {
@@ -2157,10 +2247,17 @@ table,
 .ultra-stat::after {
   content: "";
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 2px;
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, var(--stat-accent, hsl(var(--primary))), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--stat-accent, hsl(var(--primary))),
+    transparent
+  );
   opacity: 0.7;
 }
 .ultra-stat-num {
@@ -2181,8 +2278,10 @@ table,
 }
 .ultra-stat-icon {
   position: absolute;
-  top: 16px; right: 16px;
-  width: 28px; height: 28px;
+  top: 16px;
+  right: 16px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2190,17 +2289,29 @@ table,
   background: color-mix(in srgb, var(--stat-accent, hsl(var(--primary))) 12%, transparent);
   color: var(--stat-accent, hsl(var(--primary)));
 }
-.ultra-stat[data-tone="good"]   { --stat-accent: hsl(var(--success)); }
-.ultra-stat[data-tone="bad"]    { --stat-accent: hsl(var(--destructive)); }
-.ultra-stat[data-tone="warn"]   { --stat-accent: hsl(var(--warning)); }
-.ultra-stat[data-tone="info"]   { --stat-accent: hsl(var(--info)); }
-.ultra-stat[data-tone="violet"] { --stat-accent: hsl(var(--violet)); }
+.ultra-stat[data-tone="good"] {
+  --stat-accent: hsl(var(--success));
+}
+.ultra-stat[data-tone="bad"] {
+  --stat-accent: hsl(var(--destructive));
+}
+.ultra-stat[data-tone="warn"] {
+  --stat-accent: hsl(var(--warning));
+}
+.ultra-stat[data-tone="info"] {
+  --stat-accent: hsl(var(--info));
+}
+.ultra-stat[data-tone="violet"] {
+  --stat-accent: hsl(var(--violet));
+}
 
 /* ── U5. Capture bar — focus bloom ─────────────────────────────────────── */
 .ultra-capture {
   position: relative;
   border-radius: 24px;
-  transition: box-shadow 300ms ease, border-color 300ms ease;
+  transition:
+    box-shadow 300ms ease,
+    border-color 300ms ease;
 }
 .ultra-capture:focus-within {
   border-color: hsl(var(--primary) / 0.4);
@@ -2209,7 +2320,9 @@ table,
     var(--shadow-md);
 }
 .ultra-capture-icon {
-  transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), background 300ms ease;
+  transition:
+    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 300ms ease;
 }
 .ultra-capture:focus-within .ultra-capture-icon {
   transform: scale(1.1) rotate(-6deg);
@@ -2222,7 +2335,10 @@ table,
   overflow: hidden;
   border-radius: 16px;
   font-weight: 700;
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 240ms ease, filter 240ms ease;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 240ms ease,
+    filter 240ms ease;
 }
 .ultra-btn-primary::after {
   content: "";
@@ -2234,7 +2350,9 @@ table,
 .ultra-btn-primary:hover {
   transform: translateY(-1.5px);
   filter: saturate(1.12) brightness(1.06);
-  box-shadow: var(--shadow-primary), 0 0 0 1px hsl(var(--primary) / 0.25);
+  box-shadow:
+    var(--shadow-primary),
+    0 0 0 1px hsl(var(--primary) / 0.25);
 }
 .ultra-btn-primary:active {
   transform: translateY(0) scale(0.97);
@@ -2243,7 +2361,10 @@ table,
   position: relative;
   overflow: hidden;
   border-radius: 16px;
-  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1), border-color 200ms ease, background 200ms ease;
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 200ms ease,
+    background 200ms ease;
 }
 .ultra-btn-ghost:hover {
   transform: translateY(-1.5px);
@@ -2277,14 +2398,25 @@ table,
 
 /* ── U9. Motion guards ─────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .ultra-rise, .ultra-rise-1, .ultra-rise-2, .ultra-rise-3, .ultra-rise-4, .ultra-fade {
+  .ultra-rise,
+  .ultra-rise-1,
+  .ultra-rise-2,
+  .ultra-rise-3,
+  .ultra-rise-4,
+  .ultra-fade {
     animation: none !important;
   }
-  .ultra-hero-orb--1, .ultra-hero-orb--2, .ultra-hero-orb--3,
-  .ultra-hero-sweep, .ultra-now-row::before, .ultra-stat-num {
+  .ultra-hero-orb--1,
+  .ultra-hero-orb--2,
+  .ultra-hero-orb--3,
+  .ultra-hero-sweep,
+  .ultra-now-row::before,
+  .ultra-stat-num {
     animation: none !important;
   }
-  .ultra-stat, .ultra-btn-primary, .ultra-btn-ghost {
+  .ultra-stat,
+  .ultra-btn-primary,
+  .ultra-btn-ghost {
     transition: none;
   }
 }

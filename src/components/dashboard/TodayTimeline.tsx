@@ -3,7 +3,15 @@
 // untimed (engine score). Answers "what now / what next / what needs me"
 // in one glance instead of three siloed panels.
 
-import { TriangleAlert as AlertTriangle, ArrowUpRight, CircleCheck as CheckCircle2, Clock, Flag, Timer, Zap } from "lucide-react";
+import {
+  TriangleAlert as AlertTriangle,
+  ArrowUpRight,
+  CircleCheck as CheckCircle2,
+  Clock,
+  Flag,
+  Timer,
+  Zap,
+} from "lucide-react";
 import type { Timeline, TimelineEntry } from "@/lib/timeline";
 import type { WorkItem } from "@/lib/workQueue";
 import { useNavigationStore } from "@/stores/navigationStore";

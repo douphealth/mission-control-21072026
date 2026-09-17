@@ -6,7 +6,14 @@
 // Read-only: consumes WorkItem data passed in; writes only via callbacks.
 
 import { useEffect, useState } from "react";
-import { ChevronRight, CircleCheck as CheckCircle2, Clock, Sparkles, Timer, Zap } from "lucide-react";
+import {
+  ChevronRight,
+  CircleCheck as CheckCircle2,
+  Clock,
+  Sparkles,
+  Timer,
+  Zap,
+} from "lucide-react";
 import type { WorkItem } from "@/lib/workQueue";
 import { estimateOf, fmtMinutes } from "@/lib/planning";
 import type { Task } from "@/lib/db";
@@ -20,7 +27,15 @@ function useClock() {
   return now;
 }
 
-function ProgressRing({ pct, size = 56, stroke = 5 }: { pct: number; size?: number; stroke?: number }) {
+function ProgressRing({
+  pct,
+  size = 56,
+  stroke = 5,
+}: {
+  pct: number;
+  size?: number;
+  stroke?: number;
+}) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const offset = c - (Math.min(100, Math.max(0, pct)) / 100) * c;
@@ -112,9 +127,7 @@ export default function HeroNowBand({
               </span>
               Now
             </span>
-            <span className="font-mono text-[16px] font-bold tabular-nums text-white">
-              {hhmm}
-            </span>
+            <span className="font-mono text-[16px] font-bold tabular-nums text-white">{hhmm}</span>
             <span className="hidden text-[12px] font-semibold text-white/50 sm:inline">
               {greeting}
             </span>
@@ -129,7 +142,9 @@ export default function HeroNowBand({
                 </span>
               </div>
               <div className="text-[11px] leading-tight text-white/55">
-                <div className="font-bold text-white">{commitmentsDone}/{commitmentsTotal}</div>
+                <div className="font-bold text-white">
+                  {commitmentsDone}/{commitmentsTotal}
+                </div>
                 <div>outcomes</div>
               </div>
             </div>
@@ -150,7 +165,8 @@ export default function HeroNowBand({
                 <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-white/50">
                   {nextAction.kind === "task" && (
                     <span className="inline-flex items-center gap-1">
-                      <Timer size={11} aria-hidden /> {fmtMinutes(estimateOf(nextAction.raw as Task))}
+                      <Timer size={11} aria-hidden />{" "}
+                      {fmtMinutes(estimateOf(nextAction.raw as Task))}
                     </span>
                   )}
                   {nextAction.due && (

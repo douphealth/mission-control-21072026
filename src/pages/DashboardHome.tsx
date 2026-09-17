@@ -7,7 +7,17 @@
 // leads, then a grid of glass stat tiles, then the plan/timeline pair.
 
 import { Suspense, lazy, useEffect, useState } from "react";
-import { TriangleAlert as AlertTriangle, ChartBar as BarChart3, CalendarClock, CircleCheck as CheckCircle2, ChevronDown, Inbox, Moon, Timer, Zap } from "lucide-react";
+import {
+  TriangleAlert as AlertTriangle,
+  ChartBar as BarChart3,
+  CalendarClock,
+  CircleCheck as CheckCircle2,
+  ChevronDown,
+  Inbox,
+  Moon,
+  Timer,
+  Zap,
+} from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
 import InboxStrip from "@/components/dashboard/InboxStrip";

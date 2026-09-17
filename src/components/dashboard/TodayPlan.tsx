@@ -3,7 +3,17 @@
 // Calm hierarchy: titles dominate, metadata is secondary, one primary action.
 
 import { useState } from "react";
-import { CircleCheck as CheckCircle2, ChevronRight, Clock, Pin, PinOff, Sparkles, Timer, TriangleAlert as AlertTriangle, CalendarClock } from "lucide-react";
+import {
+  CircleCheck as CheckCircle2,
+  ChevronRight,
+  Clock,
+  Pin,
+  PinOff,
+  Sparkles,
+  Timer,
+  TriangleAlert as AlertTriangle,
+  CalendarClock,
+} from "lucide-react";
 import { toast } from "sonner";
 import type { WorkItem } from "@/lib/workQueue";
 import type { Task } from "@/lib/db";
