@@ -1,7 +1,6 @@
 // ─── QuickCaptureBar — the universal front door ───────────────────────────────
-// One input. Title is the only required field. Everything the parser found is
-// shown as an editable chip BEFORE saving — including whether a date was read
-// as a deadline or as a plan. Press N anywhere to focus it.
+// One input with live-parsed chips. Editorial surface with focus glow.
+// Press N anywhere to focus it.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -56,7 +55,6 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
   const addItem = useAddItem();
   const { area: areaFilter, bump } = usePlanStore();
 
-  // Global "N" (and the mobile capture button) focuses this input.
   useEffect(() => {
     const focus = () => inputRef.current?.focus();
     window.addEventListener(CAPTURE_FOCUS_EVENT, focus);
@@ -109,13 +107,10 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
   const isTask = preview?.target === "tasks";
 
   return (
-    <section
-      className="ultra-capture enterprise-card v10-card rounded-[24px] p-3 sm:p-4"
-      aria-label="Quick capture"
-    >
+    <section className="se-capture p-3 sm:p-4" aria-label="Quick capture">
       <div className="flex items-center gap-3">
-        <span className="ultra-capture-icon flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <CornerDownLeft size={15} />
+        <span className="ultra-capture-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-300">
+          <CornerDownLeft size={16} />
         </span>
         <input
           ref={inputRef}
@@ -130,22 +125,22 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
             if (e.key === "Escape") reset();
           }}
           aria-label="Capture a task, note, idea, link or reminder"
-          placeholder="What needs doing? e.g. “Send proposal by Friday, 45 min, Work”"
-          className="min-w-0 flex-1 bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/60"
+          placeholder='What needs doing? e.g. "Send proposal by Friday, 45 min, Work"'
+          className="min-w-0 flex-1 bg-transparent text-[14px] text-foreground outline-none placeholder:text-muted-foreground/55"
         />
-        <kbd className="hidden rounded-md border border-border/60 bg-secondary/60 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
+        <kbd className="hidden rounded-md border border-border/50 bg-secondary/50 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
           N
         </kbd>
         <button
           onClick={save}
           disabled={!preview || saving}
-          className="v10-btn-sheen flex h-9 shrink-0 items-center gap-1.5 rounded-2xl bg-primary px-3.5 text-[12px] font-bold text-primary-foreground transition disabled:opacity-40 enabled:hover:shadow-[var(--shadow-primary)] enabled:active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          className="se-btn se-btn-primary h-10 px-4 text-[12px] disabled:opacity-40"
         >
           {saving ? (
-            "…"
+            "..."
           ) : (
             <>
-              <CheckCircle2 size={13} /> Save
+              <CheckCircle2 size={14} /> Save
             </>
           )}
         </button>
@@ -153,11 +148,10 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
 
       {preview && meta && (
         <div
-          className="mt-2.5 flex flex-wrap items-center gap-1.5 pl-0 sm:pl-12"
+          className="mt-2.5 flex flex-wrap items-center gap-1.5 pl-0 sm:pl-[52px]"
           role="group"
           aria-label="Interpreted details — click a chip to change it"
         >
-          {/* Target */}
           <Chip
             tone={meta.tone}
             icon={<meta.icon size={11} />}
@@ -172,7 +166,6 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
             hint="Click to change where this lands"
           />
 
-          {/* Date + role */}
           {preview.due ? (
             <Chip
               icon={<CalendarDays size={11} />}
@@ -180,8 +173,8 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
               strong={preview.dateRole === "deadline"}
               hint={
                 preview.dateRole === "deadline"
-                  ? `“${preview.dateText ?? preview.due}” read as a deadline. Click to make it a plan instead.`
-                  : `“${preview.dateText ?? preview.due}” read as when you'll work on it — not a deadline. Click to make it the deadline.`
+                  ? `"${preview.dateText ?? preview.due}" read as a deadline. Click to make it a plan instead.`
+                  : `"${preview.dateText ?? preview.due}" read as when you'll work on it — not a deadline. Click to make it the deadline.`
               }
               onClick={() =>
                 setOv((o) => ({
@@ -264,12 +257,12 @@ function Chip({
 }) {
   const Tag = onClick ? "button" : "span";
   return (
-    <span className="inline-flex items-center overflow-hidden rounded-full border border-border/60 bg-secondary/60 text-[10.5px] font-semibold">
+    <span className="inline-flex items-center overflow-hidden rounded-full border border-border/50 bg-secondary/50 text-[10.5px] font-semibold">
       <Tag
         type={onClick ? "button" : undefined}
         onClick={onClick}
         title={hint}
-        className={`inline-flex items-center gap-1 px-2.5 py-1 ${tone ?? "text-foreground/85"} ${
+        className={`inline-flex items-center gap-1 px-2.5 py-1 ${tone ?? "text-foreground/80"} ${
           strong ? "bg-primary/10 text-primary" : ""
         } ${onClick ? "hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50" : ""}`}
       >

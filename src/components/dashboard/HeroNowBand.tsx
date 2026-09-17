@@ -1,9 +1,6 @@
-// ─── ULTRA HeroNowBand — the command-deck hero strip ──────────────────────────
-// The first viewport answers three questions in one glance:
-//   1. What is happening RIGHT NOW (live clock + next up)
-//   2. How far through the day's committed work am I (progress ring)
-//   3. What is the very next action (one-tap Start / Done)
-// Read-only: consumes WorkItem data passed in; writes only via callbacks.
+// ─── SAGE HeroNowBand — editorial command-deck hero ───────────────────────────
+// Greeting + live clock + day progress arc + next action in one beautiful band.
+// Dark surface with floating orbs, dot grid, and gradient progress arc.
 
 import { useEffect, useState } from "react";
 import {
@@ -27,10 +24,10 @@ function useClock() {
   return now;
 }
 
-function ProgressRing({
+function ProgressArc({
   pct,
-  size = 56,
-  stroke = 5,
+  size = 72,
+  stroke = 6,
 }: {
   pct: number;
   size?: number;
@@ -47,7 +44,7 @@ function ProgressRing({
         r={r}
         strokeWidth={stroke}
         fill="none"
-        className="ultra-ring-track"
+        className="se-arc-track"
       />
       <circle
         cx={size / 2}
@@ -56,15 +53,15 @@ function ProgressRing({
         strokeWidth={stroke}
         strokeLinecap="round"
         fill="none"
-        stroke="url(#ultraRingGrad)"
+        stroke="url(#seArcGrad)"
         strokeDasharray={c}
         strokeDashoffset={offset}
-        className="ultra-ring-fill"
+        className="se-arc-fill"
       />
       <defs>
-        <linearGradient id="ultraRingGrad" x1="0" y1="0" x2="1" y2="1">
+        <linearGradient id="seArcGrad" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#6ee7b7" />
-          <stop offset="50%" stopColor="#38bdf8" />
+          <stop offset="45%" stopColor="#38bdf8" />
           <stop offset="100%" stopColor="#a78bfa" />
         </linearGradient>
       </defs>
@@ -91,130 +88,132 @@ export default function HeroNowBand({
 }) {
   const now = useClock();
   const hhmm = now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  const hour = now.getHours();
   const greeting =
-    now.getHours() < 5
-      ? "Deep night"
-      : now.getHours() < 12
+    hour < 5
+      ? "Still up"
+      : hour < 12
         ? "Good morning"
-        : now.getHours() < 18
+        : hour < 18
           ? "Good afternoon"
           : "Good evening";
+  const dateLabel = now.toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 
-  const donePct =
-    commitmentsTotal > 0 ? Math.round((commitmentsDone / commitmentsTotal) * 100) : null;
+  const donePct = commitmentsTotal > 0 ? Math.round((commitmentsDone / commitmentsTotal) * 100) : 0;
 
   return (
-    <section className="ultra-hero ultra-rise text-white" aria-label="Now and day progress">
-      {/* Floating orbs */}
-      <div className="ultra-hero-orb ultra-hero-orb--1" aria-hidden />
-      <div className="ultra-hero-orb ultra-hero-orb--2" aria-hidden />
-      <div className="ultra-hero-orb ultra-hero-orb--3" aria-hidden />
-      {/* Dot matrix */}
-      <div className="ultra-hero-dots" aria-hidden />
-      {/* Top catch-light */}
-      <div className="ultra-hero-toplight" aria-hidden />
-      {/* Hover sweep */}
-      <div className="ultra-hero-sweep" aria-hidden />
+    <section className="se-hero ultra-rise text-white" aria-label="Now and day progress">
+      <div className="se-hero-orb se-hero-orb--1" aria-hidden />
+      <div className="se-hero-orb se-hero-orb--2" aria-hidden />
+      <div className="se-hero-grid" aria-hidden />
+      <div className="se-hero-glow" aria-hidden />
 
-      <div className="ultra-hero-content p-5 sm:p-7">
-        {/* Top row: NOW chip + clock + progress ring */}
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-[0.18em] text-white backdrop-blur">
+      <div className="se-hero-content p-5 sm:p-8">
+        {/* Top: greeting + date + progress arc */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/8 px-3 py-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/70 backdrop-blur">
               <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
               </span>
-              Now
-            </span>
-            <span className="font-mono text-[16px] font-bold tabular-nums text-white">{hhmm}</span>
-            <span className="hidden text-[12px] font-semibold text-white/50 sm:inline">
+              {dateLabel}
+            </div>
+
+            <h1 className="mt-4 font-display text-[30px] font-extrabold leading-[1.02] tracking-tighter text-white sm:text-[42px]">
               {greeting}
-            </span>
+            </h1>
+            <p className="mt-1.5 text-[13px] text-white/45 sm:text-[14px]">
+              {commitmentsTotal > 0
+                ? `${commitmentsDone} of ${commitmentsTotal} outcomes complete · ${fmtMinutes(Math.max(0, availableMin))} free today`
+                : "Capture something to get started"}
+            </p>
+
+            {/* Day progress bar */}
+            {commitmentsTotal > 0 && (
+              <div className="mt-4 max-w-xs">
+                <div className="se-bar">
+                  <div className="se-bar-fill" style={{ width: `${donePct}%` }} />
+                </div>
+                <div className="mt-1.5 flex items-center justify-between text-[10.5px] font-semibold text-white/40">
+                  <span>{donePct}% done</span>
+                  <span className="font-mono tabular-nums text-white/60">{hhmm}</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {donePct !== null && (
-            <div className="flex items-center gap-2.5" role="status">
-              <div className="relative">
-                <ProgressRing pct={donePct} size={48} stroke={4.5} />
-                <span className="absolute inset-0 flex items-center justify-center text-[10px] font-extrabold tabular-nums text-white">
+          {/* Progress arc */}
+          {commitmentsTotal > 0 && (
+            <div className="relative shrink-0" role="status">
+              <ProgressArc pct={donePct} size={80} stroke={7} />
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="font-display text-[18px] font-extrabold tabular-nums text-white">
                   {donePct}%
                 </span>
-              </div>
-              <div className="text-[11px] leading-tight text-white/55">
-                <div className="font-bold text-white">
-                  {commitmentsDone}/{commitmentsTotal}
-                </div>
-                <div>outcomes</div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Next action row */}
-        <div className="mt-5 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            {nextAction ? (
-              <>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
-                  Next up
-                </p>
-                <h1 className="mt-1.5 truncate font-display text-[22px] font-extrabold leading-tight tracking-tight text-white sm:text-[28px]">
-                  {nextAction.title}
-                </h1>
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-white/50">
-                  {nextAction.kind === "task" && (
-                    <span className="inline-flex items-center gap-1">
-                      <Timer size={11} aria-hidden />{" "}
-                      {fmtMinutes(estimateOf(nextAction.raw as Task))}
-                    </span>
-                  )}
-                  {nextAction.due && (
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={11} aria-hidden /> due {nextAction.due.slice(5)}
-                    </span>
-                  )}
-                  <span className="inline-flex items-center gap-1 text-emerald-300/70">
-                    <Sparkles size={11} aria-hidden />{" "}
-                    {plannedMin > 0 ? fmtMinutes(plannedMin) : "0 min"} planned ·{" "}
-                    {fmtMinutes(Math.max(0, availableMin))} free
-                  </span>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-emerald-300/80">
-                  Next up
-                </p>
-                <h1 className="mt-1.5 font-display text-[22px] font-extrabold leading-tight tracking-tight text-white sm:text-[28px]">
-                  Nothing queued — capture something
-                </h1>
-                <p className="mt-1.5 text-[11.5px] text-white/50">
-                  Press <kbd className="rounded border border-white/20 px-1 text-[10px]">N</kbd> to
-                  capture, or{" "}
-                  <kbd className="rounded border border-white/20 px-1 text-[10px]">?</kbd> for
-                  shortcuts.
-                </p>
-              </>
-            )}
+        {/* Next action card */}
+        <div className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-white/[0.06] p-4 backdrop-blur-xl sm:p-5">
+          <div className="relative mb-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-[9.5px] font-bold uppercase tracking-[0.16em] text-emerald-300">
+            <Sparkles size={10} /> Do this now
           </div>
 
-          {nextAction && (
-            <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
-              <button
-                onClick={() => onFocus(nextAction)}
-                className="ultra-btn-sheen flex h-10 items-center gap-1.5 rounded-2xl bg-white px-4 text-[12.5px] font-bold text-slate-900 shadow-lg shadow-emerald-500/20 transition hover:-translate-y-0.5 hover:shadow-emerald-400/30 active:scale-95"
-              >
-                <Zap size={14} /> Start
-                <ChevronRight size={14} />
-              </button>
-              <button
-                onClick={() => onComplete(nextAction)}
-                aria-label="Mark done"
-                className="ultra-btn-ghost flex h-10 items-center gap-1.5 rounded-2xl border border-white/15 bg-white/10 px-3 text-[12.5px] font-semibold text-white backdrop-blur transition hover:border-white/25 hover:bg-white/[0.15] active:scale-95"
-              >
-                <CheckCircle2 size={14} /> Done
-              </button>
+          {nextAction ? (
+            <>
+              <h2 className="font-display text-[19px] font-bold leading-snug tracking-tight text-white sm:text-[24px]">
+                {nextAction.title}
+              </h2>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-white/45">
+                {nextAction.kind === "task" && (
+                  <span className="inline-flex items-center gap-1">
+                    <Timer size={11} /> {fmtMinutes(estimateOf(nextAction.raw as Task))}
+                  </span>
+                )}
+                {nextAction.due && (
+                  <span className="inline-flex items-center gap-1">
+                    <Clock size={11} /> due {nextAction.due.slice(5)}
+                  </span>
+                )}
+                <span className="inline-flex items-center gap-1 text-emerald-300/60">
+                  {plannedMin > 0 ? fmtMinutes(plannedMin) : "0 min"} planned ·{" "}
+                  {fmtMinutes(Math.max(0, availableMin))} free
+                </span>
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => onFocus(nextAction)}
+                  className="se-btn se-btn-primary h-10 px-4 text-[12.5px]"
+                >
+                  <Zap size={14} /> Start
+                  <ChevronRight size={14} />
+                </button>
+                <button
+                  onClick={() => onComplete(nextAction)}
+                  className="se-btn h-10 border border-white/15 bg-white/8 px-4 text-[12.5px] font-semibold text-white backdrop-blur hover:bg-white/15"
+                >
+                  <CheckCircle2 size={14} /> Done
+                </button>
+              </div>
+            </>
+          ) : (
+            <div className="py-2">
+              <h2 className="font-display text-[19px] font-bold tracking-tight text-white sm:text-[22px]">
+                Nothing is demanding your attention
+              </h2>
+              <p className="mt-1 text-[12px] text-white/45">
+                Press <kbd className="rounded border border-white/20 px-1 text-[10px]">N</kbd> to
+                capture, or <kbd className="rounded border border-white/20 px-1 text-[10px]">?</kbd>{" "}
+                for shortcuts.
+              </p>
             </div>
           )}
         </div>

@@ -1,6 +1,5 @@
 // ─── Today: outcomes, next action, capacity ───────────────────────────────────
-// Answers, in order: What matters today? What should I do next? Is it realistic?
-// Calm hierarchy: titles dominate, metadata is secondary, one primary action.
+// Editorial card with clean hierarchy: next action, capacity bar, outcomes list.
 
 import { useState } from "react";
 import {
@@ -126,23 +125,20 @@ export default function TodayPlan({
   };
 
   return (
-    <section
-      className="zen-card v10-card enterprise-card ultra-rise-3 rounded-[24px] p-4 sm:p-5"
-      aria-labelledby="today-heading"
-    >
+    <section className="se-card ultra-rise-3 p-4 sm:p-6" aria-labelledby="today-heading">
       {/* ── Next action ── */}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="zen-label text-[10.5px] font-bold uppercase tracking-[0.14em]">Do next</p>
+          <p className="se-label">Do next</p>
           {next ? (
             <>
               <h1
                 id="today-heading"
-                className="title-grad mt-1 font-display text-[22px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[26px]"
+                className="title-grad mt-1.5 font-display text-[22px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[28px]"
               >
                 {next.title}
               </h1>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
                 {next.kind === "task" && (
                   <span className="inline-flex items-center gap-1">
                     <Timer size={11} aria-hidden /> {fmtMinutes(estimateOf(next.raw as Task))}
@@ -156,24 +152,24 @@ export default function TodayPlan({
           ) : (
             <h1
               id="today-heading"
-              className="mt-1 font-display text-[22px] font-extrabold tracking-tight text-foreground"
+              className="mt-1.5 font-display text-[22px] font-extrabold tracking-tight text-foreground"
             >
               Nothing chosen yet
             </h1>
           )}
         </div>
         {next && (
-          <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
             <button
               onClick={() => onFocus(next)}
-              className="flex h-10 items-center gap-1.5 rounded-2xl bg-primary px-4 text-[12.5px] font-bold text-primary-foreground shadow-[var(--shadow-primary)] transition hover:opacity-95 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="se-btn se-btn-primary h-10 px-4 text-[12.5px]"
             >
               Start <ChevronRight size={14} />
             </button>
             <button
               onClick={() => onComplete(next)}
               aria-label="Mark done"
-              className="flex h-10 items-center gap-1.5 rounded-2xl border border-border/60 bg-background/60 px-3 text-[12.5px] font-semibold text-foreground transition hover:border-emerald-500/40 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="se-btn se-btn-ghost h-10 px-3 text-[12.5px]"
             >
               <CheckCircle2 size={14} /> Done
             </button>
@@ -182,7 +178,10 @@ export default function TodayPlan({
       </div>
 
       {/* ── Capacity ── */}
-      <div className="mt-4 rounded-2xl border border-border/50 bg-background/50 p-3" role="status">
+      <div
+        className="mt-5 rounded-2xl border border-border/40 bg-background/40 p-3.5"
+        role="status"
+      >
         <div className="flex items-center justify-between gap-3 text-[11.5px]">
           <span className="flex items-center gap-1.5 font-semibold text-foreground">
             <Clock size={12} aria-hidden />
@@ -201,14 +200,14 @@ export default function TodayPlan({
             <span className="text-muted-foreground">realistic</span>
           )}
         </div>
-        <div className="mt-2 zen-cap-bar" aria-hidden>
+        <div className="mt-2.5 zen-cap-bar" aria-hidden>
           <div
             className={`zen-cap-fill ${over ? "over" : ""}`}
             style={{ width: `${Math.min(100, capacity.ratio * 100)}%` }}
           />
         </div>
         {over && (
-          <p className="mt-2 flex items-start gap-1.5 text-[11.5px] text-foreground/85">
+          <p className="mt-2.5 flex items-start gap-1.5 text-[11.5px] text-foreground/85">
             <AlertTriangle size={12} className="mt-0.5 shrink-0 text-destructive" aria-hidden />
             Your selected work exceeds today's available time. Choose what to move — deadlines stay
             where they are.
@@ -217,69 +216,71 @@ export default function TodayPlan({
       </div>
 
       {/* ── Outcomes ── */}
-      <div className="mt-4">
+      <div className="mt-5">
         <div className="flex items-center justify-between">
-          <h2 className="zen-label text-[10.5px] font-bold uppercase tracking-[0.14em]">
+          <h2 className="se-label">
             {outcomesAreChosen ? "Today's outcomes" : "Suggested for today"}
           </h2>
           {!outcomesAreChosen && suggestedPlan.length > 0 && (
-            <button
-              onClick={applySuggestion}
-              className="flex items-center gap-1 rounded-xl bg-primary/10 px-2.5 py-1.5 text-[11px] font-bold text-primary transition hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-            >
-              <Sparkles size={11} /> Commit to these {suggestedPlan.length}
+            <button onClick={applySuggestion} className="se-btn se-btn-ghost h-8 px-3 text-[11px]">
+              <Sparkles size={11} /> Commit {suggestedPlan.length}
             </button>
           )}
         </div>
 
-        <ul className="mt-2 space-y-1.5">
-          {(outcomesAreChosen ? commitments : []).map((item) => (
-            <li key={item.id} className="zen-pill group">
-              <button
-                onClick={() => onComplete(item)}
-                aria-label={`Mark “${item.title}” done`}
-                className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-border/70 text-transparent transition hover:border-emerald-500 hover:text-emerald-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              >
-                <CheckCircle2 size={12} />
-              </button>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[13.5px] font-semibold text-foreground">
-                  {item.title}
+        <ul className="mt-3 space-y-2">
+          {(outcomesAreChosen ? commitments : []).map((item) => {
+            const isDone = item.raw && (item.raw as { status?: string }).status === "done";
+            return (
+              <li key={item.id} className={`se-outcome group ${isDone ? "se-outcome-done" : ""}`}>
+                <button
+                  onClick={() => onComplete(item)}
+                  aria-label={`Mark "${item.title}" done`}
+                  className="se-check"
+                >
+                  <CheckCircle2 size={13} />
+                </button>
+                <div className="min-w-0 flex-1">
+                  <div className="se-outcome-title truncate text-[13.5px] font-semibold text-foreground">
+                    {item.title}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10.5px] text-muted-foreground">
+                    {item.kind === "task" && (
+                      <span>{fmtMinutes(estimateOf(item.raw as Task))}</span>
+                    )}
+                    <DueBadge due={item.due} today={today} />
+                    {item.kind === "task" && <SyncDot id={item.refId} />}
+                  </div>
                 </div>
-                <div className="mt-0.5 flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-[10.5px] text-muted-foreground">
-                  {item.kind === "task" && <span>{fmtMinutes(estimateOf(item.raw as Task))}</span>}
-                  <DueBadge due={item.due} today={today} />
-                  {item.kind === "task" && <SyncDot id={item.refId} />}
+                <div className="flex shrink-0 items-center gap-1">
+                  {over && item.kind === "task" && (
+                    <button
+                      onClick={() => moveOne(item)}
+                      title="Move to tomorrow (deadline unchanged)"
+                      className="se-icon-btn"
+                    >
+                      <CalendarClock size={13} />
+                    </button>
+                  )}
+                  {item.kind === "task" && (item.raw as Task).committedOn === today && (
+                    <button
+                      onClick={() => unpin(item)}
+                      title="Unpin from today"
+                      className="se-icon-btn"
+                    >
+                      <PinOff size={13} />
+                    </button>
+                  )}
                 </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                {over && item.kind === "task" && (
-                  <button
-                    onClick={() => moveOne(item)}
-                    title="Move to tomorrow (deadline unchanged)"
-                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  >
-                    <CalendarClock size={13} />
-                  </button>
-                )}
-                {item.kind === "task" && (item.raw as Task).committedOn === today && (
-                  <button
-                    onClick={() => unpin(item)}
-                    title="Unpin from today"
-                    className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-                  >
-                    <PinOff size={13} />
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
+              </li>
+            );
+          })}
 
           {!outcomesAreChosen &&
             suggestedPlan.map((s) => (
               <li
                 key={s.task.id}
-                className="flex items-center gap-3 rounded-2xl border border-dashed border-border/60 px-3 py-2.5"
+                className="flex items-center gap-3 rounded-2xl border border-dashed border-border/50 px-3.5 py-3"
               >
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[13.5px] font-semibold text-foreground">
@@ -297,7 +298,7 @@ export default function TodayPlan({
                     } as Partial<Task>)
                   }
                   title="Pin just this one"
-                  className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                  className="se-icon-btn"
                 >
                   <Pin size={13} />
                 </button>
@@ -305,7 +306,7 @@ export default function TodayPlan({
             ))}
 
           {!outcomesAreChosen && suggestedPlan.length === 0 && (
-            <li className="rounded-2xl border border-dashed border-border/60 px-3 py-4 text-center text-[12px] text-muted-foreground">
+            <li className="rounded-2xl border border-dashed border-border/50 px-3.5 py-5 text-center text-[12px] text-muted-foreground">
               Nothing queued for today. Capture something with{" "}
               <kbd className="rounded border border-border/60 px-1 text-[10px]">N</kbd> or{" "}
               <button
@@ -321,7 +322,7 @@ export default function TodayPlan({
         {outcomesAreChosen && lastMorningPlan !== today && (
           <button
             onClick={() => markMorningPlan(today, Date.now() - planStart)}
-            className="mt-2 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+            className="mt-3 text-[11px] font-semibold text-muted-foreground hover:text-foreground"
           >
             This is my plan for today ✓
           </button>
@@ -330,13 +331,11 @@ export default function TodayPlan({
 
       {/* ── Fixed commitments ── */}
       {fixed.length > 0 && (
-        <div className="mt-4">
-          <h2 className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-muted-foreground">
-            Fixed today
-          </h2>
-          <ul className="mt-2 divide-y divide-border/40 rounded-2xl border border-border/40 bg-background/40">
+        <div className="mt-5">
+          <h2 className="se-label">Fixed today</h2>
+          <ul className="mt-2.5 divide-y divide-border/30 rounded-2xl border border-border/30 bg-background/30">
             {fixed.map((f) => (
-              <li key={f.id} className="flex items-center gap-3 px-3 py-2 text-[12.5px]">
+              <li key={f.id} className="flex items-center gap-3 px-3.5 py-2.5 text-[12.5px]">
                 <span className="w-[92px] shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
                   {f.allDay ? "all day" : `${f.start}–${f.end}`}
                 </span>

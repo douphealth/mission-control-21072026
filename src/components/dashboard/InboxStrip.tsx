@@ -24,10 +24,7 @@ export default function InboxStrip({ tasks, today }: { tasks: Task[]; today: str
   };
 
   return (
-    <section
-      className="enterprise-card v10-card rounded-[24px] p-3.5 sm:p-4"
-      aria-labelledby="inbox-heading"
-    >
+    <section className="se-card p-3.5 sm:p-4" aria-labelledby="inbox-heading">
       <div className="flex items-center justify-between">
         <h2
           id="inbox-heading"
@@ -48,37 +45,39 @@ export default function InboxStrip({ tasks, today }: { tasks: Task[]; today: str
           </button>
         )}
       </div>
-      <ul className="mt-2 space-y-1">
+      <ul className="mt-2.5 space-y-1">
         {shown.map((t) => (
           <li
             key={t.id}
-            className="flex items-center gap-2 rounded-xl px-2 py-1.5 hover:bg-secondary/50"
+            className="group flex items-center gap-2 rounded-xl px-2 py-2 transition hover:bg-secondary/40"
           >
             <span className="min-w-0 flex-1 truncate text-[13px] text-foreground">{t.title}</span>
-            <button
-              onClick={() => pin(t)}
-              title="Do today"
-              aria-label={`Do “${t.title}” today`}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-primary/10 hover:text-primary"
-            >
-              <Pin size={13} />
-            </button>
-            <button
-              onClick={() => later(t)}
-              title="Tomorrow"
-              aria-label={`Plan “${t.title}” for tomorrow`}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
-            >
-              <CalendarClock size={13} />
-            </button>
-            <button
-              onClick={() => softDeleteTasks([t.id])}
-              title="Delete (recoverable)"
-              aria-label={`Delete “${t.title}”`}
-              className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-            >
-              <Trash2 size={13} />
-            </button>
+            <div className="flex shrink-0 items-center gap-0.5 opacity-50 transition group-hover:opacity-100">
+              <button
+                onClick={() => pin(t)}
+                title="Do today"
+                aria-label={`Do "${t.title}" today`}
+                className="se-icon-btn hover:bg-primary/10 hover:text-primary"
+              >
+                <Pin size={13} />
+              </button>
+              <button
+                onClick={() => later(t)}
+                title="Tomorrow"
+                aria-label={`Plan "${t.title}" for tomorrow`}
+                className="se-icon-btn"
+              >
+                <CalendarClock size={13} />
+              </button>
+              <button
+                onClick={() => softDeleteTasks([t.id])}
+                title="Delete (recoverable)"
+                aria-label={`Delete "${t.title}"`}
+                className="se-icon-btn hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
           </li>
         ))}
       </ul>

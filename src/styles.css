@@ -2455,3 +2455,416 @@ table,
   background: hsl(var(--card)) !important;
   border-color: hsl(var(--foreground) / 0.35) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   SAGE EDITORIAL — Fireart-inspired dashboard redesign (Sep 17 2026)
+   Clean editorial surfaces, big numerals, soft shadows, generous radii.
+   Works with both light and dark themes. Additive layer.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── SE1. Editorial card surface ───────────────────────────────────────── */
+.se-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid var(--hairline-color);
+  background: var(--surface-raised);
+  backdrop-filter: blur(24px) saturate(1.35);
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.35s ease,
+    border-color 0.3s ease;
+}
+.se-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+.se-card-acc {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid var(--hairline-color);
+  background: var(--surface-raised);
+  backdrop-filter: blur(24px) saturate(1.35);
+  box-shadow: var(--shadow-sm);
+}
+.se-card-acc::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--se-accent, hsl(var(--primary))),
+    transparent
+  );
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ── SE2. Section label ────────────────────────────────────────────────── */
+.se-label {
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── SE3. Big editorial numeral ────────────────────────────────────────── */
+.se-num {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+/* ── SE4. Hero greeting surface ────────────────────────────────────────── */
+.se-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 32px;
+  background: linear-gradient(155deg, #060d18 0%, #0a1525 38%, #07201f 68%, #082c25 100%);
+  border: 1px solid hsl(0 0% 100% / 0.06);
+  box-shadow:
+    0 40px 80px -30px hsl(200 80% 2% / 0.8),
+    inset 0 1px 0 hsl(0 0% 100% / 0.08);
+}
+.se-hero-orb {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(64px);
+  pointer-events: none;
+  will-change: transform;
+}
+.se-hero-orb--1 {
+  top: -100px;
+  right: -60px;
+  width: 340px;
+  height: 340px;
+  background: radial-gradient(circle, hsl(163 88% 42% / 0.5), transparent 65%);
+  animation: ultra-orb 24s ease-in-out infinite;
+}
+.se-hero-orb--2 {
+  bottom: -120px;
+  left: -40px;
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, hsl(199 95% 52% / 0.35), transparent 65%);
+  animation: ultra-orb-rev 30s ease-in-out infinite;
+}
+.se-hero-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.06;
+  background-image: radial-gradient(circle, hsl(0 0% 100%) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.se-hero-glow {
+  position: absolute;
+  inset-x: 0;
+  top: 0;
+  height: 100px;
+  pointer-events: none;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.06), transparent);
+}
+.se-hero-content {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── SE5. Progress arc ─────────────────────────────────────────────────── */
+.se-arc-track {
+  stroke: hsl(0 0% 100% / 0.08);
+}
+.se-arc-fill {
+  transition: stroke-dashoffset 1s cubic-bezier(0.22, 1, 0.36, 1);
+  filter: drop-shadow(0 0 6px hsl(163 88% 50% / 0.4));
+}
+
+/* ── SE6. Day progress bar ─────────────────────────────────────────────── */
+.se-bar {
+  position: relative;
+  height: 8px;
+  border-radius: 999px;
+  background: hsl(0 0% 100% / 0.08);
+  overflow: hidden;
+}
+.se-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(163 88% 45%), hsl(172 82% 48%) 55%, hsl(196 95% 52%));
+  box-shadow: 0 0 12px hsl(163 88% 45% / 0.4);
+  transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.se-bar-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 30%, hsl(0 0% 100% / 0.25) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: aurora-shimmer 3s linear infinite;
+  border-radius: inherit;
+}
+
+/* ── SE7. Outcome row ──────────────────────────────────────────────────── */
+.se-outcome {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  padding: 0.75rem 1rem;
+  border-radius: 18px;
+  background: hsl(var(--card) / 0.5);
+  border: 1px solid hsl(var(--border) / 0.4);
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    transform 0.25s ease;
+}
+.se-outcome:hover {
+  border-color: hsl(var(--primary) / 0.3);
+  background: hsl(var(--primary) / 0.04);
+  transform: translateY(-1px);
+}
+.se-outcome-done {
+  opacity: 0.5;
+}
+.se-outcome-done .se-outcome-title {
+  text-decoration: line-through;
+}
+
+/* ── SE8. Checkbox circle ──────────────────────────────────────────────── */
+.se-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid hsl(var(--border) / 0.7);
+  color: transparent;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.se-check:hover {
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary));
+}
+
+/* ── SE9. Pill badge ───────────────────────────────────────────────────── */
+.se-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ── SE10. Action button ───────────────────────────────────────────────── */
+.se-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: 14px;
+  font-weight: 700;
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 220ms ease,
+    filter 220ms ease,
+    background 200ms ease,
+    border-color 200ms ease;
+}
+.se-btn-primary {
+  background: var(--gradient-primary);
+  color: hsl(var(--primary-foreground));
+  box-shadow: var(--shadow-primary);
+  position: relative;
+  overflow: hidden;
+}
+.se-btn-primary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, hsl(0 0% 100% / 0.18), transparent 55%);
+  pointer-events: none;
+}
+.se-btn-primary:hover {
+  transform: translateY(-1.5px);
+  filter: saturate(1.1) brightness(1.05);
+  box-shadow:
+    var(--shadow-primary),
+    0 0 0 1px hsl(var(--primary) / 0.2);
+}
+.se-btn-primary:active {
+  transform: translateY(0) scale(0.97);
+}
+.se-btn-ghost {
+  background: hsl(var(--secondary) / 0.6);
+  color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+.se-btn-ghost:hover {
+  transform: translateY(-1.5px);
+  border-color: hsl(var(--primary) / 0.3);
+  background: hsl(var(--primary) / 0.05);
+}
+.se-btn-ghost:active {
+  transform: translateY(0) scale(0.97);
+}
+
+/* ── SE11. Timeline row ────────────────────────────────────────────────── */
+.se-tl-row {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 0.875rem 1rem;
+  border-radius: 18px;
+  border: 1px solid hsl(var(--border) / 0.4);
+  background: hsl(var(--card) / 0.4);
+  transition:
+    border-color 0.25s ease,
+    background 0.25s ease,
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.se-tl-row:hover {
+  border-color: hsl(var(--primary) / 0.25);
+  background: hsl(var(--card) / 0.6);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px hsl(var(--foreground) / 0.05);
+}
+.se-tl-row-now {
+  border-color: hsl(var(--primary) / 0.35);
+  background: hsl(var(--primary) / 0.05);
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--primary) / 0.12),
+    0 8px 24px hsl(var(--primary) / 0.08);
+}
+
+/* ── SE12. Time gutter pill ────────────────────────────────────────────── */
+.se-time {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: hsl(var(--secondary));
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: hsl(var(--foreground));
+}
+
+/* ── SE13. Icon button ─────────────────────────────────────────────────── */
+.se-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 12px;
+  color: hsl(var(--muted-foreground));
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+  flex-shrink: 0;
+}
+.se-icon-btn:hover {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+}
+
+/* ── SE14. Capture input surface ───────────────────────────────────────── */
+.se-capture {
+  position: relative;
+  border-radius: 24px;
+  border: 1px solid var(--hairline-color);
+  background: var(--surface-raised);
+  backdrop-filter: blur(24px) saturate(1.35);
+  box-shadow: var(--shadow-sm);
+  transition:
+    box-shadow 300ms ease,
+    border-color 300ms ease;
+}
+.se-capture:focus-within {
+  border-color: hsl(var(--primary) / 0.35);
+  box-shadow:
+    0 0 0 3px hsl(var(--primary) / 0.08),
+    var(--shadow-md);
+}
+
+/* ── SE15. Empty state card ────────────────────────────────────────────── */
+.se-empty-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  background: hsl(var(--primary) / 0.1);
+  color: hsl(var(--primary));
+  transition:
+    background 0.25s ease,
+    color 0.25s ease,
+    transform 0.25s ease;
+}
+.se-empty-card:hover .se-empty-action {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  transform: scale(1.05);
+}
+
+/* ── SE16. Motion guards ───────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .se-hero-orb--1,
+  .se-hero-orb--2,
+  .se-bar-fill::after,
+  .se-card,
+  .se-card-acc,
+  .se-outcome,
+  .se-tl-row,
+  .se-btn,
+  .se-capture {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+.a11y-reduce-motion .se-hero-orb--1,
+.a11y-reduce-motion .se-hero-orb--2,
+.a11y-reduce-motion .se-bar-fill::after {
+  animation: none !important;
+}
+.a11y-reduce-motion .se-card,
+.a11y-reduce-motion .se-outcome,
+.a11y-reduce-motion .se-tl-row,
+.a11y-reduce-motion .se-btn,
+.a11y-reduce-motion .se-capture {
+  transition: none !important;
+}
+.a11y-contrast .se-hero-orb--1,
+.a11y-contrast .se-hero-orb--2,
+.a11y-contrast .se-hero-grid,
+.a11y-contrast .se-hero-glow,
+.a11y-contrast .se-card-acc::before,
+.a11y-contrast .se-bar-fill::after {
+  display: none !important;
+}
+.a11y-contrast .se-hero {
+  background: hsl(var(--card)) !important;
+  border-color: hsl(var(--foreground) / 0.35) !important;
+}

@@ -1,7 +1,6 @@
 // ─── Unified Today Timeline ──────────────────────────────────────────────────
-// The visual core of the unified system: flags → timed (clock) → NOW →
-// untimed (engine score). Answers "what now / what next / what needs me"
-// in one glance instead of three siloed panels.
+// Editorial timeline: flags → timed (clock) → NOW → untimed (engine score).
+// Clean rows with time gutters, kind badges, and hover-revealed actions.
 
 import {
   TriangleAlert as AlertTriangle,
@@ -33,9 +32,9 @@ const KIND_STYLE: Record<string, { badge: string; dot: string; label: string }> 
 };
 
 const SEVERITY_RING: Record<string, string> = {
-  critical: "border-destructive/30 bg-destructive/[0.05]",
-  warning: "border-amber-500/30 bg-amber-500/[0.05]",
-  info: "border-border/60 bg-background/60",
+  critical: "border-destructive/30 bg-destructive/[0.04]",
+  warning: "border-amber-500/30 bg-amber-500/[0.04]",
+  info: "border-border/50 bg-background/40",
 };
 
 function EntryRow({
@@ -86,24 +85,15 @@ function EntryRow({
 
   const w = entry.workItem;
   return (
-    <div
-      className={`zen-row ultra-now-row group relative flex items-start gap-3 rounded-2xl border p-3.5 ${isNow ? "now border-primary/40" : "border-border/60"}`}
-    >
-      {/* time gutter */}
-      <span className="flex h-9 w-14 shrink-0 items-center justify-center rounded-xl bg-secondary text-[11px] font-extrabold tabular-nums text-foreground">
-        {entry.time ?? <Zap size={12} className="text-primary" />}
-      </span>
+    <div className={`se-tl-row group ${isNow ? "se-tl-row-now" : ""}`}>
+      <span className="se-time">{entry.time ?? <Zap size={12} className="text-primary" />}</span>
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span
-            className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${ks.badge}`}
-          >
-            {ks.label}
-          </span>
+          <span className={`se-pill ${ks.badge}`}>{ks.label}</span>
           {isNow && <span className="living-badge">Now</span>}
           {w && w.overdueDays > 0 && (
-            <span className="rounded-full bg-destructive/12 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-destructive">
+            <span className="se-pill bg-destructive/12 text-destructive">
               {w.overdueDays}d late
             </span>
           )}
@@ -122,7 +112,7 @@ function EntryRow({
       </div>
 
       {w && (
-        <div className="flex shrink-0 items-center gap-1 opacity-60 transition group-hover:opacity-100">
+        <div className="flex shrink-0 items-center gap-1 opacity-50 transition group-hover:opacity-100">
           {w.kind === "task" && (
             <button
               onClick={() => {
@@ -130,24 +120,20 @@ function EntryRow({
                 setActiveSection("focus");
               }}
               title="Start a focus session"
-              className="rounded-xl p-2 text-muted-foreground transition hover:bg-primary/10 hover:text-primary"
+              className="se-icon-btn"
             >
-              <Timer size={13} />
+              <Timer size={14} />
             </button>
           )}
-          <button
-            onClick={() => onPlan?.(w, 1)}
-            title="Plan for tomorrow (deadline unchanged)"
-            className="rounded-xl p-2 text-muted-foreground transition hover:bg-secondary hover:text-foreground"
-          >
-            <Clock size={13} />
+          <button onClick={() => onPlan?.(w, 1)} title="Plan for tomorrow" className="se-icon-btn">
+            <Clock size={14} />
           </button>
           <button
             onClick={() => onComplete?.(w)}
             title="Complete"
-            className="rounded-xl p-2 text-muted-foreground transition hover:bg-emerald-500/10 hover:text-emerald-500"
+            className="se-icon-btn hover:bg-emerald-500/10 hover:text-emerald-500"
           >
-            <CheckCircle2 size={13} />
+            <CheckCircle2 size={14} />
           </button>
         </div>
       )}
@@ -170,12 +156,12 @@ export default function TodayTimeline({
   const { entries, nowIndex, counts } = timeline;
 
   return (
-    <section className="zen-card v10-card enterprise-card ultra-rise-3 relative rounded-[28px] p-5 sm:p-6">
+    <section className="se-card-acc ultra-rise-3 p-5 sm:p-6">
       <div className="zen-glow-spot -top-16 -right-10" aria-hidden />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <div className="zen-label text-[10px] font-bold uppercase tracking-[0.16em]">Today</div>
-          <h3 className="title-grad font-display text-[19px] font-extrabold tracking-tight sm:text-[22px]">
+          <div className="se-label">Today</div>
+          <h3 className="title-grad mt-1 font-display text-[20px] font-extrabold tracking-tight sm:text-[24px]">
             One timeline
           </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -185,21 +171,20 @@ export default function TodayTimeline({
         </div>
         <button
           onClick={() => setActiveSection("calendar")}
-          className="rounded-full bg-secondary px-3 py-1.5 text-[11px] font-bold text-foreground transition hover:bg-secondary/70"
+          className="se-btn se-btn-ghost h-8 px-3 text-[11px]"
         >
           Calendar
         </button>
       </div>
 
       <div className="relative space-y-2.5">
-        {/* rail */}
         <div
           className="zen-rail absolute top-2 bottom-2 left-[27px] w-px sm:left-[31px]"
           aria-hidden
         />
 
         {entries.length === 0 && (
-          <p className="rounded-2xl border border-dashed border-border/70 p-6 text-center text-[12px] text-muted-foreground">
+          <p className="rounded-2xl border border-dashed border-border/60 p-6 text-center text-[12px] text-muted-foreground">
             Nothing today. Capture something or review what is coming.
           </p>
         )}
@@ -243,8 +228,8 @@ export default function TodayTimeline({
           </div>
         )}
 
-        {counts.flags === 0 && (
-          <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.06] p-4">
+        {counts.flags === 0 && entries.length > 0 && (
+          <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
             <Flag size={16} className="text-emerald-500" />
             <p className="text-[12px] text-muted-foreground">
               No exceptions. Deadlines, payments, decisions and syncs are all healthy.

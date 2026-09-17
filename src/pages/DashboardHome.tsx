@@ -1,10 +1,7 @@
-// ─── Mission Control — Today is the product's centre ─────────────────────────
-// First viewport answers: what matters today, what's fixed, what's next, is it
-// realistic. Capture is one keystroke away. Metrics and pulses live below.
-// Desktop: plan beside the day's timeline. Mobile: agenda first, capture in reach.
-//
-// ULTRA: the HeroNowBand (deep-space hero with floating orbs + progress ring)
-// leads, then a grid of glass stat tiles, then the plan/timeline pair.
+// ─── Mission Control — Editorial Dashboard ────────────────────────────────────
+// First viewport: greeting hero, stat tiles, plan + timeline.
+// Capture is one keystroke away. Everything staggers in beautifully.
+// Desktop: plan beside the day's timeline. Mobile: agenda first.
 
 import { Suspense, lazy, useEffect, useState } from "react";
 import {
@@ -15,7 +12,6 @@ import {
   ChevronDown,
   Inbox,
   Moon,
-  Timer,
   Zap,
 } from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
@@ -48,7 +44,6 @@ export default function DashboardHome() {
   const workdayEnd = usePlanStore((s) => s.workdayEnd);
   const evening = hhmmNow() >= workdayEnd || showClose;
 
-  // "?" opens the shortcuts overlay (when not typing in a field).
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== "?" || e.metaKey || e.ctrlKey || e.altKey) return;
@@ -67,7 +62,6 @@ export default function DashboardHome() {
     return () => document.removeEventListener("keydown", handler);
   }, []);
 
-  // Read-only derived stats for the hero + stat tiles.
   const commitmentsTotal = ops.commitments.length;
   const commitmentsDone = ops.commitments.filter(
     (c) => c.raw && (c.raw as { status?: string }).status === "done",
@@ -115,7 +109,7 @@ export default function DashboardHome() {
           <AreaSwitch />
           <button
             onClick={() => setShowClose((v) => !v)}
-            className="flex h-8 items-center gap-1.5 rounded-xl border border-border/60 bg-secondary/50 px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            className="flex h-8 items-center gap-1.5 rounded-xl border border-border/50 bg-secondary/40 px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             aria-pressed={showClose}
           >
             <Moon size={12} /> Close day
@@ -139,7 +133,7 @@ export default function DashboardHome() {
         <FirstRunExperience />
       ) : (
         <>
-          {/* ── ULTRA hero: deep-space NOW band ── */}
+          {/* ── Hero: greeting + progress + next action ── */}
           <HeroNowBand
             nextAction={ops.nextAction}
             commitmentsTotal={commitmentsTotal}
@@ -150,7 +144,7 @@ export default function DashboardHome() {
             onComplete={ops.complete}
           />
 
-          {/* ── ULTRA stat tiles: glass grid ── */}
+          {/* ── Stat tiles: glass grid ── */}
           <div className="ultra-rise-2 ultra-stat-grid" role="status">
             {attentionCount > 0 && (
               <div className="ultra-stat" data-tone="bad">
@@ -222,7 +216,7 @@ export default function DashboardHome() {
         <section className="ultra-rise-4">
           <button
             onClick={() => setShowMore((v) => !v)}
-            className="enterprise-card v10-card flex w-full items-center justify-between rounded-[24px] p-4 text-left transition hover:-translate-y-0.5 sm:p-5"
+            className="se-card flex w-full items-center justify-between p-4 text-left transition hover:-translate-y-0.5 sm:p-5"
             aria-expanded={showMore}
           >
             <span>
@@ -251,7 +245,7 @@ export default function DashboardHome() {
       <section className="ultra-rise-4">
         <button
           onClick={() => setShowInsights((v) => !v)}
-          className="enterprise-card v10-card flex w-full items-center justify-between rounded-[24px] p-4 text-left transition hover:-translate-y-0.5 sm:p-5"
+          className="se-card flex w-full items-center justify-between p-4 text-left transition hover:-translate-y-0.5 sm:p-5"
           aria-expanded={showInsights}
         >
           <span className="flex items-center gap-3">
