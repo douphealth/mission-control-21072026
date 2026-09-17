@@ -242,7 +242,7 @@ export default function SnapCapture() {
   return (
     <>
       {phase === "idle" && (
-        <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+152px)] right-4 lg:bottom-28 lg:right-8 z-[90] flex flex-col items-end gap-2">
+        <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+152px)] right-4 lg:bottom-[calc(32px+64px+12px)] lg:right-8 z-[90] flex flex-col items-end gap-2">
           {showActions && (
             <>
               <div className="fixed inset-0 z-[89]" onClick={() => setShowActions(false)} />
@@ -290,11 +290,11 @@ export default function SnapCapture() {
               e.preventDefault();
               setShowActions(true);
             }}
-            className="w-14 h-14 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-150"
+            className="w-[52px] h-[52px] lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-150"
             title="Tap: camera · Long-press / right-click: more options"
             aria-label="Snap a photo to import"
           >
-            <Camera className="w-6 h-6 sm:w-5 sm:h-5" />
+            <Camera className="w-6 h-6 lg:w-7 lg:h-7" />
           </button>
         </div>
       )}
