@@ -30,6 +30,7 @@ interface ServerResponse {
     language?: string;
   } | null;
   error?: string;
+  allowTextFallback?: boolean;
 }
 
 const VALID_TYPES = new Set(["tasks", "notes", "ideas", "links"]);
@@ -59,8 +60,21 @@ export async function smartCapture(
     const data = (await res.json().catch(() => ({}))) as ServerResponse;
 
     if (!res.ok || !data.transcript) {
+      if (data.allowTextFallback && browserTranscript.trim()) {
+        return { ...classifyTranscript(browserTranscript), source: "local" };
+      }
       if (browserTranscript.trim()) {
         return { ...classifyTranscript(browserTranscript), source: "local" };
+      }
+      // No transcript at all — return a special result so the UI can show
+      // a text-input fallback instead of crashing.
+      if (data.allowTextFallback) {
+        return {
+          transcript: "",
+          type: "notes" as const,
+          title: "",
+          source: "local" as const,
+        };
       }
       throw new Error(data.error || "Could not transcribe the recording.");
     }

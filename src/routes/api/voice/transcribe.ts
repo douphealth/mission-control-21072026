@@ -65,12 +65,17 @@ export const Route = createFileRoute("/api/voice/transcribe")({
 
         if (!browserTranscript) {
           if (hasAudio) {
+            // Browser SpeechRecognition didn't produce a transcript (non-Chrome
+            // browser, network issue, or mobile Safari). We don't have a
+            // server-side STT endpoint, so return a clear error that lets the
+            // client show a text-input fallback instead of crashing.
             return json(
               {
                 error:
-                  "Browser did not transcribe the audio. Try using Chrome for voice capture, or type your note instead.",
+                  "Could not transcribe audio in this browser. Try Chrome, or type your note below.",
+                allowTextFallback: true,
               },
-              422,
+              200,
             );
           }
           return json({ error: "No audio or transcript received." }, 400);

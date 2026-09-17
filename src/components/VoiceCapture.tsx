@@ -15,6 +15,7 @@ import {
 import { useAddItem } from "@/hooks/useTableData";
 import type { Task, Note, Idea, LinkItem } from "@/lib/db";
 import { smartCapture, type SmartCaptureResult } from "@/lib/voiceAi";
+import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";
 import { buildRecognitionSnapshot, type RecognitionResultLike } from "@/lib/speechTranscript";
 import { encodePcmAsWav } from "@/lib/wavRecorder";
 import { toast } from "sonner";
@@ -61,7 +62,7 @@ const TYPE_OPTIONS: {
 // Voice activity detection constants
 const SILENCE_RMS_THRESHOLD = 0.012; // below this = silence
 const SPEECH_RMS_THRESHOLD = 0.025; // above this = clearly speaking
-const SILENCE_HANG_MS = 2400; // auto-stop after this much continuous silence (post-speech)
+const SILENCE_HANG_MS = 3500; // auto-stop after this much continuous silence (post-speech)
 const MAX_RECORD_MS = 180_000; // hard cap
 const MIN_RECORD_MS = 600; // ignore taps shorter than this
 
@@ -118,6 +119,16 @@ function getSpeechRecognition(): BrowserSpeechRecognitionConstructor | null {
       .webkitSpeechRecognition ??
     null
   );
+}
+
+// Quick local type inference for manual typing fallback
+function inferTypeLocal(text: string): CaptureType {
+  const lower = text.toLowerCase();
+  if (/\b(link|url|website|http|bookmark)\b/.test(lower) || /^https?:\/\//.test(text.trim()))
+    return "links";
+  if (/^(idea|brainstorm|what if|concept)\b/.test(lower)) return "ideas";
+  if (/^(note|remember|journal|log|meeting)\b/.test(lower)) return "notes";
+  return "tasks";
 }
 
 export default function VoiceCapture() {
@@ -290,6 +301,15 @@ export default function VoiceCapture() {
         languageRef.current,
       )
         .then((result) => {
+          if (!result.transcript) {
+            // Browser STT failed and no server STT available — show text
+            // input fallback so the user can type what they said.
+            setErrorMsg(
+              "Could not transcribe your voice in this browser. Type your note below, or try Chrome for voice recognition.",
+            );
+            setPhase("ready");
+            return;
+          }
           setTranscript(result.transcript);
           setAiResult(result);
           if (typeAuto) setType(result.type);
@@ -299,7 +319,6 @@ export default function VoiceCapture() {
           console.error("transcribe failed", err);
           const message = err instanceof Error ? err.message : "Transcription failed";
           setErrorMsg(message);
-          toast.error(message);
           setPhase("error");
         });
     },
@@ -706,13 +725,18 @@ export default function VoiceCapture() {
               {/* Transcript */}
               <div className="px-5 sm:px-6 pb-4">
                 <div className="min-h-[100px] max-h-[180px] overflow-y-auto bg-secondary/40 rounded-2xl p-4 text-[14px] leading-relaxed text-foreground border border-border/30">
-                  {transcript ? (
+                  {transcript || phase === "ready" ? (
                     <textarea
                       value={transcript}
-                      onChange={(e) => setTranscript(e.target.value)}
+                      onChange={(e) => {
+                        setTranscript(e.target.value);
+                        if (typeAuto) setType(inferTypeLocal(e.target.value));
+                      }}
                       rows={4}
                       className="w-full bg-transparent outline-none resize-none text-[14px] leading-relaxed text-foreground"
                       aria-label="Transcript"
+                      placeholder="Type your note here, or tap the mic to speak…"
+                      autoFocus={phase === "ready" && !transcript}
                     />
                   ) : phase === "processing" ? (
                     <span className="text-muted-foreground italic flex items-center gap-2">
