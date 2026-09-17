@@ -341,7 +341,23 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       }
       const reader = new FileReader();
       reader.onload = (ev) => {
-        const text = ev.target?.result as string;
+        let text = ev.target?.result as string;
+        // For binary files (PDFs, docs), strip non-printable chars so the
+        // AI can still extract whatever text content is readable.
+        if (
+          file.type.startsWith("application/") &&
+          !file.type.includes("json") &&
+          !file.type.includes("xml")
+        ) {
+          text = text
+            .replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, " ")
+            .replace(/\s{3,}/g, "\n")
+            .trim();
+        }
+        if (text.length < 10) {
+          toast.error(`Could not read "${file.name}". Try converting to .txt or .csv.`);
+          return;
+        }
         setRawText(text);
         handleAnalyze(text, file.name);
       };
@@ -515,13 +531,12 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     [handleAnalyze, addImages],
   );
 
-  // Handle drag & drop
+  // Handle drag & drop (any file type)
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
 
-      // Handle dropped files
       const dropped = Array.from(e.dataTransfer.files || []);
       if (dropped.some((f) => f.type.startsWith("image/"))) {
         addImages(dropped);
@@ -531,7 +546,21 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       if (file) {
         const reader = new FileReader();
         reader.onload = (ev) => {
-          const text = ev.target?.result as string;
+          let text = ev.target?.result as string;
+          if (
+            file.type.startsWith("application/") &&
+            !file.type.includes("json") &&
+            !file.type.includes("xml")
+          ) {
+            text = text
+              .replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, " ")
+              .replace(/\s{3,}/g, "\n")
+              .trim();
+          }
+          if (text.length < 10) {
+            toast.error(`Could not read "${file.name}". Try converting to .txt or .csv.`);
+            return;
+          }
           setRawText(text);
           handleAnalyze(text, file.name);
         };
@@ -539,7 +568,6 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
         return;
       }
 
-      // Handle dropped text
       const text = e.dataTransfer.getData("text");
       if (text) {
         setRawText(text);
@@ -785,7 +813,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                   <input
                     ref={fileRef}
                     type="file"
-                    accept=".csv,.json,.txt,.tsv,.jsonl,.md,.html,.htm,image/*"
+                    accept="*/*"
                     onChange={handleFile}
                     className="hidden"
                   />

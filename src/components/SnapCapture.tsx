@@ -1,6 +1,8 @@
 // ─── SnapCapture ─────────────────────────────────────────────────────────────
-// Floating "Snap" button visible on every screen.
-// One tap → camera/gallery → AI reads it → items auto-filed → done.
+// Floating capture button visible on every screen.
+// Tap → camera/gallery → AI reads it → items auto-filed → done.
+// Also accepts ANY file type (PDF, .docx, .txt, .csv, .json) via the
+// long-press menu "Upload File" option and drag-and-drop anywhere on screen.
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import {
@@ -12,9 +14,11 @@ import {
   AlertTriangle,
   Image as ImageIcon,
   Clipboard,
+  FileUp,
+  Paperclip,
 } from "lucide-react";
 import { toast } from "sonner";
-import { aiImageImport } from "@/lib/aiImport";
+import { aiImageImport, aiAutonomousImport } from "@/lib/aiImport";
 import { deduplicateItems } from "@/lib/dedup";
 import { useBulkAddItems } from "@/hooks/useTableData";
 import { TARGET_META, type ImportTarget } from "@/lib/importEngine";
@@ -61,6 +65,39 @@ function compressImage(file: File): Promise<string> {
   });
 }
 
+const TEXT_EXTENSIONS = [
+  ".txt",
+  ".csv",
+  ".tsv",
+  ".json",
+  ".jsonl",
+  ".md",
+  ".markdown",
+  ".html",
+  ".htm",
+  ".xml",
+  ".yaml",
+  ".yml",
+  ".log",
+  ".env",
+];
+
+function isTextFile(file: File): boolean {
+  if (file.type.startsWith("text/")) return true;
+  if (file.type === "application/json" || file.type === "application/xml") return true;
+  const name = file.name.toLowerCase();
+  return TEXT_EXTENSIONS.some((ext) => name.endsWith(ext));
+}
+
+function readFileAsText(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Could not read file"));
+    reader.onload = () => resolve(reader.result as string);
+    reader.readAsText(file);
+  });
+}
+
 export default function SnapCapture() {
   const [phase, setPhase] = useState<SnapPhase>("idle");
   const [result, setResult] = useState<SnapResult | null>(null);
@@ -69,6 +106,7 @@ export default function SnapCapture() {
 
   const cameraRef = useRef<HTMLInputElement>(null);
   const galleryRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressFired = useRef(false);
 
@@ -92,7 +130,7 @@ export default function SnapCapture() {
         const breakdown = snapResult.categories
           .map((c) => `${c.emoji} ${c.items.length} ${c.label}`)
           .join(" · ");
-        toast.success(`✅ Snapped & filed: ${breakdown}`, {
+        toast.success(`Filed: ${breakdown}`, {
           duration: 5000,
           description:
             snapResult.skippedDupes > 0
@@ -109,6 +147,48 @@ export default function SnapCapture() {
     [bulkAddItems, reset],
   );
 
+  const processImportResult = useCallback(
+    async (importResult: ReturnType<typeof aiImageImport> extends Promise<infer R> ? R : never) => {
+      if (!importResult.totalItems) {
+        toast.error("Could not read anything from that file.");
+        reset();
+        return;
+      }
+
+      let totalSkipped = 0;
+      const categories: SnapResult["categories"] = [];
+      for (const cat of importResult.categories) {
+        const unique = await deduplicateItems(cat.target, cat.items);
+        totalSkipped += cat.items.length - unique.length;
+        if (unique.length > 0) {
+          categories.push({
+            target: cat.target,
+            items: unique as Record<string, any>[],
+            label: TARGET_META[cat.target]?.label ?? cat.target,
+            emoji: TARGET_META[cat.target]?.emoji ?? "📄",
+          });
+        }
+      }
+
+      const totalItems = categories.reduce((s, c) => s + c.items.length, 0);
+      if (totalItems === 0) {
+        toast(`Everything in that file already exists (${totalSkipped} duplicates).`);
+        reset();
+        return;
+      }
+
+      const snapResult: SnapResult = { categories, totalItems, skippedDupes: totalSkipped };
+      setResult(snapResult);
+
+      if (categories.length === 1 && totalItems <= 5) {
+        await executeImport(snapResult);
+      } else {
+        setPhase("review");
+      }
+    },
+    [executeImport, reset],
+  );
+
   const processImages = useCallback(
     async (files: File[]) => {
       const imageFiles = files.filter((f) => f.type.startsWith("image/")).slice(0, 4);
@@ -123,69 +203,98 @@ export default function SnapCapture() {
       try {
         const encoded = await Promise.all(imageFiles.map(compressImage));
         setPreview(encoded[0]);
-
         const importResult = await aiImageImport(encoded);
-
-        if (!importResult.totalItems) {
-          toast.error("📷 Could not read anything from that image.");
-          reset();
-          return;
-        }
-
-        let totalSkipped = 0;
-        const categories: SnapResult["categories"] = [];
-        for (const cat of importResult.categories) {
-          const unique = await deduplicateItems(cat.target, cat.items);
-          totalSkipped += cat.items.length - unique.length;
-          if (unique.length > 0) {
-            categories.push({
-              target: cat.target,
-              items: unique as Record<string, any>[],
-              label: TARGET_META[cat.target]?.label ?? cat.target,
-              emoji: TARGET_META[cat.target]?.emoji ?? "📄",
-            });
-          }
-        }
-
-        const totalItems = categories.reduce((s, c) => s + c.items.length, 0);
-        if (totalItems === 0) {
-          toast(`🔄 Everything in that photo already exists (${totalSkipped} duplicates).`);
-          reset();
-          return;
-        }
-
-        const snapResult: SnapResult = { categories, totalItems, skippedDupes: totalSkipped };
-        setResult(snapResult);
-
-        if (categories.length === 1 && totalItems <= 5) {
-          await executeImport(snapResult);
-        } else {
-          setPhase("review");
-        }
+        await processImportResult(importResult);
       } catch (err: any) {
         console.error("Snap processing error:", err);
-        toast.error(err?.message || "📷 Processing failed. Try a clearer photo.");
+        toast.error(err?.message || "Processing failed. Try a clearer photo.");
         reset();
       }
     },
-    [executeImport, reset],
+    [processImportResult, reset],
+  );
+
+  const processFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+
+      const imageFiles = files.filter((f) => f.type.startsWith("image/"));
+      const textFiles = files.filter((f) => isTextFile(f));
+      const otherFiles = files.filter((f) => !f.type.startsWith("image/") && !isTextFile(f));
+
+      // Images go through the vision pipeline
+      if (imageFiles.length > 0) {
+        processImages(imageFiles);
+        return;
+      }
+
+      if (textFiles.length > 0) {
+        setPhase("processing");
+        setShowActions(false);
+        try {
+          const file = textFiles[0];
+          const text = await readFileAsText(file);
+          if (!text.trim()) {
+            toast.error("That file appears to be empty.");
+            reset();
+            return;
+          }
+          const importResult = await aiAutonomousImport(text, file.name);
+          await processImportResult(importResult);
+        } catch (err: any) {
+          console.error("File import error:", err);
+          toast.error(err?.message || "Could not process that file.");
+          reset();
+        }
+        return;
+      }
+
+      if (otherFiles.length > 0) {
+        // For binary files (PDFs, docs, etc.) try to read as text — many
+        // formats have enough plain-text content for the AI to work with.
+        setPhase("processing");
+        setShowActions(false);
+        try {
+          const file = otherFiles[0];
+          const text = await readFileAsText(file);
+          const cleanText = text
+            .replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, " ")
+            .replace(/\s{3,}/g, "\n")
+            .trim();
+          if (cleanText.length < 20) {
+            toast.error(
+              `Could not read "${file.name}". Try converting to .txt, .csv, or an image.`,
+            );
+            reset();
+            return;
+          }
+          const importResult = await aiAutonomousImport(cleanText, file.name);
+          await processImportResult(importResult);
+        } catch (err: any) {
+          console.error("Binary file import error:", err);
+          toast.error(`Could not process that file type. Try .txt, .csv, or an image.`);
+          reset();
+        }
+      }
+    },
+    [processImages, processImportResult, reset],
   );
 
   const handleFiles = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = Array.from(e.target.files || []);
       e.target.value = "";
-      if (files.length > 0) processImages(files);
+      if (files.length > 0) processFiles(files);
     },
-    [processImages],
+    [processFiles],
   );
 
   const handleFABDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if ("button" in e && e.button !== 0) return; // ignore right/middle click
+    if ("button" in e && e.button !== 0) return;
     longPressFired.current = false;
     longPressTimer.current = setTimeout(() => {
       longPressFired.current = true;
-      longPressTimer.current = null; // mark as fired
+      longPressTimer.current = null;
       setShowActions(true);
     }, 400);
   }, []);
@@ -193,12 +302,10 @@ export default function SnapCapture() {
   const handleFABUp = useCallback((e: React.MouseEvent | React.TouchEvent) => {
     if ("button" in e && e.button !== 0) return;
     if (longPressTimer.current) {
-      // still pending = short tap
       clearTimeout(longPressTimer.current);
       longPressTimer.current = null;
       cameraRef.current?.click();
     }
-    // long press already fired → do nothing, menu stays open
   }, []);
 
   const pasteFromClipboard = useCallback(async () => {
@@ -209,35 +316,83 @@ export default function SnapCapture() {
         for (const type of item.types) {
           if (type.startsWith("image/")) {
             const blob = await item.getType(type);
-            processImages([new File([blob], "pasted.png", { type })]);
+            processFiles([new File([blob], "pasted.png", { type })]);
             return;
           }
         }
       }
-      toast.error("No image in clipboard.");
+      // Try text
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim().length > 5) {
+        setPhase("processing");
+        try {
+          const importResult = await aiAutonomousImport(text);
+          await processImportResult(importResult);
+        } catch (err: any) {
+          toast.error(err?.message || "Could not process clipboard.");
+          reset();
+        }
+        return;
+      }
+      toast.error("Nothing importable in clipboard.");
     } catch {
       toast.error("Clipboard access denied.");
     }
-  }, [processImages]);
+  }, [processFiles, processImportResult, reset]);
 
-  // Global paste (Ctrl+V an image anywhere)
+  // Global paste (Ctrl+V an image or text anywhere)
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable)) return;
       const items = Array.from(e.clipboardData?.items || []);
-      const files = items
+      const imageFiles = items
         .filter((i) => i.type.startsWith("image/"))
         .map((i) => i.getAsFile())
         .filter((f): f is File => f !== null);
-      if (files.length > 0) {
+      if (imageFiles.length > 0) {
         e.preventDefault();
-        processImages(files);
+        processFiles(imageFiles);
+        return;
+      }
+      const text = e.clipboardData?.getData("text");
+      if (text && text.trim().length > 10) {
+        e.preventDefault();
+        setPhase("processing");
+        aiAutonomousImport(text)
+          .then(processImportResult)
+          .catch((err) => {
+            console.error("Paste import error:", err);
+            toast.error("Could not process pasted text.");
+            reset();
+          });
       }
     };
     window.addEventListener("paste", handlePaste);
     return () => window.removeEventListener("paste", handlePaste);
-  }, [processImages]);
+  }, [processFiles, processImportResult, reset]);
+
+  // Global drag-and-drop anywhere on screen
+  useEffect(() => {
+    const handleDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types?.includes("Files")) {
+        e.preventDefault();
+        if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+      }
+    };
+    const handleDrop = (e: DragEvent) => {
+      if (!e.dataTransfer?.files?.length) return;
+      e.preventDefault();
+      const files = Array.from(e.dataTransfer.files);
+      processFiles(files);
+    };
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("drop", handleDrop);
+    return () => {
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, [processFiles]);
 
   return (
     <>
@@ -263,13 +418,22 @@ export default function SnapCapture() {
                   }}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
                 >
-                  <ImageIcon className="w-4 h-4" /> Choose from Gallery
+                  <ImageIcon className="w-4 h-4" /> Choose Image
+                </button>
+                <button
+                  onClick={() => {
+                    setShowActions(false);
+                    fileRef.current?.click();
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
+                >
+                  <FileUp className="w-4 h-4" /> Upload File
                 </button>
                 <button
                   onClick={pasteFromClipboard}
                   className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
                 >
-                  <Clipboard className="w-4 h-4" /> Paste Image
+                  <Clipboard className="w-4 h-4" /> Paste
                 </button>
               </div>
             </>
@@ -292,7 +456,7 @@ export default function SnapCapture() {
             }}
             className="w-[52px] h-[52px] lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-150"
             title="Tap: camera · Long-press / right-click: more options"
-            aria-label="Snap a photo to import"
+            aria-label="Capture a photo or file to import"
           >
             <Camera className="w-6 h-6 lg:w-7 lg:h-7" />
           </button>
@@ -313,11 +477,11 @@ export default function SnapCapture() {
               <Loader2 className="w-5 h-5 animate-spin text-primary shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-card-foreground">
-                  {phase === "processing" ? "Reading image…" : "Filing items…"}
+                  {phase === "processing" ? "Reading content…" : "Filing items…"}
                 </p>
                 <p className="text-[11px] text-muted-foreground">
                   {phase === "processing"
-                    ? "AI recognizing handwriting, receipts, lists…"
+                    ? "AI recognizing and categorizing…"
                     : "Saving to your database…"}
                 </p>
               </div>
@@ -340,7 +504,7 @@ export default function SnapCapture() {
                 <Sparkles className="w-4 h-4 text-primary" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-card-foreground">Snap Results</h3>
+                <h3 className="text-sm font-semibold text-card-foreground">Capture Results</h3>
                 <p className="text-[11px] text-muted-foreground">
                   {result.totalItems} items · confirm to file
                 </p>
@@ -416,7 +580,7 @@ export default function SnapCapture() {
             <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center">
               <Check className="w-6 h-6 text-primary" />
             </div>
-            <p className="text-sm font-semibold text-card-foreground">Filed! ✅</p>
+            <p className="text-sm font-semibold text-card-foreground">Filed!</p>
           </div>
         </div>
       )}
@@ -433,6 +597,14 @@ export default function SnapCapture() {
         ref={galleryRef}
         type="file"
         accept="image/*"
+        multiple
+        className="hidden"
+        onChange={handleFiles}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="*/*"
         multiple
         className="hidden"
         onChange={handleFiles}
