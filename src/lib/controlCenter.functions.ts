@@ -9,6 +9,7 @@ import {
   readAudience,
   type RawItem,
 } from "./controlCenter.server";
+import { anthropicComplete, isAnthropicAvailable } from "@/lib/anthropicServer";
 
 // ─── Industry / feed collection ───────────────────────────────────────────────
 
@@ -198,41 +199,22 @@ export const rankStories = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!data.stories.length)
       return { ranked: [] as { id: string; score: number; summary: string }[] };
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) return { ranked: [] as { id: string; score: number; summary: string }[] };
-
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content:
-              'You rank business/industry stories by how much they matter to the operator of this business. Return STRICT JSON {"ranked":[{"id":"","score":0-100,"summary":"one crisp sentence, max 140 chars, no hype"}]}. Score 80+ only for direct, material impact. Never invent facts beyond the given title/summary.',
-          },
-          {
-            role: "user",
-            content: `${data.context ? `Operator context: ${data.context}\n\n` : ""}Stories:\n${data.stories
-              .map(
-                (s) =>
-                  `- id=${s.id} | ${s.title} | ${s.source ?? ""} | ${(s.summary ?? "").slice(0, 200)}`,
-              )
-              .join("\n")}`,
-          },
-        ],
-        response_format: { type: "json_object" },
-      }),
-    });
-
-    if (!res.ok) {
-      // Deterministic local ranking still works — never fail the collector.
+    if (!isAnthropicAvailable())
       return { ranked: [] as { id: string; score: number; summary: string }[] };
-    }
-    const json = await res.json();
+
+    const systemPrompt =
+      'You rank business/industry stories by how much they matter to the operator of this business. Return STRICT JSON {"ranked":[{"id":"","score":0-100,"summary":"one crisp sentence, max 140 chars, no hype"}]}. Score 80+ only for direct, material impact. Never invent facts beyond the given title/summary.';
+    const userContent = `${data.context ? `Operator context: ${data.context}\n\n` : ""}Stories:\n${data.stories
+      .map(
+        (s) => `- id=${s.id} | ${s.title} | ${s.source ?? ""} | ${(s.summary ?? "").slice(0, 200)}`,
+      )
+      .join("\n")}`;
+
+    const raw = await anthropicComplete(systemPrompt, userContent, { maxTokens: 2048 });
+    if (!raw) return { ranked: [] as { id: string; score: number; summary: string }[] };
+
     try {
-      const parsed = JSON.parse(json?.choices?.[0]?.message?.content ?? "{}");
+      const parsed = JSON.parse(raw);
       const ranked = Array.isArray(parsed?.ranked) ? parsed.ranked : [];
       return {
         ranked: ranked

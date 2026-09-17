@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { ANTHROPIC_BASE, ANTHROPIC_KEY, ANTHROPIC_SMALL_MODEL } from "@/lib/anthropicServer";
 
 const InputSchema = z
   .object({
@@ -72,8 +73,7 @@ OUTPUT SCHEMA:
 export const aiParseImport = createServerFn({ method: "POST" })
   .inputValidator((input: unknown) => InputSchema.parse(input))
   .handler(async ({ data }) => {
-    const apiKey = process.env.LOVABLE_API_KEY;
-    if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
+    if (!ANTHROPIC_KEY) throw new Error("AI is not configured on this project.");
 
     const images = data.images ?? [];
     const hasImages = images.length > 0;
@@ -90,39 +90,41 @@ Return JSON only.${data.text ? `\n\nExtra context typed by the user:\n${data.tex
     const userContent: any = hasImages
       ? [
           { type: "text", text: instruction },
-          ...images.map((url) => ({ type: "image_url", image_url: { url } })),
+          ...images.map((url) => ({
+            type: "image",
+            source: { type: "base64", media_type: "image/jpeg", data: url.split(",")[1] || url },
+          })),
         ]
       : instruction;
 
-    const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const res = await fetch(`${ANTHROPIC_BASE}/v1/messages`, {
       method: "POST",
       headers: {
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: hasImages ? "google/gemini-2.5-pro" : "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: userContent },
-        ],
-        response_format: { type: "json_object" },
+        model: ANTHROPIC_SMALL_MODEL,
+        max_tokens: 8192,
+        system: SYSTEM_PROMPT,
+        messages: [{ role: "user", content: userContent }],
       }),
     });
 
     if (!res.ok) {
       const body = await res.text();
       if (res.status === 429) throw new Error("AI rate limit exceeded — try again in a moment.");
-      if (res.status === 402)
-        throw new Error("AI credits exhausted — add credits in workspace settings.");
       throw new Error(`AI import failed [${res.status}]: ${body.slice(0, 400)}`);
     }
 
     const json = await res.json();
-    const raw = json?.choices?.[0]?.message?.content ?? "{}";
+    const raw = json?.content?.find((c: any) => c.type === "text")?.text ?? "{}";
     let parsed: any;
     try {
-      parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+      // Anthropic may wrap JSON in markdown fences
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
+      parsed = JSON.parse(cleaned);
     } catch {
       throw new Error("AI returned malformed JSON");
     }
