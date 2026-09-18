@@ -137,6 +137,15 @@ export function useGoogleCalendar(opts?: {
           if (pushed.size > 0) console.log(`📤 Synced ${pushed.size} tasks to Google Calendar`);
         }
 
+        // Keep Google Tasks mirrored both ways (best-effort — never blocks calendar).
+        try {
+          const { syncGoogleTasks } = await import("@/lib/googleTasksSync");
+          await syncGoogleTasks();
+        } catch (e) {
+          console.warn("Google Tasks sync skipped:", e);
+        }
+
+
         const { min, max } = getTimeRange();
         const rawEvents = await syncGCalEvents(min, max, force);
 

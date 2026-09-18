@@ -293,6 +293,12 @@ export async function connectGCal(): Promise<{ email?: string; redirected?: bool
   }
   const { startCloudSync } = await import("@/lib/cloudSync");
   await startCloudSync(true);
+  try {
+    const { syncGoogleTasks } = await import("@/lib/googleTasksSync");
+    await syncGoogleTasks();
+  } catch {
+    /* non-fatal — retried on the next sync pass */
+  }
   return { email: profileEmail || email, redirected: false };
 }
 
