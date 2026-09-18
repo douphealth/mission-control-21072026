@@ -39,22 +39,9 @@ import {
 } from "lucide-react";
 import { hasGoogleClientId } from "@/lib/googleDirectAuth";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
-import {
-  getSupabaseConfig,
-  setSupabaseConfig,
-  clearSupabaseConfig,
-  testSupabaseConnection,
-  pullFromSupabase,
-  fullSync,
-  isSupabaseConnected,
-  SUPABASE_SCHEMA_SQL,
-  getLastSyncTime,
-  refreshSupabaseSchemaState,
-} from "@/lib/supabase";
 import { generateStrongKey, setEncryptionKey, hasCustomEncryptionKey } from "@/lib/encryption";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { setGCalConfig } from "@/lib/googleCalendar";
-import SupabaseSyncConsole from "@/components/SupabaseSyncConsole";
 import AccessibilityPanel from "@/components/AccessibilityPanel";
 import PlanningSettings from "@/components/PlanningSettings";
 import ConnectionsPanel from "@/components/ConnectionsPanel";
@@ -114,18 +101,6 @@ export default function SettingsPage() {
   // Google Calendar — direct OAuth via user's Client ID (Settings → Google Connection)
   const gcal = useGoogleCalendar({ autoFetch: false });
   const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
-
-  // Supabase state
-  const [sbUrl, setSbUrl] = useState(getSupabaseConfig()?.url || "");
-  const [sbKey, setSbKey] = useState(getSupabaseConfig()?.anonKey || "");
-  const [sbConnected, setSbConnected] = useState(isSupabaseConnected());
-  const [sbTesting, setSbTesting] = useState(false);
-  const [sbTestResult, setSbTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
-  const [sbSyncing, setSbSyncing] = useState<null | "sync" | "refresh">(null);
-  const [sbLastSync, setSbLastSync] = useState<string | null>(null);
-  const [showSchema, setShowSchema] = useState(false);
-  const [sbSchemaReady, setSbSchemaReady] = useState(false);
-  const [sbConnectionOk, setSbConnectionOk] = useState(false);
 
   // Security state
   const [encKey, setEncKey] = useState("");
@@ -190,17 +165,7 @@ export default function SettingsPage() {
           return;
         }
         await importAllData(json);
-        if (isSupabaseConnected()) {
-          toast.info("Syncing imported data to cloud…");
-          const result = await fullSync();
-          if (result.success) {
-            toast.success(`Import complete — pushed ${result.pushed} items to cloud`);
-          } else {
-            toast.warning("Imported locally but cloud sync failed. Will retry automatically.");
-          }
-        } else {
-          toast.success("Backup imported successfully");
-        }
+        toast.success("Backup imported successfully");
         setTimeout(() => window.location.reload(), 1200);
       } catch (err) {
         toast.error("Invalid file or import failed. Make sure it's a valid JSON backup.");
@@ -219,79 +184,6 @@ export default function SettingsPage() {
       window.location.reload();
     };
     toast.success("All data cleared");
-  };
-
-  // Supabase handlers
-  const handleTestConnection = async () => {
-    if (!sbUrl || !sbKey) {
-      toast.error("Enter URL and anon key first");
-      return;
-    }
-    setSbTesting(true);
-    setSbTestResult(null);
-    const result = await refreshSchemaStatus();
-    setSbTestResult({
-      ok: result.ok,
-      msg: result.ok
-        ? "Supabase connected and schema is ready."
-        : result.error || "Connection failed",
-    });
-    setSbTesting(false);
-  };
-
-  const handleSaveSupabase = () => {
-    if (!sbUrl || !sbKey) {
-      toast.error("Both URL and anon key are required");
-      return;
-    }
-    setSupabaseConfig(sbUrl, sbKey);
-    setSbConnected(true);
-    setSbConnectionOk(false);
-    setSbSchemaReady(false);
-    toast.success("Supabase connection saved — testing schema now");
-    refreshSchemaStatus().catch(() => setSbSchemaReady(false));
-  };
-
-  const handleDisconnectSupabase = () => {
-    clearSupabaseConfig();
-    setSbConnected(false);
-    setSbConnectionOk(false);
-    setSbSchemaReady(false);
-    setSbLastSync(null);
-    setSbTestResult(null);
-    toast.info("Supabase disconnected");
-  };
-
-  const handleSyncNow = async () => {
-    setSbSyncing("sync");
-    refreshSupabaseSchemaState();
-    const result = await fullSync();
-    setSbSyncing(null);
-
-    if (result.success) {
-      toast.success(`✅ Synced ${result.pushed} pushed + ${result.pulled} pulled`);
-      setSbLastSync(new Date().toISOString());
-      return;
-    }
-
-    toast.error(`Sync failed: ${result.error}`);
-  };
-
-  const handleRefreshFromCloud = async () => {
-    setSbSyncing("refresh");
-    refreshSupabaseSchemaState();
-    const result = await pullFromSupabase();
-    setSbSyncing(null);
-
-    if (result.success) {
-      toast.success(
-        `✅ Refreshed ${result.added} new + ${result.updated} updated items from cloud`,
-      );
-      setSbLastSync(new Date().toISOString());
-      return;
-    }
-
-    toast.error(`Refresh failed: ${result.error}`);
   };
 
   const handleGenerateEncKey = () => {
@@ -320,7 +212,7 @@ export default function SettingsPage() {
       <div>
         <h1 className="text-xl sm:text-2xl font-bold text-foreground">Settings</h1>
         <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-          Manage your Mission Control preferences, sync, and security
+          Manage your Mission Control preferences, data, and security
         </p>
       </div>
 
@@ -656,299 +548,6 @@ export default function SettingsPage() {
               <GoogleSetupModal open={googleSetupOpen} onClose={() => setGoogleSetupOpen(false)} />
             )}
 
-            {/* ─── Supabase Sync ─── */}
-            {activeTab === "supabase" && (
-              <div key="supabase" {...fadeIn} className="space-y-4">
-                {/* Status Banner */}
-                <div
-                  className={`rounded-2xl border p-4 flex items-center gap-3 ${
-                    sbConnected
-                      ? sbConnectionOk
-                        ? sbSchemaReady
-                          ? "bg-emerald-500/5 border-emerald-500/20"
-                          : "bg-destructive/5 border-destructive/20"
-                        : "bg-destructive/5 border-destructive/20"
-                      : "bg-amber-500/5 border-amber-500/20"
-                  }`}
-                >
-                  <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                      sbConnected
-                        ? sbConnectionOk
-                          ? sbSchemaReady
-                            ? "bg-emerald-500/15"
-                            : "bg-destructive/15"
-                          : "bg-destructive/15"
-                        : "bg-amber-500/15"
-                    }`}
-                  >
-                    <Cloud
-                      size={17}
-                      className={
-                        sbConnected
-                          ? sbConnectionOk
-                            ? sbSchemaReady
-                              ? "text-emerald-500"
-                              : "text-destructive"
-                            : "text-destructive"
-                          : "text-amber-500"
-                      }
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div
-                      className={`text-sm font-semibold ${sbConnected ? (sbConnectionOk ? (sbSchemaReady ? "text-emerald-600 dark:text-emerald-400" : "text-destructive") : "text-destructive") : "text-amber-600 dark:text-amber-400"}`}
-                    >
-                      {sbConnected
-                        ? sbConnectionOk
-                          ? sbSchemaReady
-                            ? "🟢 Supabase Sync Ready"
-                            : "🛑 Supabase Schema Missing"
-                          : "🛑 Supabase Connection Error"
-                        : "⚡ Supabase Not Connected"}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">
-                      {sbConnected
-                        ? sbConnectionOk
-                          ? sbSchemaReady
-                            ? sbLastSync
-                              ? `Last sync: ${new Date(sbLastSync).toLocaleString()}`
-                              : "Schema is ready — no sync has run yet"
-                            : "Your Supabase project is reachable, but the Mission Control tables have not been created yet"
-                          : "The project cannot be reached from this browser right now. Verify the URL/key or disconnect cloud sync."
-                        : "Connect your Supabase project for multi-device sync & backup"}
-                    </div>
-                  </div>
-                  {sbConnected && (
-                    <a
-                      href="https://supabase.com/dashboard"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-primary hover:underline flex items-center gap-1 shrink-0"
-                    >
-                      Dashboard <ExternalLink size={10} />
-                    </a>
-                  )}
-                </div>
-
-                {/* Config */}
-                <div className="card-elevated p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-semibold text-lg">Connection Settings</h2>
-                    {sbConnected && (
-                      <button
-                        onClick={handleDisconnectSupabase}
-                        className="text-xs text-destructive hover:underline font-medium"
-                      >
-                        Disconnect
-                      </button>
-                    )}
-                  </div>
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
-                        Project URL
-                      </label>
-                      <input
-                        value={sbUrl}
-                        onChange={(e) => setSbUrl(e.target.value)}
-                        className="input-base font-mono text-xs"
-                        placeholder="https://your-project.supabase.co"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-muted-foreground mb-1.5 block">
-                        Anon Key
-                      </label>
-                      <input
-                        value={sbKey}
-                        onChange={(e) => setSbKey(e.target.value)}
-                        type="password"
-                        className="input-base font-mono text-xs"
-                        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                      />
-                    </div>
-                  </div>
-
-                  {sbTestResult && (
-                    <div
-                      className={`flex items-center gap-2 p-3 rounded-xl text-sm font-medium ${
-                        sbTestResult.ok
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                          : "bg-destructive/10 text-destructive"
-                      }`}
-                    >
-                      {sbTestResult.ok ? <CheckCircle2 size={15} /> : <XCircle size={15} />}
-                      {sbTestResult.msg}
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 flex-wrap">
-                    <button
-                      onClick={handleTestConnection}
-                      disabled={sbTesting}
-                      className="btn-secondary text-sm gap-2.5"
-                    >
-                      {sbTesting ? (
-                        <Loader2 size={14} className="animate-spin" />
-                      ) : (
-                        <Plug size={14} />
-                      )}
-                      Test Connection
-                    </button>
-                    <button onClick={handleSaveSupabase} className="btn-primary text-sm">
-                      Save & Connect
-                    </button>
-                  </div>
-                </div>
-
-                {/* Cloud Sync Actions */}
-                {sbConnected && (
-                  <>
-                    <SupabaseSyncConsole />
-                    <div className="card-elevated p-6 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <h2 className="font-semibold text-lg">Live Cloud Sync</h2>
-                        <span
-                          className={`text-[10px] font-medium px-2 py-1 rounded-lg flex items-center gap-1 ${sbConnectionOk && sbSchemaReady ? "text-emerald-600 bg-emerald-500/10" : "text-destructive bg-destructive/10"}`}
-                        >
-                          {sbConnectionOk && sbSchemaReady ? (
-                            <CheckCircle2 size={10} />
-                          ) : (
-                            <AlertTriangle size={10} />
-                          )}{" "}
-                          {sbConnectionOk && sbSchemaReady ? "Auto-Save Active" : "Blocked"}
-                        </span>
-                      </div>
-
-                      <div
-                        className={`flex items-start gap-2 p-3 rounded-xl border ${sbConnectionOk && sbSchemaReady ? "bg-emerald-500/8 border-emerald-500/15" : "bg-destructive/5 border-destructive/20"}`}
-                      >
-                        {sbConnectionOk && sbSchemaReady ? (
-                          <CheckCircle2 size={14} className="text-emerald-500 shrink-0 mt-0.5" />
-                        ) : (
-                          <AlertTriangle size={14} className="text-destructive shrink-0 mt-0.5" />
-                        )}
-                        <div className="text-xs text-muted-foreground leading-relaxed">
-                          {sbConnectionOk && sbSchemaReady ? (
-                            <>
-                              <strong className="text-foreground">Always-on live sync.</strong>{" "}
-                              Changes are auto-saved to cloud and auto-refreshed on every device.
-                              Use Export/Import below only for version snapshots.
-                            </>
-                          ) : !sbConnectionOk ? (
-                            <>
-                              <strong className="text-foreground">
-                                Sync is currently blocked.
-                              </strong>{" "}
-                              The saved cloud connection is failing at the network/auth level, so
-                              the schema checks are not reliable. Test the connection again, update
-                              the URL/key, or disconnect cloud sync to keep this device local-only.
-                            </>
-                          ) : (
-                            <>
-                              <strong className="text-foreground">
-                                Sync is currently blocked.
-                              </strong>{" "}
-                              The console above is showing real Supabase errors because the required
-                              tables do not exist yet. Run the SQL schema below, then test again.
-                            </>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <button
-                          onClick={handleSyncNow}
-                          disabled={!!sbSyncing || !sbConnectionOk || !sbSchemaReady}
-                          className="flex items-center gap-3 p-4 rounded-2xl bg-primary/5 border-2 border-primary/20 hover:border-primary/40 hover:bg-primary/10 transition-all text-left group"
-                        >
-                          <div className="w-11 h-11 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0 transition-transform group-hover:scale-105">
-                            {sbSyncing === "sync" ? (
-                              <Loader2 size={18} className="text-primary-foreground animate-spin" />
-                            ) : (
-                              <ArrowUpDown size={18} className="text-primary-foreground" />
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-sm font-bold text-foreground">Sync Now</div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">
-                              Run immediate two-way sync (push + pull)
-                            </div>
-                          </div>
-                        </button>
-
-                        <button
-                          onClick={handleRefreshFromCloud}
-                          disabled={!!sbSyncing || !sbConnectionOk || !sbSchemaReady}
-                          className="flex items-center gap-3 p-4 rounded-2xl bg-secondary/30 border-2 border-border/30 hover:border-border/60 hover:bg-secondary/50 transition-all text-left group"
-                        >
-                          <div className="w-11 h-11 rounded-xl bg-secondary flex items-center justify-center shrink-0 transition-transform group-hover:scale-105">
-                            {sbSyncing === "refresh" ? (
-                              <Loader2 size={18} className="text-foreground animate-spin" />
-                            ) : (
-                              <ArrowDown size={18} className="text-muted-foreground" />
-                            )}
-                          </div>
-                          <div className="flex-1">
-                            <div className="text-sm font-bold text-foreground">
-                              Refresh From Cloud
-                            </div>
-                            <div className="text-[11px] text-muted-foreground mt-0.5">
-                              Pull latest cloud changes to this device
-                            </div>
-                          </div>
-                        </button>
-                      </div>
-
-                      {sbLastSync && (
-                        <div className="text-[11px] text-muted-foreground text-center">
-                          Last cloud sync: {new Date(sbLastSync).toLocaleString()}
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-
-                {/* Schema */}
-                <div className="card-elevated p-6 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h2 className="font-semibold text-lg flex items-center gap-2">
-                      <Terminal size={16} className="text-muted-foreground" /> Database Schema
-                    </h2>
-                    <button
-                      onClick={() => setShowSchema(!showSchema)}
-                      className="text-xs font-medium text-primary hover:underline"
-                    >
-                      {showSchema ? "Hide" : "Show SQL"}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    First time setup: Run this SQL in your Supabase SQL Editor to create all
-                    required tables.
-                  </p>
-                  {showSchema && (
-                    <div className="relative">
-                      <pre className="bg-secondary/50 rounded-xl p-4 text-[10px] font-mono text-muted-foreground overflow-auto max-h-60 leading-relaxed">
-                        {SUPABASE_SCHEMA_SQL.trim()}
-                      </pre>
-                      <div className="absolute top-2 right-2">
-                        <CopyButton text={SUPABASE_SCHEMA_SQL.trim()} />
-                      </div>
-                    </div>
-                  )}
-                  <a
-                    href="https://supabase.com/dashboard/project/_/editor"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-                  >
-                    Open SQL Editor <ExternalLink size={10} />
-                  </a>
-                </div>
-              </div>
-            )}
-
             {/* ─── Security ─── */}
             {activeTab === "security" && (
               <div key="security" {...fadeIn} className="space-y-4">
@@ -1098,7 +697,7 @@ export default function SettingsPage() {
                       { label: "Framework", value: "React 18 + TypeScript + Vite" },
                       { label: "Styling", value: "Tailwind CSS + Framer Motion" },
                       { label: "Storage", value: "IndexedDB (Dexie.js) — Offline-first" },
-                      { label: "Cloud Sync", value: "Mission Control Cloud" },
+                      { label: "Storage", value: "Private local database — no account required" },
                       { label: "Encryption", value: "AES-256-GCM via Web Crypto" },
                       { label: "Layout", value: "react-grid-layout — Drag & Drop" },
                     ].map(({ label, value }) => (

@@ -1,587 +1,91 @@
-// ─── Account-scoped cloud backup & sync ──────────────────────────────────────
-// Why this exists: all app data lived only in the browser's IndexedDB, so
-// clearing site data, switching browsers/devices, or iOS storage eviction made
-// everything "disappear". This module mirrors every local record into the
-// user's private cloud row store (`mc_records`) and restores it on any device.
-//
-// Model: one row per (collection, record_id) with a JSON payload + tombstones.
-// Push is debounced, pull happens on boot + realtime + tab focus.
-
-import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable";
-import { db } from "@/lib/db";
-
+/**
+ * Standalone persistence compatibility layer.
+ *
+ * Mission Control stores records directly in IndexedDB. These exports remain
+ * so older feature modules can call the same save hooks without initiating
+ * authentication, network requests, background retries, or cloud restores.
+ */
 export type CloudStatus = "signed-out" | "connecting" | "syncing" | "synced" | "offline" | "error";
-
-const LAST_SYNC_KEY = "mc-cloud-last-sync";
-const DIRTY_RECORDS_KEY = "mc-cloud-dirty-records-v2";
-const LEGACY_DIRTY_RECORDS_KEY = "mc-cloud-dirty-records-v1";
-const TABLE = "mc_records";
+export type RecordSyncState = "saved" | "pending" | "failed" | "local-only";
 
 type DirtyOperation = "put" | "delete";
-type DirtyRecord = { operation: DirtyOperation; changedAt: string };
-type DirtyRecordMap = Record<string, DirtyRecord>;
-
-const COLLECTIONS: Record<string, any> = {
-  websites: db.websites,
-  seoProfiles: db.seoProfiles,
-  seoSnapshots: db.seoSnapshots,
-  seoQueryObservations: db.seoQueryObservations,
-  seoIssues: db.seoIssues,
-  seoActions: db.seoActions,
-  seoChanges: db.seoChanges,
-  seoVisibilityChecks: db.seoVisibilityChecks,
-  tasks: db.tasks,
-  repos: db.repos,
-  buildProjects: db.buildProjects,
-  links: db.links,
-  notes: db.notes,
-  payments: db.payments,
-  ideas: db.ideas,
-  credentials: db.credentials,
-  customModules: db.customModules,
-  habits: db.habits,
-  feedSources: db.feedSources,
-  streamItems: db.streamItems,
-  watchTerms: db.watchTerms,
-  audienceAccounts: db.audienceAccounts,
-  audienceReadings: db.audienceReadings,
-  reminders: db.reminders,
-  decisions: db.decisions,
-  auditLog: db.auditLog,
-  settings: db.settings,
-};
-
-let userId: string | null = null;
-let hydrated = false; // a full pull completed this session
-let status: CloudStatus = "signed-out";
-let lastError: string | null = null;
-let pushTimer: ReturnType<typeof setTimeout> | null = null;
-let retryAttempt = 0;
-const RETRY_BASE_MS = 2000;
-const MAX_RETRY_MS = 60_000;
-const MAX_RETRY_ATTEMPTS = 6;
-let pushing = false;
-let pushAgain = false;
-let realtimeBound = false;
-let started = false;
-
-function cloudErrorMessage(error: unknown, fallback: string): string {
-  const message = error instanceof Error ? error.message : String(error ?? "");
-  if (/Missing Supabase environment variable|Connect Supabase/i.test(message)) {
-    return "Mission Control Cloud is temporarily unavailable. Your changes are safe on this device and will retry automatically.";
-  }
-  return message || fallback;
-}
-
-const listeners = new Set<(s: CloudStatus, err: string | null) => void>();
-
-function recordKey(collection: string, recordId: string) {
-  return `${collection}::${recordId}`;
-}
-
-function dirtyStorageKey(scope = userId ?? "pending") {
-  return `${DIRTY_RECORDS_KEY}:${scope}`;
-}
-
-function readDirtyRecords(): DirtyRecordMap {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(dirtyStorageKey()) ?? "{}");
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function writeDirtyRecords(records: DirtyRecordMap) {
-  try {
-    const key = dirtyStorageKey();
-    if (Object.keys(records).length) localStorage.setItem(key, JSON.stringify(records));
-    else localStorage.removeItem(key);
-  } catch {
-    /* ignore */
-  }
-  dirtyListeners.forEach((cb) => cb());
-}
-
-// ─── Per-record sync state ───────────────────────────────────────────────────
-// "saved"   → on this device (Dexie) and not waiting for the cloud
-// "pending" → journaled, will be pushed / retried
-// "failed"  → the last push attempt errored (still journaled, retry available)
-export type RecordSyncState = "saved" | "pending" | "failed" | "local-only";
+const listeners = new Set<(status: CloudStatus, error: string | null) => void>();
 const dirtyListeners = new Set<() => void>();
 
-export function onDirtyRecordsChange(cb: () => void) {
-  dirtyListeners.add(cb);
-  return () => {
-    dirtyListeners.delete(cb);
-  };
+export function onDirtyRecordsChange(callback: () => void) {
+  dirtyListeners.add(callback);
+  return () => dirtyListeners.delete(callback);
 }
 
-export function getRecordSyncState(collection: string, recordId: string): RecordSyncState {
-  if (!COLLECTIONS[collection]) return "saved";
-  if (!userId) return "local-only";
-  const entry = readDirtyRecords()[recordKey(collection, recordId)];
-  if (!entry) return "saved";
-  return status === "error" || retryAttempt >= MAX_RETRY_ATTEMPTS ? "failed" : "pending";
+export function getRecordSyncState(_collection: string, _recordId: string): RecordSyncState {
+  return "local-only";
 }
 
-/** Manual retry after a failed push — resets the backoff and pushes now. */
-export async function retryCloudPush(): Promise<void> {
-  retryAttempt = 0;
-  await flushCloudChanges();
-}
+export async function retryCloudPush(): Promise<void> {}
 
-function claimPendingDirtyRecords() {
-  if (!userId) return;
-  try {
-    const targetKey = dirtyStorageKey(userId);
-    const current = JSON.parse(localStorage.getItem(targetKey) ?? "{}") as DirtyRecordMap;
-    const pending = JSON.parse(
-      localStorage.getItem(dirtyStorageKey("pending")) ?? "{}",
-    ) as DirtyRecordMap;
-    const legacy = JSON.parse(
-      localStorage.getItem(LEGACY_DIRTY_RECORDS_KEY) ?? "{}",
-    ) as DirtyRecordMap;
-    const merged = { ...current, ...legacy, ...pending };
-    if (Object.keys(merged).length) localStorage.setItem(targetKey, JSON.stringify(merged));
-    localStorage.removeItem(dirtyStorageKey("pending"));
-    localStorage.removeItem(LEGACY_DIRTY_RECORDS_KEY);
-  } catch {
-    /* ignore */
-  }
-}
-
-/** Persisted before the debounced request so a reload can never lose the edit. */
 export function markCloudRecordDirty(
-  collection: string,
-  recordId: string,
-  operation: DirtyOperation = "put",
-) {
-  if (!COLLECTIONS[collection] || !recordId) return;
-  const records = readDirtyRecords();
-  records[recordKey(collection, recordId)] = { operation, changedAt: new Date().toISOString() };
-  writeDirtyRecords(records);
+  _collection: string,
+  _recordId: string,
+  _operation: DirtyOperation = "put",
+): void {
+  dirtyListeners.forEach((callback) => callback());
 }
 
 export function markCloudRecordsDirty(
-  collection: string,
-  recordIds: string[],
-  operation: DirtyOperation = "put",
-) {
-  if (!COLLECTIONS[collection] || !recordIds.length) return;
-  const records = readDirtyRecords();
-  const changedAt = new Date().toISOString();
-  for (const recordId of recordIds) {
-    if (recordId) records[recordKey(collection, recordId)] = { operation, changedAt };
-  }
-  writeDirtyRecords(records);
-}
-
-function clearSyncedDirtyRecords(captured: DirtyRecordMap) {
-  const current = readDirtyRecords();
-  for (const [key, value] of Object.entries(captured)) {
-    if (
-      current[key]?.changedAt === value.changedAt &&
-      current[key]?.operation === value.operation
-    ) {
-      delete current[key];
-    }
-  }
-  writeDirtyRecords(current);
-}
-
-function setStatus(next: CloudStatus, err: string | null = null) {
-  status = next;
-  lastError = err;
-  listeners.forEach((cb) => cb(status, lastError));
-  dirtyListeners.forEach((cb) => cb());
-  // Reliability indicators: the cockpit always knows what is synced.
-  void (async () => {
-    try {
-      const { reportSync } = await import("@/lib/reliability");
-      const pending = Object.keys(readDirtyRecords()).length;
-      const health =
-        next === "synced"
-          ? "ok"
-          : next === "syncing"
-            ? "syncing"
-            : next === "error"
-              ? "error"
-              : next === "offline"
-                ? "stale"
-                : "not-configured";
-      await reportSync("cloud", {
-        status: health as any,
-        error: err ?? undefined,
-        pending,
-        label: "Cloud backup",
-      });
-    } catch {
-      /* never break sync on reporting */
-    }
-  })();
+  _collection: string,
+  _recordIds: string[],
+  _operation: DirtyOperation = "put",
+): void {
+  dirtyListeners.forEach((callback) => callback());
 }
 
 export function getCloudStatus(): CloudStatus {
-  return status;
+  return "signed-out";
 }
+
 export function getCloudError(): string | null {
-  return lastError;
+  return null;
 }
+
 export function getCloudUserId(): string | null {
-  return userId;
+  return null;
 }
+
 export function getLastCloudSync(): string | null {
-  try {
-    return localStorage.getItem(LAST_SYNC_KEY);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
-export function onCloudStatus(cb: (s: CloudStatus, err: string | null) => void) {
-  listeners.add(cb);
-  cb(status, lastError);
-  return () => {
-    listeners.delete(cb);
-  };
+export function onCloudStatus(callback: (status: CloudStatus, error: string | null) => void) {
+  listeners.add(callback);
+  callback("signed-out", null);
+  return () => listeners.delete(callback);
 }
 
-// ─── Auth helpers ────────────────────────────────────────────────────────────
+const standaloneMessage = "Mission Control runs locally and does not require an account.";
 
-/** Publicly probe whether the Supabase project's Google OAuth provider is
- * actually usable (enabled AND has a secret). `GET /auth/v1/settings` tells
- * us `external.google`; `GET /auth/v1/authorize?provider=google` returns
- * 400 "missing OAuth secret" when the secret is absent. Caches for 10 min. */
-let googleProviderCache: { ready: boolean; at: number } | null = null;
-async function isGoogleProviderReady(): Promise<boolean> {
-  if (googleProviderCache && Date.now() - googleProviderCache.at < 600_000) {
-    return googleProviderCache.ready;
-  }
-  try {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) return true;
-    const cfgModule = await import("@/lib/supabase");
-    const cfg = cfgModule.getSupabaseConfig?.();
-    const supabaseUrl = cfg?.url || "";
-    if (!supabaseUrl) return false;
-    const res = await fetch(`${supabaseUrl}/auth/v1/authorize?provider=google`, {
-      method: "GET",
-      redirect: "manual",
-    });
-    // redirect:manual → type "opaqueredirect" (status 0) when configured;
-    // a visible 400 body means "missing OAuth secret".
-    const ready = res.type === "opaqueredirect" || res.status === 302 || res.status === 200;
-    googleProviderCache = { ready, at: Date.now() };
-    return ready;
-  } catch {
-    // Network failure probing — don't block sign-in on it.
-    return true;
-  }
-}
+export async function signInToCloud(): Promise<void> {}
 
-async function waitForSession(ms = 8000): Promise<boolean> {
-  const deadline = Date.now() + ms;
-  while (Date.now() < deadline) {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) return true;
-    await new Promise((r) => setTimeout(r, 400));
-  }
-  return false;
-}
-
-export async function signInToCloud() {
-  try {
-    setStatus("connecting");
-
-    // Already signed in? Skip the popup entirely.
-    const existing = await supabase.auth.getSession();
-    if (existing.data.session) {
-      await startCloudSync(true);
-      return;
-    }
-
-    // Pre-flight: does this Supabase project even have the Google provider
-    // configured? On standalone deployments (pages.dev etc.) the OAuth secret
-    // is absent, and lovable.auth would navigate the tab to /~oauth/… → 404.
-    // Probe the public auth settings first and fail fast with the honest,
-    // actionable signal instead of a dead-end navigation.
-    const providerReady = await isGoogleProviderReady();
-    if (!providerReady) {
-      throw new Error("GOOGLE_OAUTH_UNCONFIGURED");
-    }
-
-    let res: any = null;
-    let popupError: any = null;
-    try {
-      res = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
-      });
-    } catch (e) {
-      popupError = e;
-    }
-
-    // Full-page redirect flow — the browser is navigating away.
-    if (res?.redirected) return;
-
-    // The popup may report "cancelled" even when the session landed
-    // (window closed right after the token was delivered) — verify first.
-    if (popupError || res?.error) {
-      if (await waitForSession(2500)) {
-        await startCloudSync(true);
-        return;
-      }
-      const msg = String(popupError?.message ?? res?.error?.message ?? res?.error ?? "");
-      // Server-side OAuth misconfiguration (missing client secret) is
-      // common and outside the user's control — guide to email backup
-      // instead of a dead-end error.
-      if (/missing OAuth secret|Unsupported provider|secret/i.test(msg)) {
-        throw new Error("GOOGLE_OAUTH_UNCONFIGURED");
-      }
-      if (/cancel|closed|popup/i.test(msg)) {
-        throw new Error(
-          "Google sign-in window was closed before finishing. Allow pop-ups for this site and try again.",
-        );
-      }
-      throw new Error(msg || "Sign-in failed");
-    }
-
-    if (!(await waitForSession())) {
-      throw new Error("Google sign-in did not complete. Allow pop-ups for this site, then retry.");
-    }
-
-    await startCloudSync(true);
-  } catch (e: any) {
-    setStatus("error", cloudErrorMessage(e, "Sign-in failed"));
-  }
-}
-
-/** Email code sign-in — works with zero server-side OAuth configuration.
- *  Sends a 6-digit code; onAutoSession fires when the code is verified. */
-export async function requestEmailCode(email: string): Promise<{ ok: boolean; error?: string }> {
-  try {
-    setStatus("connecting");
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        shouldCreateUser: true,
-        // Land the magic link on the origin the user is actually using —
-        // NOT the platform-locked Site URL (which points at lovable.app).
-        // The Supabase dashboard's "Email OTP" setting decides whether the
-        // user receives a 6-digit code or a magic link; we support both.
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    if (error) {
-      setStatus("error", error.message);
-      return { ok: false, error: error.message };
-    }
-    return { ok: true };
-  } catch (e: any) {
-    const msg = String(e?.message ?? e);
-    setStatus("error", msg);
-    return { ok: false, error: msg };
-  }
-}
-
-/** Verify the 6-digit code from the email. */
-export async function verifyEmailCode(
-  email: string,
-  code: string,
+export async function requestEmailCode(
+  _email: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  try {
-    const { error } = await supabase.auth.verifyOtp({
-      email: email.trim(),
-      token: code.trim(),
-      type: "email",
-    });
-    if (error) return { ok: false, error: error.message };
-    await startCloudSync(true);
-    return { ok: true };
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message ?? e) };
-  }
+  return { ok: false, error: standaloneMessage };
 }
 
-/**
- * Magic-link exchange — for users whose email contains a "Log In" LINK
- * instead of a 6-digit code (Supabase "Email OTP" toggle off).
- *
- * The platform-locked Site URL points at lovable.app, so links often land on
- * a different origin than the one where the user requested the code. The
- * fix works entirely in the browser:
- *   1. Client boots with detectSessionInUrl — links consumed automatically
- *      on the origin they land on.
- *   2. If the link landed on ANOTHER origin, the user copies the link from
- *      the email and pastes it here; we extract the token and exchange it
- *      directly against the auth server (implicit flow — no PKCE verifier
- *      needed, so it works cross-origin).
- */
-/**
- * Verify a pasted email link, with a self-healing ladder:
- *  1. Unwrap mail-client tracking wrappers (Gmail "?u=", Apple Mail redirects)
- *  2. Try every token type Supabase uses (magiclink, signup, invite, recovery, email_change)
- *  3. If the token is expired/used, auto-send a fresh link to the same email —
- *     a dead paste instantly becomes a new email in the user's inbox.
- */
+export async function verifyEmailCode(
+  _email: string,
+  _code: string,
+): Promise<{ ok: boolean; error?: string }> {
+  return { ok: false, error: standaloneMessage };
+}
+
 export async function verifyMagicLink(
-  linkUrl: string,
-  email?: string,
+  _linkUrl: string,
+  _email?: string,
 ): Promise<{ ok: boolean; error?: string; resent?: boolean; email?: string }> {
-  try {
-    let url: URL;
-    try {
-      url = new URL(linkUrl.trim());
-    } catch {
-      return {
-        ok: false,
-        error: "That doesn't look like a link. Paste the full Log In link from the email.",
-      };
-    }
-
-    // 1 ─ Unwrap common mail-client redirect wrappers.
-    const unwrapped = unwrapMailLink(url.href);
-    if (unwrapped) url = new URL(unwrapped);
-
-    // 2 ─ Extract token+type from hash (implicit flow) or query (server callback).
-    const fromParams = (u: URL) => {
-      const hash = u.hash.startsWith("#") ? u.hash.slice(1) : u.search;
-      const params = new URLSearchParams(hash);
-      const token =
-        params.get("token_hash") ??
-        params.get("token") ??
-        new URLSearchParams(u.search).get("token_hash");
-      const type = (params.get("type") ?? "magiclink").toLowerCase();
-      return { token, type } as const;
-    };
-
-    const { token, type } = fromParams(url);
-    if (!token) {
-      return {
-        ok: false,
-        error: "No sign-in token found in that link. Paste the full link from the email.",
-      };
-    }
-
-    // 3 ─ Try the extracted type first, then every other type.
-    const types = [type, "magiclink", "signup", "invite", "recovery", "email_change"].filter(
-      (t, idx, arr) => arr.indexOf(t) === idx,
-    );
-    let lastError = "";
-    for (const t of types) {
-      const { error } = await supabase.auth.verifyOtp({ type: t as any, token_hash: token });
-      if (!error) {
-        await startCloudSync(true);
-        return { ok: true };
-      }
-      lastError = error.message;
-      // Token invalid/expired/consumed → stop trying permutations, go to resend.
-      if (/expired|invalid|used|already|token/i.test(error.message)) break;
-    }
-
-    // 4 ─ Self-heal: token dead → send a fresh link automatically.
-    if (email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      const fresh = await requestEmailCode(email);
-      if (fresh.ok) {
-        return {
-          ok: false,
-          resent: true,
-          email,
-          error: `That link was already used or expired — a fresh one is on its way to ${email}. Check your inbox and paste the new link.`,
-        };
-      }
-    }
-
-    return { ok: false, error: lastError || "Email link is invalid or has expired" };
-  } catch (e: any) {
-    return { ok: false, error: String(e?.message ?? e) };
-  }
+  return { ok: false, error: standaloneMessage };
 }
 
-/** Peel mail-client tracking wrappers down to the embedded destination URL. */
-function unwrapMailLink(href: string): string | null {
-  try {
-    const u = new URL(href);
-    // Gmail-style: https://cpp.googleusercontent.com/...?u=<encoded>
-    const inner = u.searchParams.get("u");
-    if (inner && inner.startsWith("http")) return decodeURIComponent(inner);
-    // Generic ?url= / ?redirect= / ?dest= wrappers
-    for (const k of ["url", "redirect", "dest", "target", "continue"]) {
-      const v = u.searchParams.get(k);
-      if (v && v.startsWith("http")) return decodeURIComponent(v);
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-export async function signOutOfCloud() {
-  try {
-    await supabase.auth.signOut();
-  } catch {
-    /* ignore */
-  }
-  userId = null;
-  hydrated = false;
-  setStatus("signed-out");
-}
-
-// ─── Serialization ───────────────────────────────────────────────────────────
-
-async function localSnapshot(): Promise<
-  Array<{ collection: string; record_id: string; data: any }>
-> {
-  const out: Array<{ collection: string; record_id: string; data: any }> = [];
-  for (const [collection, table] of Object.entries(COLLECTIONS)) {
-    const rows = await table.toArray();
-    for (const row of rows) {
-      if (!row?.id) continue;
-      out.push({ collection, record_id: String(row.id), data: row });
-    }
-  }
-  return out;
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-  return out;
-}
-
-// ─── Validation ──────────────────────────────────────────────────────────────
-// A corrupt cloud row must never be written into the local database.
-
-const REQUIRED_FIELDS: Record<string, string[]> = {
-  tasks: ["title"],
-  websites: ["name"],
-  notes: ["title"],
-  links: ["title"],
-  repos: ["name"],
-  buildProjects: ["name"],
-  ideas: ["title"],
-  credentials: ["label"],
-  customModules: ["name"],
-  habits: ["name"],
-  feedSources: ["name"],
-  streamItems: ["title"],
-  watchTerms: ["term"],
-  audienceAccounts: ["platform"],
-  reminders: ["title"],
-};
-
-function isValidRecord(collection: string, data: any, recordId: string): boolean {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
-  if (typeof data.id !== "string" || !data.id) return false;
-  if (recordId && data.id !== recordId) return false;
-  for (const field of REQUIRED_FIELDS[collection] ?? []) {
-    if (typeof data[field] !== "string") return false;
-  }
-  return true;
-}
-
-// ─── Pull: cloud → local ─────────────────────────────────────────────────────
+export async function signOutOfCloud(): Promise<void> {}
 
 export async function pullFromCloud(): Promise<{
   ok: boolean;
@@ -589,288 +93,21 @@ export async function pullFromCloud(): Promise<{
   remoteRows: number;
   error?: string;
 }> {
-  if (!userId) return { ok: false, restored: 0, remoteRows: 0, error: "Not signed in" };
-  try {
-    setStatus("syncing");
-    const rows: any[] = [];
-    const pageSize = 1000;
-    for (let page = 0; ; page++) {
-      const { data, error } = await supabase
-        .from(TABLE)
-        .select("collection, record_id, data, deleted, updated_at")
-        .range(page * pageSize, page * pageSize + pageSize - 1);
-      if (error) throw error;
-      rows.push(...(data ?? []));
-      if (!data || data.length < pageSize) break;
-    }
-
-    const dirty = readDirtyRecords();
-    let restored = 0;
-    let skipped = 0;
-    for (const [collection, table] of Object.entries(COLLECTIONS)) {
-      const mine = rows.filter((r) => r.collection === collection);
-      const alive: any[] = [];
-      for (const r of mine.filter((x) => !x.deleted)) {
-        // A local edit that has not reached the cloud is authoritative.
-        // This journal survives reloads, unlike the old in-memory debounce.
-        if (dirty[recordKey(collection, r.record_id)]) continue;
-        if (isValidRecord(collection, r.data, r.record_id)) alive.push(r.data);
-        else skipped++;
-      }
-      const dead = mine
-        .filter((r) => r.deleted && !dirty[recordKey(collection, r.record_id)])
-        .map((r) => r.record_id);
-      if (alive.length) {
-        await table.bulkPut(alive);
-        restored += alive.length;
-      }
-      if (dead.length) {
-        await table.bulkDelete(dead);
-      }
-    }
-    if (skipped) console.warn(`☁️ Skipped ${skipped} corrupt cloud record(s) during restore`);
-
-    hydrated = true;
-    try {
-      localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
-    setStatus("synced");
-    return { ok: true, restored, remoteRows: rows.length };
-  } catch (e: any) {
-    const message = cloudErrorMessage(e, "Restore failed");
-    setStatus("error", message);
-    return { ok: false, restored: 0, remoteRows: 0, error: message };
-  }
+  return { ok: true, restored: 0, remoteRows: 0 };
 }
 
-// ─── Push: local → cloud ─────────────────────────────────────────────────────
-
-async function pushNow(): Promise<void> {
-  if (!userId) return;
-  if (pushing) {
-    pushAgain = true;
-    return;
-  }
-  const uid: string = userId;
-  pushing = true;
-  let pullAfterConflict = false;
-  try {
-    setStatus("syncing");
-    const capturedDirty = readDirtyRecords();
-    const dirtyEntries = Object.entries(capturedDirty);
-    if (!dirtyEntries.length) {
-      setStatus("synced");
-      return;
-    }
-
-    // Upload only records changed on this device. Uploading a full local
-    // snapshot here lets an older device overwrite newer cloud records.
-    const rows: Array<{
-      user_id: string;
-      collection: string;
-      record_id: string;
-      data: any;
-      deleted: boolean;
-      updated_at: string;
-    }> = [];
-    for (const [key, change] of dirtyEntries) {
-      const separator = key.indexOf("::");
-      if (separator < 1) continue;
-      const collection = key.slice(0, separator);
-      const recordId = key.slice(separator + 2);
-      const table = COLLECTIONS[collection];
-      if (!table || !recordId) continue;
-      const local = change.operation === "put" ? await table.get(recordId) : null;
-      rows.push({
-        user_id: uid,
-        collection,
-        record_id: recordId,
-        data: local ?? {},
-        deleted: change.operation === "delete" || !local,
-        updated_at: change.changedAt,
-      });
-    }
-
-    const { data: remoteVersions, error: versionsError } = await supabase
-      .from(TABLE)
-      .select("collection, record_id, updated_at");
-    if (versionsError) throw versionsError;
-    const remoteUpdatedAt = new Map(
-      (remoteVersions ?? []).map((row) => [
-        recordKey(row.collection, row.record_id),
-        row.updated_at,
-      ]),
-    );
-    const newestRows = rows.filter((row) => {
-      const remote = remoteUpdatedAt.get(recordKey(row.collection, row.record_id));
-      return !remote || new Date(row.updated_at).getTime() >= new Date(remote).getTime();
-    });
-    pullAfterConflict = newestRows.length !== rows.length;
-
-    for (const batch of chunk(newestRows, 300)) {
-      const { error } = await supabase
-        .from(TABLE)
-        .upsert(batch, { onConflict: "user_id,collection,record_id" });
-      if (error) throw error;
-    }
-
-    try {
-      localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
-    } catch {
-      /* ignore */
-    }
-    clearSyncedDirtyRecords(capturedDirty);
-    retryAttempt = 0;
-    setStatus("synced");
-  } catch (e: any) {
-    setStatus(navigator.onLine ? "error" : "offline", cloudErrorMessage(e, "Backup failed"));
-    scheduleRetry();
-  } finally {
-    pushing = false;
-    if (pushAgain) {
-      pushAgain = false;
-      void pushNow();
-    } else if (pullAfterConflict) void pullFromCloud();
-  }
-}
-
-/** How many local edits are still waiting to reach the cloud. */
 export function getPendingCloudCount(): number {
-  return Object.keys(readDirtyRecords()).length;
+  return 0;
 }
 
-/**
- * Bounded exponential retry. A failed push never loses the edit: the journal
- * stays on disk and the next attempt (or a reload) picks it up again.
- */
-function scheduleRetry() {
-  if (!userId) return;
-  if (retryAttempt >= MAX_RETRY_ATTEMPTS) return;
-  const delay = Math.min(RETRY_BASE_MS * 2 ** retryAttempt, MAX_RETRY_MS);
-  retryAttempt += 1;
-  if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => {
-    void pushNow();
-  }, delay);
-}
+export function queueCloudPush(_delay = 0): void {}
 
-/**
- * Debounced backup — the default path after every local mutation. The Dexie
- * write already happened, so the UI is saved; the network call is batched so
- * a burst of rapid edits produces one request, not one per keystroke.
- */
-export function queueCloudPush(delay = 1200) {
-  if (!userId) return;
-  retryAttempt = 0;
-  if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => {
-    void pushNow();
-  }, delay);
-}
+export async function flushCloudChanges(): Promise<void> {}
 
-/** Flush pending edits now. Local writes remain safe when offline and retry later. */
-export async function flushCloudChanges(): Promise<void> {
-  if (!userId) return;
-  if (pushTimer) {
-    clearTimeout(pushTimer);
-    pushTimer = null;
-  }
-  await pushNow();
-}
+export async function forceCloudSync(): Promise<void> {}
 
-export async function forceCloudSync(): Promise<void> {
-  if (!userId) return;
-  // Only pending local edits are pushed; unchanged stale rows never overwrite
-  // a newer device. Dirty records are also protected during the following pull.
-  await flushCloudChanges();
-  await pullFromCloud();
-}
-
-// ─── Realtime + lifecycle ────────────────────────────────────────────────────
-
-function bindRealtime() {
-  if (realtimeBound || !userId) return;
-  realtimeBound = true;
-  supabase
-    .channel("mc-records-sync")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: TABLE, filter: `user_id=eq.${userId}` },
-      () => {
-        /* debounce a pull to pick up other devices */
-        if (!pushing) void pullFromCloud();
-      },
-    )
-    .subscribe();
-}
-
-/**
- * Boot the cloud layer. Returns whether local data was restored from cloud.
- * Safe to call multiple times.
- */
 export async function startCloudSync(
-  force = false,
+  _force = false,
 ): Promise<{ signedIn: boolean; restored: number }> {
-  if (started && !force) return { signedIn: !!userId, restored: 0 };
-  started = true;
-
-  const { data } = await supabase.auth.getSession();
-  userId = data.session?.user?.id ?? null;
-
-  if (!userId) {
-    setStatus("signed-out");
-    return { signedIn: false, restored: 0 };
-  }
-
-  claimPendingDirtyRecords();
-
-  // Flush journaled local edits first. If the request fails, pullFromCloud
-  // preserves those dirty records and cannot roll them back.
-  const hadPendingChanges = Object.keys(readDirtyRecords()).length > 0;
-  if (hadPendingChanges) await pushNow();
-  const pulled = await pullFromCloud();
-  // On an entirely new account, preserve existing local data as the initial
-  // cloud baseline. Existing accounts always treat cloud as authoritative.
-  if (!hadPendingChanges && pulled.ok && pulled.remoteRows === 0) {
-    const snapshot = await localSnapshot();
-    for (const item of snapshot) markCloudRecordDirty(item.collection, item.record_id);
-    await pushNow();
-  }
-  bindRealtime();
-
-  if (!force) {
-    supabase.auth.onAuthStateChange((event, session) => {
-      const next = session?.user?.id ?? null;
-      if (next === userId) return;
-      userId = next;
-      hydrated = false;
-      realtimeBound = false;
-      if (!userId) {
-        setStatus("signed-out");
-        return;
-      }
-      claimPendingDirtyRecords();
-      void (async () => {
-        const hasPending = Object.keys(readDirtyRecords()).length > 0;
-        if (hasPending) await pushNow();
-        await pullFromCloud();
-        bindRealtime();
-      })();
-    });
-
-    window.addEventListener("online", () => {
-      if (userId) void forceCloudSync();
-    });
-    window.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible" && userId) void pullFromCloud();
-    });
-    // Best-effort flush before the tab closes.
-    window.addEventListener("pagehide", () => {
-      if (userId) void pushNow();
-    });
-  }
-
-  return { signedIn: true, restored: pulled.restored };
+  return { signedIn: false, restored: 0 };
 }
