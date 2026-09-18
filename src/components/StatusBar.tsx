@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { WifiOff, Database, Check, Loader2, AlertCircle, Cloud, CloudOff } from "lucide-react";
 import { onSaveStatus } from "@/stores/dataStore";
-import { getCloudStatus, onCloudStatus, type CloudStatus } from "@/lib/cloudSync";
+import { onCloudStatus, type CloudStatus } from "@/lib/cloudSync";
 
 export default function StatusBar() {
   const [online, setOnline] = useState(true);

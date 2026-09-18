@@ -19,10 +19,11 @@ describe("production hardening gates", () => {
     expect(src).not.toContain("DIGEST_CRON_SECRET");
   });
 
-  it("standalone cloud compatibility module performs no network calls", () => {
+  it("account sync is restricted to Google's private app storage", () => {
     const src = read("src/lib/cloudSync.ts");
-    expect(src).toContain('return "local-only"');
-    expect(src).not.toMatch(/fetch\s*\(/);
+    expect(src).toContain('GDRIVE_APPDATA_SCOPE');
+    expect(src).toContain('parents: ["appDataFolder"]');
+    expect(src).not.toMatch(/supabase|lovable/i);
   });
 
   it("CI blocks tracked env files and makes lint blocking", () => {

@@ -142,7 +142,7 @@ async function writeRemote(fileId: string | null, backup: RemoteBackup): Promise
 
 export function onDirtyRecordsChange(callback: () => void) {
   dirtyListeners.add(callback);
-  return () => dirtyListeners.delete(callback);
+  return () => { dirtyListeners.delete(callback); };
 }
 export function getRecordSyncState(collection: string, recordId: string): RecordSyncState {
   if (!readGoogleToken()) return "local-only";
@@ -168,7 +168,7 @@ export function getLastCloudSync() { try { return localStorage.getItem(LAST_SYNC
 export function onCloudStatus(callback: (next: CloudStatus, error: string | null) => void) {
   listeners.add(callback);
   callback(status, lastError);
-  return () => listeners.delete(callback);
+  return () => { listeners.delete(callback); };
 }
 export function getPendingCloudCount() { return Object.keys(readDirty()).length; }
 
