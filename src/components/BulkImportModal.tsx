@@ -368,8 +368,11 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
           totalSkipped += cat.items.length - unique.length;
           cat.items = unique;
         }
-        importResult.categories = importResult.categories.filter((c) => c.items.length > 0);
-        importResult.totalItems = importResult.categories.reduce((s, c) => s + c.items.length, 0);
+        importResult.categories = importResult.categories.filter((c: any) => c.items.length > 0);
+        importResult.totalItems = importResult.categories.reduce(
+          (s: number, c: any) => s + c.items.length,
+          0,
+        );
         setSkippedDupes(totalSkipped);
         setResult(importResult);
 
