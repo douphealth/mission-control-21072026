@@ -415,7 +415,7 @@ export default function SettingsPage() {
                       )}
                       <div className="text-[10px] text-muted-foreground">
                         OAuth Client ID:{" "}
-                        {hasGoogleClientId() ? (
+                        {googleReady ? (
                           <span className="font-mono text-emerald-600 dark:text-emerald-400">
                             configured
                           </span>
@@ -436,7 +436,7 @@ export default function SettingsPage() {
                   <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => {
-                        if (!hasGoogleClientId()) {
+                        if (!googleReady) {
                           setGoogleSetupOpen(true);
                           return;
                         }
