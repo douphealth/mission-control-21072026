@@ -610,6 +610,12 @@ export default function CalendarPage() {
   const [gcalPickerOpen, setGcalPickerOpen] = useState(false);
   const [gtSetupOpen, setGtSetupOpen] = useState(false);
 
+  const connectGoogle = useCallback(async () => {
+    const result = await gcal.connect();
+    if (!result.success) throw new Error(result.error || "Google connection failed");
+    toast.success(result.email ? `Connected as ${result.email}` : "Google connected and synced");
+  }, [gcal.connect]);
+
   const googleEvents: CalEvent[] = useMemo(
     () =>
       gcal.events.map((gev) => ({
@@ -950,28 +956,21 @@ export default function CalendarPage() {
                 {gcal.error || "Connect your Google account to sync events."}
               </div>
             </div>
-            {!hasGoogleClientId() ? (
-              <button
-                onClick={() => setGtSetupOpen(true)}
-                disabled={gcal.connecting || gcal.syncing}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50"
-              >
-                <Settings size={10} /> Set up Google
-              </button>
-            ) : (
-              <button
-                onClick={() => void gcal.connect()}
-                disabled={gcal.connecting || gcal.syncing}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50"
-              >
-                {gcal.connecting || gcal.syncing ? (
-                  <Loader2 size={10} className="animate-spin" />
-                ) : (
-                  <RefreshCw size={10} />
-                )}
-                Retry
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!hasGoogleClientId()) setGtSetupOpen(true);
+                else void connectGoogle().catch((error) => toast.error(error.message));
+              }}
+              disabled={gcal.connecting || gcal.syncing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors touch-manipulation disabled:opacity-50"
+            >
+              {gcal.connecting || gcal.syncing ? (
+                <Loader2 size={10} className="animate-spin" />
+              ) : (
+                <LogIn size={10} />
+              )}
+              Connect Google
+            </button>
           </div>
         )}
 
@@ -1072,21 +1071,15 @@ export default function CalendarPage() {
                     : "One-time setup: paste your Google OAuth Client ID in Settings."}
               </div>
             </div>
-            {!hasGoogleClientId() ? (
-              <button
-                onClick={() => setGtSetupOpen(true)}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
-              >
-                <Settings size={10} /> Set up Google
-              </button>
-            ) : (
-              <button
-                onClick={() => void gtasks.signIn()}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
-              >
-                <LogIn size={10} /> Connect
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!hasGoogleClientId()) setGtSetupOpen(true);
+                else void connectGoogle().catch((error) => toast.error(error.message));
+              }}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
+            >
+              <LogIn size={10} /> Connect Google
+            </button>
           </div>
         )}
 
@@ -1727,7 +1720,11 @@ export default function CalendarPage() {
       </>
 
       {/* Google OAuth Client ID Setup Modal */}
-      <GoogleSetupModal open={gtSetupOpen} onClose={() => setGtSetupOpen(false)} />
+      <GoogleSetupModal
+        open={gtSetupOpen}
+        onClose={() => setGtSetupOpen(false)}
+        onConnect={connectGoogle}
+      />
 
       {/* Event Modal */}
       <EventModal

@@ -94,6 +94,7 @@ export default function GoogleTasksPage() {
       const message = e?.message || "Google sign-in failed";
       setAuthError(message);
       toast.error(message);
+      throw e;
     }
   };
 
@@ -176,12 +177,12 @@ export default function GoogleTasksPage() {
 
         <div className="card-elevated p-4 text-left space-y-2 border-primary/15 bg-primary/5">
           <div className="text-sm font-semibold text-foreground">
-            {hasGoogleClientId() ? "Direct Google connection" : "One-time setup needed"}
+            {hasGoogleClientId() ? "Ready to connect" : "One-time Google setup"}
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
             {hasGoogleClientId()
-              ? "This app talks to Google directly from your browser using your own OAuth Client ID — no third-party servers."
-              : "Google integration runs directly in your browser and needs your own Google OAuth Client ID (3-minute setup, once)."}
+              ? "Choose your Google account once to synchronize Calendar, Tasks, and private backup."
+              : "Create one public Google Client ID, paste it once, and account selection opens automatically."}
           </p>
           {!hasGoogleClientId() && (
             <button
@@ -216,14 +217,14 @@ export default function GoogleTasksPage() {
               onClick={handleSignIn}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
             >
-              <LogIn size={16} /> Connect Google Tasks
+              <LogIn size={16} /> Connect Google
             </button>
           ) : (
             <button
               onClick={() => setSetupOpen(true)}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
             >
-              <Settings size={16} /> Set up Google Connection
+              <Settings size={16} /> Connect Google
             </button>
           )}
           <button
@@ -234,7 +235,11 @@ export default function GoogleTasksPage() {
           </button>
         </div>
 
-        <GoogleSetupModal open={setupOpen} onClose={() => setSetupOpen(false)} />
+        <GoogleSetupModal
+          open={setupOpen}
+          onClose={() => setSetupOpen(false)}
+          onConnect={handleSignIn}
+        />
       </div>
     );
   }
