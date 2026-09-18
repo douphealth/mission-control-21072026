@@ -1,6 +1,6 @@
 // Server-only Anthropic API helper.
 // Bolt environments provide ANTHROPIC_API_KEY, ANTHROPIC_BASE_URL, and
-// ANTHROPIC_SMALL_FAST_MODEL — we use those instead of the legacy Lovable gateway.
+// ANTHROPIC_SMALL_FAST_MODEL — we use those instead of the legacy hosted gateway.
 
 export const ANTHROPIC_BASE = (
   process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com"
