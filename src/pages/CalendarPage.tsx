@@ -35,7 +35,7 @@ import { expandRecurringTask } from "@/lib/recurrence";
 import { isGCalConnected, getGCalConfig, setGCalConfig } from "@/lib/googleCalendar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ListTodo, LogIn, ChevronDown } from "lucide-react";
-import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+import { useGoogleReady } from "@/hooks/useGoogleReady";
 
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 
@@ -958,7 +958,7 @@ export default function CalendarPage() {
             </div>
             <button
               onClick={() => {
-                if (!hasGoogleClientId()) setGtSetupOpen(true);
+                if (!googleReady) setGtSetupOpen(true);
                 else void connectGoogle().catch((error) => toast.error(error.message));
               }}
               disabled={gcal.connecting || gcal.syncing}
@@ -1066,14 +1066,14 @@ export default function CalendarPage() {
               <div className="text-[11px] text-muted-foreground">
                 {gtasks.error
                   ? gtasks.error
-                  : hasGoogleClientId()
+                  : googleReady
                     ? "Connect to display your Google Tasks with due dates."
                     : "One-time setup: paste your Google OAuth Client ID in Settings."}
               </div>
             </div>
             <button
               onClick={() => {
-                if (!hasGoogleClientId()) setGtSetupOpen(true);
+                if (!googleReady) setGtSetupOpen(true);
                 else void connectGoogle().catch((error) => toast.error(error.message));
               }}
               className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 text-primary text-[11px] font-semibold hover:bg-primary/20 transition-colors"
