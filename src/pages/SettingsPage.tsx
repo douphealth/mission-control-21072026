@@ -101,6 +101,7 @@ export default function SettingsPage() {
   // Google Calendar — direct OAuth via user's Client ID (Settings → Google Connection)
   const gcal = useGoogleCalendar({ autoFetch: false });
   const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
+  const googleReady = useGoogleReady();
 
   const connectGoogle = async () => {
     const result = await gcal.connect();

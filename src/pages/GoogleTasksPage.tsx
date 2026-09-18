@@ -41,6 +41,7 @@ export default function GoogleTasksPage() {
   const [newTitle, setNewTitle] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const googleReady = useGoogleReady();
   const oauth = getGoogleTasksOAuthDiagnostics();
 
   useEffect(() => {
