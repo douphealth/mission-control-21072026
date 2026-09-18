@@ -37,7 +37,7 @@ import {
   X,
   KeyRound,
 } from "lucide-react";
-import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import { generateStrongKey, setEncryptionKey, hasCustomEncryptionKey } from "@/lib/encryption";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";

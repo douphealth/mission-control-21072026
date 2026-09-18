@@ -14,7 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { toast } from "sonner";
-import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import {
   isSignedIn,

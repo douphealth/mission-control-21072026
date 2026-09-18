@@ -609,6 +609,7 @@ export default function CalendarPage() {
   const [gtPickerOpen, setGtPickerOpen] = useState(false);
   const [gcalPickerOpen, setGcalPickerOpen] = useState(false);
   const [gtSetupOpen, setGtSetupOpen] = useState(false);
+  const googleReady = useGoogleReady();
 
   const connectGoogle = useCallback(async () => {
     const result = await gcal.connect();
