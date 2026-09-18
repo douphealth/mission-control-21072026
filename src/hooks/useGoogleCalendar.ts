@@ -301,7 +301,7 @@ export function useGoogleCalendar(opts?: {
       const cfg = getGCalConfig();
       const ms = (cfg.syncIntervalMinutes || 5) * 60 * 1000;
       intervalRef.current = setInterval(() => {
-        syncEvents(true);
+        syncEvents(true).catch(() => {});
       }, ms);
     }
     return () => {

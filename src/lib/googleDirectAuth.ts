@@ -6,7 +6,7 @@
 //
 // Google Cloud Console setup (one-time, ~3 minutes):
 //   1. console.cloud.google.com → APIs & Services → Library → enable
-//      "Google Calendar API" AND "Google Tasks API".
+//      "Google Calendar API", "Google Tasks API", and "Google Drive API".
 //   2. OAuth consent screen → External → add yourself as test user (or publish).
 //   3. Credentials → Create OAuth client ID → Web application.
 //   4. Authorized JavaScript origins: add this app's origin (e.g.

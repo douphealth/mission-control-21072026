@@ -85,9 +85,10 @@ export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: ()
                 </a>
               </li>
               <li>
-                Enable the <span className="text-foreground font-medium">Google Calendar API</span>{" "}
-                and <span className="text-foreground font-medium">Google Tasks API</span> (APIs &
-                Services → Library).
+                Enable the <span className="text-foreground font-medium">Google Calendar API</span>,{" "}
+                <span className="text-foreground font-medium">Google Tasks API</span>, and{" "}
+                <span className="text-foreground font-medium">Google Drive API</span> (APIs &
+                Services → Library). Drive is used only for the app's private cross-device backup.
               </li>
               <li>
                 OAuth consent screen → External → add your Google account as a Test user (or Publish
