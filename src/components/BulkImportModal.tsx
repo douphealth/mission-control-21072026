@@ -50,7 +50,8 @@ import {
   type TargetMeta,
   generateTemplate,
 } from "@/lib/importEngine";
-import { aiAutonomousImport, aiImageImport } from "@/lib/aiImport";
+import { aiAutonomousImport, aiImageImport, aiFileImport } from "@/lib/aiImport";
+import { describeUnsupported, isSupportedFile, prepareFile } from "@/lib/fileIntake";
 import { deduplicateItems } from "@/lib/dedup";
 import { useIsMobile } from "@/hooks/use-mobile";
 
