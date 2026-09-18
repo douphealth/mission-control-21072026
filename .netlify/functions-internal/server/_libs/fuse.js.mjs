@@ -575,7 +575,7 @@ var BitapSearch = class {
 		return result;
 	}
 };
-var MULTI_MATCH_TYPES = /* @__PURE__ */ new Set(["fuzzy", "include"]);
+var MULTI_MATCH_TYPES = new Set(["fuzzy", "include"]);
 function isInverse(type) {
 	return type.startsWith("inverse");
 }

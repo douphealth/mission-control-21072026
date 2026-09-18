@@ -1,11 +1,11 @@
 import { PassThrough, Readable } from "node:stream";
-//#region node_modules/h3/node_modules/rou3/dist/index.mjs
+//#region node_modules/rou3/dist/index.mjs
 var NullProtoObj = /* @__PURE__ */ (() => {
 	const e = function() {};
 	return e.prototype = Object.create(null), Object.freeze(e.prototype), e;
 })();
 //#endregion
-//#region node_modules/h3/node_modules/srvx/dist/_chunks/_url.mjs
+//#region node_modules/srvx/dist/_chunks/_url.mjs
 function lazyInherit(target, source, sourceKey) {
 	for (const key of [...Object.getOwnPropertyNames(source), ...Object.getOwnPropertySymbols(source)]) {
 		if (key === "constructor") continue;
@@ -33,50 +33,9 @@ function lazyInherit(target, source, sourceKey) {
 		if (modified) Object.defineProperty(target, key, desc);
 	}
 }
-var _needsNormRE = /(?:(?:^|\/)(?:\.|\.\.|%2e|%2e\.|\.%2e|%2e%2e)(?:\/|$))|[\\^#"<>{}`\x00-\x20\x7f-\uffff]/i;
-var _searchNeedsNormRE = /[#"'<>\x00-\x20\x7f-\uffff]/;
+var _needsNormRE = /(?:(?:^|\/)(?:\.|\.\.|%2e|%2e\.|\.%2e|%2e%2e)(?:\/|$))|[\\^\x80-\uffff]/i;
 var FastURL = /* @__PURE__ */ (() => {
 	const NativeURL = globalThis.URL;
-	const NativeSearchParams = globalThis.URLSearchParams;
-	const FastURLSearchParams = class URLSearchParams {
-		#owner;
-		#params;
-		constructor(owner) {
-			this.#owner = owner;
-		}
-		static [Symbol.hasInstance](val) {
-			return val instanceof NativeSearchParams;
-		}
-		_adopt(params) {
-			this.#params = params;
-		}
-		get _params() {
-			if (!this.#params) {
-				const search = this.#owner.search;
-				this.#params ??= new NativeSearchParams(search);
-			}
-			return this.#params;
-		}
-		#mutable() {
-			this.#owner._url;
-			return this.#params;
-		}
-		append(name, value) {
-			this.#mutable().append(name, value);
-		}
-		set(name, value) {
-			this.#mutable().set(name, value);
-		}
-		delete(name, value) {
-			this.#mutable().delete(name, value);
-		}
-		sort() {
-			this.#mutable().sort();
-		}
-	};
-	lazyInherit(FastURLSearchParams.prototype, NativeSearchParams.prototype, "_params");
-	Object.setPrototypeOf(FastURLSearchParams.prototype, NativeSearchParams.prototype);
-	Object.setPrototypeOf(FastURLSearchParams, NativeSearchParams);
 	const FastURL = class URL {
 		#url;
 		#href;
@@ -87,11 +46,9 @@ var FastURL = /* @__PURE__ */ (() => {
 		#searchParams;
 		#pos;
 		constructor(url) {
-			if (typeof url === "string") {
-				const isOriginForm = url[0] === "/";
-				if (isOriginForm && !_searchNeedsNormRE.test(url)) this.#href = `http://localhost${url}`;
-				else this.#url = new NativeURL(isOriginForm ? `http://localhost${url}` : url);
-			} else if (_needsNormRE.test(url.pathname) || url.search && _searchNeedsNormRE.test(url.search)) this.#url = new NativeURL(`${url.protocol || "http:"}//${url.host || "localhost"}${url.pathname}${url.search || ""}`);
+			if (typeof url === "string") if (url[0] === "/") this.#href = url;
+			else this.#url = new NativeURL(url);
+			else if (_needsNormRE.test(url.pathname)) this.#url = new NativeURL(`${url.protocol || "http:"}//${url.host || "localhost"}${url.pathname}${url.search || ""}`);
 			else {
 				this.#protocol = url.protocol;
 				this.#host = url.host;
@@ -110,8 +67,8 @@ var FastURL = /* @__PURE__ */ (() => {
 			this.#host = void 0;
 			this.#pathname = void 0;
 			this.#search = void 0;
+			this.#searchParams = void 0;
 			this.#pos = void 0;
-			this.#searchParams?._adopt(this.#url.searchParams);
 			return this.#url;
 		}
 		get href() {
@@ -153,9 +110,9 @@ var FastURL = /* @__PURE__ */ (() => {
 			return this.#search;
 		}
 		get searchParams() {
-			if (this.#searchParams) return this.#searchParams;
 			if (this.#url) return this.#url.searchParams;
-			return this.#searchParams = new FastURLSearchParams(this);
+			if (!this.#searchParams) this.#searchParams = new URLSearchParams(this.search);
+			return this.#searchParams;
 		}
 		get protocol() {
 			if (this.#url) return this.#url.protocol;
@@ -166,10 +123,6 @@ var FastURL = /* @__PURE__ */ (() => {
 				this.#protocol = url.slice(0, protocolIndex + 1);
 			}
 			return this.#protocol;
-		}
-		get hash() {
-			if (this.#url) return this.#url.hash;
-			return "";
 		}
 		toString() {
 			return this.href;
@@ -184,9 +137,10 @@ var FastURL = /* @__PURE__ */ (() => {
 	return FastURL;
 })();
 //#endregion
-//#region node_modules/h3/node_modules/srvx/dist/adapters/node.mjs
+//#region node_modules/srvx/dist/adapters/node.mjs
 var NodeResponse = /* @__PURE__ */ (() => {
 	const NativeResponse = globalThis.Response;
+	const STATUS_CODES = globalThis.process?.getBuiltinModule?.("node:http")?.STATUS_CODES || {};
 	class NodeResponse {
 		#body;
 		#init;
@@ -199,31 +153,17 @@ var NodeResponse = /* @__PURE__ */ (() => {
 		static [Symbol.hasInstance](val) {
 			return val instanceof NativeResponse;
 		}
-		static json(data, init) {
-			const body = JSON.stringify(data);
-			if (body === void 0) throw new TypeError("Value is not JSON serializable");
-			let headers = init?.headers;
-			if (!headers) headers = { "content-type": "application/json" };
-			else {
-				const merged = new Headers(headers);
-				if (!merged.has("content-type")) merged.set("content-type", "application/json");
-				headers = merged;
-			}
-			return new NodeResponse(body, init ? {
-				...init,
-				headers
-			} : { headers });
-		}
 		get status() {
 			return this.#response?.status || this.#init?.status || 200;
 		}
 		get statusText() {
-			return this.#response?.statusText || this.#init?.statusText || "";
+			return this.#response?.statusText || this.#init?.statusText || STATUS_CODES[this.status] || "";
 		}
 		get headers() {
 			if (this.#response) return this.#response.headers;
 			if (this.#headers) return this.#headers;
-			return this.#headers = new Headers(this.#init?.headers);
+			const initHeaders = this.#init?.headers;
+			return this.#headers = initHeaders instanceof Headers ? initHeaders : new Headers(initHeaders);
 		}
 		get ok() {
 			if (this.#response) return this.#response.ok;
@@ -256,42 +196,39 @@ var NodeResponse = /* @__PURE__ */ (() => {
 			let contentType;
 			let contentLength;
 			if (this.#response) body = this.#response.body;
-			else if (this.#body != null) {
-				if (this.#body instanceof ReadableStream) body = this.#body;
-				else if (typeof this.#body === "string") {
-					body = this.#body;
-					contentType = "text/plain; charset=UTF-8";
-					contentLength = Buffer.byteLength(this.#body);
-				} else if (this.#body instanceof ArrayBuffer) {
-					body = Buffer.from(this.#body);
-					contentLength = this.#body.byteLength;
-				} else if (this.#body instanceof Uint8Array) {
-					body = this.#body;
-					contentLength = this.#body.byteLength;
-				} else if (this.#body instanceof DataView) {
-					body = Buffer.from(this.#body.buffer, this.#body.byteOffset, this.#body.byteLength);
-					contentLength = this.#body.byteLength;
-				} else if (this.#body instanceof Blob) {
-					body = this.#body.stream();
-					contentType = this.#body.type;
-					contentLength = this.#body.size;
-				} else if (typeof this.#body.pipe === "function") body = this.#body;
-				else body = this._response.body;
-			}
+			else if (this.#body) if (this.#body instanceof ReadableStream) body = this.#body;
+			else if (typeof this.#body === "string") {
+				body = this.#body;
+				contentType = "text/plain; charset=UTF-8";
+				contentLength = Buffer.byteLength(this.#body);
+			} else if (this.#body instanceof ArrayBuffer) {
+				body = Buffer.from(this.#body);
+				contentLength = this.#body.byteLength;
+			} else if (this.#body instanceof Uint8Array) {
+				body = this.#body;
+				contentLength = this.#body.byteLength;
+			} else if (this.#body instanceof DataView) {
+				body = Buffer.from(this.#body.buffer);
+				contentLength = this.#body.byteLength;
+			} else if (this.#body instanceof Blob) {
+				body = this.#body.stream();
+				contentType = this.#body.type;
+				contentLength = this.#body.size;
+			} else if (typeof this.#body.pipe === "function") body = this.#body;
+			else body = this._response.body;
 			const headers = [];
 			const initHeaders = this.#init?.headers;
-			const headerEntries = this.#response?.headers || this.#headers || (initHeaders ? Array.isArray(initHeaders) ? initHeaders : initHeaders?.entries ? initHeaders.entries() : Object.entries(initHeaders) : void 0);
+			const headerEntries = this.#response?.headers || this.#headers || (initHeaders ? Array.isArray(initHeaders) ? initHeaders : initHeaders?.entries ? initHeaders.entries() : Object.entries(initHeaders).map(([k, v]) => [k.toLowerCase(), v]) : void 0);
 			let hasContentTypeHeader;
 			let hasContentLength;
 			if (headerEntries) for (const [key, value] of headerEntries) {
-				const lowerKey = typeof key === "string" ? key.toLowerCase() : String(key);
-				if (Array.isArray(value)) for (const v of value) headers.push(lowerKey, v);
-				else headers.push(lowerKey, value);
-				if (lowerKey === "content-type") hasContentTypeHeader = true;
-				else if (lowerKey === "content-length") hasContentLength = true;
+				if (Array.isArray(value)) for (const v of value) headers.push([key, v]);
+				else headers.push([key, value]);
+				if (key === "content-type") hasContentTypeHeader = true;
+				else if (key === "content-length") hasContentLength = true;
 			}
-			if (contentType && !hasContentTypeHeader) headers.push("content-type", contentType);
-			if (contentLength != null && !hasContentLength) headers.push("content-length", String(contentLength));
+			if (contentType && !hasContentTypeHeader) headers.push(["content-type", contentType]);
+			if (contentLength && !hasContentLength) headers.push(["content-length", String(contentLength)]);
 			this.#init = void 0;
 			this.#headers = void 0;
 			this.#response = void 0;
@@ -310,28 +247,14 @@ var NodeResponse = /* @__PURE__ */ (() => {
 	return NodeResponse;
 })();
 //#endregion
-//#region node_modules/h3/dist/response.mjs
-var NEEDLESS_ESCAPE_SRC = String.raw`%(?:2[146-9A-E]|3[0-9ABD]|4[0-9A-F]|5[0-9ABDF]|6[1-9A-F]|7[0-9ACE])`;
-var NEEDLESS_ESCAPE_RE = /* @__PURE__ */ new RegExp(NEEDLESS_ESCAPE_SRC, "i");
-var NEEDLESS_ESCAPE_RE_G = /* @__PURE__ */ new RegExp(NEEDLESS_ESCAPE_SRC, "gi");
-function isNonCanonicalPathname(pathname) {
-	return NEEDLESS_ESCAPE_RE.test(pathname);
-}
-function canonicalPathname(pathname) {
-	return pathname.replace(NEEDLESS_ESCAPE_RE_G, (m) => String.fromCharCode(Number.parseInt(m.slice(1), 16)));
-}
+//#region node_modules/h3/dist/h3.mjs
 function decodePathname(pathname) {
-	try {
-		return decodeURI(pathname);
-	} catch {
-		return;
-	}
+	return decodeURI(pathname.includes("%25") ? pathname.replace(/%25/g, "%2525") : pathname);
 }
 var kEventNS = "h3.internal.event.";
 var kEventRes = /* @__PURE__ */ Symbol.for(`${kEventNS}res`);
 var kEventResHeaders = /* @__PURE__ */ Symbol.for(`${kEventNS}res.headers`);
 var kEventResErrHeaders = /* @__PURE__ */ Symbol.for(`${kEventNS}res.err.headers`);
-var kMalformedURL = /* @__PURE__ */ Symbol.for(`${kEventNS}malformed`);
 var H3Event = class {
 	app;
 	req;
@@ -339,16 +262,12 @@ var H3Event = class {
 	context;
 	static __is_event__ = true;
 	constructor(req, context, app) {
-		this.context = req.context = context || req.context || new NullProtoObj();
+		this.context = context || req.context || new NullProtoObj();
 		this.req = req;
 		this.app = app;
 		const _url = req._url;
-		let url = _url && _url instanceof URL ? _url : new FastURL(req.url);
-		const pathname = url.pathname;
-		if (pathname.includes("%")) {
-			if (decodePathname(pathname) === void 0) this[kMalformedURL] = true;
-			else if (isNonCanonicalPathname(pathname)) url = new FastURL(`${url.protocol}//${url.host}${canonicalPathname(pathname)}${url.search}`);
-		}
+		const url = _url && _url instanceof URL ? _url : new FastURL(req.url);
+		if (url.pathname.includes("%")) url.pathname = decodePathname(url.pathname);
 		this.url = url;
 	}
 	get res() {
@@ -396,7 +315,7 @@ function sanitizeStatusMessage(statusMessage = "") {
 function sanitizeStatusCode(statusCode, defaultStatusCode = 200) {
 	if (!statusCode) return defaultStatusCode;
 	if (typeof statusCode === "string") statusCode = +statusCode;
-	if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) return defaultStatusCode;
+	if (statusCode < 100 || statusCode > 599) return defaultStatusCode;
 	return statusCode;
 }
 var HTTPError = class HTTPError extends Error {
@@ -472,35 +391,15 @@ function isJSONSerializable(value, _type) {
 	const proto = Object.getPrototypeOf(value);
 	return proto === Object.prototype || proto === null;
 }
-var kEventDispose = /* @__PURE__ */ Symbol.for("h3.internal.event.dispose");
 var kNotFound = /* @__PURE__ */ Symbol.for("h3.notFound");
 var kHandled = /* @__PURE__ */ Symbol.for("h3.handled");
 function toResponse(val, event, config = {}) {
-	if (typeof val?.then === "function") return val.then((resolvedVal) => toResponse(resolvedVal, event, config), (r) => toResponse(toError(r), event, config));
-	let response;
-	try {
-		response = prepareResponse(val, event, config);
-	} catch (error) {
-		return toResponse(toError(error), event, config);
-	}
+	if (typeof val?.then === "function") return val.then((resolvedVal) => toResponse(resolvedVal, event, config), (r) => toResponse(typeof r === "number" ? new HTTPError({ status: r }) : r, event, config));
+	const response = prepareResponse(val, event, config);
 	if (typeof response?.then === "function") return toResponse(response, event, config);
 	const { onResponse } = config;
-	if (onResponse) return Promise.resolve().then(() => onResponse(response, event)).catch((error) => {
-		if (!config.silent) console.error(error);
-	}).then(() => event[kEventDispose]?.observe(response, val) ?? response);
-	return event[kEventDispose]?.observe(response, val) ?? response;
+	return onResponse ? Promise.resolve(onResponse(response, event)).then(() => response) : response;
 }
-function toError(value) {
-	if (value === kNotFound || value === kHandled || value instanceof Error) return value;
-	if (typeof value === "number") return new HTTPError({ status: value });
-	const error = new HTTPError({
-		status: 500,
-		unhandled: true
-	});
-	error.cause = value;
-	return error;
-}
-var kHTTPResponse = /* @__PURE__ */ Symbol.for("h3.HTTPResponse");
 var HTTPResponse = class {
 	#headers;
 	#init;
@@ -510,16 +409,15 @@ var HTTPResponse = class {
 		this.#init = init;
 	}
 	get status() {
-		return this.#init?.status;
+		return this.#init?.status || 200;
 	}
 	get statusText() {
-		return this.#init?.statusText;
+		return this.#init?.statusText || "OK";
 	}
 	get headers() {
 		return this.#headers ||= new Headers(this.#init?.headers);
 	}
 };
-HTTPResponse.prototype[kHTTPResponse] = true;
 function prepareResponse(val, event, config, nested) {
 	if (val === kHandled) return new NodeResponse(null);
 	if (val === kNotFound) val = new HTTPError({
@@ -536,37 +434,33 @@ function prepareResponse(val, event, config, nested) {
 		if (error.unhandled && !config.silent) console.error(error);
 		const { onError } = config;
 		const errHeaders = event[kEventRes]?.[kEventResErrHeaders];
-		if (onError && !nested) return Promise.resolve().then(() => onError(error, event)).catch(toError).then((newVal) => prepareResponse(newVal ?? val, event, config, true));
-		event[kEventRes] = void 0;
-		return errorResponse(error, config.debug, errHeaders);
+		return onError && !nested ? Promise.resolve(onError(error, event)).catch((error) => error).then((newVal) => prepareResponse(newVal ?? val, event, config, true)) : errorResponse(error, config.debug, errHeaders);
 	}
 	const preparedRes = event[kEventRes];
-	let preparedHeaders = preparedRes?.[kEventResHeaders];
+	const preparedHeaders = preparedRes?.[kEventResHeaders];
 	event[kEventRes] = void 0;
 	if (!(val instanceof Response)) {
 		const res = prepareResponseBody(val, event, config);
-		const rawStatus = res.status || preparedRes?.status;
-		const status = rawStatus ? sanitizeStatusCode(rawStatus) : void 0;
-		const rawStatusText = res.statusText || preparedRes?.statusText;
+		const status = res.status || preparedRes?.status;
 		return new NodeResponse(nullBody(event.req.method, status) ? null : res.body, {
 			status,
-			statusText: rawStatusText === void 0 ? void 0 : sanitizeStatusMessage(rawStatusText),
-			headers: res.headers && preparedHeaders ? mergeHeaders(res.headers, preparedHeaders) : res.headers || preparedHeaders
+			statusText: res.statusText || preparedRes?.statusText,
+			headers: res.headers && preparedHeaders ? mergeHeaders$1(res.headers, preparedHeaders) : res.headers || preparedHeaders
 		});
 	}
-	if (val.status >= 400) preparedHeaders = preparedRes?.[kEventResErrHeaders];
-	if (preparedHeaders && !nested && !preparedHeaders.keys().next().done) return new NodeResponse(nullBody(event.req.method, val.status) ? null : val.body, {
-		status: val.status,
-		statusText: val.statusText,
-		headers: mergeHeaders(val.headers, preparedHeaders)
-	});
-	return event.req.method === "HEAD" && val.body !== null ? new NodeResponse(null, {
-		status: val.status,
-		statusText: val.statusText,
-		headers: val.headers
-	}) : val;
+	if (!preparedHeaders || nested || !val.ok) return val;
+	try {
+		mergeHeaders$1(val.headers, preparedHeaders, val.headers);
+		return val;
+	} catch {
+		return new NodeResponse(nullBody(event.req.method, val.status) ? null : val.body, {
+			status: val.status,
+			statusText: val.statusText,
+			headers: mergeHeaders$1(val.headers, preparedHeaders)
+		});
+	}
 }
-function mergeHeaders(base, overrides, target = new Headers(base)) {
+function mergeHeaders$1(base, overrides, target = new Headers(base)) {
 	for (const [name, value] of overrides) if (name === "set-cookie") target.append(name, value);
 	else target.set(name, value);
 	return target;
@@ -588,11 +482,11 @@ function prepareResponseBody(val, event, config) {
 	};
 	const valType = typeof val;
 	if (valType === "string") return { body: val };
-	if (val instanceof Uint8Array) return {
-		body: val,
-		headers: new Headers({ "content-length": val.byteLength.toString() })
-	};
-	if (val instanceof HTTPResponse || val?.[kHTTPResponse] === true) return val;
+	if (val instanceof Uint8Array) {
+		event.res.headers.set("content-length", val.byteLength.toString());
+		return { body: val };
+	}
+	if (val instanceof HTTPResponse || val?.constructor?.name === "HTTPResponse") return val;
 	if (isJSONSerializable(val, valType)) return {
 		body: JSON.stringify(val, void 0, config.debug ? 2 : void 0),
 		headers: jsonHeaders
@@ -624,8 +518,8 @@ function nullBody(method, status) {
 	return method === "HEAD" || status === 100 || status === 101 || status === 102 || status === 204 || status === 205 || status === 304;
 }
 function errorResponse(error, debug, errHeaders) {
-	let headers = error.headers ? mergeHeaders(jsonHeaders, error.headers) : new Headers(jsonHeaders);
-	if (errHeaders) headers = mergeHeaders(headers, errHeaders);
+	let headers = error.headers ? mergeHeaders$1(jsonHeaders, error.headers) : new Headers(jsonHeaders);
+	if (errHeaders) headers = mergeHeaders$1(headers, errHeaders);
 	return new NodeResponse(JSON.stringify({
 		...error.toJSON(),
 		stack: debug && error.stack ? error.stack.split("\n").map((l) => l.trim()) : void 0
@@ -635,33 +529,15 @@ function errorResponse(error, debug, errHeaders) {
 		headers
 	});
 }
-//#endregion
-//#region node_modules/h3/dist/middleware.mjs
-function composeMiddleware(middleware) {
-	let chain = (event, handler) => handler(event);
-	for (let i = middleware.length - 1; i >= 0; i--) {
-		const fn = middleware[i];
-		const inner = chain;
-		chain = (event, handler) => callLayer(fn, event, handler, inner);
-	}
-	return chain;
-}
-function composeHandler(middleware, handler) {
-	const chain = composeMiddleware(middleware);
-	return function _composedHandler(event) {
-		return chain(event, handler);
-	};
-}
 function callMiddleware(event, middleware, handler, index = 0) {
-	return index === middleware.length ? handler(event) : callLayer(middleware[index], event, handler, (_event, _handler) => callMiddleware(_event, middleware, _handler, index + 1));
-}
-function callLayer(fn, event, handler, inner) {
+	if (index === middleware.length) return handler(event);
+	const fn = middleware[index];
 	let nextCalled;
 	let nextResult;
 	const next = () => {
 		if (nextCalled) return nextResult;
 		nextCalled = true;
-		nextResult = inner(event, handler);
+		nextResult = callMiddleware(event, middleware, handler, index + 1);
 		return nextResult;
 	};
 	const ret = fn(event, next);
@@ -670,27 +546,26 @@ function callLayer(fn, event, handler, inner) {
 function isUnhandledResponse(val) {
 	return val === void 0 || val === kNotFound;
 }
-//#endregion
-//#region node_modules/h3/dist/cache.mjs
 function toRequest(input, options) {
 	if (typeof input === "string") {
 		let url = input;
-		if (url[0] === "/") url = `http://${safeHost((options?.headers ? new Headers(options.headers) : void 0)?.get("host"))}${url}`;
+		if (url[0] === "/") {
+			const headers = options?.headers ? new Headers(options.headers) : void 0;
+			const host = headers?.get("host") || "localhost";
+			url = `${headers?.get("x-forwarded-proto") === "https" ? "https" : "http"}://${host}${url}`;
+		}
 		return new Request(url, options);
 	} else if (options || input instanceof URL) return new Request(input, options);
 	return input;
-}
-function safeHost(host) {
-	return host && !/[/\\?#@\s]/.test(host) ? host : "localhost";
 }
 function defineHandler(input) {
 	if (typeof input === "function") return handlerWithFetch(input);
 	const handler = input.handler || (input.fetch ? function _fetchHandler(event) {
 		return input.fetch(event.req);
 	} : NoHandler);
-	const composed = input.middleware?.length && composeHandler(input.middleware, handler);
-	const eventHandler = handlerWithFetch(composed || handler);
-	return Object.assign(eventHandler, input, composed && { fetch: eventHandler.fetch });
+	return Object.assign(handlerWithFetch(input.middleware?.length ? function _handlerMiddleware(event) {
+		return callMiddleware(event, input.middleware, handler);
+	} : handler), input);
 }
 function handlerWithFetch(handler) {
 	if ("fetch" in handler) return handler;
@@ -701,7 +576,7 @@ function handlerWithFetch(handler) {
 		try {
 			return Promise.resolve(toResponse(handler(event), event));
 		} catch (error) {
-			return Promise.resolve(toResponse(toError(error), event));
+			return Promise.resolve(toResponse(error, event));
 		}
 	} });
 }
@@ -729,8 +604,6 @@ var H3Core = class {
 	config;
 	"~middleware";
 	"~routes" = [];
-	"~dispatch";
-	"~composed";
 	constructor(config = {}) {
 		this["~middleware"] = [];
 		this.config = config;
@@ -746,16 +619,14 @@ var H3Core = class {
 			event.context.params = route.params;
 			event.context.matchedRoute = route.data;
 		}
-		return (this["~dispatch"] ??= createDispatcher(this))(event, route);
+		const routeHandler = route?.data.handler || NoHandler;
+		const middleware = this["~getMiddleware"](event, route);
+		return middleware.length > 0 ? callMiddleware(event, middleware, routeHandler) : routeHandler(event);
 	}
 	"~request"(request, context) {
 		const event = new H3Event(request, context, this);
 		let handlerRes;
 		try {
-			if (event[kMalformedURL] && !this.config.allowMalformedURL) throw new HTTPError({
-				status: 400,
-				message: "Bad Request"
-			});
 			if (this.config.onRequest) {
 				const hookRes = this.config.onRequest(event);
 				handlerRes = typeof hookRes?.then === "function" ? hookRes.then(() => this.handler(event)) : this.handler(event);
@@ -769,21 +640,11 @@ var H3Core = class {
 	"~addRoute"(_route) {
 		this["~routes"].push(_route);
 	}
-	"~getMiddleware"(_event, _route) {
-		return this["~middleware"];
+	"~getMiddleware"(_event, route) {
+		const routeMiddleware = route?.data.middleware;
+		const globalMiddleware = this["~middleware"];
+		return routeMiddleware ? [...globalMiddleware, ...routeMiddleware] : globalMiddleware;
 	}
 };
-function createDispatcher(app) {
-	if (app["~getMiddleware"] !== H3Core.prototype["~getMiddleware"]) return (event, route) => callMiddleware(event, app["~getMiddleware"](event, route || void 0), routeHandler(route));
-	const middleware = app["~middleware"];
-	if (middleware.length === 0) return (event, route) => routeHandler(route)(event);
-	const composed = app["~composed"] ??= composeMiddleware(middleware);
-	return (event, route) => composed(event, routeHandler(route));
-}
-function routeHandler(route) {
-	const data = route?.data;
-	if (!data) return NoHandler;
-	return data.middleware?.length ? data["~composed"] ??= composeHandler(data.middleware, data.handler) : data.handler;
-}
 //#endregion
-export { HTTPError as i, defineLazyEventHandler as n, toRequest as r, H3Core as t };
+export { NodeResponse as a, toRequest as i, HTTPError as n, NullProtoObj as o, defineLazyEventHandler as r, H3Core as t };

@@ -1,6 +1,5 @@
 globalThis.__nitro_main__ = import.meta.url;
-import { i as HTTPError, n as defineLazyEventHandler, t as H3Core } from "./_libs/h3+rou3+srvx.mjs";
-import { r as NodeResponse } from "./_libs/h3-v2+rou3+srvx.mjs";
+import { a as NodeResponse, n as HTTPError, r as defineLazyEventHandler, t as H3Core } from "./_libs/h3+rou3+srvx.mjs";
 //#region #nitro-vite-setup
 function lazyService(loader) {
 	let promise, mod;
@@ -39,11 +38,11 @@ var findRouteRules = /* @__PURE__ */ (() => {
 		return r;
 	};
 })();
-var _lazy_jEkMQG = defineLazyEventHandler(() => import("./_chunks/ssr-renderer.mjs"));
+var _lazy_j21Qvj = defineLazyEventHandler(() => import("./_chunks/ssr-renderer.mjs"));
 var findRoute = /* @__PURE__ */ (() => {
 	const data = {
 		route: "/**",
-		handler: _lazy_jEkMQG
+		handler: _lazy_j21Qvj
 	};
 	return ((_m, p) => {
 		return {
@@ -193,7 +192,7 @@ function getRouteRules(method, pathname) {
 //#endregion
 //#region node_modules/nitro/dist/presets/netlify/runtime/netlify.mjs
 var nitroApp = useNitroApp();
-var ONE_YEAR_IN_SECONDS = 31536e3;
+var ONE_YEAR_IN_SECONDS = 365 * 24 * 60 * 60;
 var handler = async (req) => {
 	req.runtime ??= { name: "netlify" };
 	req.ip ??= req.headers.get("x-nf-client-connection-ip") || void 0;

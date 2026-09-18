@@ -140,16 +140,14 @@ var persistImpl = (config, baseOptions) => (set, get, api) => {
 		});
 		const postRehydrationCallback = ((_b = options.onRehydrateStorage) == null ? void 0 : _b.call(options, (_a = get()) != null ? _a : configResult)) || void 0;
 		return toThenable(storage.getItem.bind(storage))(options.name).then((deserializedStorageValue) => {
-			if (deserializedStorageValue) {
-				if (typeof deserializedStorageValue.version === "number" && deserializedStorageValue.version !== options.version) {
-					if (options.migrate) {
-						const migration = options.migrate(deserializedStorageValue.state, deserializedStorageValue.version);
-						if (migration instanceof Promise) return migration.then((result) => [true, result]);
-						return [true, migration];
-					}
-					console.error(`State loaded from storage couldn't be migrated since no migrate function was provided`);
-				} else return [false, deserializedStorageValue.state];
-			}
+			if (deserializedStorageValue) if (typeof deserializedStorageValue.version === "number" && deserializedStorageValue.version !== options.version) {
+				if (options.migrate) {
+					const migration = options.migrate(deserializedStorageValue.state, deserializedStorageValue.version);
+					if (migration instanceof Promise) return migration.then((result) => [true, result]);
+					return [true, migration];
+				}
+				console.error(`State loaded from storage couldn't be migrated since no migrate function was provided`);
+			} else return [false, deserializedStorageValue.state];
 			return [false, void 0];
 		}).then((migrationResult) => {
 			var _a2;
@@ -178,7 +176,6 @@ var persistImpl = (config, baseOptions) => (set, get, api) => {
 			if (newOptions.storage) storage = newOptions.storage;
 		},
 		clearStorage: () => {
-			++hydrationVersion;
 			storage?.removeItem(options.name);
 		},
 		getOptions: () => options,

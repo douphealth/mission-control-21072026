@@ -58,12 +58,10 @@ function notUndefined(value, msg) {
 var approxEqual = (a, b) => Math.abs(a - b) < 1.01;
 var debounce = (targetWindow, fn, ms) => {
 	let timeoutId;
-	return Object.assign(function(...args) {
+	return function(...args) {
 		targetWindow.clearTimeout(timeoutId);
 		timeoutId = targetWindow.setTimeout(() => fn.apply(this, args), ms);
-	}, { cancel: () => {
-		targetWindow.clearTimeout(timeoutId);
-	} });
+	};
 };
 //#endregion
 //#region node_modules/@tanstack/virtual-core/dist/esm/index.js
@@ -148,7 +146,6 @@ var observeOffset = (instance, cb, readOffset) => {
 	return () => {
 		element.removeEventListener("scroll", handler);
 		if (registerScrollendEvent) element.removeEventListener("scrollend", endHandler);
-		fallback?.cancel();
 	};
 };
 var observeElementOffset = (instance, cb) => observeOffset(instance, cb, (el) => {
@@ -230,7 +227,6 @@ var Virtualizer = class {
 								}
 								return;
 							}
-							if (!this.isIndexInRange(index)) return;
 							if (this.shouldMeasureDuringScroll(index)) this.resizeItem(index, this.options.measureElement(node, entry, this));
 						};
 						this.options.useAnimationFrameWithResizeObserver ? requestAnimationFrame(run) : run();
@@ -374,8 +370,6 @@ var Virtualizer = class {
 				this.rafId = null;
 			}
 			this.scrollState = null;
-			this.isScrolling = false;
-			this.scrollDirection = null;
 			this._iosDeferredAdjustment = 0;
 			this._iosTouching = false;
 			this._iosJustTouchEnded = false;
@@ -459,14 +453,12 @@ var Virtualizer = class {
 			this.pendingScrollAnchor = null;
 			if (anchor && this.scrollElement && this.options.enabled) {
 				const [key, _offset, followOnAppend, anchorDelta] = anchor;
-				if (key !== null && !followOnAppend) {
-					if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
-						if (anchorDelta !== 0) this._iosDeferredAdjustment += anchorDelta;
-					} else this._scrollToOffset(this.getScrollOffset(), {
-						adjustments: void 0,
-						behavior: void 0
-					});
-				}
+				if (key !== null && !followOnAppend) if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
+					if (anchorDelta !== 0) this._iosDeferredAdjustment += anchorDelta;
+				} else this._scrollToOffset(this.getScrollOffset(), {
+					adjustments: void 0,
+					behavior: void 0
+				});
 				if (followOnAppend) this.scrollToEnd({ behavior: followOnAppend });
 			}
 		};
@@ -530,7 +522,6 @@ var Virtualizer = class {
 				gap
 			};
 		}, { key: false });
-		this.isIndexInRange = (index) => index >= 0 && index < this.options.count;
 		this.getMeasurements = memo(() => [this.getMeasurementOptions(), this.itemSizeCacheVersion], ({ count, paddingStart, scrollMargin, getItemKey, enabled, lanes, laneAssignmentMode, gap }, _itemSizeCacheVersion) => {
 			const itemSizeCache = this.itemSizeCache;
 			if (!enabled) {
@@ -729,7 +720,6 @@ var Virtualizer = class {
 				return;
 			}
 			const index = this.indexFromElement(node);
-			if (!this.isIndexInRange(index)) return;
 			const key = this.options.getItemKey(index);
 			const prevNode = this.elementsCache.get(key);
 			if (prevNode !== node) {
@@ -741,7 +731,7 @@ var Virtualizer = class {
 		};
 		this.resizeItem = (index, size) => {
 			var _a, _b;
-			if (!this.isIndexInRange(index)) return;
+			if (index < 0 || index >= this.options.count) return;
 			let cachedSize;
 			let itemStart;
 			let key;
@@ -757,13 +747,10 @@ var Virtualizer = class {
 				itemStart = item.start;
 				cachedSize = item.size;
 			}
-			const itemSize = this.itemSizeCache.get(key) ?? cachedSize;
-			const delta = size - itemSize;
+			const delta = size - (this.itemSizeCache.get(key) ?? cachedSize);
 			if (delta !== 0) {
 				const wasAtEnd = this.options.anchorTo === "end" && ((_a = this.scrollState) == null ? void 0 : _a.behavior) !== "smooth" && this.getVirtualDistanceFromEnd() <= this.options.scrollEndThreshold;
 				const prevTotalSize = wasAtEnd ? this.getTotalSize() : 0;
-				const scrollOffsetWithAdj = this.getScrollOffset() + this.scrollAdjustments;
-				const defaultShouldAdjust = !this.itemSizeCache.has(key) ? itemStart < scrollOffsetWithAdj : itemStart + itemSize <= scrollOffsetWithAdj && this.scrollDirection !== "backward";
 				const shouldAdjustScroll = ((_b = this.scrollState) == null ? void 0 : _b.behavior) !== "smooth" && (this.shouldAdjustScrollPositionOnItemSizeChange !== void 0 ? this.shouldAdjustScrollPositionOnItemSizeChange(this.measurementsCache[index] ?? {
 					index,
 					key,
@@ -771,14 +758,13 @@ var Virtualizer = class {
 					size: cachedSize,
 					end: itemStart + cachedSize,
 					lane: 0
-				}, delta, this) : defaultShouldAdjust);
+				}, delta, this) : itemStart < this.getScrollOffset() + this.scrollAdjustments && (!this.itemSizeCache.has(key) || this.scrollDirection !== "backward"));
 				if (this.pendingMin === null || index < this.pendingMin) this.pendingMin = index;
 				this.itemSizeCache.set(key, size);
 				this.itemSizeCacheVersion++;
-				let adjustedSync = false;
-				if (wasAtEnd) adjustedSync = this.applyScrollAdjustment(this.getTotalSize() - prevTotalSize);
-				else if (shouldAdjustScroll) adjustedSync = this.applyScrollAdjustment(delta);
-				this.notify(adjustedSync);
+				if (wasAtEnd) this.applyScrollAdjustment(this.getTotalSize() - prevTotalSize);
+				else if (shouldAdjustScroll) this.applyScrollAdjustment(delta);
+				this.notify(false);
 			}
 		};
 		this.getVirtualItems = memo(() => [this.getVirtualIndexes(), this.getMeasurements()], (indexes, measurements) => {
@@ -832,11 +818,9 @@ var Virtualizer = class {
 			const scrollOffset = this.getScrollOffset();
 			const item = this.measurementsCache[index];
 			if (!item) return;
-			if (align === "auto") {
-				if (item.end >= scrollOffset + size - this.options.scrollPaddingEnd) align = "end";
-				else if (item.start <= scrollOffset + this.options.scrollPaddingStart) align = "start";
-				else return [scrollOffset, align];
-			}
+			if (align === "auto") if (item.end >= scrollOffset + size - this.options.scrollPaddingEnd) align = "end";
+			else if (item.start <= scrollOffset + this.options.scrollPaddingStart) align = "start";
+			else return [scrollOffset, align];
 			if (align === "end" && index === this.options.count - 1) return [this.getMaxScrollOffset(), align];
 			const toOffset = align === "end" ? item.end + this.options.scrollPaddingEnd : item.start - this.options.scrollPaddingStart;
 			return [this.getOffsetForAlignment(toOffset, align, item.size), align];
@@ -960,11 +944,9 @@ var Virtualizer = class {
 		this.setOptions(opts);
 	}
 	applyScrollAdjustment(delta, behavior) {
-		if (delta === 0) return false;
-		if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) {
-			this._iosDeferredAdjustment += delta;
-			return false;
-		} else {
+		if (delta === 0) return;
+		if (isIOSWebKit() && (this.isScrolling || this._iosTouching || this._iosJustTouchEnded)) this._iosDeferredAdjustment += delta;
+		else {
 			this._scrollToOffset(this.getScrollOffset(), {
 				adjustments: this.scrollAdjustments += delta,
 				behavior
@@ -974,7 +956,6 @@ var Virtualizer = class {
 				if (this.scrollOffset < 0) this.scrollOffset = 0;
 				this.scrollAdjustments = 0;
 			}
-			return true;
 		}
 	}
 	scheduleScrollReconcile() {
@@ -1104,7 +1085,7 @@ function useVirtualizerBase({ useFlushSync = true, directDomUpdates = false, dir
 	});
 	directRef.current.enabled = directDomUpdates;
 	directRef.current.mode = directDomUpdatesMode;
-	const applyContainerSize = (instance2) => {
+	const applyDirectStyles = (instance2) => {
 		const state = directRef.current;
 		if (!state.enabled || !state.container) return;
 		const totalSize = instance2.getTotalSize();
@@ -1113,11 +1094,6 @@ function useVirtualizerBase({ useFlushSync = true, directDomUpdates = false, dir
 			const sizeAxis = instance2.options.horizontal ? "width" : "height";
 			state.container.style[sizeAxis] = `${totalSize}px`;
 		}
-	};
-	const applyDirectStyles = (instance2) => {
-		const state = directRef.current;
-		if (!state.enabled || !state.container) return;
-		applyContainerSize(instance2);
 		const horizontal = !!instance2.options.horizontal;
 		const useTransform = state.mode === "transform";
 		const posAxis = horizontal ? "left" : "top";
@@ -1150,10 +1126,8 @@ function useVirtualizerBase({ useFlushSync = true, directDomUpdates = false, dir
 					isScrolling: instance2.isScrolling
 				} : null;
 			}
-			if (shouldRerender) {
-				if (useFlushSync && sync) (0, import_react_dom.flushSync)(rerender);
-				else rerender();
-			}
+			if (shouldRerender) if (useFlushSync && sync) (0, import_react_dom.flushSync)(rerender);
+			else rerender();
 			(_a = options.onChange) == null || _a.call(options, instance2, sync);
 		}
 	};
@@ -1176,7 +1150,6 @@ function useVirtualizerBase({ useFlushSync = true, directDomUpdates = false, dir
 		return instance._didMount();
 	}, []);
 	useIsomorphicLayoutEffect(() => {
-		applyContainerSize(instance);
 		return instance._willUpdate();
 	});
 	useIsomorphicLayoutEffect(() => {
