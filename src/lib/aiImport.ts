@@ -8,6 +8,7 @@ import {
 } from "@/lib/importEngine";
 import { parseCredentialsDump } from "@/lib/parseCredentialsDump";
 import { redactSecretText } from "@/lib/secrets";
+import type { PreparedFile } from "@/lib/fileIntake";
 
 function stringifyRow(item: Record<string, any>): Record<string, string> {
   const out: Record<string, string> = {};
