@@ -585,33 +585,12 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       e.stopPropagation();
 
       const dropped = Array.from(e.dataTransfer.files || []);
-      if (dropped.some((f) => f.type.startsWith("image/"))) {
-        addImages(dropped);
-        return;
-      }
-      const file = dropped[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          let text = ev.target?.result as string;
-          if (
-            file.type.startsWith("application/") &&
-            !file.type.includes("json") &&
-            !file.type.includes("xml")
-          ) {
-            text = text
-              .replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, " ")
-              .replace(/\s{3,}/g, "\n")
-              .trim();
-          }
-          if (text.length < 10) {
-            toast.error(`Could not read "${file.name}". Try converting to .txt or .csv.`);
-            return;
-          }
-          setRawText(text);
-          handleAnalyze(text, file.name);
-        };
-        reader.readAsText(file);
+      if (dropped.length > 0) {
+        if (dropped.every((f) => f.type.startsWith("image/"))) {
+          addImages(dropped);
+          return;
+        }
+        void handleFiles(dropped, rawText.trim() || undefined);
         return;
       }
 
@@ -621,7 +600,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
         handleAnalyze(text);
       }
     },
-    [handleAnalyze, addImages],
+    [handleAnalyze, addImages, handleFiles, rawText],
   );
 
   const stats = useMemo(() => {
