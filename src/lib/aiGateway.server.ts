@@ -133,10 +133,23 @@ export async function responsesJson<T = Record<string, unknown>>(opts: {
     if (event.type === "response.output_text.delta" && typeof event.delta === "string") {
       text += event.delta;
     } else if (event.type === "response.completed") {
-      const completed = event.response as { output_text?: string | string[] } | undefined;
+      const completed = event.response as
+        | {
+            output_text?: string | string[];
+            output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+          }
+        | undefined;
       const out = completed?.output_text;
       if (typeof out === "string" && out.trim()) text = out;
       else if (Array.isArray(out) && out.length) text = out.join("");
+      else if (!text.trim() && Array.isArray(completed?.output)) {
+        const joined = completed.output
+          .flatMap((item) => item.content ?? [])
+          .filter((part) => part?.type === "output_text" && typeof part.text === "string")
+          .map((part) => part.text as string)
+          .join("");
+        if (joined.trim()) text = joined;
+      }
     }
   }
 
