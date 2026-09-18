@@ -379,7 +379,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
         if (importResult.totalItems > 0) {
           setPhase("review");
           const catLabels = importResult.categories
-            .map((c) => `${c.items.length} ${c.meta.label}`)
+            .map((c: any) => `${c.items.length} ${c.meta.label}`)
             .join(", ");
           toast.success(
             `${importResult.kind || "File"} recognised → ${catLabels}${
