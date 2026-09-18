@@ -841,6 +841,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                     ref={fileRef}
                     type="file"
                     accept="*/*"
+                    multiple
                     onChange={handleFile}
                     className="hidden"
                   />
