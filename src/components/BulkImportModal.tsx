@@ -828,10 +828,11 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                       />
                       <div className="text-left">
                         <p className="text-xs font-semibold text-card-foreground group-hover:text-primary transition-colors">
-                          Drop a file or image, or click to upload
+                          Drop any file here, or click to upload
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          .csv, .json, .txt, .tsv, .jsonl, .md, .html, .jpg, .png, .heic
+                          PDFs, photos & screenshots, bills, .csv, .json, .txt, .md, .html — read
+                          and filed automatically
                         </p>
                       </div>
                     </div>
