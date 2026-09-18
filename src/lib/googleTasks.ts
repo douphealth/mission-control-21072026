@@ -95,6 +95,12 @@ export async function signIn(): Promise<void> {
     }
     const { startCloudSync } = await import("@/lib/cloudSync");
     await startCloudSync(true);
+    try {
+      const { syncGoogleTasks } = await import("@/lib/googleTasksSync");
+      await syncGoogleTasks();
+    } catch {
+      /* non-fatal — first sync retries on the next pass */
+    }
   } catch (err) {
     throw formatGoogleAuthError(err);
   }
