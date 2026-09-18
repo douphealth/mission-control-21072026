@@ -107,6 +107,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
         const settings = await db.settings.get("default");
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
+        // Pre-load the app's Google identity so "Connect Google" is one click.
+        void import("@/lib/googleDirectAuth").then((m) => m.ensureGoogleClientId());
         await startCloudSync();
       } catch (e) {
         console.error("DB init error:", e);
