@@ -169,7 +169,7 @@ export async function requestGoogleToken(opts?: {
   scope?: string;
   prompt?: string;
 }): Promise<StoredGoogleToken> {
-  const clientId = getGoogleClientId();
+  const clientId = await ensureGoogleClientId();
   if (!clientId) {
     throw new Error(
       "No Google Client ID configured. Open Settings → Google Connection and paste your OAuth Client ID.",
