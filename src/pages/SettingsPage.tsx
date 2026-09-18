@@ -107,21 +107,6 @@ export default function SettingsPage() {
   const [showEncKey, setShowEncKey] = useState(false);
   const [hasCustomKey, setHasCustomKey] = useState(hasCustomEncryptionKey());
 
-  const refreshSchemaStatus = async () => {
-    refreshSupabaseSchemaState();
-    const result = await testSupabaseConnection(sbUrl, sbKey);
-    setSbConnectionOk(result.connectionOk);
-    setSbSchemaReady(result.schemaReady);
-    return result;
-  };
-
-  useEffect(() => {
-    if (sbConnected) {
-      getLastSyncTime().then(setSbLastSync);
-      refreshSchemaStatus().catch(() => setSbSchemaReady(false));
-    }
-  }, [sbConnected]);
-
   useEffect(() => {
     setName(userName);
   }, [userName]);
