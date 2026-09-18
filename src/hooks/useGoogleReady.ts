@@ -12,6 +12,13 @@ export function useGoogleReady(): boolean {
   useEffect(() => {
     let cancelled = false;
     const refresh = () => {
+      // The Google account bundled with this app makes everything ready
+      // without any action from the user.
+      void import("@/lib/googleCalendar").then(({ refreshAppCalendarAccount }) =>
+        refreshAppCalendarAccount().then((ok) => {
+          if (ok && !cancelled) setReady(true);
+        }),
+      );
       if (hasGoogleClientId()) {
         setReady(true);
         return;
