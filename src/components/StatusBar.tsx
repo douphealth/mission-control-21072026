@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { WifiOff, Database, Check, Loader2, AlertCircle } from "lucide-react";
 import { onSaveStatus } from "@/stores/dataStore";
-import { CloudBackupBadge } from "@/components/CloudBackupBanner";
 
 export default function StatusBar() {
   const [online, setOnline] = useState(navigator.onLine);
@@ -47,7 +46,6 @@ export default function StatusBar() {
         <span className="flex items-center gap-1 text-muted-foreground/40">
           <Database size={10} /> IndexedDB
         </span>
-        <CloudBackupBadge />
         {saveStatus === "saving" && (
           <span className="flex items-center gap-1 text-amber-500/70 animate-pulse">
             <Loader2 size={10} className="animate-spin" /> Saving…
@@ -60,7 +58,7 @@ export default function StatusBar() {
         )}
         {saveStatus === "error" && (
           <span className="flex items-center gap-1 text-destructive/70">
-            <AlertCircle size={10} /> Sync error
+            <AlertCircle size={10} /> Save error
           </span>
         )}
       </div>

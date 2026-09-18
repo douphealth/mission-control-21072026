@@ -28,8 +28,6 @@ import type {
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useDataStore } from "@/stores/dataStore";
 import { deduplicateAll } from "@/lib/dedup";
-import { startCloudSync } from "@/lib/cloudSync";
-
 import { restoreLatestNonEmptyVersion } from "@/lib/versions";
 
 // Re-export types for backward compat with old imports
@@ -92,29 +90,14 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
       try {
         await migrateFromLocalStorage();
 
-        // ── Account-scoped cloud restore (primary persistence) ──────────────
-        let cloudRestored = 0;
-        try {
-          const cloud = await startCloudSync();
-          cloudRestored = cloud.restored;
-        } catch (e) {
-          console.warn("Cloud sync unavailable:", e);
-        }
-
-        // The account-scoped mc_records store is the single cloud authority.
-        // Never hydrate again from the legacy mc_* snapshot tables: that second
-        // restore was replacing freshly edited tasks with an older full snapshot.
-        if (cloudRestored === 0) {
-          const [t, w, r, b] = await Promise.all([
-            db.tasks.count(),
-            db.websites.count(),
-            db.repos.count(),
-            db.buildProjects.count(),
-          ]);
-          if (t + w + r + b === 0) {
-            // Only real prior user data may repopulate an empty device.
-            await restoreLatestNonEmptyVersion();
-          }
+        const [t, w, r, b] = await Promise.all([
+          db.tasks.count(),
+          db.websites.count(),
+          db.repos.count(),
+          db.buildProjects.count(),
+        ]);
+        if (t + w + r + b === 0) {
+          await restoreLatestNonEmptyVersion();
         }
 
         await ensureSettingsRow();

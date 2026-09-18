@@ -22,29 +22,12 @@ import { useUpdateItem } from "@/hooks/useTableData";
 import { usePlanStore } from "@/stores/planStore";
 import { rescheduleToTomorrow } from "@/lib/taskActions";
 import { useRecordSync } from "@/hooks/useRecordSync";
-import { retryCloudPush } from "@/lib/cloudSync";
 import { useNavigationStore } from "@/stores/navigationStore";
 
 export function SyncDot({ id }: { id: string }) {
   const state = useRecordSync("tasks", id);
-  if (state === "saved" || state === "local-only") return null;
-  return (
-    <button
-      type="button"
-      onClick={state === "failed" ? () => void retryCloudPush() : undefined}
-      title={
-        state === "failed" ? "Cloud save failed — click to retry" : "Saved here · syncing to cloud"
-      }
-      aria-label={state === "failed" ? "Sync failed, retry" : "Pending sync"}
-      className={`inline-flex h-4 shrink-0 items-center gap-1 rounded-full px-1.5 text-[9px] font-bold uppercase tracking-wide ${
-        state === "failed"
-          ? "bg-destructive/10 text-destructive"
-          : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-      }`}
-    >
-      {state === "failed" ? "retry" : "pending"}
-    </button>
-  );
+  void state;
+  return null;
 }
 
 function DueBadge({ due, today }: { due?: string; today: string }) {

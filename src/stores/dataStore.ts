@@ -20,7 +20,6 @@ import type {
   UserSettings,
   WidgetLayout,
 } from "@/lib/db";
-import { isSupabaseConnected, pushToSupabase } from "@/lib/supabase";
 import { markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from "@/lib/cloudSync";
 
 import { isDuplicate, deduplicateItems, findDuplicateId } from "@/lib/dedup";
@@ -109,9 +108,7 @@ function getTable(tableName: string) {
   return tables[tableName];
 }
 
-// ─── Supabase push debounce ─────────────────────────────────────────────────────
-
-let pushTimer: ReturnType<typeof setTimeout> | null = null;
+// ─── Local persistence status ──────────────────────────────────────────────────
 let saveStatusCallbacks: ((status: "saving" | "saved" | "error") => void)[] = [];
 
 export function onSaveStatus(cb: (status: "saving" | "saved" | "error") => void) {
@@ -133,36 +130,8 @@ function schedulePush() {
   } catch {
     /* ignore */
   }
-  // Account-scoped cloud backup (survives cleared browser data / new devices)
-  try {
-    queueCloudPush();
-  } catch {
-    /* ignore */
-  }
-  if (!isSupabaseConnected()) {
-    // No legacy cloud target — still "saved" locally (+ cloud backup above)
-    notifySaveStatus("saved");
-    return;
-  }
-
-  if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => {
-    pushToSupabase().then((r) => {
-      if (r.success) {
-        console.log(`☁️ Auto-pushed ${r.synced} items`);
-        notifySaveStatus("saved");
-      } else {
-        console.warn("☁️ Auto-push failed:", r.error);
-        notifySaveStatus("error");
-        // Retry once after 5s
-        setTimeout(() => {
-          pushToSupabase().then((r2) => {
-            notifySaveStatus(r2.success ? "saved" : "error");
-          });
-        }, 5000);
-      }
-    });
-  }, 1000); // Reduced from 2s to 1s for faster cross-device sync
+  queueCloudPush();
+  notifySaveStatus("saved");
 }
 
 // ─── Store ───────────────────────────────────────────────────────────────────────
