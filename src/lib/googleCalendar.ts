@@ -279,7 +279,7 @@ export async function deleteGCalEvent(eventId: string, calendarId = "primary"): 
 export async function connectGCal(): Promise<{ email?: string; redirected?: boolean }> {
   if (!getGoogleClientId()) {
     throw new GCalAuthError(
-      "Google isn't connected yet. Open Settings → Google Connection, paste your Google OAuth Client ID, then press Connect.",
+      "Google setup is required once. Press Connect Google and follow the three steps.",
     );
   }
   const token = await ensureToken(true);

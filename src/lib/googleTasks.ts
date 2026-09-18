@@ -79,9 +79,7 @@ export async function signIn(): Promise<void> {
     throw new Error("Google sign-in is only available in the browser");
   }
   if (!getGoogleClientId()) {
-    throw new Error(
-      "Google isn't connected yet. Open Settings → Google Connection, paste your Google OAuth Client ID, then come back and press Connect.",
-    );
+    throw new Error("Google setup is required once. Press Connect Google and follow the three steps.");
   }
   try {
     const token = await requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: "select_account" });
