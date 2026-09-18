@@ -37,7 +37,7 @@ import {
   X,
   KeyRound,
 } from "lucide-react";
-import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import { generateStrongKey, setEncryptionKey, hasCustomEncryptionKey } from "@/lib/encryption";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
@@ -101,6 +101,7 @@ export default function SettingsPage() {
   // Google Calendar — direct OAuth via user's Client ID (Settings → Google Connection)
   const gcal = useGoogleCalendar({ autoFetch: false });
   const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
+  const googleReady = useGoogleReady();
 
   const connectGoogle = async () => {
     const result = await gcal.connect();
@@ -415,7 +416,7 @@ export default function SettingsPage() {
                       )}
                       <div className="text-[10px] text-muted-foreground">
                         OAuth Client ID:{" "}
-                        {hasGoogleClientId() ? (
+                        {googleReady ? (
                           <span className="font-mono text-emerald-600 dark:text-emerald-400">
                             configured
                           </span>
@@ -436,7 +437,7 @@ export default function SettingsPage() {
                   <div className="flex gap-2 flex-wrap">
                     <button
                       onClick={() => {
-                        if (!hasGoogleClientId()) {
+                        if (!googleReady) {
                           setGoogleSetupOpen(true);
                           return;
                         }

@@ -95,8 +95,29 @@ export function clearGCalConfig(): void {
   localStorage.removeItem(CONFIG_STORAGE_KEY);
 }
 
+// The app ships with a Google Calendar account already authorized on the
+// server. When that is available every calendar read and write goes through
+// it, and the user never signs in or pastes anything.
+let appAccountReady: boolean | null = null;
+
+export async function refreshAppCalendarAccount(): Promise<boolean> {
+  if (appAccountReady !== null) return appAccountReady;
+  try {
+    const { gcalGatewayStatus } = await import("@/lib/googleCalendarGateway.functions");
+    const { available } = await gcalGatewayStatus();
+    appAccountReady = available;
+  } catch {
+    appAccountReady = false;
+  }
+  return appAccountReady;
+}
+
+export function hasAppCalendarAccount(): boolean {
+  return appAccountReady === true;
+}
+
 export function isGCalConnected(): boolean {
-  return validGoogleToken() !== null;
+  return appAccountReady === true || validGoogleToken() !== null;
 }
 
 export class GCalAuthError extends Error {
@@ -119,6 +140,21 @@ async function ensureToken(interactive = false): Promise<StoredGoogleToken> {
 }
 
 async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  if (await refreshAppCalendarAccount()) {
+    const { gcalGatewayRequest } = await import("@/lib/googleCalendarGateway.functions");
+    const { status, body } = await gcalGatewayRequest({
+      data: {
+        path,
+        method: (init.method as any) || "GET",
+        body: init.body ? JSON.parse(String(init.body)) : undefined,
+      },
+    });
+    if (status === 204 || !body) return undefined as T;
+    if (status < 200 || status >= 300) {
+      throw new Error(`Google Calendar ${status}: ${body.slice(0, 600)}`);
+    }
+    return JSON.parse(body) as T;
+  }
   const token = await ensureToken();
   const res = await fetch(`https://www.googleapis.com/calendar/v3${path}`, {
     ...init,
@@ -277,7 +313,15 @@ export async function deleteGCalEvent(eventId: string, calendarId = "primary"): 
 }
 
 export async function connectGCal(): Promise<{ email?: string; redirected?: boolean }> {
-  if (!getGoogleClientId()) {
+  // Preferred path: the Google account already authorized for this app.
+  if (await refreshAppCalendarAccount()) {
+    const calendars = await listCalendars();
+    const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
+    if (primary) setGCalConfig({ connectedEmail: primary.id });
+    return { email: primary?.id, redirected: false };
+  }
+  const { ensureGoogleClientId } = await import("@/lib/googleDirectAuth");
+  if (!(await ensureGoogleClientId())) {
     throw new GCalAuthError(
       "Google setup is required once. Press Connect Google and follow the three steps.",
     );

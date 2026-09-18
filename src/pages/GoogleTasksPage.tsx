@@ -14,7 +14,7 @@ import {
   Settings,
 } from "lucide-react";
 import { toast } from "sonner";
-import { hasGoogleClientId } from "@/lib/googleDirectAuth";
+import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import {
   isSignedIn,
@@ -41,6 +41,7 @@ export default function GoogleTasksPage() {
   const [newTitle, setNewTitle] = useState("");
   const [authError, setAuthError] = useState<string | null>(null);
   const [setupOpen, setSetupOpen] = useState(false);
+  const googleReady = useGoogleReady();
   const oauth = getGoogleTasksOAuthDiagnostics();
 
   useEffect(() => {
@@ -177,14 +178,14 @@ export default function GoogleTasksPage() {
 
         <div className="card-elevated p-4 text-left space-y-2 border-primary/15 bg-primary/5">
           <div className="text-sm font-semibold text-foreground">
-            {hasGoogleClientId() ? "Ready to connect" : "One-time Google setup"}
+            {googleReady ? "Ready to connect" : "One-time Google setup"}
           </div>
           <p className="text-xs leading-relaxed text-muted-foreground">
-            {hasGoogleClientId()
+            {googleReady
               ? "Choose your Google account once to synchronize Calendar, Tasks, and private backup."
               : "Create one public Google Client ID, paste it once, and account selection opens automatically."}
           </p>
-          {!hasGoogleClientId() && (
+          {!googleReady && (
             <button
               onClick={() => setSetupOpen(true)}
               className="mt-1 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition"
@@ -212,7 +213,7 @@ export default function GoogleTasksPage() {
         </div>
 
         <div className="flex flex-wrap justify-center gap-2">
-          {hasGoogleClientId() ? (
+          {googleReady ? (
             <button
               onClick={handleSignIn}
               className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"

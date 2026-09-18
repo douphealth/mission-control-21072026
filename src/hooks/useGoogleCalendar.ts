@@ -298,11 +298,18 @@ export function useGoogleCalendar(opts?: {
 
   useEffect(() => {
     syncStateFromConfig();
-    if (autoFetch && isGCalConnected()) {
-      fetchCalendars()
-        .then(() => syncEvents())
-        .catch(() => {});
-    }
+    (async () => {
+      const { refreshAppCalendarAccount } = await import("@/lib/googleCalendar");
+      const ready = await refreshAppCalendarAccount();
+      if (ready) setState((s) => ({ ...s, connected: true }));
+      if (!autoFetch || !isGCalConnected()) return;
+      try {
+        await fetchCalendars();
+        await syncEvents();
+      } catch {
+        /* surfaced through state.error */
+      }
+    })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

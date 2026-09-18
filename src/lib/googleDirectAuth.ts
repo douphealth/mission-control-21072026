@@ -14,6 +14,7 @@
 //   5. Copy the Client ID (ends in .apps.googleusercontent.com) into Settings.
 
 const CLIENT_ID_KEY = "mc_google_oauth_client_id";
+const SERVER_CLIENT_ID_KEY = "mc_google_oauth_client_id_server";
 const TOKEN_KEY = "mc_google_access_token_v1";
 const TOKEN_TTL_MS = 55 * 60 * 1000; // Google access tokens live ~60 min
 
@@ -61,16 +62,49 @@ function loadGis(): Promise<void> {
   return gisPromise;
 }
 
-/** The configured Google OAuth Client ID (user-pasted or build-time). */
+/** The configured Google OAuth Client ID (build-time, user-pasted, or app-provided). */
 export function getGoogleClientId(): string {
   if (typeof window === "undefined") return "";
   const env = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
   if (env) return String(env);
   try {
-    return localStorage.getItem(CLIENT_ID_KEY) || "";
+    return localStorage.getItem(CLIENT_ID_KEY) || localStorage.getItem(SERVER_CLIENT_ID_KEY) || "";
   } catch {
     return "";
   }
+}
+
+let clientIdLoad: Promise<string> | null = null;
+
+/**
+ * Fetch the Google Client ID this app already ships with, so the user never
+ * has to create or paste one. Cached locally; falls back silently when the
+ * app is served without a configured identity (pure static hosting).
+ */
+export async function ensureGoogleClientId(): Promise<string> {
+  const existing = getGoogleClientId();
+  if (existing) return existing;
+  if (!clientIdLoad) {
+    clientIdLoad = (async () => {
+      try {
+        const { getServerGoogleClientId } = await import("@/lib/googleConfig.functions");
+        const { clientId } = await getServerGoogleClientId();
+        if (clientId) {
+          try {
+            localStorage.setItem(SERVER_CLIENT_ID_KEY, clientId);
+          } catch {
+            /* private-mode browsers keep it in memory only */
+          }
+        }
+        return clientId || "";
+      } catch {
+        return "";
+      } finally {
+        clientIdLoad = null;
+      }
+    })();
+  }
+  return clientIdLoad;
 }
 
 export function setGoogleClientId(id: string): void {
@@ -135,7 +169,7 @@ export async function requestGoogleToken(opts?: {
   scope?: string;
   prompt?: string;
 }): Promise<StoredGoogleToken> {
-  const clientId = getGoogleClientId();
+  const clientId = await ensureGoogleClientId();
   if (!clientId) {
     throw new Error(
       "No Google Client ID configured. Open Settings → Google Connection and paste your OAuth Client ID.",
