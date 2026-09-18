@@ -21,7 +21,7 @@ function stringifyRow(item: Record<string, any>): Record<string, string> {
 }
 
 /**
- * AI-first autonomous import: sends raw text to Lovable AI Gateway,
+ * AI-first autonomous import: sends raw text to the configured AI provider,
  * receives structured multi-category items, normalizes them through the
  * existing importEngine so downstream dedup/import stays identical.
  */

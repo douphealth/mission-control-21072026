@@ -1,220 +1,3 @@
-//#region node_modules/@tanstack/query-core/build/modern/timeoutManager.js
-var defaultTimeoutProvider = {
-	setTimeout: (callback, delay) => setTimeout(callback, delay),
-	clearTimeout: (timeoutId) => clearTimeout(timeoutId),
-	setInterval: (callback, delay) => setInterval(callback, delay),
-	clearInterval: (intervalId) => clearInterval(intervalId)
-};
-/**
-* Allows customization of how timeouts are created.
-*
-* @tanstack/query-core makes liberal use of timeouts to implement `staleTime`
-* and `gcTime`. The default TimeoutManager provider uses the platform's global
-* `setTimeout` implementation, which is known to have scalability issues with
-* thousands of timeouts on the event loop.
-*
-* If you hit this limitation, consider providing a custom TimeoutProvider that
-* coalesces timeouts.
-*/
-var TimeoutManager = class {
-	#provider = defaultTimeoutProvider;
-	#providerCalled = false;
-	setTimeoutProvider(provider) {
-		this.#provider = provider;
-	}
-	setTimeout(callback, delay) {
-		return this.#provider.setTimeout(callback, delay);
-	}
-	clearTimeout(timeoutId) {
-		this.#provider.clearTimeout(timeoutId);
-	}
-	setInterval(callback, delay) {
-		return this.#provider.setInterval(callback, delay);
-	}
-	clearInterval(intervalId) {
-		this.#provider.clearInterval(intervalId);
-	}
-};
-var timeoutManager = new TimeoutManager();
-/**
-* In many cases code wants to delay to the next event loop tick; this is not
-* mediated by {@link timeoutManager}.
-*
-* This function is provided to make auditing the `tanstack/query-core` for
-* incorrect use of system `setTimeout` easier.
-*/
-function systemSetTimeoutZero(callback) {
-	setTimeout(callback, 0);
-}
-//#endregion
-//#region node_modules/@tanstack/query-core/build/modern/utils.js
-/** @deprecated
-* use `environmentManager.isServer()` instead.
-*/
-var isServer$1 = typeof window === "undefined" || "Deno" in globalThis;
-function noop() {}
-function functionalUpdate(updater, input) {
-	return typeof updater === "function" ? updater(input) : updater;
-}
-function isValidTimeout(value) {
-	return typeof value === "number" && value >= 0 && value !== Infinity;
-}
-function timeUntilStale(updatedAt, staleTime) {
-	return Math.max(updatedAt + (staleTime || 0) - Date.now(), 0);
-}
-function resolveQueryValue(value, query) {
-	return typeof value === "function" ? value(query) : value;
-}
-function matchQuery(filters, query) {
-	const { type = "all", exact, fetchStatus, predicate, queryKey, stale } = filters;
-	if (queryKey) {
-		if (exact) {
-			if (query.queryHash !== hashQueryKeyByOptions(queryKey, query.options)) return false;
-		} else if (!partialMatchKey(query.queryKey, queryKey)) return false;
-	}
-	if (type !== "all") {
-		const isActive = query.isActive();
-		if (type === "active" && !isActive) return false;
-		if (type === "inactive" && isActive) return false;
-	}
-	if (typeof stale === "boolean" && query.isStale() !== stale) return false;
-	if (fetchStatus && fetchStatus !== query.state.fetchStatus) return false;
-	if (predicate && !predicate(query)) return false;
-	return true;
-}
-function matchMutation(filters, mutation) {
-	const { exact, status, predicate, mutationKey } = filters;
-	if (mutationKey) {
-		if (!mutation.options.mutationKey) return false;
-		if (exact) {
-			if (hashKey(mutation.options.mutationKey) !== hashKey(mutationKey)) return false;
-		} else if (!partialMatchKey(mutation.options.mutationKey, mutationKey)) return false;
-	}
-	if (status && mutation.state.status !== status) return false;
-	if (predicate && !predicate(mutation)) return false;
-	return true;
-}
-function hashQueryKeyByOptions(queryKey, options) {
-	return (options?.queryKeyHashFn || hashKey)(queryKey);
-}
-/**
-* Default query & mutation keys hash function.
-* Hashes the value into a stable hash.
-*/
-function hashKey(queryKey) {
-	return JSON.stringify(queryKey, (_, val) => isPlainObject(val) ? Object.keys(val).sort().reduce((result, key) => {
-		result[key] = val[key];
-		return result;
-	}, {}) : val);
-}
-function partialMatchKey(a, b) {
-	if (a === b) return true;
-	if (typeof a !== typeof b) return false;
-	if (a && b && typeof a === "object" && typeof b === "object") {
-		if (Array.isArray(a) && Array.isArray(b)) {
-			for (let i = 0; i < b.length; i++) if (!partialMatchKey(a[i], b[i])) return false;
-			return true;
-		}
-		const bKeys = Object.keys(b);
-		for (const key of bKeys) if (!partialMatchKey(a[key], b[key])) return false;
-		return true;
-	}
-	return false;
-}
-var hasOwn = Object.prototype.hasOwnProperty;
-function replaceEqualDeep(a, b, depth = 0) {
-	if (a === b) return a;
-	if (depth > 500) return b;
-	const array = isPlainArray(a) && isPlainArray(b);
-	if (!array && !(isPlainObject(a) && isPlainObject(b))) return b;
-	const aSize = (array ? a : Object.keys(a)).length;
-	const bItems = array ? b : Object.keys(b);
-	const bSize = bItems.length;
-	const copy = array ? new Array(bSize) : {};
-	let equalItems = 0;
-	for (let i = 0; i < bSize; i++) {
-		const key = array ? i : bItems[i];
-		const aItem = a[key];
-		const bItem = b[key];
-		if (aItem === bItem) {
-			copy[key] = aItem;
-			if (array ? i < aSize : hasOwn.call(a, key)) equalItems++;
-			continue;
-		}
-		if (aItem === null || bItem === null || typeof aItem !== "object" || typeof bItem !== "object") {
-			copy[key] = bItem;
-			continue;
-		}
-		const v = replaceEqualDeep(aItem, bItem, depth + 1);
-		copy[key] = v;
-		if (v === aItem) equalItems++;
-	}
-	return aSize === bSize && equalItems === aSize ? a : copy;
-}
-function isPlainArray(value) {
-	return Array.isArray(value) && value.length === Object.keys(value).length;
-}
-function isPlainObject(o) {
-	if (!hasObjectPrototype(o)) return false;
-	const ctor = o.constructor;
-	if (ctor === void 0) return true;
-	const prot = ctor.prototype;
-	if (!hasObjectPrototype(prot)) return false;
-	if (!prot.hasOwnProperty("isPrototypeOf")) return false;
-	if (Object.getPrototypeOf(o) !== Object.prototype) return false;
-	return true;
-}
-function hasObjectPrototype(o) {
-	return Object.prototype.toString.call(o) === "[object Object]";
-}
-function sleep(timeout) {
-	return new Promise((resolve) => {
-		timeoutManager.setTimeout(resolve, timeout);
-	});
-}
-function replaceData(prevData, data, options) {
-	if (typeof options.structuralSharing === "function") return options.structuralSharing(prevData, data);
-	else if (options.structuralSharing !== false) return replaceEqualDeep(prevData, data);
-	return data;
-}
-function addToEnd(items, item, max = 0) {
-	const newItems = [...items, item];
-	return max && newItems.length > max ? newItems.slice(1) : newItems;
-}
-function addToStart(items, item, max = 0) {
-	const newItems = [item, ...items];
-	return max && newItems.length > max ? newItems.slice(0, -1) : newItems;
-}
-var skipToken = Symbol();
-function ensureQueryFn(options, fetchOptions) {
-	if (!options.queryFn && fetchOptions?.initialPromise) return () => fetchOptions.initialPromise;
-	if (!options.queryFn || options.queryFn === skipToken) return () => Promise.reject(/* @__PURE__ */ new Error(`Missing queryFn: '${options.queryHash}'`));
-	return options.queryFn;
-}
-function addConsumeAwareSignal(object, getSignal, onCancelled) {
-	let consumed = false;
-	let signal;
-	Object.defineProperty(object, "signal", {
-		enumerable: true,
-		get: () => {
-			signal ??= getSignal();
-			if (consumed) return signal;
-			consumed = true;
-			if (signal.aborted) onCancelled();
-			else signal.addEventListener("abort", onCancelled, { once: true });
-			return signal;
-		}
-	});
-	return object;
-}
-//#endregion
-//#region node_modules/@tanstack/query-core/build/modern/environmentManager.js
-var isServerFn = () => isServer$1;
-/**
-* Returns whether the current runtime should be treated as a server environment.
-*/
-var isServer = () => isServerFn();
-//#endregion
 //#region node_modules/@tanstack/query-core/build/modern/subscribable.js
 var Subscribable = class {
 	constructor() {
@@ -288,6 +71,237 @@ var FocusManager = class extends Subscribable {
 	}
 };
 var focusManager = new FocusManager();
+//#endregion
+//#region node_modules/@tanstack/query-core/build/modern/timeoutManager.js
+var defaultTimeoutProvider = {
+	setTimeout: (callback, delay) => setTimeout(callback, delay),
+	clearTimeout: (timeoutId) => clearTimeout(timeoutId),
+	setInterval: (callback, delay) => setInterval(callback, delay),
+	clearInterval: (intervalId) => clearInterval(intervalId)
+};
+var TimeoutManager = class {
+	#provider = defaultTimeoutProvider;
+	#providerCalled = false;
+	setTimeoutProvider(provider) {
+		this.#provider = provider;
+	}
+	setTimeout(callback, delay) {
+		return this.#provider.setTimeout(callback, delay);
+	}
+	clearTimeout(timeoutId) {
+		this.#provider.clearTimeout(timeoutId);
+	}
+	setInterval(callback, delay) {
+		return this.#provider.setInterval(callback, delay);
+	}
+	clearInterval(intervalId) {
+		this.#provider.clearInterval(intervalId);
+	}
+};
+var timeoutManager = new TimeoutManager();
+function systemSetTimeoutZero(callback) {
+	setTimeout(callback, 0);
+}
+//#endregion
+//#region node_modules/@tanstack/query-core/build/modern/utils.js
+var isServer = typeof window === "undefined" || "Deno" in globalThis;
+function noop() {}
+function functionalUpdate(updater, input) {
+	return typeof updater === "function" ? updater(input) : updater;
+}
+function isValidTimeout(value) {
+	return typeof value === "number" && value >= 0 && value !== Infinity;
+}
+function timeUntilStale(updatedAt, staleTime) {
+	return Math.max(updatedAt + (staleTime || 0) - Date.now(), 0);
+}
+function resolveStaleTime(staleTime, query) {
+	return typeof staleTime === "function" ? staleTime(query) : staleTime;
+}
+function resolveQueryBoolean(option, query) {
+	return typeof option === "function" ? option(query) : option;
+}
+function matchQuery(filters, query) {
+	const { type = "all", exact, fetchStatus, predicate, queryKey, stale } = filters;
+	if (queryKey) {
+		if (exact) {
+			if (query.queryHash !== hashQueryKeyByOptions(queryKey, query.options)) return false;
+		} else if (!partialMatchKey(query.queryKey, queryKey)) return false;
+	}
+	if (type !== "all") {
+		const isActive = query.isActive();
+		if (type === "active" && !isActive) return false;
+		if (type === "inactive" && isActive) return false;
+	}
+	if (typeof stale === "boolean" && query.isStale() !== stale) return false;
+	if (fetchStatus && fetchStatus !== query.state.fetchStatus) return false;
+	if (predicate && !predicate(query)) return false;
+	return true;
+}
+function matchMutation(filters, mutation) {
+	const { exact, status, predicate, mutationKey } = filters;
+	if (mutationKey) {
+		if (!mutation.options.mutationKey) return false;
+		if (exact) {
+			if (hashKey(mutation.options.mutationKey) !== hashKey(mutationKey)) return false;
+		} else if (!partialMatchKey(mutation.options.mutationKey, mutationKey)) return false;
+	}
+	if (status && mutation.state.status !== status) return false;
+	if (predicate && !predicate(mutation)) return false;
+	return true;
+}
+function hashQueryKeyByOptions(queryKey, options) {
+	return (options?.queryKeyHashFn || hashKey)(queryKey);
+}
+function hashKey(queryKey) {
+	return JSON.stringify(queryKey, (_, val) => isPlainObject(val) ? Object.keys(val).sort().reduce((result, key) => {
+		result[key] = val[key];
+		return result;
+	}, {}) : val);
+}
+function partialMatchKey(a, b) {
+	if (a === b) return true;
+	if (typeof a !== typeof b) return false;
+	if (a && b && typeof a === "object" && typeof b === "object") return Object.keys(b).every((key) => partialMatchKey(a[key], b[key]));
+	return false;
+}
+var hasOwn = Object.prototype.hasOwnProperty;
+function replaceEqualDeep(a, b, depth = 0) {
+	if (a === b) return a;
+	if (depth > 500) return b;
+	const array = isPlainArray(a) && isPlainArray(b);
+	if (!array && !(isPlainObject(a) && isPlainObject(b))) return b;
+	const aSize = (array ? a : Object.keys(a)).length;
+	const bItems = array ? b : Object.keys(b);
+	const bSize = bItems.length;
+	const copy = array ? new Array(bSize) : {};
+	let equalItems = 0;
+	for (let i = 0; i < bSize; i++) {
+		const key = array ? i : bItems[i];
+		const aItem = a[key];
+		const bItem = b[key];
+		if (aItem === bItem) {
+			copy[key] = aItem;
+			if (array ? i < aSize : hasOwn.call(a, key)) equalItems++;
+			continue;
+		}
+		if (aItem === null || bItem === null || typeof aItem !== "object" || typeof bItem !== "object") {
+			copy[key] = bItem;
+			continue;
+		}
+		const v = replaceEqualDeep(aItem, bItem, depth + 1);
+		copy[key] = v;
+		if (v === aItem) equalItems++;
+	}
+	return aSize === bSize && equalItems === aSize ? a : copy;
+}
+function isPlainArray(value) {
+	return Array.isArray(value) && value.length === Object.keys(value).length;
+}
+function isPlainObject(o) {
+	if (!hasObjectPrototype(o)) return false;
+	const ctor = o.constructor;
+	if (ctor === void 0) return true;
+	const prot = ctor.prototype;
+	if (!hasObjectPrototype(prot)) return false;
+	if (!prot.hasOwnProperty("isPrototypeOf")) return false;
+	if (Object.getPrototypeOf(o) !== Object.prototype) return false;
+	return true;
+}
+function hasObjectPrototype(o) {
+	return Object.prototype.toString.call(o) === "[object Object]";
+}
+function sleep(timeout) {
+	return new Promise((resolve) => {
+		timeoutManager.setTimeout(resolve, timeout);
+	});
+}
+function replaceData(prevData, data, options) {
+	if (typeof options.structuralSharing === "function") return options.structuralSharing(prevData, data);
+	else if (options.structuralSharing !== false) return replaceEqualDeep(prevData, data);
+	return data;
+}
+function addToEnd(items, item, max = 0) {
+	const newItems = [...items, item];
+	return max && newItems.length > max ? newItems.slice(1) : newItems;
+}
+function addToStart(items, item, max = 0) {
+	const newItems = [item, ...items];
+	return max && newItems.length > max ? newItems.slice(0, -1) : newItems;
+}
+var skipToken = /* @__PURE__ */ Symbol();
+function ensureQueryFn(options, fetchOptions) {
+	if (!options.queryFn && fetchOptions?.initialPromise) return () => fetchOptions.initialPromise;
+	if (!options.queryFn || options.queryFn === skipToken) return () => Promise.reject(/* @__PURE__ */ new Error(`Missing queryFn: '${options.queryHash}'`));
+	return options.queryFn;
+}
+function addConsumeAwareSignal(object, getSignal, onCancelled) {
+	let consumed = false;
+	let signal;
+	Object.defineProperty(object, "signal", {
+		enumerable: true,
+		get: () => {
+			signal ??= getSignal();
+			if (consumed) return signal;
+			consumed = true;
+			if (signal.aborted) onCancelled();
+			else signal.addEventListener("abort", onCancelled, { once: true });
+			return signal;
+		}
+	});
+	return object;
+}
+//#endregion
+//#region node_modules/@tanstack/query-core/build/modern/environmentManager.js
+var environmentManager = /* @__PURE__ */ (() => {
+	let isServerFn = () => isServer;
+	return {
+		/**
+		* Returns whether the current runtime should be treated as a server environment.
+		*/
+		isServer() {
+			return isServerFn();
+		},
+		/**
+		* Overrides the server check globally.
+		*/
+		setIsServer(isServerValue) {
+			isServerFn = isServerValue;
+		}
+	};
+})();
+//#endregion
+//#region node_modules/@tanstack/query-core/build/modern/thenable.js
+function pendingThenable() {
+	let resolve;
+	let reject;
+	const thenable = new Promise((_resolve, _reject) => {
+		resolve = _resolve;
+		reject = _reject;
+	});
+	thenable.status = "pending";
+	thenable.catch(() => {});
+	function finalize(data) {
+		Object.assign(thenable, data);
+		delete thenable.resolve;
+		delete thenable.reject;
+	}
+	thenable.resolve = (value) => {
+		finalize({
+			status: "fulfilled",
+			value
+		});
+		resolve(value);
+	};
+	thenable.reject = (reason) => {
+		finalize({
+			status: "rejected",
+			reason
+		});
+		reject(reason);
+	};
+	return thenable;
+}
 //#endregion
 //#region node_modules/@tanstack/query-core/build/modern/notifyManager.js
 var defaultScheduler = systemSetTimeoutZero;
@@ -428,15 +442,8 @@ function createRetryer(config) {
 	let isRetryCancelled = false;
 	let failureCount = 0;
 	let continueFn;
-	let status = "pending";
-	let promiseResolve;
-	let promiseReject;
-	const promise = new Promise((resolve, reject) => {
-		promiseResolve = resolve;
-		promiseReject = reject;
-	});
-	promise.catch(noop);
-	const isResolved = () => status !== "pending";
+	const thenable = pendingThenable();
+	const isResolved = () => thenable.status !== "pending";
 	const cancel = (cancelOptions) => {
 		if (!isResolved()) {
 			const error = new CancelledError(cancelOptions);
@@ -455,15 +462,13 @@ function createRetryer(config) {
 	const resolve = (value) => {
 		if (!isResolved()) {
 			continueFn?.();
-			status = "resolved";
-			promiseResolve(value);
+			thenable.resolve(value);
 		}
 	};
 	const reject = (value) => {
 		if (!isResolved()) {
 			continueFn?.();
-			status = "rejected";
-			promiseReject(value);
+			thenable.reject(value);
 		}
 	};
 	const pause = () => {
@@ -488,7 +493,7 @@ function createRetryer(config) {
 		}
 		Promise.resolve(promiseOrValue).then(resolve).catch((error) => {
 			if (isResolved()) return;
-			const retry = config.retry ?? (isServer() ? 0 : 3);
+			const retry = config.retry ?? (environmentManager.isServer() ? 0 : 3);
 			const retryDelay = config.retryDelay ?? defaultRetryDelay;
 			const delay = typeof retryDelay === "function" ? retryDelay(failureCount, error) : retryDelay;
 			const shouldRetry = retry === true || typeof retry === "number" && failureCount < retry || typeof retry === "function" && retry(failureCount, error);
@@ -507,12 +512,12 @@ function createRetryer(config) {
 		});
 	};
 	return {
-		promise,
-		status: () => status,
+		promise: thenable,
+		status: () => thenable.status,
 		cancel,
 		continue: () => {
 			continueFn?.();
-			return promise;
+			return thenable;
 		},
 		cancelRetry,
 		continueRetry,
@@ -520,7 +525,7 @@ function createRetryer(config) {
 		start: () => {
 			if (canStart()) run();
 			else pause().then(run);
-			return promise;
+			return thenable;
 		}
 	};
 }
@@ -538,7 +543,7 @@ var Removable = class {
 		}, this.gcTime);
 	}
 	updateGcTime(newGcTime) {
-		this.gcTime = Math.max(this.gcTime || 0, newGcTime ?? (isServer() ? Infinity : 3e5));
+		this.gcTime = Math.max(this.gcTime || 0, newGcTime ?? (environmentManager.isServer() ? Infinity : 300 * 1e3));
 	}
 	clearGcTimeout() {
 		if (this.#gcTimeout !== void 0) {
@@ -570,18 +575,17 @@ function infiniteQueryBehavior(pages) {
 				if (cancelled) return Promise.reject(context.signal.reason);
 				if (param == null && data.pages.length) return Promise.resolve(data);
 				const createQueryFnContext = () => {
-					const queryFnContext = {
+					const queryFnContext2 = {
 						client: context.client,
 						queryKey: context.queryKey,
 						pageParam: param,
 						direction: previous ? "backward" : "forward",
 						meta: context.options.meta
 					};
-					addSignalProperty(queryFnContext);
-					return queryFnContext;
+					addSignalProperty(queryFnContext2);
+					return queryFnContext2;
 				};
-				const queryFnContext = createQueryFnContext();
-				const page = await queryFn(queryFnContext);
+				const page = await queryFn(createQueryFnContext());
 				const { maxPages } = context.options;
 				const addTo = previous ? addToStart : addToEnd;
 				return {
@@ -711,7 +715,7 @@ var Query = class extends Removable {
 		this.setState(this.resetState);
 	}
 	isActive() {
-		return this.observers.some((observer) => resolveQueryValue(observer.options.enabled, this) !== false);
+		return this.observers.some((observer) => resolveQueryBoolean(observer.options.enabled, this) !== false);
 	}
 	isDisabled() {
 		if (this.getObserversCount() > 0) return !this.isActive();
@@ -721,7 +725,7 @@ var Query = class extends Removable {
 		return this.state.dataUpdateCount + this.state.errorUpdateCount > 0;
 	}
 	isStatic() {
-		if (this.getObserversCount() > 0) return this.observers.some((observer) => resolveQueryValue(observer.options.staleTime, this) === "static");
+		if (this.getObserversCount() > 0) return this.observers.some((observer) => resolveStaleTime(observer.options.staleTime, this) === "static");
 		return false;
 	}
 	isStale() {
@@ -754,14 +758,11 @@ var Query = class extends Removable {
 		}
 	}
 	removeObserver(observer) {
-		const index = this.observers.indexOf(observer);
-		if (index !== -1) {
-			this.observers.splice(index, 1);
+		if (this.observers.includes(observer)) {
+			this.observers = this.observers.filter((x) => x !== observer);
 			if (!this.observers.length) {
-				if (this.#retryer) {
-					if (this.#abortSignalConsumed || this.state.fetchStatus === "paused" && this.state.status === "pending") this.#retryer.cancel({ revert: true });
-					else this.#retryer.cancelRetry();
-				}
+				if (this.#retryer) if (this.#abortSignalConsumed || this.#isInitialPausedFetch()) this.#retryer.cancel({ revert: true });
+				else this.#retryer.cancelRetry();
 				this.scheduleGc();
 			}
 			this.#cache.notify({
@@ -773,6 +774,9 @@ var Query = class extends Removable {
 	}
 	getObserversCount() {
 		return this.observers.length;
+	}
+	#isInitialPausedFetch() {
+		return this.state.fetchStatus === "paused" && this.state.status === "pending";
 	}
 	invalidate() {
 		if (!this.state.isInvalidated) this.#dispatch({ type: "invalidate" });
@@ -803,13 +807,13 @@ var Query = class extends Removable {
 		const fetchFn = () => {
 			const queryFn = ensureQueryFn(this.options, fetchOptions);
 			const createQueryFnContext = () => {
-				const queryFnContext = {
+				const queryFnContext2 = {
 					client: this.#client,
 					queryKey: this.queryKey,
 					meta: this.meta
 				};
-				addSignalProperty(queryFnContext);
-				return queryFnContext;
+				addSignalProperty(queryFnContext2);
+				return queryFnContext2;
 			};
 			const queryFnContext = createQueryFnContext();
 			this.#abortSignalConsumed = false;
@@ -817,7 +821,7 @@ var Query = class extends Removable {
 			return queryFn(queryFnContext);
 		};
 		const createFetchContext = () => {
-			const context = {
+			const context2 = {
 				fetchOptions,
 				options: this.options,
 				queryKey: this.queryKey,
@@ -825,8 +829,8 @@ var Query = class extends Removable {
 				state: this.state,
 				fetchFn
 			};
-			addSignalProperty(context);
-			return context;
+			addSignalProperty(context2);
+			return context2;
 		};
 		const context = createFetchContext();
 		(this.#queryType === "infinite" ? infiniteQueryBehavior(this.options.pages) : this.options.behavior)?.onFetch(context, this);
@@ -835,7 +839,7 @@ var Query = class extends Removable {
 			type: "fetch",
 			meta: context.fetchOptions?.meta
 		});
-		const retryer = this.#retryer = createRetryer({
+		this.#retryer = createRetryer({
 			initialPromise: fetchOptions?.initialPromise,
 			fn: context.fetchFn,
 			onCancel: (error) => {
@@ -864,7 +868,7 @@ var Query = class extends Removable {
 			canRun: () => true
 		});
 		try {
-			const data = await retryer.start();
+			const data = await this.#retryer.start();
 			if (data === void 0) throw new Error(`${this.queryHash} data is undefined`);
 			this.setData(data);
 			this.#cache.config.onSuccess?.(data, this);
@@ -886,7 +890,6 @@ var Query = class extends Removable {
 			this.#cache.config.onSettled?.(this.state.data, error, this);
 			throw error;
 		} finally {
-			if (this.#retryer === retryer) this.#retryer = void 0;
 			this.scheduleGc();
 		}
 	}
@@ -949,7 +952,7 @@ var Query = class extends Removable {
 		};
 		this.state = reducer(this.state);
 		notifyManager.batch(() => {
-			this.observers.slice().forEach((observer) => {
+			this.observers.forEach((observer) => {
 				observer.onQueryUpdate();
 			});
 			this.#cache.notify({
@@ -1044,13 +1047,11 @@ var Mutation = class extends Removable {
 		});
 	}
 	optionalRemove() {
-		if (!this.#observers.length) {
-			if (this.state.status === "pending") this.scheduleGc();
-			else this.#mutationCache.remove(this);
-		}
+		if (!this.#observers.length) if (this.state.status === "pending") this.scheduleGc();
+		else this.#mutationCache.remove(this);
 	}
 	continue() {
-		return this.#retryer?.continue() ?? (this.state.status === "pending" ? this.execute(this.state.variables) : Promise.resolve());
+		return this.#retryer?.continue() ?? this.execute(this.state.variables);
 	}
 	async execute(variables) {
 		const onContinue = () => {
@@ -1061,7 +1062,7 @@ var Mutation = class extends Removable {
 			meta: this.options.meta,
 			mutationKey: this.options.mutationKey
 		};
-		const retryer = this.#retryer = createRetryer({
+		this.#retryer = createRetryer({
 			fn: () => {
 				if (!this.options.mutationFn) return Promise.reject(/* @__PURE__ */ new Error("No mutationFn found"));
 				return this.options.mutationFn(variables, mutationFnContext);
@@ -1083,7 +1084,7 @@ var Mutation = class extends Removable {
 			canRun: () => this.#mutationCache.canRun(this)
 		});
 		const restored = this.state.status === "pending";
-		const isPaused = !retryer.canStart();
+		const isPaused = !this.#retryer.canStart();
 		try {
 			if (restored) onContinue();
 			else {
@@ -1101,7 +1102,7 @@ var Mutation = class extends Removable {
 					isPaused
 				});
 			}
-			const data = await retryer.start();
+			const data = await this.#retryer.start();
 			await this.#mutationCache.config.onSuccess?.(data, variables, this.state.context, this, mutationFnContext);
 			await this.options.onSuccess?.(data, variables, this.state.context, mutationFnContext);
 			await this.#mutationCache.config.onSettled?.(data, null, this.state.variables, this.state.context, this, mutationFnContext);
@@ -1138,7 +1139,6 @@ var Mutation = class extends Removable {
 			});
 			throw error;
 		} finally {
-			if (this.#retryer === retryer) this.#retryer = void 0;
 			this.#mutationCache.runNext(this);
 		}
 	}
@@ -1219,9 +1219,6 @@ function getDefaultState() {
 //#endregion
 //#region node_modules/@tanstack/query-core/build/modern/mutationCache.js
 var MutationCache = class extends Subscribable {
-	#mutations;
-	#scopes;
-	#mutationId;
 	constructor(config = {}) {
 		super();
 		this.config = config;
@@ -1229,6 +1226,9 @@ var MutationCache = class extends Subscribable {
 		this.#scopes = /* @__PURE__ */ new Map();
 		this.#mutationId = 0;
 	}
+	#mutations;
+	#scopes;
+	#mutationId;
 	build(client, options, state) {
 		const mutation = new Mutation({
 			client,
@@ -1326,12 +1326,12 @@ function scopeFor(mutation) {
 //#endregion
 //#region node_modules/@tanstack/query-core/build/modern/queryCache.js
 var QueryCache = class extends Subscribable {
-	#queries;
 	constructor(config = {}) {
 		super();
 		this.config = config;
 		this.#queries = /* @__PURE__ */ new Map();
 	}
+	#queries;
 	build(client, options, state) {
 		const queryKey = options.queryKey;
 		const queryHash = options.queryHash ?? hashQueryKeyByOptions(queryKey, options);
@@ -1481,15 +1481,12 @@ var QueryClient = class {
 		const options = this.defaultQueryOptions({ queryKey });
 		return this.#queryCache.get(options.queryHash)?.state.data;
 	}
-	/**
-	* @deprecated Use queryClient.query({ ...options, staleTime: 'static' }) instead. This method will be removed in the next major version.
-	*/
 	ensureQueryData(options) {
 		const defaultedOptions = this.defaultQueryOptions(options);
 		const query = this.#queryCache.build(this, defaultedOptions);
 		const cachedData = query.state.data;
 		if (cachedData === void 0) return this.fetchQuery(options);
-		if (options.revalidateIfStale && query.isStaleByTime(resolveQueryValue(defaultedOptions.staleTime, query))) this.prefetchQuery(defaultedOptions);
+		if (options.revalidateIfStale && query.isStaleByTime(resolveStaleTime(defaultedOptions.staleTime, query))) this.prefetchQuery(defaultedOptions);
 		return Promise.resolve(cachedData);
 	}
 	getQueriesData(filters) {
@@ -1525,14 +1522,12 @@ var QueryClient = class {
 	resetQueries(filters, options) {
 		const queryCache = this.#queryCache;
 		return notifyManager.batch(() => {
-			const matched = queryCache.findAll(filters);
-			const queriesToRefetch = new Set(matched);
-			matched.forEach((query) => {
+			queryCache.findAll(filters).forEach((query) => {
 				query.reset();
 			});
 			return this.refetchQueries({
 				type: "active",
-				predicate: (query) => queriesToRefetch.has(query)
+				...filters
 			}, options);
 		});
 	}
@@ -1568,50 +1563,22 @@ var QueryClient = class {
 		}));
 		return Promise.all(promises).then(noop);
 	}
-	async query(options) {
-		const defaultedOptions = this.defaultQueryOptions(options);
-		if (defaultedOptions.retry === void 0) defaultedOptions.retry = false;
-		const query = this.#queryCache.build(this, defaultedOptions);
-		const queryData = query.isStaleByTime(resolveQueryValue(defaultedOptions.staleTime, query)) ? await query.fetch(defaultedOptions) : query.state.data;
-		const select = defaultedOptions.select;
-		if (select) return select(queryData);
-		return queryData;
-	}
-	/**
-	* @deprecated Use queryClient.query(options) instead. This method will be removed in the next major version.
-	*/
 	fetchQuery(options) {
 		const defaultedOptions = this.defaultQueryOptions(options);
 		if (defaultedOptions.retry === void 0) defaultedOptions.retry = false;
 		const query = this.#queryCache.build(this, defaultedOptions);
-		return query.isStaleByTime(resolveQueryValue(defaultedOptions.staleTime, query)) ? query.fetch(defaultedOptions) : Promise.resolve(query.state.data);
+		return query.isStaleByTime(resolveStaleTime(defaultedOptions.staleTime, query)) ? query.fetch(defaultedOptions) : Promise.resolve(query.state.data);
 	}
-	/**
-	* @deprecated Use queryClient.query(options) instead. You can swallow errors with `.catch(noop)`. This method will be removed in the next major version.
-	*/
 	prefetchQuery(options) {
 		return this.fetchQuery(options).then(noop).catch(noop);
 	}
-	infiniteQuery(options) {
-		options._type = "infinite";
-		return this.query(options);
-	}
-	/**
-	* @deprecated Use queryClient.infiniteQuery(options) instead. This method will be removed in the next major version.
-	*/
 	fetchInfiniteQuery(options) {
 		options._type = "infinite";
 		return this.fetchQuery(options);
 	}
-	/**
-	* @deprecated Use queryClient.infiniteQuery(options) instead. You can swallow errors with `.catch(noop)`. This method will be removed in the next major version.
-	*/
 	prefetchInfiniteQuery(options) {
 		return this.fetchInfiniteQuery(options).then(noop).catch(noop);
 	}
-	/**
-	* @deprecated Use queryClient.infiniteQuery({ ...options, staleTime: 'static' }) instead. This method will be removed in the next major version.
-	*/
 	ensureInfiniteQueryData(options) {
 		options._type = "infinite";
 		return this.ensureQueryData(options);

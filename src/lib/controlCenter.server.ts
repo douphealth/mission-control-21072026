@@ -9,7 +9,7 @@ export interface RawItem {
   source?: string;
 }
 
-const UA = "Mozilla/5.0 (compatible; MissionControl/1.0; +https://mission-control-001.lovable.app)";
+const UA = "Mozilla/5.0 (compatible; MissionControl/1.0)";
 
 export async function httpGet(url: string, timeoutMs = 12_000): Promise<string> {
   const ctrl = new AbortController();

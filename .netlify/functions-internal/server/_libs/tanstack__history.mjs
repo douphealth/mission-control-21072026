@@ -178,25 +178,26 @@ function createBrowserHistory(opts) {
 	let ignoreNextBeforeUnload = false;
 	const getLocation = () => currentLocation;
 	let next;
+	let scheduled;
 	const flush = () => {
 		if (!next) return;
 		history._ignoreSubscribers = true;
-		(next[2] ? win.history.pushState : win.history.replaceState)(next[1], "", next[0]);
+		(next.isPush ? win.history.pushState : win.history.replaceState)(next.state, "", next.href);
 		history._ignoreSubscribers = false;
 		next = void 0;
+		scheduled = void 0;
 		rollbackLocation = void 0;
 	};
-	const queueHistoryAction = (isPush, destHref, state) => {
+	const queueHistoryAction = (type, destHref, state) => {
 		const href = createHref(destHref);
-		const hasPendingAction = !!next;
-		if (!hasPendingAction) rollbackLocation = currentLocation;
+		if (!scheduled) rollbackLocation = currentLocation;
 		currentLocation = parseHref(destHref, state);
-		next = [
+		next = {
 			href,
 			state,
-			next?.[2] || isPush
-		];
-		if (!hasPendingAction) queueMicrotask(() => flush());
+			isPush: next?.isPush || type === "push"
+		};
+		if (!scheduled) scheduled = Promise.resolve().then(() => flush());
 	};
 	const onPushPop = (type) => {
 		currentLocation = parseLocation();
@@ -263,8 +264,8 @@ function createBrowserHistory(opts) {
 	const history = createHistory({
 		getLocation,
 		getLength: () => win.history.length,
-		pushState: (href, state) => queueHistoryAction(true, href, state),
-		replaceState: (href, state) => queueHistoryAction(false, href, state),
+		pushState: (href, state) => queueHistoryAction("push", href, state),
+		replaceState: (href, state) => queueHistoryAction("replace", href, state),
 		back: (ignoreBlocker) => {
 			if (ignoreBlocker) skipBlockerNextPop = true;
 			ignoreNextBeforeUnload = true;

@@ -97,12 +97,12 @@ function getOppositePlacement(placement) {
 	return oppositeSideMap[side] + placement.slice(side.length);
 }
 function expandPaddingObject(padding) {
-	var _padding$top, _padding$right, _padding$bottom, _padding$left;
 	return {
-		top: (_padding$top = padding.top) != null ? _padding$top : 0,
-		right: (_padding$right = padding.right) != null ? _padding$right : 0,
-		bottom: (_padding$bottom = padding.bottom) != null ? _padding$bottom : 0,
-		left: (_padding$left = padding.left) != null ? _padding$left : 0
+		top: 0,
+		right: 0,
+		bottom: 0,
+		left: 0,
+		...padding
 	};
 }
 function getPaddingObject(padding) {
@@ -169,8 +169,14 @@ function computeCoordsFromPlacement(_ref, placement, rtl) {
 			y: reference.y
 		};
 	}
-	const alignment = getAlignment(placement);
-	if (alignment) coords[alignmentAxis] += commonAlign * (alignment === "end" ? 1 : -1) * (rtl && isVertical ? -1 : 1);
+	switch (getAlignment(placement)) {
+		case "start":
+			coords[alignmentAxis] -= commonAlign * (rtl && isVertical ? -1 : 1);
+			break;
+		case "end":
+			coords[alignmentAxis] += commonAlign * (rtl && isVertical ? -1 : 1);
+			break;
+	}
 	return coords;
 }
 /**
@@ -201,7 +207,10 @@ async function detectOverflow(state, options) {
 		height: rects.floating.height
 	} : rects.reference;
 	const offsetParent = await (platform.getOffsetParent == null ? void 0 : platform.getOffsetParent(elements.floating));
-	const offsetScale = await (platform.isElement == null ? void 0 : platform.isElement(offsetParent)) && await (platform.getScale == null ? void 0 : platform.getScale(offsetParent)) || {
+	const offsetScale = await (platform.isElement == null ? void 0 : platform.isElement(offsetParent)) ? await (platform.getScale == null ? void 0 : platform.getScale(offsetParent)) || {
+		x: 1,
+		y: 1
+	} : {
 		x: 1,
 		y: 1
 	};
@@ -321,11 +330,12 @@ var arrow = (options) => ({
 		const largestPossiblePadding = clientSize / 2 - arrowDimensions[length] / 2 - 1;
 		const minPadding = min(paddingObject[minProp], largestPossiblePadding);
 		const maxPadding = min(paddingObject[maxProp], largestPossiblePadding);
+		const min$1 = minPadding;
 		const max = clientSize - arrowDimensions[length] - maxPadding;
 		const center = clientSize / 2 - arrowDimensions[length] / 2 + centerToReference;
-		const offset = clamp(minPadding, center, max);
-		const shouldAddOffset = !middlewareData.arrow && getAlignment(placement) != null && center !== offset && rects.reference[length] / 2 - (center < minPadding ? minPadding : maxPadding) - arrowDimensions[length] / 2 < 0;
-		const alignmentOffset = shouldAddOffset ? center < minPadding ? center - minPadding : center - max : 0;
+		const offset = clamp(min$1, center, max);
+		const shouldAddOffset = !middlewareData.arrow && getAlignment(placement) != null && center !== offset && rects.reference[length] / 2 - (center < min$1 ? minPadding : maxPadding) - arrowDimensions[length] / 2 < 0;
+		const alignmentOffset = shouldAddOffset ? center < min$1 ? center - min$1 : center - max : 0;
 		return {
 			[axis]: coords[axis] + alignmentOffset,
 			data: {
@@ -400,7 +410,9 @@ var flip = function(options) {
 						if (placement) resetPlacement = placement;
 						break;
 					}
-					case "initialPlacement": resetPlacement = initialPlacement;
+					case "initialPlacement":
+						resetPlacement = initialPlacement;
+						break;
 				}
 				if (placement !== resetPlacement) return { reset: { placement: resetPlacement } };
 			}
@@ -538,13 +550,24 @@ var shift = function(options) {
 				y
 			};
 			const overflow = await platform.detectOverflow(state, detectOverflowOptions);
-			const crossAxis = getSideAxis(placement);
+			const crossAxis = getSideAxis(getSide(placement));
 			const mainAxis = getOppositeAxis(crossAxis);
 			let mainAxisCoord = coords[mainAxis];
 			let crossAxisCoord = coords[crossAxis];
-			const clampCoord = (axis, coord) => clamp(coord + overflow[axis === "y" ? "top" : "left"], coord, coord - overflow[axis === "y" ? "bottom" : "right"]);
-			if (checkMainAxis) mainAxisCoord = clampCoord(mainAxis, mainAxisCoord);
-			if (checkCrossAxis) crossAxisCoord = clampCoord(crossAxis, crossAxisCoord);
+			if (checkMainAxis) {
+				const minSide = mainAxis === "y" ? "top" : "left";
+				const maxSide = mainAxis === "y" ? "bottom" : "right";
+				const min = mainAxisCoord + overflow[minSide];
+				const max = mainAxisCoord - overflow[maxSide];
+				mainAxisCoord = clamp(min, mainAxisCoord, max);
+			}
+			if (checkCrossAxis) {
+				const minSide = crossAxis === "y" ? "top" : "left";
+				const maxSide = crossAxis === "y" ? "bottom" : "right";
+				const min = crossAxisCoord + overflow[minSide];
+				const max = crossAxisCoord - overflow[maxSide];
+				crossAxisCoord = clamp(min, crossAxisCoord, max);
+			}
 			const limitedCoords = limiter.fn({
 				...state,
 				[mainAxis]: mainAxisCoord,
@@ -572,7 +595,6 @@ var limitShift = function(options) {
 	return {
 		options,
 		fn(state) {
-			var _rawOffset$mainAxis, _rawOffset$crossAxis;
 			const { x, y, placement, rects, middlewareData } = state;
 			const { offset = 0, mainAxis: checkMainAxis = true, crossAxis: checkCrossAxis = true } = evaluate(options, state);
 			const coords = {
@@ -588,8 +610,9 @@ var limitShift = function(options) {
 				mainAxis: rawOffset,
 				crossAxis: 0
 			} : {
-				mainAxis: (_rawOffset$mainAxis = rawOffset.mainAxis) != null ? _rawOffset$mainAxis : 0,
-				crossAxis: (_rawOffset$crossAxis = rawOffset.crossAxis) != null ? _rawOffset$crossAxis : 0
+				mainAxis: 0,
+				crossAxis: 0,
+				...rawOffset
 			};
 			if (checkMainAxis) {
 				const len = mainAxis === "y" ? "height" : "width";
@@ -626,6 +649,7 @@ var size = function(options) {
 		name: "size",
 		options,
 		async fn(state) {
+			var _state$middlewareData, _state$middlewareData2;
 			const { placement, rects, platform, elements } = state;
 			const { apply = () => {}, ...detectOverflowOptions } = evaluate(options, state);
 			const overflow = await platform.detectOverflow(state, detectOverflowOptions);
@@ -646,15 +670,18 @@ var size = function(options) {
 			const maximumClippingWidth = width - overflow.left - overflow.right;
 			const overflowAvailableHeight = min(height - overflow[heightSide], maximumClippingHeight);
 			const overflowAvailableWidth = min(width - overflow[widthSide], maximumClippingWidth);
-			const shiftData = state.middlewareData.shift;
-			const noShift = !shiftData;
+			const noShift = !state.middlewareData.shift;
 			let availableHeight = overflowAvailableHeight;
 			let availableWidth = overflowAvailableWidth;
-			if (shiftData != null && shiftData.enabled.x) availableWidth = maximumClippingWidth;
-			if (shiftData != null && shiftData.enabled.y) availableHeight = maximumClippingHeight;
+			if ((_state$middlewareData = state.middlewareData.shift) != null && _state$middlewareData.enabled.x) availableWidth = maximumClippingWidth;
+			if ((_state$middlewareData2 = state.middlewareData.shift) != null && _state$middlewareData2.enabled.y) availableHeight = maximumClippingHeight;
 			if (noShift && !alignment) {
-				if (isYAxis) availableWidth = width - 2 * max(overflow.left, overflow.right);
-				else availableHeight = height - 2 * max(overflow.top, overflow.bottom);
+				const xMin = max(overflow.left, 0);
+				const xMax = max(overflow.right, 0);
+				const yMin = max(overflow.top, 0);
+				const yMax = max(overflow.bottom, 0);
+				if (isYAxis) availableWidth = width - 2 * (xMin !== 0 || xMax !== 0 ? xMin + xMax : max(overflow.left, overflow.right));
+				else availableHeight = height - 2 * (yMin !== 0 || yMax !== 0 ? yMin + yMax : max(overflow.top, overflow.bottom));
 			}
 			await apply({
 				...state,

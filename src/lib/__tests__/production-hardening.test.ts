@@ -6,25 +6,24 @@ const root = join(__dirname, "..", "..", "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
 describe("production hardening gates", () => {
-  it("daily digest is owner-scoped despite using the service role", () => {
+  it("server digest cannot access private local records", () => {
     const src = read("src/routes/api/public/digest.ts");
-    expect(src).toMatch(/process\.env\[(['"])MISSION_CONTROL_OWNER_USER_ID\1\]/);
-    expect(src).toMatch(/\.eq\((['"])user_id\1, ownerUserId\)/);
-    expect(src).toContain("Digest owner is not configured");
+    expect(src).toContain("standalone: true");
+    expect(src).toContain("status: 410");
+    expect(src).not.toContain("supabaseAdmin");
   });
 
-  it("daily digest uses the canonical Athens timezone", () => {
+  it("server digest does not embed account or timezone configuration", () => {
     const src = read("src/routes/api/public/digest.ts");
-    expect(src).toContain("Europe/Athens");
-    expect(src).not.toContain("Europe/Bucharest");
+    expect(src).not.toContain("MISSION_CONTROL_OWNER_USER_ID");
+    expect(src).not.toContain("DIGEST_CRON_SECRET");
   });
 
-  it("environment example documents server-only secrets without values", () => {
-    const src = read(".env.example");
-    expect(src).toContain("SUPABASE_SERVICE_ROLE_KEY=");
-    expect(src).toContain("DIGEST_CRON_SECRET=");
-    expect(src).toContain("MISSION_CONTROL_OWNER_USER_ID=");
-    expect(src).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY=\S+/);
+  it("account sync is restricted to Google's private app storage", () => {
+    const src = read("src/lib/cloudSync.ts");
+    expect(src).toContain('GDRIVE_APPDATA_SCOPE');
+    expect(src).toContain('parents: ["appDataFolder"]');
+    expect(src).not.toMatch(/supabase|lovable/i);
   });
 
   it("CI blocks tracked env files and makes lint blocking", () => {

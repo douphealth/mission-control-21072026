@@ -96,9 +96,7 @@ export function clearGCalConfig(): void {
 }
 
 export function isGCalConnected(): boolean {
-  if (validGoogleToken() !== null) return true;
-  const config = getGCalConfig();
-  return Boolean(config.connectedEmail || config.lastSync);
+  return validGoogleToken() !== null;
 }
 
 export class GCalAuthError extends Error {
@@ -112,10 +110,8 @@ export class GCalAuthError extends Error {
 }
 
 async function ensureToken(interactive = false): Promise<StoredGoogleToken> {
-  const token = validGoogleToken();
-  if (token) return token;
   try {
-    return await ensureGoogleToken({ interactive });
+    return await ensureGoogleToken({ scope: GCAL_SCOPE, interactive });
   } catch (e: any) {
     if (e?.message?.includes("popup")) throw new GCalAuthError(e.message);
     throw new GCalAuthError(e?.message || "Google sign-in failed");
@@ -295,6 +291,8 @@ export async function connectGCal(): Promise<{ email?: string; redirected?: bool
   if (profileEmail || email) {
     setGCalConfig({ connectedEmail: profileEmail || email || null });
   }
+  const { startCloudSync } = await import("@/lib/cloudSync");
+  await startCloudSync(true);
   return { email: profileEmail || email, redirected: false };
 }
 

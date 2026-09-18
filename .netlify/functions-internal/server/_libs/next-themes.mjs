@@ -1,8 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { u as require_react } from "./@floating-ui/react-dom+[...].mjs";
 //#region node_modules/next-themes/dist/index.mjs
-var import_react = /* @__PURE__ */ __toESM(require_react(), 1);
-var M = (e, i, s, u, m, a, l, h) => {
+var import_react = /* @__PURE__ */ __toESM(require_react(), 1), M = (e, i, s, u, m, a, l, h) => {
 	let d = document.documentElement, w = ["light", "dark"];
 	function p(n) {
 		(Array.isArray(e) ? e : [e]).forEach((y) => {
@@ -21,13 +20,10 @@ var M = (e, i, s, u, m, a, l, h) => {
 		let n = localStorage.getItem(i) || s;
 		p(l && n === "system" ? c() : n);
 	} catch (n) {}
-};
-var x = import_react.createContext(void 0);
-var U = {
+}, x = import_react.createContext(void 0), U = {
 	setTheme: (e) => {},
 	themes: []
-};
-var z = () => {
+}, z = () => {
 	var e;
 	return (e = import_react.useContext(x)) != null ? e : U;
 };

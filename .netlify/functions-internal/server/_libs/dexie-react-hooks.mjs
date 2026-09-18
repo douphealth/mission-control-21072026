@@ -21,23 +21,19 @@ function useObservable(observableFactory, arg2, arg3) {
 	const [_, triggerUpdate] = import_react.useReducer((x) => x + 1, 0);
 	const observable = import_react.useMemo(() => {
 		const observable = typeof observableFactory === "function" ? observableFactory() : observableFactory;
-		if (!observable || typeof observable.subscribe !== "function") {
-			if (observableFactory === observable) throw new TypeError(`Given argument to useObservable() was neither a valid observable nor a function.`);
-			else throw new TypeError(`Observable factory given to useObservable() did not return a valid observable.`);
-		}
+		if (!observable || typeof observable.subscribe !== "function") if (observableFactory === observable) throw new TypeError(`Given argument to useObservable() was neither a valid observable nor a function.`);
+		else throw new TypeError(`Observable factory given to useObservable() did not return a valid observable.`);
 		if (!monitor.current.hasResult && typeof window !== "undefined") {
-			if (typeof observable.hasValue !== "function" || observable.hasValue()) {
-				if (typeof observable.getValue === "function") {
-					monitor.current.result = observable.getValue();
+			if (typeof observable.hasValue !== "function" || observable.hasValue()) if (typeof observable.getValue === "function") {
+				monitor.current.result = observable.getValue();
+				monitor.current.hasResult = true;
+			} else {
+				const subscription = observable.subscribe((val) => {
+					monitor.current.result = val;
 					monitor.current.hasResult = true;
-				} else {
-					const subscription = observable.subscribe((val) => {
-						monitor.current.result = val;
-						monitor.current.hasResult = true;
-					});
-					if (typeof subscription === "function") subscription();
-					else subscription.unsubscribe();
-				}
+				});
+				if (typeof subscription === "function") subscription();
+				else subscription.unsubscribe();
 			}
 		}
 		return observable;

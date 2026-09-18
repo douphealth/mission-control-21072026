@@ -3,7 +3,6 @@ import TopBar from "@/components/TopBar";
 import StatusBar from "@/components/StatusBar";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import DailyBriefingBanner from "@/components/DailyBriefingBanner";
-import CloudBackupBanner from "@/components/CloudBackupBanner";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardProvider, useDashboardOptional } from "@/contexts/DashboardContext";
@@ -155,7 +154,6 @@ export default function DashboardLayout() {
           className="mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain"
         >
           <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
-            <CloudBackupBanner />
             {(activeSection === "tasks" ||
               activeSection === "focus" ||
               activeSection === "review") && <DailyBriefingBanner />}

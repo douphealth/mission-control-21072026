@@ -1,14 +1,11 @@
 // ─── Mission Control Versions ─────────────────────────────────────────────────
-// SOTA snapshot/version system on top of the existing Supabase connection.
+// Local snapshot/version system for standalone operation.
 // - Auto snapshots (debounced after edits + every 15 min if dirty)
 // - Manual named snapshots ("Save version")
 // - One-click restore (always takes a safety snapshot first)
-// - Cross-device: anyone connected to the same Supabase project sees all versions
-// - Graceful: if the optional mc_snapshots table is missing, falls back to
-//   localStorage so the UI still works, and tells the user once.
+// - Portable: snapshots can be exported and imported between devices
 
 import { db } from "./db";
-import { getSupabase, isSupabaseConnected } from "./supabase";
 import { deduplicateAll } from "./dedup";
 
 export const SNAPSHOTS_TABLE = "mc_snapshots";
@@ -111,41 +108,13 @@ function writeLocal(list: Snapshot[]) {
   }
 }
 
-// ─── Cloud helpers ────────────────────────────────────────────────────────────
-
-let cloudAvailable: boolean | null = null;
-async function checkCloud(): Promise<boolean> {
-  if (!isSupabaseConnected()) return false;
-  if (cloudAvailable !== null) return cloudAvailable;
-  const client = getSupabase();
-  if (!client) return false;
-  const { error } = await client.from(SNAPSHOTS_TABLE).select("id").limit(1);
-  cloudAvailable = !error || (error.code !== "42P01" && error.code !== "PGRST205");
-  return cloudAvailable;
-}
-
 export function resetVersionsCache() {
-  cloudAvailable = null;
+  // Kept for compatibility with older callers.
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function listVersions(): Promise<SnapshotMeta[]> {
-  if (await checkCloud()) {
-    const client = getSupabase()!;
-    const { data, error } = await client
-      .from(SNAPSHOTS_TABLE)
-      .select("id, data")
-      .order("id", { ascending: false })
-      .limit(200);
-    if (!error && data) {
-      return data
-        .map((r: any) => r.data as Snapshot)
-        .filter(Boolean)
-        .map(stripPayload)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    }
-  }
   return readLocal()
     .map(stripPayload)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -176,15 +145,9 @@ export async function saveVersion(
     settings,
   };
 
-  if (await checkCloud()) {
-    const client = getSupabase()!;
-    const { error } = await client.from(SNAPSHOTS_TABLE).insert([{ id: snap.id, data: snap }]);
-    if (error) throw new Error(error.message);
-  } else {
-    const list = readLocal();
-    list.unshift(snap);
-    writeLocal(list);
-  }
+  const list = readLocal();
+  list.unshift(snap);
+  writeLocal(list);
 
   await pruneAuto();
   return stripPayload(snap);
@@ -207,35 +170,19 @@ async function pruneAuto() {
 }
 
 async function fetchFullSnapshot(id: string): Promise<Snapshot | null> {
-  if (await checkCloud()) {
-    const client = getSupabase()!;
-    const { data, error } = await client.from(SNAPSHOTS_TABLE).select("data").eq("id", id).single();
-    if (error) throw new Error(error.message);
-    return data?.data ?? null;
-  }
   return readLocal().find((s) => s.id === id) ?? null;
 }
 
 export async function deleteVersion(id: string): Promise<void> {
-  if (await checkCloud()) {
-    const client = getSupabase()!;
-    await client.from(SNAPSHOTS_TABLE).delete().eq("id", id);
-  } else {
-    writeLocal(readLocal().filter((s) => s.id !== id));
-  }
+  writeLocal(readLocal().filter((s) => s.id !== id));
 }
 
 export async function renameVersion(id: string, name: string): Promise<void> {
   const snap = await fetchFullSnapshot(id);
   if (!snap) return;
   snap.name = name.trim() || snap.name;
-  if (await checkCloud()) {
-    const client = getSupabase()!;
-    await client.from(SNAPSHOTS_TABLE).update({ data: snap }).eq("id", id);
-  } else {
-    const list = readLocal().map((s) => (s.id === id ? snap : s));
-    writeLocal(list);
-  }
+  const list = readLocal().map((s) => (s.id === id ? snap : s));
+  writeLocal(list);
 }
 
 export async function restoreVersion(
@@ -303,14 +250,9 @@ export async function importVersionFile(file: File): Promise<SnapshotMeta> {
   snap.createdAt = new Date().toISOString();
   snap.type = "manual";
   snap.name = snap.name ? `Imported · ${snap.name}` : `Imported · ${snap.createdAt}`;
-  if (await checkCloud()) {
-    const client = getSupabase()!;
-    await client.from(SNAPSHOTS_TABLE).insert([{ id: snap.id, data: snap }]);
-  } else {
-    const list = readLocal();
-    list.unshift(snap);
-    writeLocal(list);
-  }
+  const list = readLocal();
+  list.unshift(snap);
+  writeLocal(list);
   return stripPayload(snap);
 }
 

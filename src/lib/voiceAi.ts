@@ -1,5 +1,5 @@
 // Client helper: sends recorded audio to the server transcription route
-// (Lovable AI speech-to-text + structured classification) and normalizes the
+// (AI speech-to-text + structured classification) and normalizes the
 // response into the shape the capture UI expects.
 
 import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";

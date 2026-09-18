@@ -5,7 +5,6 @@
 import { db, type SyncHealth, type SyncSourceId } from "@/lib/db";
 
 export const SYNC_SOURCES: { id: SyncSourceId; label: string; hint: string }[] = [
-  { id: "cloud", label: "Cloud backup", hint: "Cross-device sync of every record" },
   { id: "google-calendar", label: "Google Calendar", hint: "Tasks pushed as calendar events" },
   { id: "wordpress", label: "WordPress sites", hint: "Core, plugin and update status" },
   { id: "gsc", label: "Search Console", hint: "Clicks, impressions, indexing" },
