@@ -78,7 +78,8 @@ export async function signIn(): Promise<void> {
   if (typeof window === "undefined") {
     throw new Error("Google sign-in is only available in the browser");
   }
-  if (!getGoogleClientId()) {
+  const { ensureGoogleClientId } = await import("@/lib/googleDirectAuth");
+  if (!(await ensureGoogleClientId())) {
     throw new Error("Google setup is required once. Press Connect Google and follow the three steps.");
   }
   try {

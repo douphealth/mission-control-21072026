@@ -277,7 +277,8 @@ export async function deleteGCalEvent(eventId: string, calendarId = "primary"): 
 }
 
 export async function connectGCal(): Promise<{ email?: string; redirected?: boolean }> {
-  if (!getGoogleClientId()) {
+  const { ensureGoogleClientId } = await import("@/lib/googleDirectAuth");
+  if (!(await ensureGoogleClientId())) {
     throw new GCalAuthError(
       "Google setup is required once. Press Connect Google and follow the three steps.",
     );
