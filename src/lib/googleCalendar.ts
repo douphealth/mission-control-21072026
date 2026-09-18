@@ -313,6 +313,13 @@ export async function deleteGCalEvent(eventId: string, calendarId = "primary"): 
 }
 
 export async function connectGCal(): Promise<{ email?: string; redirected?: boolean }> {
+  // Preferred path: the Google account already authorized for this app.
+  if (await refreshAppCalendarAccount()) {
+    const calendars = await listCalendars();
+    const primary = calendars.find((cal) => cal.primary && /@/.test(cal.id));
+    if (primary) setGCalConfig({ connectedEmail: primary.id });
+    return { email: primary?.id, redirected: false };
+  }
   const { ensureGoogleClientId } = await import("@/lib/googleDirectAuth");
   if (!(await ensureGoogleClientId())) {
     throw new GCalAuthError(
