@@ -3,8 +3,8 @@
 // origin to whitelist in Google Cloud Console. Shared by CalendarPage,
 // GoogleTasksPage and SettingsPage.
 
-import { useState } from "react";
-import { X, Copy, Check, ExternalLink, KeyRound, ShieldCheck } from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Copy, Check, ExternalLink, KeyRound, Loader2 } from "lucide-react";
 import {
   getGoogleClientId,
   setGoogleClientId,
@@ -12,19 +12,49 @@ import {
   getGoogleOrigin,
 } from "@/lib/googleDirectAuth";
 
-export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+type GoogleSetupModalProps = {
+  open: boolean;
+  onClose: () => void;
+  onConnect?: () => Promise<void>;
+};
+
+export function GoogleSetupModal({ open, onClose, onConnect }: GoogleSetupModalProps) {
   const [value, setValue] = useState(() => getGoogleClientId());
   const [copied, setCopied] = useState(false);
-  const [saved, setSaved] = useState(hasGoogleClientId());
+  const [connecting, setConnecting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const origin = getGoogleOrigin();
+
+  useEffect(() => {
+    if (!open) return;
+    setValue(getGoogleClientId());
+    setError(null);
+  }, [open]);
 
   if (!open) return null;
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    const valid = /^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(value.trim());
+    if (!valid) {
+      setError("Paste the Client ID ending in .apps.googleusercontent.com");
+      return;
+    }
     setGoogleClientId(value);
-    setSaved(/\.apps\.googleusercontent\.com$/.test(value.trim()));
-    // re-read so parent re-renders pick up the new state
     window.dispatchEvent(new Event("mc-google-client-id-changed"));
+    if (!onConnect) {
+      onClose();
+      return;
+    }
+    setConnecting(true);
+    setError(null);
+    try {
+      await onConnect();
+      onClose();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Google connection failed. Please try again.");
+    } finally {
+      setConnecting(false);
+    }
   };
 
   const copyOrigin = async () => {
@@ -49,7 +79,7 @@ export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: ()
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <KeyRound size={16} className="text-primary" />
-            <h3 className="text-sm font-bold text-foreground">Connect Google — one-time setup</h3>
+             <h3 className="text-sm font-bold text-foreground">Connect Google once</h3>
           </div>
           <button
             onClick={onClose}
@@ -62,47 +92,29 @@ export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: ()
 
         <div className="p-5 space-y-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            This app talks to Google directly from your browser — no third-party servers. To do
-            that, Google needs an OAuth Client ID that authorizes{" "}
-            <span className="font-semibold text-foreground">{origin}</span>. It takes about 3
-            minutes, once.
+            Google requires this one-time identity for a standalone app. After this, one Google
+            account selection connects Calendar, Tasks, and private backup.
           </p>
 
           <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-2.5">
-            <div className="text-[11px] font-semibold text-foreground">
-              Steps in Google Cloud Console:
-            </div>
-            <ol className="text-[11px] text-muted-foreground space-y-1.5 list-decimal list-inside leading-relaxed">
+            <ol className="text-xs text-muted-foreground space-y-3 leading-relaxed">
               <li>
-                Open{" "}
+                <span className="font-bold text-foreground">1. Open Google setup.</span>{" "}
                 <a
                   href="https://console.cloud.google.com/apis/credentials"
                   target="_blank"
                   rel="noreferrer"
                   className="text-primary underline underline-offset-2 inline-flex items-center gap-0.5"
                 >
-                  console.cloud.google.com → Credentials <ExternalLink size={9} />
+                  Open Credentials <ExternalLink size={10} />
                 </a>
+                . Enable Calendar API, Tasks API, and Drive API. Add your Google account as a test
+                user on the OAuth consent screen.
               </li>
               <li>
-                Enable the <span className="text-foreground font-medium">Google Calendar API</span>,{" "}
-                <span className="text-foreground font-medium">Google Tasks API</span>, and{" "}
-                <span className="text-foreground font-medium">Google Drive API</span> (APIs &
-                Services → Library). Drive is used only for the app's private cross-device backup.
-              </li>
-              <li>
-                OAuth consent screen → External → add your Google account as a Test user (or Publish
-                the app).
-              </li>
-              <li>
-                Create Credentials →{" "}
-                <span className="text-foreground font-medium">OAuth client ID</span> → Web
-                application.
-              </li>
-              <li>
-                Under{" "}
-                <span className="text-foreground font-medium">Authorized JavaScript origins</span>{" "}
-                add:
+                <span className="font-bold text-foreground">2. Create an OAuth Client ID.</span>{" "}
+                Choose <span className="font-semibold text-foreground">Web application</span>, then
+                add this exact address under Authorized JavaScript origins:
                 <button
                   onClick={copyOrigin}
                   className="mt-1.5 w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-card border border-border font-mono text-[10px] text-foreground hover:border-primary/40 transition-colors"
@@ -116,8 +128,8 @@ export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: ()
                 </button>
               </li>
               <li>
-                Copy the Client ID (ends in{" "}
-                <span className="font-mono">.apps.googleusercontent.com</span>) and paste it below.
+                <span className="font-bold text-foreground">3. Paste the Client ID below.</span> The
+                Google account window opens automatically.
               </li>
             </ol>
           </div>
@@ -135,7 +147,7 @@ export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: ()
               value={value}
               onChange={(e) => {
                 setValue(e.target.value);
-                setSaved(false);
+                setError(null);
               }}
               placeholder="123456789-abcdefg.apps.googleusercontent.com"
               className="w-full px-3 py-2 rounded-xl bg-secondary/50 border border-border text-xs font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -147,9 +159,9 @@ export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: ()
             )}
           </div>
 
-          {saved && (
-            <div className="flex items-center gap-1.5 text-[11px] text-green-600 dark:text-green-400">
-              <ShieldCheck size={12} /> Google Client ID saved. Press Connect on the calendar.
+          {error && (
+            <div className="text-xs font-medium text-destructive" role="alert">
+              {error}
             </div>
           )}
         </div>
@@ -159,14 +171,15 @@ export function GoogleSetupModal({ open, onClose }: { open: boolean; onClose: ()
             onClick={onClose}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:bg-secondary"
           >
-            {saved ? "Done" : "Cancel"}
+            Cancel
           </button>
           <button
             onClick={handleSave}
-            disabled={!value.trim()}
+            disabled={!value.trim() || connecting}
             className="px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
-            Save Client ID
+            {connecting && <Loader2 size={13} className="mr-1.5 inline animate-spin" />}
+            {connecting ? "Connecting…" : onConnect ? "Save & Connect Google" : "Save Client ID"}
           </button>
         </div>
       </div>

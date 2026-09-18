@@ -9,6 +9,7 @@
 ## Standalone account sync and deployment
 - [x] Restore optional self-hosted account sync without Lovable runtime services
 - [x] Preserve direct Google sign-in, Tasks, and Calendar synchronization
+- [x] Replace the disconnected Google dead-end with guided save-and-connect setup
 - [x] Stop unauthenticated Google requests and hydration warnings
 - [x] Repair the repository's Cloudflare Pages deployment configuration
 - [ ] Redeploy Cloudflare Pages and verify the target URL

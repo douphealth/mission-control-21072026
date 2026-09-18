@@ -102,6 +102,12 @@ export default function SettingsPage() {
   const gcal = useGoogleCalendar({ autoFetch: false });
   const [googleSetupOpen, setGoogleSetupOpen] = useState(false);
 
+  const connectGoogle = async () => {
+    const result = await gcal.connect();
+    if (!result.success) throw new Error(result.error || "Google connection failed");
+    toast.success(result.email ? `Connected as ${result.email}` : "Google connected and synced");
+  };
+
   // Security state
   const [encKey, setEncKey] = useState("");
   const [showEncKey, setShowEncKey] = useState(false);
@@ -351,7 +357,7 @@ export default function SettingsPage() {
                           : "Connected — calendar, tasks, and app data are syncing"
                         : "Connect your Google Calendar to see all your events in Mission Control"}
                     </div>
-                    {gcal.lastSync && (
+                    {gcal.connected && gcal.lastSync && (
                       <div className="text-[10px] text-muted-foreground mt-0.5">
                         Last sync: {new Date(gcal.lastSync).toLocaleString()}
                       </div>
@@ -381,7 +387,7 @@ export default function SettingsPage() {
                       onClick={() => setGoogleSetupOpen(true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary/10 text-primary text-xs font-semibold hover:bg-primary/20 transition-colors"
                     >
-                      <KeyRound size={12} /> Client ID setup
+                      <KeyRound size={12} /> Google setup
                     </button>
                   </div>
 
@@ -429,17 +435,12 @@ export default function SettingsPage() {
 
                   <div className="flex gap-2 flex-wrap">
                     <button
-                      onClick={async () => {
-                        const result = await gcal.connect();
-                        if (result.success) {
-                          toast.success(
-                            result.email
-                              ? `✅ Synced as ${result.email}`
-                              : "✅ Google Calendar synced",
-                          );
-                        } else {
-                          toast.error(result.error || "Sync failed");
+                      onClick={() => {
+                        if (!hasGoogleClientId()) {
+                          setGoogleSetupOpen(true);
+                          return;
                         }
+                        void connectGoogle().catch((error) => toast.error(error.message));
                       }}
                       disabled={gcal.connecting || gcal.syncing}
                       className="btn-primary text-sm gap-2"
@@ -449,7 +450,7 @@ export default function SettingsPage() {
                       ) : (
                         <RefreshCw size={14} />
                       )}
-                      Refresh & Sync Now
+                      {gcal.connected ? "Sync Now" : "Connect Google"}
                     </button>
                   </div>
                 </div>
@@ -530,7 +531,11 @@ export default function SettingsPage() {
 
             {/* Google OAuth setup (reachable from the Google Calendar tab) */}
             {activeTab === "google-calendar" && (
-              <GoogleSetupModal open={googleSetupOpen} onClose={() => setGoogleSetupOpen(false)} />
+              <GoogleSetupModal
+                open={googleSetupOpen}
+                onClose={() => setGoogleSetupOpen(false)}
+                onConnect={connectGoogle}
+              />
             )}
 
             {/* ─── Security ─── */}
