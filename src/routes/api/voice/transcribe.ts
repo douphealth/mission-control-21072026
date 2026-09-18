@@ -1,10 +1,13 @@
 // ── Voice transcription + classification route ──────────────────────────────
-// The browser transcribes speech via Chrome SpeechRecognition (supports Greek
-// and 14+ languages). This route classifies the transcript via Anthropic and
-// returns structured data. Falls back gracefully if AI is unavailable.
+// 1. The recorded audio is transcribed server-side with a multilingual
+//    speech-to-text model that auto-detects the spoken language (85+ langs).
+// 2. The resulting transcript is structured into one Mission Control item.
+// The browser's own SpeechRecognition transcript (when available) is used as a
+// hint and as a fallback if server transcription is unavailable.
 
 import { createFileRoute } from "@tanstack/react-router";
 import { anthropicToolUse, isAnthropicAvailable } from "@/lib/anthropicServer";
+import { hasGateway, responsesJson, transcribeAudio } from "@/lib/aiGateway.server";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -29,7 +32,7 @@ Rules:
 - For tasks: startTime/endTime as HH:MM (24h) only if a time was actually mentioned.
 - For links: extract the url (add https:// if missing).
 - tags: 1-4 short lowercase keywords.
-You MUST call the capture_item tool.`;
+- Use null for any field that does not apply.`;
 
 const TOOL_SCHEMA = {
   type: "object" as const,
@@ -49,6 +52,39 @@ const TOOL_SCHEMA = {
   required: ["type", "title", "cleanedTranscript"],
 };
 
+// Strict-mode variant for the Responses API: every property required,
+// optional values expressed as nullable types.
+const STRICT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    type: { type: "string", enum: ["tasks", "notes", "ideas", "links"] },
+    language: { type: ["string", "null"] },
+    title: { type: "string" },
+    cleanedTranscript: { type: "string" },
+    priority: { type: ["string", "null"], enum: ["critical", "high", "medium", "low", null] },
+    dueDate: { type: ["string", "null"] },
+    startTime: { type: ["string", "null"] },
+    endTime: { type: ["string", "null"] },
+    url: { type: ["string", "null"] },
+    subtasks: { type: ["array", "null"], items: { type: "string" } },
+    tags: { type: ["array", "null"], items: { type: "string" } },
+  },
+  required: [
+    "type",
+    "language",
+    "title",
+    "cleanedTranscript",
+    "priority",
+    "dueDate",
+    "startTime",
+    "endTime",
+    "url",
+    "subtasks",
+    "tags",
+  ],
+};
+
 export const Route = createFileRoute("/api/voice/transcribe")({
   server: {
     handlers: {
@@ -61,32 +97,68 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         const form = await request.formData();
         const file = form.get("audio");
         const browserTranscript = String(form.get("browserTranscript") ?? "").trim();
-        const hasAudio = file instanceof File && file.size > 0;
+        const requestedLanguage = String(form.get("language") ?? "auto").trim();
+        const hasAudio = file instanceof File && file.size > 2048;
 
-        if (!browserTranscript) {
-          if (hasAudio) {
-            // Browser SpeechRecognition didn't produce a transcript (non-Chrome
-            // browser, network issue, or mobile Safari). We don't have a
-            // server-side STT endpoint, so return a clear error that lets the
-            // client show a text-input fallback instead of crashing.
-            return json(
-              {
-                error:
-                  "Could not transcribe audio in this browser. Try Chrome, or type your note below.",
-                allowTextFallback: true,
-              },
-              200,
-            );
+        // ── 1. Server-side speech-to-text (auto language detection) ─────────
+        let transcript = "";
+        let source: "ai" | "browser" = "browser";
+
+        if (hasAudio) {
+          try {
+            const result = await transcribeAudio(file as File, requestedLanguage);
+            if (result?.text) {
+              transcript = result.text;
+              source = "ai";
+            }
+          } catch (err) {
+            console.error("[voice] transcription failed", err);
           }
-          return json({ error: "No audio or transcript received." }, 400);
         }
 
-        // Try AI classification via Anthropic
+        // Prefer the accurate server transcript; fall back to the browser's.
+        if (!transcript) transcript = browserTranscript;
+
+        if (!transcript) {
+          return json(
+            {
+              error: hasAudio
+                ? "I could not make out any speech in that recording. Try again, or type it below."
+                : "No audio or transcript received.",
+              allowTextFallback: true,
+            },
+            hasAudio ? 200 : 400,
+          );
+        }
+
+        const today = new Date().toISOString().slice(0, 10);
+
+        // ── 2. Structure the transcript ─────────────────────────────────────
+        if (hasGateway()) {
+          try {
+            const structured = await responsesJson<Record<string, unknown>>({
+              system: `${SYSTEM_PROMPT}\nCurrent date: ${today}.`,
+              parts: [{ type: "input_text", text: `Transcript:\n"""${transcript}"""` }],
+              schemaName: "capture_item",
+              schema: STRICT_SCHEMA,
+              effort: "low",
+            });
+            if (structured) {
+              return json({
+                transcript: (structured.cleanedTranscript as string) || transcript,
+                source,
+                structured,
+              });
+            }
+          } catch (err) {
+            console.error("[voice] classification failed", err);
+          }
+        }
+
         if (isAnthropicAvailable()) {
-          const today = new Date().toISOString().slice(0, 10);
           const structured = await anthropicToolUse(
             `${SYSTEM_PROMPT}\nCurrent date: ${today}.`,
-            `Transcript:\n"""${browserTranscript}"""`,
+            `Transcript:\n"""${transcript}"""`,
             {
               name: "capture_item",
               description: "Structure a voice capture into a Mission Control item",
@@ -96,19 +168,15 @@ export const Route = createFileRoute("/api/voice/transcribe")({
 
           if (structured) {
             return json({
-              transcript: (structured.cleanedTranscript as string) || browserTranscript,
-              source: "browser" as const,
+              transcript: (structured.cleanedTranscript as string) || transcript,
+              source,
               structured,
             });
           }
         }
 
-        // AI unavailable or failed — return raw transcript for client-side classification
-        return json({
-          transcript: browserTranscript,
-          source: "browser" as const,
-          structured: null,
-        });
+        // AI unavailable — return the transcript for client-side classification.
+        return json({ transcript, source, structured: null });
       },
     },
   },
