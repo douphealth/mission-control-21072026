@@ -143,7 +143,7 @@ type GatewayResult = {
   }>;
 };
 
-type Category = { target: (typeof VALID_TARGETS)[number]; items: Record<string, unknown>[] };
+type Category = { target: (typeof VALID_TARGETS)[number]; items: Record<string, string>[] };
 
 function sanitizeCategories(rawCats: unknown): Category[] {
   const list = Array.isArray(rawCats) ? rawCats : [];
@@ -237,10 +237,10 @@ export const aiParseImport = createServerFn({ method: "POST" })
           (result.categories ?? []).map((c) => ({
             target: c.target,
             items: (c.items ?? []).map((item) => {
-              const record: Record<string, unknown> = {};
+              const record: Record<string, string> = {};
               for (const field of item.fields ?? []) {
                 if (field?.key && field.value != null && String(field.value).trim() !== "") {
-                  record[field.key] = field.value;
+                  record[field.key] = String(field.value);
                 }
               }
               return record;
