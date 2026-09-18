@@ -1,5 +1,5 @@
-import { writeFileSync, existsSync, readdirSync, mkdirSync, copyFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { writeFileSync, existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 const distDir = join(process.cwd(), "dist");
 if (!existsSync(distDir)) {
@@ -7,53 +7,28 @@ if (!existsSync(distDir)) {
   process.exit(0);
 }
 
-// --- _routes.json: tells Cloudflare Pages which routes go to the worker ---
-const clientAssetsDir = join(distDir, "client", "assets");
-const exclude = ["/favicon.ico", "/assets/*"];
+// Nitro's netlify preset generates an empty _redirects and uses
+// .netlify/functions-internal/ (not edge-functions). Netlify needs
+// a catch-all redirect to route dynamic requests to the server function.
+const redirectsPath = join(distDir, "_redirects");
+let redirects = "";
 
-if (existsSync(clientAssetsDir)) {
-  for (const file of readdirSync(clientAssetsDir)) {
-    exclude.push(`/assets/${file}`);
-  }
+// Preserve any existing redirect rules from Nitro
+if (existsSync(redirectsPath)) {
+  const existing = readFileSync(redirectsPath, "utf8").trim();
+  if (existing) redirects = existing + "\n";
 }
 
-writeFileSync(
-  join(distDir, "_routes.json"),
-  JSON.stringify({ version: 1, include: ["/*"], exclude }, null, 2),
-);
-console.log("[postbuild] Wrote _routes.json");
-
-// --- _worker.js: Cloudflare Pages requires the server entry at this path ---
-// The cloudflare-module preset puts it at dist/server/index.mjs, but Pages
-// looks for dist/_worker.js/index.js (or dist/_worker.js as a single file).
-// We copy the server directory into _worker.js/ so relative imports resolve.
-const workerDir = join(distDir, "_worker.js");
-const serverDir = join(distDir, "server");
-
-if (existsSync(serverDir) && !existsSync(workerDir)) {
-  mkdirSync(workerDir, { recursive: true });
-
-  function copyDir(src, dest) {
-    for (const entry of readdirSync(src)) {
-      const srcPath = join(src, entry);
-      const destPath = join(dest, entry);
-      if (statSync(srcPath).isDirectory()) {
-        mkdirSync(destPath, { recursive: true });
-        copyDir(srcPath, destPath);
-      } else {
-        copyFileSync(srcPath, destPath);
-      }
-    }
+// Add static asset exclusions so they're served directly (not through the function)
+const assetsDir = join(distDir, "assets");
+if (existsSync(assetsDir)) {
+  for (const file of readdirSync(assetsDir)) {
+    redirects += `/assets/${file} 200\n`;
   }
-
-  copyDir(serverDir, workerDir);
-
-  // Cloudflare Pages expects _worker.js/index.js (not .mjs)
-  const indexMjs = join(workerDir, "index.mjs");
-  const indexJs = join(workerDir, "index.js");
-  if (existsSync(indexMjs) && !existsSync(indexJs)) {
-    copyFileSync(indexMjs, indexJs);
-  }
-
-  console.log("[postbuild] Created _worker.js/ from server/");
 }
+redirects += "/favicon.ico 200\n";
+// Route everything else to the Netlify serverless function
+redirects += "/*  /.netlify/functions-internal/server  200";
+
+writeFileSync(redirectsPath, redirects);
+console.log("[postbuild] Wrote _redirects for Netlify");
