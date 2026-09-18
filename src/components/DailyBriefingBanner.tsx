@@ -22,8 +22,6 @@ import {
 
 import type { Task } from "@/lib/db";
 import { toast } from "sonner";
-import { useServerFn } from "@tanstack/react-start";
-import { sendOverdueDigest } from "@/lib/digest.functions";
 
 const PRIORITY_STYLE: Record<string, string> = {
   critical: "bg-rose-500/15 text-rose-500 ring-rose-500/25",
@@ -97,8 +95,6 @@ export default function DailyBriefingBanner() {
   const settings = useSettingsStore() as unknown as Record<string, unknown>;
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [sending, setSending] = useState(false);
-  const sendDigest = useServerFn(sendOverdueDigest);
 
   const briefing = useMemo(() => buildBriefing(tasks as Task[]), [tasks]);
   const today = todayISO();
@@ -117,41 +113,7 @@ export default function DailyBriefingBanner() {
     setTimeout(() => setCopied(false), 1800);
   };
 
-  const toDigestTask = (t: Task) => ({
-    title: t.title,
-    priority: t.priority,
-    dueDate: t.dueDate || undefined,
-    startTime: t.startTime || undefined,
-    daysOverdue: daysOverdue(t, today),
-  });
-
-  const emailDigest = async () => {
-    if (sending) return;
-    setSending(true);
-    try {
-      const res = await sendDigest({
-        data: {
-          date: today,
-          overdue: briefing.overdue.map(toDigestTask),
-          dueToday: briefing.dueToday.map(toDigestTask),
-          dueTomorrow: briefing.dueTomorrow.map(toDigestTask),
-          completedToday: briefing.completedToday,
-        },
-      });
-      if (res.sent) toast.success(`Digest emailed to ${digestEmail}`);
-      else toast.warning("That address is unsubscribed from emails");
-    } catch (e: any) {
-      const msg = String(e?.message || e);
-      if (msg.includes("domain_not_verified")) {
-        toast.error("Email domain still verifying — opening your mail app instead");
-      } else {
-        toast.error("Could not send — opening your mail app instead");
-      }
-      mailDigest(briefing, digestEmail, today);
-    } finally {
-      setSending(false);
-    }
-  };
+  const emailDigest = () => mailDigest(briefing, digestEmail, today);
 
   const shown = expanded
     ? [...briefing.overdue, ...briefing.dueToday]
@@ -190,7 +152,7 @@ export default function DailyBriefingBanner() {
             title="Email digest"
             className="hidden rounded-full border border-border/50 p-2 sm:block text-muted-foreground transition active:scale-90"
           >
-            <Mail size={15} className={sending ? "animate-pulse" : ""} />
+            <Mail size={15} />
           </button>
           <button
             onClick={() => setActiveSection("tasks")}

@@ -454,7 +454,7 @@ export default function GitHubPage() {
           <FormInput
             value={form.devPlatformUrl || ""}
             onChange={(v) => uf("devPlatformUrl", v)}
-            placeholder="https://bolt.new/..., lovable.dev/..., replit.com/..."
+            placeholder="https://github.com/..., https://example.com/..."
           />
         </FormField>
         <FormField label="Deployment Gateway URL">

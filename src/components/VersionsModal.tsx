@@ -10,7 +10,6 @@ import {
   X,
   Check,
   Loader2,
-  Cloud,
   HardDrive,
   Smartphone,
   Sparkles,
@@ -30,7 +29,6 @@ import {
   SNAPSHOTS_SCHEMA_SQL,
   type SnapshotMeta,
 } from "@/lib/versions";
-import { isSupabaseConnected } from "@/lib/supabase";
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -61,8 +59,6 @@ export default function VersionsModal({ open, onClose }: { open: boolean; onClos
   const [device, setDevice] = useState(getDeviceLabel());
   const [confirmRestore, setConfirmRestore] = useState<SnapshotMeta | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-
-  const cloud = isSupabaseConnected();
 
   const refresh = async () => {
     setLoading(true);
@@ -160,7 +156,7 @@ export default function VersionsModal({ open, onClose }: { open: boolean; onClos
                 <div className="flex-1">
                   <h2 className="text-lg font-semibold text-foreground">Versions</h2>
                   <p className="text-xs text-muted-foreground/80">
-                    Save, restore, and sync versions of all your data — across every device.
+                    Save, export, and restore private versions stored on this device.
                   </p>
                 </div>
                 <button
@@ -174,12 +170,9 @@ export default function VersionsModal({ open, onClose }: { open: boolean; onClos
               {/* Status + device */}
               <div className="px-6 py-3 flex flex-wrap items-center gap-3 text-xs border-b border-border/30 bg-secondary/20">
                 <span
-                  className={`flex items-center gap-1.5 ${cloud ? "text-success" : "text-muted-foreground"}`}
+                  className="flex items-center gap-1.5 text-muted-foreground"
                 >
-                  {cloud ? <Cloud size={13} /> : <HardDrive size={13} />}
-                  {cloud
-                    ? "Cloud sync · versions are available on every device"
-                    : "Local-only · connect Cloud Sync to share versions across devices"}
+                  <HardDrive size={13} /> Local versions · export a backup to move devices
                 </span>
                 <div className="ml-auto flex items-center gap-1.5 text-muted-foreground">
                   <Smartphone size={13} />
