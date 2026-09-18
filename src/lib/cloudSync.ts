@@ -280,6 +280,7 @@ export async function startCloudSync(force = false): Promise<{ signedIn: boolean
   const token = readGoogleToken();
   if (!token || !googleTokenHasScopes(token, [GDRIVE_APPDATA_SCOPE])) { setStatus("signed-out"); return { signedIn: false, restored: 0 }; }
   userEmail = localStorage.getItem(USER_EMAIL_KEY);
+  if (!getLastCloudSync()) await markExistingLocalRecordsDirty();
   const result = await pullFromCloud();
   if (force || getPendingCloudCount()) await flushCloudChanges();
   if (!started) {

@@ -348,7 +348,7 @@ export default function SettingsPage() {
                       {gcal.connected
                         ? gcal.email
                           ? `Signed in as ${gcal.email}`
-                          : "Connected — events are syncing"
+                          : "Connected — calendar, tasks, and app data are syncing"
                         : "Connect your Google Calendar to see all your events in Mission Control"}
                     </div>
                     {gcal.lastSync && (
@@ -399,8 +399,8 @@ export default function SettingsPage() {
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {gcal.connected
-                          ? "This app uses your own Google sign-in, so it can load the same calendars you see in Google Calendar."
-                          : "Sign in with your Google account to load your calendars, subscriptions, birthdays, holidays, and other calendar feeds."}
+                          ? "Your calendar, Google Tasks, and private Mission Control backup use this Google account across devices."
+                          : "Sign in once to synchronize Calendar, Google Tasks, and a private Mission Control backup across your devices."}
                       </div>
                       {gcal.email && (
                         <div className="text-xs text-muted-foreground">

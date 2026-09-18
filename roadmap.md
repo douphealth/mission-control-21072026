@@ -10,5 +10,6 @@
 - [x] Restore optional self-hosted account sync without Lovable runtime services
 - [x] Preserve direct Google sign-in, Tasks, and Calendar synchronization
 - [x] Stop unauthenticated Google requests and hydration warnings
-- [x] Repair the Cloudflare Pages deployment configuration and verify the target URL
+- [x] Repair the repository's Cloudflare Pages deployment configuration
+- [ ] Redeploy Cloudflare Pages and verify the target URL
 - [ ] Verify local-only and signed-in workflows end to end

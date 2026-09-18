@@ -12,6 +12,7 @@ import {
   getGoogleOrigin,
   readGoogleToken,
   requestGoogleToken,
+  googleTokenHasScopes,
   validGoogleToken,
 } from "@/lib/googleDirectAuth";
 import type { StoredGoogleToken } from "@/lib/googleDirectAuth";
@@ -64,10 +65,10 @@ function originLabel(): string {
 
 async function ensureToken(interactive = false): Promise<StoredGoogleToken> {
   const token = validGoogleToken();
-  if (token) return token;
+  if (token && googleTokenHasScopes(token, [GTASKS_SCOPE])) return token;
   if (!interactive) throw new Error("Not connected to Google Tasks");
   try {
-    return await requestGoogleToken({ scope: GTASKS_SCOPE });
+    return await requestGoogleToken({ scope: GOOGLE_SCOPES });
   } catch (err) {
     throw formatGoogleAuthError(err);
   }
@@ -83,7 +84,7 @@ export async function signIn(): Promise<void> {
     );
   }
   try {
-    const token = await requestGoogleToken({ prompt: "select_account" });
+    const token = await requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: "select_account" });
     const email = await fetchGoogleEmail(token.access_token);
     if (email) {
       try {
@@ -92,6 +93,8 @@ export async function signIn(): Promise<void> {
         /* non-fatal */
       }
     }
+    const { startCloudSync } = await import("@/lib/cloudSync");
+    await startCloudSync(true);
   } catch (err) {
     throw formatGoogleAuthError(err);
   }
