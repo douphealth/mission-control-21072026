@@ -96,9 +96,7 @@ export function clearGCalConfig(): void {
 }
 
 export function isGCalConnected(): boolean {
-  if (validGoogleToken() !== null) return true;
-  const config = getGCalConfig();
-  return Boolean(config.connectedEmail || config.lastSync);
+  return validGoogleToken() !== null;
 }
 
 export class GCalAuthError extends Error {

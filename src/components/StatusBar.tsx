@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
-import { WifiOff, Database, Check, Loader2, AlertCircle } from "lucide-react";
+import { WifiOff, Database, Check, Loader2, AlertCircle, Cloud, CloudOff } from "lucide-react";
 import { onSaveStatus } from "@/stores/dataStore";
+import { getCloudStatus, onCloudStatus, type CloudStatus } from "@/lib/cloudSync";
 
 export default function StatusBar() {
-  const [online, setOnline] = useState(navigator.onLine);
+  const [online, setOnline] = useState(true);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [cloudStatus, setCloudStatus] = useState<CloudStatus>("signed-out");
 
   useEffect(() => {
+    setOnline(navigator.onLine);
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener("online", on);
@@ -16,6 +19,8 @@ export default function StatusBar() {
       window.removeEventListener("offline", off);
     };
   }, []);
+
+  useEffect(() => onCloudStatus((next) => setCloudStatus(next)), []);
 
   useEffect(() => {
     return onSaveStatus((status) => {
@@ -45,6 +50,10 @@ export default function StatusBar() {
         )}
         <span className="flex items-center gap-1 text-muted-foreground/40">
           <Database size={10} /> IndexedDB
+        </span>
+        <span className="flex items-center gap-1 text-muted-foreground/50">
+          {cloudStatus === "signed-out" ? <CloudOff size={10} /> : <Cloud size={10} />}
+          {cloudStatus === "synced" ? "Google synced" : cloudStatus === "syncing" ? "Google syncing" : cloudStatus === "error" ? "Sync needs attention" : "Local only"}
         </span>
         {saveStatus === "saving" && (
           <span className="flex items-center gap-1 text-amber-500/70 animate-pulse">

@@ -7,8 +7,8 @@
 - [x] Verify tests, type safety, and browser behavior
 
 ## Standalone account sync and deployment
-- [ ] Restore optional self-hosted account sync without Lovable runtime services
-- [ ] Preserve direct Google sign-in, Tasks, and Calendar synchronization
-- [ ] Stop unauthenticated Google requests and hydration warnings
-- [ ] Repair the Cloudflare Pages deployment configuration and verify the target URL
+- [x] Restore optional self-hosted account sync without Lovable runtime services
+- [x] Preserve direct Google sign-in, Tasks, and Calendar synchronization
+- [x] Stop unauthenticated Google requests and hydration warnings
+- [x] Repair the Cloudflare Pages deployment configuration and verify the target URL
 - [ ] Verify local-only and signed-in workflows end to end

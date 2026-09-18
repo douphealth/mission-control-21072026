@@ -29,6 +29,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { useDataStore } from "@/stores/dataStore";
 import { deduplicateAll } from "@/lib/dedup";
 import { restoreLatestNonEmptyVersion } from "@/lib/versions";
+import { startCloudSync } from "@/lib/cloudSync";
 
 // Re-export types for backward compat with old imports
 export type {
@@ -106,6 +107,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
         const settings = await db.settings.get("default");
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
+        await startCloudSync();
       } catch (e) {
         console.error("DB init error:", e);
       } finally {

@@ -10,7 +10,7 @@ Object.assign(process.env, serverEnv);
 
 async function nitroPlugin() {
   const { nitro } = await import("nitro/vite");
-  return nitro({ preset: "netlify" });
+  return nitro({ preset: process.env.NITRO_PRESET || "cloudflare-pages" });
 }
 
 export default defineConfig({

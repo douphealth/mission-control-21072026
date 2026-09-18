@@ -19,7 +19,15 @@ const TOKEN_TTL_MS = 55 * 60 * 1000; // Google access tokens live ~60 min
 
 export const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar";
 export const GTASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
-export const GOOGLE_SCOPES = ["openid", "email", "profile", GCAL_SCOPE, GTASKS_SCOPE].join(" ");
+export const GDRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+export const GOOGLE_SCOPES = [
+  "openid",
+  "email",
+  "profile",
+  GCAL_SCOPE,
+  GTASKS_SCOPE,
+  GDRIVE_APPDATA_SCOPE,
+].join(" ");
 
 export type StoredGoogleToken = {
   access_token: string;
@@ -94,6 +102,11 @@ export function readGoogleToken(): StoredGoogleToken | null {
   } catch {
     return null;
   }
+}
+
+export function googleTokenHasScopes(token: StoredGoogleToken, scopes: string[]): boolean {
+  const granted = new Set(token.scope.split(/\s+/).filter(Boolean));
+  return scopes.every((scope) => granted.has(scope));
 }
 
 export function clearGoogleToken(): void {
@@ -209,7 +222,8 @@ export async function ensureGoogleToken(
   opts?: { scope?: string; prompt?: string; interactive?: boolean } | undefined,
 ): Promise<StoredGoogleToken> {
   const existing = readGoogleToken();
-  if (existing) return existing;
+  const requiredScopes = (opts?.scope || GOOGLE_SCOPES).split(/\s+/).filter(Boolean);
+  if (existing && googleTokenHasScopes(existing, requiredScopes)) return existing;
   if (opts?.interactive === false) {
     throw new Error("Not connected to Google");
   }
