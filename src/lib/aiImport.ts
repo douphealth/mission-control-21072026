@@ -8,6 +8,7 @@ import {
 } from "@/lib/importEngine";
 import { parseCredentialsDump } from "@/lib/parseCredentialsDump";
 import { redactSecretText } from "@/lib/secrets";
+import type { PreparedFile } from "@/lib/fileIntake";
 
 function stringifyRow(item: Record<string, any>): Record<string, string> {
   const out: Record<string, string> = {};
@@ -146,5 +147,45 @@ export async function aiImageImport(
     parsedData: { rows: [], sourceFields: [], format: "text" } as any,
     totalItems,
     expressReady: totalItems > 0,
+  };
+}
+
+/**
+ * Universal file import: the AI first identifies what each file actually is
+ * (bill, handwritten to-do list, CSV export, credentials sheet, screenshot,
+ * PDF contract…) and then extracts every importable item from it.
+ */
+export async function aiFileImport(
+  files: PreparedFile[],
+  note?: string,
+): Promise<AutonomousImportResult & { kind: string; summary: string }> {
+  const safeFiles = files.map((f) => ({
+    name: f.name,
+    mimeType: f.mimeType,
+    dataUrl: f.dataUrl,
+    text: f.text ? redactSecretText(f.text) : undefined,
+  }));
+
+  const result = (await aiParseImport({
+    data: {
+      files: safeFiles,
+      fileName: files.map((f) => f.name).join(", ").slice(0, 300),
+      text: note ? redactSecretText(note) : undefined,
+    },
+  })) as {
+    categories: Array<{ target: ImportTarget; items: Record<string, any>[] }>;
+    kind?: string;
+    summary?: string;
+  };
+
+  const categories = buildCategories(result?.categories ?? []);
+  const totalItems = categories.reduce((s: number, c) => s + c.items.length, 0);
+  return {
+    categories,
+    parsedData: { rows: [], sourceFields: [], format: "text" } as any,
+    totalItems,
+    expressReady: totalItems > 0,
+    kind: result?.kind ?? "",
+    summary: result?.summary ?? "",
   };
 }

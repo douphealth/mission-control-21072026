@@ -50,7 +50,8 @@ import {
   type TargetMeta,
   generateTemplate,
 } from "@/lib/importEngine";
-import { aiAutonomousImport, aiImageImport } from "@/lib/aiImport";
+import { aiAutonomousImport, aiImageImport, aiFileImport } from "@/lib/aiImport";
+import { describeUnsupported, isSupportedFile, prepareFile } from "@/lib/fileIntake";
 import { deduplicateItems } from "@/lib/dedup";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -330,40 +331,86 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
     }
   }, []);
 
-  const handleFile = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      e.target.value = "";
-      if (file.type.startsWith("image/")) {
-        addImages([file]);
+  // ── Universal file import (any file type) ────────────────────────────────
+  const handleFiles = useCallback(
+    async (files: File[], note?: string) => {
+      const usable = files.slice(0, 6);
+      if (usable.length === 0) return;
+
+      const unsupported = usable.filter((f) => !isSupportedFile(f));
+      const supported = usable.filter(isSupportedFile);
+      if (supported.length === 0) {
+        toast.error(describeUnsupported(unsupported[0]));
         return;
       }
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        let text = ev.target?.result as string;
-        // For binary files (PDFs, docs), strip non-printable chars so the
-        // AI can still extract whatever text content is readable.
-        if (
-          file.type.startsWith("application/") &&
-          !file.type.includes("json") &&
-          !file.type.includes("xml")
-        ) {
-          text = text
-            .replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, " ")
-            .replace(/\s{3,}/g, "\n")
-            .trim();
-        }
-        if (text.length < 10) {
-          toast.error(`Could not read "${file.name}". Try converting to .txt or .csv.`);
+      if (unsupported.length > 0) {
+        toast(`Skipped ${unsupported.length} file(s) I can't read.`, { icon: "⚠️" });
+      }
+
+      setPhase("analyzing");
+      try {
+        const prepared = await Promise.all(supported.map(prepareFile));
+        const importResult = await aiFileImport(prepared, note);
+
+        if (importResult.totalItems === 0) {
+          toast.error(
+            importResult.kind
+              ? `Recognised ${importResult.kind}, but found nothing importable in it.`
+              : "Could not find any importable data in that file.",
+          );
+          setPhase("input");
           return;
         }
-        setRawText(text);
-        handleAnalyze(text, file.name);
-      };
-      reader.readAsText(file);
+
+        let totalSkipped = 0;
+        for (const cat of importResult.categories) {
+          const unique = await deduplicateItems(cat.target, cat.items);
+          totalSkipped += cat.items.length - unique.length;
+          cat.items = unique;
+        }
+        importResult.categories = importResult.categories.filter((c: any) => c.items.length > 0);
+        importResult.totalItems = importResult.categories.reduce(
+          (s: number, c: any) => s + c.items.length,
+          0,
+        );
+        setSkippedDupes(totalSkipped);
+        setResult(importResult);
+
+        if (importResult.totalItems > 0) {
+          setPhase("review");
+          const catLabels = importResult.categories
+            .map((c: any) => `${c.items.length} ${c.meta.label}`)
+            .join(", ");
+          toast.success(
+            `${importResult.kind || "File"} recognised → ${catLabels}${
+              totalSkipped > 0 ? ` (${totalSkipped} duplicates filtered)` : ""
+            }`,
+          );
+        } else {
+          toast(`Everything in that file already exists.`, { icon: "🔄" });
+          setPhase("input");
+        }
+      } catch (err: any) {
+        console.error("File import error:", err);
+        toast.error(err?.message || "Could not read that file.");
+        setPhase("input");
+      }
     },
-    [handleAnalyze, addImages],
+    [],
+  );
+
+  const handleFile = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      e.target.value = "";
+      if (files.every((f) => f.type.startsWith("image/"))) {
+        addImages(files);
+        return;
+      }
+      void handleFiles(files, rawText.trim() || undefined);
+    },
+    [handleFiles, addImages, rawText],
   );
 
   const handlePaste = useCallback(async () => {
@@ -538,33 +585,12 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
       e.stopPropagation();
 
       const dropped = Array.from(e.dataTransfer.files || []);
-      if (dropped.some((f) => f.type.startsWith("image/"))) {
-        addImages(dropped);
-        return;
-      }
-      const file = dropped[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = (ev) => {
-          let text = ev.target?.result as string;
-          if (
-            file.type.startsWith("application/") &&
-            !file.type.includes("json") &&
-            !file.type.includes("xml")
-          ) {
-            text = text
-              .replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, " ")
-              .replace(/\s{3,}/g, "\n")
-              .trim();
-          }
-          if (text.length < 10) {
-            toast.error(`Could not read "${file.name}". Try converting to .txt or .csv.`);
-            return;
-          }
-          setRawText(text);
-          handleAnalyze(text, file.name);
-        };
-        reader.readAsText(file);
+      if (dropped.length > 0) {
+        if (dropped.every((f) => f.type.startsWith("image/"))) {
+          addImages(dropped);
+          return;
+        }
+        void handleFiles(dropped, rawText.trim() || undefined);
         return;
       }
 
@@ -574,7 +600,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
         handleAnalyze(text);
       }
     },
-    [handleAnalyze, addImages],
+    [handleAnalyze, addImages, handleFiles, rawText],
   );
 
   const stats = useMemo(() => {
@@ -802,10 +828,11 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                       />
                       <div className="text-left">
                         <p className="text-xs font-semibold text-card-foreground group-hover:text-primary transition-colors">
-                          Drop a file or image, or click to upload
+                          Drop any file here, or click to upload
                         </p>
                         <p className="text-[10px] text-muted-foreground">
-                          .csv, .json, .txt, .tsv, .jsonl, .md, .html, .jpg, .png, .heic
+                          PDFs, photos & screenshots, bills, .csv, .json, .txt, .md, .html — read
+                          and filed automatically
                         </p>
                       </div>
                     </div>
@@ -814,6 +841,7 @@ export default function BulkImportModal({ open, onClose }: { open: boolean; onCl
                     ref={fileRef}
                     type="file"
                     accept="*/*"
+                    multiple
                     onChange={handleFile}
                     className="hidden"
                   />
