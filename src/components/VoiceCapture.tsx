@@ -18,6 +18,7 @@ import { smartCapture, type SmartCaptureResult } from "@/lib/voiceAi";
 import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";
 import { buildRecognitionSnapshot, type RecognitionResultLike } from "@/lib/speechTranscript";
 import { encodePcmAsWav } from "@/lib/wavRecorder";
+import { browserRecognitionLanguage, hasUsableVoiceCapture } from "@/lib/voiceCaptureQuality";
 import { toast } from "sonner";
 
 type CaptureType = "tasks" | "notes" | "ideas" | "links";
@@ -286,7 +287,14 @@ export default function VoiceCapture() {
       cleanupRecognition();
       cleanupAudio();
 
-      if (!heardSomething || elapsed < MIN_RECORD_MS || blob.size < 2048) {
+      if (
+        !heardSomething ||
+        !hasUsableVoiceCapture(
+          liveTranscriptRef.current || committedTranscriptRef.current,
+          blob.size,
+          elapsed,
+        )
+      ) {
         setPhase("idle");
         setAudioLevel(0);
         if (reason !== "silence") toast.error("I didn't catch any speech. Try again.");
@@ -369,9 +377,14 @@ export default function VoiceCapture() {
     if (recognition) {
       recognition.continuous = true;
       recognition.interimResults = true;
-      recognition.lang =
-        languageRef.current !== "auto" ? languageRef.current : navigator.language || "en-US";
-      recognition.maxAlternatives = 1;
+      recognition.lang = browserRecognitionLanguage(
+        languageRef.current,
+        navigator.language || "en-US",
+      );
+      // Keep the best three hypotheses available to the browser engine. The
+      // server transcript remains authoritative, but this materially improves
+      // the fallback preview for names, URLs, and uncommon words.
+      recognition.maxAlternatives = 3;
       recognition.onresult = (event) => {
         const snapshot = buildRecognitionSnapshot(
           event.results,

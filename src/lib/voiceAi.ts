@@ -80,7 +80,10 @@ export async function smartCapture(
     }
 
     const s = data.structured;
-    const transcript = (s?.cleanedTranscript || data.transcript).trim();
+    // Keep the provider's raw transcript as the source of truth. Structured
+    // cleanup is useful for titles/tags, but must never silently rewrite words
+    // the user actually spoke.
+    const transcript = data.transcript.trim();
 
     if (!s || !s.type || !VALID_TYPES.has(s.type)) {
       return { ...classifyTranscript(transcript), source: data.source ?? "local" };

@@ -2,6 +2,8 @@
 // Used for (a) accurate multilingual speech-to-text and (b) multimodal file
 // understanding (images, PDFs, documents). Never import from client code.
 
+import { normalizeRequestedLanguage } from "@/lib/voiceCaptureQuality";
+
 const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 
 export const TRANSCRIBE_MODEL = "google/gemini-3.5-transcribe";
@@ -52,31 +54,37 @@ export async function transcribeAudio(
     type: mime.startsWith("audio/") ? mime : `audio/${ext}`,
   });
   form.append("file", audio);
-  if (language && language !== "auto" && /^[a-z]{2}(-[A-Za-z0-9]+)?$/.test(language)) {
-    form.append("language", language);
-  }
+  const requestedLanguage = normalizeRequestedLanguage(language ?? "auto");
+  if (requestedLanguage) form.append("language", requestedLanguage);
   form.append("stream", "true");
 
-  const res = await fetch(`${GATEWAY}/audio/transcriptions`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${key}` },
-    body: form,
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(`${GATEWAY}/audio/transcriptions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}` },
+      body: form,
+      signal: controller.signal,
+    });
 
-  if (!res.ok) {
-    throw new GatewayError(res.status, (await res.text().catch(() => "")).slice(0, 400));
-  }
-
-  let text = "";
-  for await (const event of readSse(res)) {
-    if (event.type === "transcript.text.delta" && typeof event.delta === "string") {
-      text += event.delta;
-    } else if (event.type === "transcript.text.done" && typeof event.text === "string") {
-      text = event.text;
+    if (!res.ok) {
+      throw new GatewayError(res.status, (await res.text().catch(() => "")).slice(0, 400));
     }
+
+    let text = "";
+    for await (const event of readSse(res)) {
+      if (event.type === "transcript.text.delta" && typeof event.delta === "string") {
+        text += event.delta;
+      } else if (event.type === "transcript.text.done" && typeof event.text === "string") {
+        text = event.text;
+      }
+    }
+    const trimmed = text.trim();
+    return trimmed ? { text: trimmed } : null;
+  } finally {
+    clearTimeout(timeout);
   }
-  const trimmed = text.trim();
-  return trimmed ? { text: trimmed } : null;
 }
 
 export type ResponseInputPart =
@@ -189,6 +197,20 @@ async function* readSse(res: Response): AsyncGenerator<SseEvent> {
         yield JSON.parse(payload) as SseEvent;
       } catch {
         // ignore keep-alive / partial frames
+      }
+    }
+  }
+
+  // Some proxies close an SSE stream without a final newline. Do not discard
+  // the final transcript event in that case.
+  const line = buffer.trim();
+  if (line.startsWith("data:")) {
+    const payload = line.slice(5).trim();
+    if (payload && payload !== "[DONE]") {
+      try {
+        yield JSON.parse(payload) as SseEvent;
+      } catch {
+        // Ignore an incomplete final frame.
       }
     }
   }
