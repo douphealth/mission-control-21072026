@@ -12,6 +12,9 @@ import {
   Copy,
   ChevronLeft,
   X,
+  Download,
+  Image,
+  FileText,
 } from "lucide-react";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
@@ -294,6 +297,20 @@ export default function NotesPage() {
                     </button>
                   </div>
                 </div>
+                {selected.attachmentDataUrl && (
+                  <div className="mb-3 rounded-2xl border border-primary/20 bg-primary/5 p-3">
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-card-foreground">
+                        {selected.attachmentMimeType?.startsWith("image/") ? <Image size={15} /> : <FileText size={15} />}
+                        <span className="truncate">{selected.attachmentName || "Attached file"}</span>
+                      </div>
+                      <a href={selected.attachmentDataUrl} download={selected.attachmentName || "attachment"} className="inline-flex items-center gap-1 rounded-lg bg-primary px-2.5 py-1.5 text-[11px] font-semibold text-primary-foreground hover:opacity-90">
+                        <Download size={13} /> Open / save
+                      </a>
+                    </div>
+                    {selected.attachmentMimeType?.startsWith("image/") && <img src={selected.attachmentDataUrl} alt={selected.attachmentName || "Uploaded image"} className="max-h-72 w-full rounded-xl object-contain bg-background/60" />}
+                  </div>
+                )}
                 <textarea
                   value={selected.content}
                   onChange={(e) => updateNote("content", e.target.value)}

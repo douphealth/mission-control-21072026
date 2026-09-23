@@ -100,6 +100,9 @@ export interface Note {
   color: string;
   pinned: boolean;
   tags: string[];
+  attachmentDataUrl?: string;
+  attachmentName?: string;
+  attachmentMimeType?: string;
   createdAt: string;
   updatedAt: string;
 }

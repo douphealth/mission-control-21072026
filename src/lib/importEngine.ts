@@ -510,7 +510,7 @@ export const TARGET_META: Record<ImportTarget, TargetMeta> = {
     label: "Notes",
     emoji: "📝",
     requiredFields: ["title"],
-    optionalFields: ["content", "color", "pinned", "tags"],
+    optionalFields: ["content", "color", "pinned", "tags", "attachmentDataUrl", "attachmentName", "attachmentMimeType"],
     aliases: {
       title: ["name", "subject", "heading", "note_title"],
       content: ["body", "text", "note", "description", "desc", "details", "message"],
@@ -1950,6 +1950,9 @@ export function normalizeItems(
             color: get(row, "color") || "blue",
             pinned: toBool(get(row, "pinned")),
             tags: toArray(get(row, "tags")),
+            attachmentDataUrl: get(row, "attachmentDataUrl"),
+            attachmentName: get(row, "attachmentName"),
+            attachmentMimeType: get(row, "attachmentMimeType"),
             createdAt: now,
             updatedAt: now,
           };

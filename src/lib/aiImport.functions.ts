@@ -171,9 +171,20 @@ function localFallbackImport(data: z.infer<typeof InputSchema>): {
     items.push(item);
     grouped.set(target, items);
   };
-  const sources = [
+  const sources: Array<{ name: string; text: string; dataUrl?: string; mimeType?: string }> = [
     ...(data.text?.trim() ? [{ name: data.fileName ?? "Captured text", text: data.text.trim() }] : []),
-    ...(data.files ?? []).map((file) => ({ name: file.name, text: file.text?.trim() ?? "" })),
+    ...(data.files ?? []).map((file) => ({
+      name: file.name,
+      text: file.text?.trim() ?? "",
+      dataUrl: file.dataUrl,
+      mimeType: file.mimeType,
+    })),
+    ...(data.images ?? []).map((dataUrl, index) => ({
+      name: `${data.fileName || "Image"} ${index + 1}`,
+      text: "",
+      dataUrl,
+      mimeType: "image/jpeg",
+    })),
   ];
   for (const source of sources) {
     const text = source.text.slice(0, 400_000);
@@ -186,7 +197,11 @@ function localFallbackImport(data: z.infer<typeof InputSchema>): {
       add("tasks", { title: text.split(/[.!?\n]/)[0].slice(0, 120) || source.name, status: "todo", priority: "medium", description: text, dueDate: today });
     else if (/\b(idea|consider|maybe|what if|ιδέα)/i.test(lower))
       add("ideas", { title: text.split(/[.!?\n]/)[0].slice(0, 120) || source.name, description: text });
-    else add("notes", { title: source.name, content: text || `Uploaded ${source.name}` });
+    else add("notes", {
+      title: source.name,
+      content: text || `Uploaded ${source.name}. AI/OCR is unavailable; open the attached file to inspect it.`,
+      ...(source.dataUrl ? { attachmentDataUrl: source.dataUrl, attachmentName: source.name, attachmentMimeType: source.mimeType || "application/octet-stream" } : {}),
+    });
   }
   if (sources.length === 0) {
     for (const file of data.files ?? []) add("notes", { title: file.name, content: `Uploaded file (${file.mimeType || "unknown type"})` });
