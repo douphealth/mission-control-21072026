@@ -48,7 +48,7 @@ export function isOfficeFile(file: File): boolean {
 }
 
 export function isSupportedFile(file: File): boolean {
-  return isImageFile(file) || isPdfFile(file) || isTextFile(file) || isOfficeFile(file);
+  return file.size > 0 && file.size <= MAX_FILE_BYTES;
 }
 
 export function describeUnsupported(file: File): string {
@@ -207,5 +207,12 @@ export async function prepareFile(file: File): Promise<PreparedFile> {
     }
     return { name: file.name, mimeType: officeMimeType(file), text: text.slice(0, MAX_EXTRACTED_CHARS) };
   }
-  throw new Error(describeUnsupported(file));
+  if (file.size > MAX_FILE_BYTES) {
+    throw new Error(`"${file.name}" is too large — upload a file under 18 MB.`);
+  }
+  return {
+    name: file.name,
+    mimeType: file.type || "application/octet-stream",
+    dataUrl: await readAsDataUrl(file),
+  };
 }

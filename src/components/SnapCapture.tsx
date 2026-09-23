@@ -413,12 +413,18 @@ export default function SnapCapture() {
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="h-[52px] lg:h-16 px-3 lg:px-4 rounded-2xl bg-card border border-border/60 text-card-foreground shadow-xl flex items-center gap-2 hover:bg-secondary active:scale-95 transition-all duration-150"
-              title="Upload a PDF, Word, Excel, PowerPoint, text file or image"
+              className="group relative h-[54px] lg:h-16 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary via-primary to-accent px-3.5 lg:px-5 text-primary-foreground shadow-[0_12px_28px_-10px_hsl(var(--primary)/0.85)] flex items-center gap-2.5 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_-10px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-[0.98] transition-all duration-200"
+              title="Upload and automatically classify any file up to 18 MB"
               aria-label="Upload a file to classify"
             >
-              <FileUp className="w-5 h-5" />
-              <span className="text-xs font-semibold">Upload</span>
+              <span className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,.32),transparent_42%)] opacity-80" />
+              <span className="relative grid h-8 w-8 place-items-center rounded-xl bg-white/20 ring-1 ring-white/25 group-hover:scale-110 transition-transform">
+                <FileUp className="w-[18px] h-[18px]" />
+              </span>
+              <span className="relative flex flex-col items-start leading-none">
+                <span className="text-xs font-bold tracking-wide">Upload</span>
+                <span className="mt-1 text-[9px] font-medium text-primary-foreground/80">AI classify</span>
+              </span>
             </button>
             <button
               type="button"

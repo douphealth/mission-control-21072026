@@ -204,13 +204,13 @@ function buildParts(data: z.infer<typeof InputSchema>): ResponseInputPart[] {
     } else if (file.dataUrl && mime.startsWith("image/")) {
       parts.push({ type: "input_text", text: `Image file: ${file.name}` });
       parts.push({ type: "input_image", image_url: file.dataUrl });
-    } else if (file.dataUrl && (mime.includes("pdf") || /\.pdf$/i.test(file.name))) {
+    } else if (file.dataUrl) {
       parts.push({
         type: "input_file",
         filename: file.name.replace(/[^\w.\-]+/g, "_"),
         file_data: file.dataUrl.startsWith("data:")
           ? file.dataUrl
-          : `data:application/pdf;base64,${file.dataUrl}`,
+          : `data:${mime || "application/octet-stream"};base64,${file.dataUrl}`,
       });
     }
   }
