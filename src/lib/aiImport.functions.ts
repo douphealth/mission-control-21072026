@@ -159,6 +159,45 @@ function sanitizeCategories(rawCats: unknown): Category[] {
     .filter((c) => c.items.length > 0);
 }
 
+function localFallbackImport(data: z.infer<typeof InputSchema>): {
+  categories: Category[];
+  kind: string;
+  summary: string;
+} {
+  const today = new Date().toISOString().slice(0, 10);
+  const grouped = new Map<Category["target"], Record<string, string>[]>();
+  const add = (target: Category["target"], item: Record<string, string>) => {
+    const items = grouped.get(target) ?? [];
+    items.push(item);
+    grouped.set(target, items);
+  };
+  const sources = [
+    ...(data.text?.trim() ? [{ name: data.fileName ?? "Captured text", text: data.text.trim() }] : []),
+    ...(data.files ?? []).map((file) => ({ name: file.name, text: file.text?.trim() ?? "" })),
+  ];
+  for (const source of sources) {
+    const text = source.text.slice(0, 400_000);
+    const lower = text.toLowerCase();
+    const url = text.match(/https?:\/\/[^\s<>()]+/i)?.[0];
+    if (url) add("links", { title: source.name, url, description: text.slice(0, 1000), tags: "import" });
+    else if (/\b(invoice|bill|receipt|payment|payable|σύνολο|πληρωτέο|λογαριασμ)/i.test(lower))
+      add("payments", { title: source.name, status: "pending", dueDate: today, notes: text.slice(0, 3000) });
+    else if (/\b(todo|task|call|email|send|buy|fix|finish|deadline|remind|πρέπει)/i.test(lower))
+      add("tasks", { title: text.split(/[.!?\n]/)[0].slice(0, 120) || source.name, status: "todo", priority: "medium", description: text, dueDate: today });
+    else if (/\b(idea|consider|maybe|what if|ιδέα)/i.test(lower))
+      add("ideas", { title: text.split(/[.!?\n]/)[0].slice(0, 120) || source.name, description: text });
+    else add("notes", { title: source.name, content: text || `Uploaded ${source.name}` });
+  }
+  if (sources.length === 0) {
+    for (const file of data.files ?? []) add("notes", { title: file.name, content: `Uploaded file (${file.mimeType || "unknown type"})` });
+  }
+  return {
+    categories: [...grouped.entries()].map(([target, items]) => ({ target, items })),
+    kind: sources.length === 1 ? "uploaded document" : "uploaded files",
+    summary: "Imported locally because no AI provider is configured; review the generated item before filing.",
+  };
+}
+
 function isTextLike(mime: string, name: string): boolean {
   const n = name.toLowerCase();
   return (
@@ -260,7 +299,7 @@ export const aiParseImport = createServerFn({ method: "POST" })
     }
 
     // ── Fallback: Anthropic (when configured) ───────────────────────────────
-    if (!ANTHROPIC_KEY) throw new Error("AI is not configured on this project.");
+    if (!ANTHROPIC_KEY) return localFallbackImport(data);
 
     const images = data.images ?? [];
     const inlineImages = [
