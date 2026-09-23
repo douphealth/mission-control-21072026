@@ -13,8 +13,12 @@ function apiKey(): string | undefined {
   return process.env["LOVABLE_API_KEY"];
 }
 
+function geminiKey(): string | undefined {
+  return process.env["GEMINI_API_KEY"];
+}
+
 export function hasGateway(): boolean {
-  return Boolean(apiKey());
+  return Boolean(apiKey() || geminiKey());
 }
 
 export class GatewayError extends Error {
@@ -105,7 +109,7 @@ export async function responsesJson<T = Record<string, unknown>>(opts: {
   signal?: AbortSignal;
 }): Promise<T | null> {
   const key = apiKey();
-  if (!key) return null;
+  if (!key) return geminiResponsesJson<T>(opts);
 
   const res = await fetch(`${GATEWAY}/responses`, {
     method: "POST",
@@ -171,6 +175,37 @@ export async function responsesJson<T = Record<string, unknown>>(opts: {
   } catch {
     return null;
   }
+}
+
+async function geminiResponsesJson<T>(opts: {
+  system: string;
+  parts: ResponseInputPart[];
+  schemaName: string;
+  schema: Record<string, unknown>;
+  effort?: "low" | "medium" | "high";
+  signal?: AbortSignal;
+}): Promise<T | null> {
+  const key = geminiKey();
+  if (!key) return null;
+  const contents: Array<{ text?: string; inlineData?: { mimeType: string; data: string } }> = opts.parts.map((part) => {
+    if (part.type === "input_text") return { text: part.text };
+    const dataUrl = part.type === "input_image" ? part.image_url : part.file_data;
+    const mimeType = dataUrl.match(/^data:([^;,]+)/i)?.[1] || (part.type === "input_image" ? "image/jpeg" : "application/octet-stream");
+    const comma = dataUrl.indexOf(",");
+    return { inlineData: { mimeType, data: comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl } };
+  });
+  contents.unshift({ text: opts.system });
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    signal: opts.signal,
+    body: JSON.stringify({ contents: [{ role: "user", parts: contents }], generationConfig: { responseMimeType: "application/json" } }),
+  });
+  if (!res.ok) return null;
+  const json = (await res.json()) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+  const raw = json.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim();
+  if (!raw) return null;
+  try { return JSON.parse(raw.replace(/^```json\s*/i, "").replace(/\s*```$/i, "")) as T; } catch { return null; }
 }
 
 type SseEvent = Record<string, unknown> & { type?: string };
