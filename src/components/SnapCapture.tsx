@@ -224,7 +224,7 @@ export default function SnapCapture() {
       if (files.length === 0) return;
 
       const imageFiles = files.filter(isImageFile).slice(0, 4);
-      if (imageFiles.length > 0) {
+      if (imageFiles.length === files.length) {
         await processImages(imageFiles);
         return;
       }
@@ -409,9 +409,21 @@ export default function SnapCapture() {
             </>
           )}
 
-          <button
-            onMouseDown={handleFABDown}
-            onMouseUp={handleFABUp}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="h-[52px] lg:h-16 px-3 lg:px-4 rounded-2xl bg-card border border-border/60 text-card-foreground shadow-xl flex items-center gap-2 hover:bg-secondary active:scale-95 transition-all duration-150"
+              title="Upload a PDF, Word, Excel, PowerPoint, text file or image"
+              aria-label="Upload a file to classify"
+            >
+              <FileUp className="w-5 h-5" />
+              <span className="text-xs font-semibold">Upload</span>
+            </button>
+            <button
+              type="button"
+              onMouseDown={handleFABDown}
+              onMouseUp={handleFABUp}
             onMouseLeave={() => {
               if (longPressTimer.current) clearTimeout(longPressTimer.current);
             }}
@@ -428,8 +440,9 @@ export default function SnapCapture() {
             title="Tap: camera · Long-press / right-click: more options"
             aria-label="Capture a photo or file to import"
           >
-            <Camera className="w-6 h-6 lg:w-7 lg:h-7" />
-          </button>
+              <Camera className="w-6 h-6 lg:w-7 lg:h-7" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -574,7 +587,7 @@ export default function SnapCapture() {
       <input
         ref={fileRef}
         type="file"
-        accept="*/*"
+        accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv,.tsv,.json,.xml,.yaml,.yml,.log,.ics,.vcf,image/*"
         multiple
         className="hidden"
         onChange={handleFiles}
