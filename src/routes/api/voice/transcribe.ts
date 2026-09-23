@@ -145,7 +145,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
             });
             if (structured) {
               return json({
-                transcript: (structured.cleanedTranscript as string) || transcript,
+                transcript,
                 source,
                 structured,
               });
@@ -168,7 +168,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
 
           if (structured) {
             return json({
-              transcript: (structured.cleanedTranscript as string) || transcript,
+              transcript,
               source,
               structured,
             });
