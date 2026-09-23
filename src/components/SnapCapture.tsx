@@ -15,10 +15,15 @@ import {
   Image as ImageIcon,
   Clipboard,
   FileUp,
-  Paperclip,
 } from "lucide-react";
 import { toast } from "sonner";
-import { aiImageImport, aiAutonomousImport } from "@/lib/aiImport";
+import { aiImageImport, aiAutonomousImport, aiFileImport } from "@/lib/aiImport";
+import {
+  describeUnsupported,
+  isImageFile,
+  isSupportedFile,
+  prepareFile,
+} from "@/lib/fileIntake";
 import { deduplicateItems } from "@/lib/dedup";
 import { useBulkAddItems } from "@/hooks/useTableData";
 import { TARGET_META, type ImportTarget } from "@/lib/importEngine";
@@ -218,63 +223,28 @@ export default function SnapCapture() {
     async (files: File[]) => {
       if (files.length === 0) return;
 
-      const imageFiles = files.filter((f) => f.type.startsWith("image/"));
-      const textFiles = files.filter((f) => isTextFile(f));
-      const otherFiles = files.filter((f) => !f.type.startsWith("image/") && !isTextFile(f));
-
-      // Images go through the vision pipeline
+      const imageFiles = files.filter(isImageFile).slice(0, 4);
       if (imageFiles.length > 0) {
-        processImages(imageFiles);
+        await processImages(imageFiles);
         return;
       }
 
-      if (textFiles.length > 0) {
-        setPhase("processing");
-        setShowActions(false);
-        try {
-          const file = textFiles[0];
-          const text = await readFileAsText(file);
-          if (!text.trim()) {
-            toast.error("That file appears to be empty.");
-            reset();
-            return;
-          }
-          const importResult = await aiAutonomousImport(text, file.name);
-          await processImportResult(importResult);
-        } catch (err: any) {
-          console.error("File import error:", err);
-          toast.error(err?.message || "Could not process that file.");
-          reset();
-        }
+      const unsupported = files.find((file) => !isSupportedFile(file));
+      if (unsupported) {
+        toast.error(describeUnsupported(unsupported));
         return;
       }
 
-      if (otherFiles.length > 0) {
-        // For binary files (PDFs, docs, etc.) try to read as text — many
-        // formats have enough plain-text content for the AI to work with.
-        setPhase("processing");
-        setShowActions(false);
-        try {
-          const file = otherFiles[0];
-          const text = await readFileAsText(file);
-          const cleanText = text
-            .replace(/[^\x20-\x7E\u00A0-\uFFFF\n\r\t]/g, " ")
-            .replace(/\s{3,}/g, "\n")
-            .trim();
-          if (cleanText.length < 20) {
-            toast.error(
-              `Could not read "${file.name}". Try converting to .txt, .csv, or an image.`,
-            );
-            reset();
-            return;
-          }
-          const importResult = await aiAutonomousImport(cleanText, file.name);
-          await processImportResult(importResult);
-        } catch (err: any) {
-          console.error("Binary file import error:", err);
-          toast.error(`Could not process that file type. Try .txt, .csv, or an image.`);
-          reset();
-        }
+      setPhase("processing");
+      setShowActions(false);
+      try {
+        const prepared = await Promise.all(files.slice(0, 4).map(prepareFile));
+        const importResult = await aiFileImport(prepared);
+        await processImportResult(importResult);
+      } catch (err: any) {
+        console.error("File import error:", err);
+        toast.error(err?.message || "Could not process that file.");
+        reset();
       }
     },
     [processImages, processImportResult, reset],
