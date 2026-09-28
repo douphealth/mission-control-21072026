@@ -44,136 +44,16 @@ import { parseCapture, toRecord } from "@/lib/quickCapture";
 import { todayISO } from "@/lib/overdue";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
+import { MISSION_NAV } from "@/lib/navigation";
 
-const sections = [
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    icon: Home,
-    emoji: "🏠",
-    keywords: ["home", "overview", "main"],
-  },
-  {
-    id: "tasks",
-    label: "Tasks",
-    icon: CheckSquare,
-    emoji: "✅",
-    keywords: ["todo", "checklist", "work"],
-  },
-  {
-    id: "calendar",
-    label: "Calendar",
-    icon: Calendar,
-    emoji: "📅",
-    keywords: ["date", "schedule", "events"],
-  },
-  {
-    id: "notes",
-    label: "Notes",
-    icon: FileText,
-    emoji: "📝",
-    keywords: ["write", "document", "memo"],
-  },
-  {
-    id: "habits",
-    label: "Habit Tracker",
-    icon: Flame,
-    emoji: "🔥",
-    keywords: ["streak", "daily", "routine"],
-  },
-  {
-    id: "focus",
-    label: "Focus Timer",
-    icon: Timer,
-    emoji: "🍅",
-    keywords: ["pomodoro", "timer", "concentrate"],
-  },
-  {
-    id: "websites",
-    label: "My Websites",
-    icon: Globe,
-    emoji: "🌐",
-    keywords: ["sites", "domains", "hosting"],
-  },
-  {
-    id: "github",
-    label: "GitHub Projects",
-    icon: Github,
-    emoji: "🐙",
-    keywords: ["repos", "code", "git"],
-  },
-  {
-    id: "builds",
-    label: "Build Projects",
-    icon: Hammer,
-    emoji: "🛠️",
-    keywords: ["deploy", "bolt", "lovable"],
-  },
-  {
-    id: "links",
-    label: "Links Hub",
-    icon: Link2,
-    emoji: "🔗",
-    keywords: ["bookmarks", "urls", "resources"],
-  },
-  {
-    id: "projects",
-    label: "Kanban Board",
-    icon: BarChart3,
-    emoji: "📊",
-    keywords: ["board", "kanban", "columns"],
-  },
-  {
-    id: "payments",
-    label: "Payments",
-    icon: DollarSign,
-    emoji: "💰",
-    keywords: ["money", "invoice", "billing"],
-  },
-  {
-    id: "ideas",
-    label: "Ideas Board",
-    icon: Lightbulb,
-    emoji: "💡",
-    keywords: ["brainstorm", "concepts", "innovation"],
-  },
-  {
-    id: "credentials",
-    label: "Credential Vault",
-    icon: KeyRound,
-    emoji: "🔐",
-    keywords: ["passwords", "secrets", "keys"],
-  },
-  {
-    id: "seo",
-    label: "SEO Center",
-    icon: TrendingUp,
-    emoji: "🔍",
-    keywords: ["search", "optimization", "ranking"],
-  },
-  {
-    id: "cloudflare",
-    label: "Cloudflare",
-    icon: Globe,
-    emoji: "☁️",
-    keywords: ["cdn", "dns", "protection"],
-  },
-  {
-    id: "vercel",
-    label: "Vercel",
-    icon: Globe,
-    emoji: "🚀",
-    keywords: ["deploy", "hosting", "nextjs"],
-  },
-  { id: "openclaw", label: "OpenClaw", icon: Github, emoji: "🐙", keywords: ["tool", "platform"] },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: Settings,
-    emoji: "⚙️",
-    keywords: ["preferences", "config", "account"],
-  },
-];
+const sections = MISSION_NAV.map((item) => ({
+  id: item.id,
+  label: item.label,
+  icon: item.icon,
+  emoji: item.emoji,
+  keywords: [...item.keywords, item.description],
+  rank: item.rank,
+}));
 
 interface CommandItem {
   id: string;
