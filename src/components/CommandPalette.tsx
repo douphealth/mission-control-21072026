@@ -233,7 +233,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
         id: `nav-${s.id}`,
         type: "navigate",
         label: s.label,
-        sub: "Go to section",
+        sub: s.keywords[s.keywords.length - 1] || "Go to section",
         action: () => {
           setActiveSection(s.id);
           onClose();
@@ -241,7 +241,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
         emoji: s.emoji,
         icon: ArrowRight,
         keywords: s.keywords,
-        priority: 50,
+        priority: s.rank,
       });
     });
 
