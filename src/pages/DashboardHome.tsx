@@ -19,6 +19,7 @@ import {
   Github,
   Search,
   ArrowUpRight,
+  AppWindow,
 } from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
@@ -135,6 +136,7 @@ export default function DashboardHome() {
           { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft },
           { id: "websites", label: "Websites", detail: "Growth", icon: Globe },
           { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search },
+          { id: "apps-funnels", label: "Apps", detail: "Funnels", icon: AppWindow },
           { id: "github", label: "GitHub", detail: "Build", icon: Github },
         ].map((item) => (
           <button
