@@ -26,6 +26,7 @@ import {
   AtSign,
   Users,
   Home,
+  AppWindow,
 } from "lucide-react";
 import { useState } from "react";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
@@ -41,6 +42,7 @@ const moreItems = [
   { id: "reminders", label: "Reminders", icon: Bell },
   { id: "control-center", label: "Captures", icon: Radar },
   { id: "websites", label: "Sites", icon: Globe },
+  { id: "apps-funnels", label: "Apps", icon: AppWindow },
   { id: "seo", label: "SEO", icon: Search },
   { id: "payments", label: "Finance", icon: DollarSign },
   { id: "industry", label: "Trends", icon: Newspaper },
