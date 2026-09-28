@@ -36,6 +36,7 @@ import { toast } from "sonner";
 import { GITHUB_REPO_CATALOG, GITHUB_REPO_CATALOG_COUNT } from "@/lib/repoCatalog";
 import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
+import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
 
 const langColors: Record<string, string> = {
   TypeScript: "bg-blue-500",
@@ -231,8 +232,9 @@ export default function GitHubPage() {
     return displayRepos
       .filter((r) => {
         const meta = REPO_PORTFOLIO_META[r.name];
+        const master = REPO_MASTER_LINKS[r.name];
         const relationships = REPO_RELATIONSHIPS[r.name] || [];
-        const state = meta?.portfolioState || "REPO ONLY / NOT PROVEN LIVE";
+        const state = meta?.portfolioState || master?.s || "REPO ONLY / NOT PROVEN LIVE";
         const portfolioMatch =
           portfolioFilter === "all" ||
           (portfolioFilter === "live" && (meta?.directWebsiteApp || state.includes("LIVE APP"))) ||
@@ -249,6 +251,15 @@ export default function GitHubPage() {
           meta?.category,
           meta?.nextAction,
           meta?.evidence,
+          master?.s,
+          master?.h,
+          master?.m,
+          master?.a,
+          ...(master?.u || []),
+          ...(master?.p || []),
+          ...(master?.c || []),
+          ...(master?.l || []),
+          ...(master?.z || []),
           ...(meta?.parentWebsites || []),
           ...(meta?.productionUrls || []),
           ...(meta?.pagesUrls || []),
@@ -289,13 +300,27 @@ export default function GitHubPage() {
   }, [displayRepos, search, priorityFilter, portfolioFilter]);
 
   const portfolioStats = useMemo(() => {
-    const rows = displayRepos.map((repo) => REPO_PORTFOLIO_META[repo.name]);
+    const states = displayRepos.map((repo) => {
+      const meta = REPO_PORTFOLIO_META[repo.name];
+      const master = REPO_MASTER_LINKS[repo.name];
+      return {
+        direct: !!meta?.directWebsiteApp,
+        state: meta?.portfolioState || master?.s || "REPO ONLY / NOT PROVEN LIVE",
+      };
+    });
     return {
       total: displayRepos.length,
-      live: rows.filter((meta) => meta?.directWebsiteApp || meta?.portfolioState.includes("LIVE APP")).length,
-      core: rows.filter((meta) => meta?.portfolioState.includes("WEBSITE CORE")).length,
-      origin: rows.filter((meta) => meta?.portfolioState.includes("ORIGIN CANDIDATE")).length,
-      repoOnly: rows.filter((meta) => !meta || meta.portfolioState.includes("REPO ONLY")).length,
+      live: states.filter(({ direct, state }) =>
+        direct ||
+        state.includes("LIVE APP") ||
+        state.toLowerCase().includes("deployed / domain linked") ||
+        state.toLowerCase().includes("public live"),
+      ).length,
+      core: states.filter(({ state }) => state.includes("WEBSITE CORE")).length,
+      origin: states.filter(({ state }) =>
+        state.includes("ORIGIN CANDIDATE") || state.toLowerCase().includes("needs origin proof"),
+      ).length,
+      repoOnly: states.filter(({ state }) => state.toLowerCase().includes("repo only")).length,
     };
   }, [displayRepos]);
 
@@ -532,9 +557,10 @@ export default function GitHubPage() {
             </div>
             {(() => {
               const meta = REPO_PORTFOLIO_META[repo.name];
+              const master = REPO_MASTER_LINKS[repo.name];
               const relationships = REPO_RELATIONSHIPS[repo.name] || [];
               const primaryRelationship = relationships[0];
-              const state = meta?.portfolioState || "REPO ONLY / NOT PROVEN LIVE";
+              const state = meta?.portfolioState || master?.s || "REPO ONLY / NOT PROVEN LIVE";
               const stateTone = state.includes("DIRECT WEBSITE APP") || state.includes("STANDALONE LIVE APP")
                 ? "border-success/20 bg-success/8 text-success"
                 : state.includes("ORIGIN CANDIDATE")
@@ -543,6 +569,10 @@ export default function GitHubPage() {
                     ? "border-primary/20 bg-primary/8 text-primary"
                     : "border-border/35 bg-secondary/55 text-muted-foreground";
               const actionLinks = Array.from(new Set([
+                ...(master?.u || []),
+                ...(master?.p || []),
+                ...(master?.c || []),
+                ...(master?.l || []),
                 ...(meta?.productionUrls || []),
                 ...(meta?.pagesUrls || []),
                 ...(meta?.githubPagesUrls || []),
@@ -566,16 +596,21 @@ export default function GitHubPage() {
                         {meta.portfolioPriority}
                       </span>
                     )}
-                    {meta?.category && (
+                    {(meta?.category || master?.h) && (
                       <span className="max-w-full truncate rounded-full bg-secondary/55 px-2 py-1 text-[9px] font-semibold text-muted-foreground">
-                        {meta.category}
+                        {meta?.category || master?.h}
+                      </span>
+                    )}
+                    {master?.m && (
+                      <span className={`rounded-full px-2 py-1 text-[9px] font-bold ${master.m === "Verified" ? "bg-success/10 text-success" : master.m.includes("Strong") ? "bg-warning/10 text-warning" : "bg-secondary text-muted-foreground"}`}>
+                        {master.m}
                       </span>
                     )}
                   </div>
 
-                  {meta?.parentWebsites?.length ? (
+                  {(meta?.parentWebsites?.length || master?.z?.length) ? (
                     <div className="flex flex-wrap gap-1.5">
-                      {meta.parentWebsites.map((website) => (
+                      {(meta?.parentWebsites?.length ? meta.parentWebsites : master?.z || []).map((website) => (
                         <span key={website} className="inline-flex items-center gap-1 rounded-lg bg-primary/6 px-2 py-1 text-[10px] font-semibold text-primary">
                           <Globe2 size={10} /> {website}
                         </span>
@@ -609,6 +644,23 @@ export default function GitHubPage() {
                     </div>
                   )}
 
+                  {!primaryRelationship && master && (master.h || master.z.length > 0) && (
+                    <div className="rounded-2xl border border-border/35 bg-secondary/20 p-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                          <ServerCog size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs font-bold text-foreground">{master.h || "Repository / deployment signal"}</div>
+                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[9.5px] text-muted-foreground">
+                            {master.z.map((zone) => <span key={zone}>Zone: {zone}</span>)}
+                            {master.m && <span>Evidence: {master.m}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {actionLinks.length > 0 && (
                     <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
                       {actionLinks.slice(0, compactView ? 4 : 8).map((url) => {
@@ -634,13 +686,13 @@ export default function GitHubPage() {
                     </div>
                   )}
 
-                  {(meta?.nextAction || primaryRelationship?.nextAction) && (
+                  {(meta?.nextAction || primaryRelationship?.nextAction || master?.a) && (
                     <div className="rounded-xl border border-warning/15 bg-warning/5 px-3 py-2.5">
                       <div className="mb-1 flex items-center gap-1 text-[8.5px] font-extrabold uppercase tracking-[0.13em] text-warning">
                         <ShieldCheck size={10} /> Next action
                       </div>
                       <p className={compactView ? "line-clamp-2 text-[10.5px] leading-relaxed text-muted-foreground" : "text-[11px] leading-relaxed text-muted-foreground"}>
-                        {primaryRelationship?.nextAction || meta?.nextAction}
+                        {primaryRelationship?.nextAction || meta?.nextAction || master?.a}
                       </p>
                     </div>
                   )}
