@@ -88,7 +88,9 @@ export default function GitHubPage() {
 
   useEffect(() => {
     if (catalogSeeded.current) return;
-    const existing = new Set(repos.map((r) => r.url.toLowerCase() || r.name.toLowerCase()));
+    const existing = new Set(
+      repos.flatMap((r) => [r.url?.toLowerCase(), r.name?.toLowerCase()].filter(Boolean) as string[]),
+    );
     const missing = GITHUB_REPO_CATALOG.filter(
       (r) => !existing.has(r.url.toLowerCase()) && !existing.has(r.name.toLowerCase()),
     );
