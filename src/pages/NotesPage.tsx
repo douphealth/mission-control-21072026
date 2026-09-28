@@ -21,6 +21,7 @@ import BulkActionBar from "@/components/BulkActionBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
+import type { Note } from "@/lib/db";
 
 const noteColors = ["blue", "amber", "green", "rose", "purple", "teal"];
 const colorMap: Record<string, { border: string; dot: string }> = {
@@ -78,7 +79,7 @@ export default function NotesPage() {
     if (!selectedId || !draftDirty.current) return;
     const id = selectedId;
     const timer = window.setTimeout(() => {
-      void updateItem("notes", id, {
+      void updateItem<Note>("notes", id, {
         title: titleDraft,
         content: contentDraft,
         updatedAt: new Date().toISOString().split("T")[0],
@@ -91,7 +92,7 @@ export default function NotesPage() {
   const updateNoteField = useCallback(
     (field: string, value: string | boolean) => {
       if (!selectedId) return;
-      void updateItem("notes", selectedId, {
+      void updateItem<Note>("notes", selectedId, {
         [field]: value,
         updatedAt: new Date().toISOString().split("T")[0],
       });
@@ -101,7 +102,7 @@ export default function NotesPage() {
 
   const addNote = async () => {
     const now = new Date().toISOString().split("T")[0];
-    const id = await addItem("notes", {
+    const id = await addItem<Note>("notes", {
       title: "Untitled Note",
       content: "",
       color: "blue",
@@ -119,7 +120,7 @@ export default function NotesPage() {
   const togglePin = (id: string) => {
     const note = notes.find((n) => n.id === id);
     if (!note) return;
-    void updateItem("notes", id, { pinned: !note.pinned });
+    void updateItem<Note>("notes", id, { pinned: !note.pinned });
   };
 
   const cd = useConfirmDialog();
