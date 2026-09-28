@@ -20,7 +20,8 @@ import { buildRecognitionSnapshot, type RecognitionResultLike } from "@/lib/spee
 import { encodePcmAsWav } from "@/lib/wavRecorder";
 import { browserRecognitionLanguage, hasUsableVoiceCapture } from "@/lib/voiceCaptureQuality";
 import { toast } from "sonner";
-import DraggableFloatingDock from "@/components/DraggableFloatingDock";
+import { VOICE_CAPTURE_OPEN_EVENT } from "@/lib/captureEvents";
+import { todayISO } from "@/lib/overdue";
 
 type CaptureType = "tasks" | "notes" | "ideas" | "links";
 
@@ -197,17 +198,7 @@ export default function VoiceCapture() {
     setSupported(ok);
   }, []);
 
-  // Global hotkey: Cmd/Ctrl + Shift + V
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "v") {
-        e.preventDefault();
-        setOpen(true);
-      }
-    };
-    document.addEventListener("keydown", h);
-    return () => document.removeEventListener("keydown", h);
-  }, []);
+
 
   const cleanupRecognition = useCallback(() => {
     const recognition = recognitionRef.current;
@@ -344,6 +335,9 @@ export default function VoiceCapture() {
     committedTranscriptRef.current = "";
     liveTranscriptRef.current = "";
     lastFinalResultIndexRef.current = 0;
+    stopReasonRef.current = null;
+    pcmChunksRef.current = [];
+    hasSpokenRef.current = false;
 
     let stream: MediaStream;
     try {
@@ -491,11 +485,9 @@ export default function VoiceCapture() {
       console.warn("audio meter init failed", err);
     }
 
-    pcmChunksRef.current = [];
     recordingRef.current = true;
     startedAtRef.current = Date.now();
     lastVoiceAtRef.current = Date.now();
-    hasSpokenRef.current = false;
     try {
       try {
         recognition?.start();
@@ -512,6 +504,26 @@ export default function VoiceCapture() {
       setPhase("error");
     }
   }, [cleanupAudio, cleanupRecognition, stopRecording]);
+
+  // Open from the unified Capture Hub or keyboard shortcut.
+  useEffect(() => {
+    const openVoice = () => {
+      setOpen(true);
+      if (supported && phase === "idle") void startRecording();
+    };
+    const h = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        openVoice();
+      }
+    };
+    document.addEventListener("keydown", h);
+    window.addEventListener(VOICE_CAPTURE_OPEN_EVENT, openVoice);
+    return () => {
+      document.removeEventListener("keydown", h);
+      window.removeEventListener(VOICE_CAPTURE_OPEN_EVENT, openVoice);
+    };
+  }, [supported, phase, startRecording]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -545,7 +557,7 @@ export default function VoiceCapture() {
     }
     setSaving(true);
     try {
-      const now = new Date().toISOString().split("T")[0];
+      const now = todayISO();
       const title = aiResult?.title || transcript.slice(0, 80);
       const text = transcript;
 
@@ -596,9 +608,15 @@ export default function VoiceCapture() {
         };
         await addItem<Idea>("ideas", ideaPayload);
       } else if (type === "links") {
+        const url = aiResult?.url?.trim();
+        if (!url || !/^https?:\/\/[^\s]+$/i.test(url)) {
+          toast.error("I couldn't detect a valid URL. Edit the transcript or save it as a note.");
+          setSaving(false);
+          return;
+        }
         const linkPayload: Omit<LinkItem, "id"> = {
           title,
-          url: aiResult?.url || "https://",
+          url,
           category: "Voice",
           status: "active",
           description: text,
@@ -638,26 +656,7 @@ export default function VoiceCapture() {
 
   return (
     <>
-      <DraggableFloatingDock
-        storageKey="mc-floating-voice-position-v2"
-        defaultClassName="fixed z-40 bottom-[calc(env(safe-area-inset-bottom)+92px)] right-3 lg:bottom-8 lg:right-6"
-        label="Move voice capture control"
-      >
-        <button
-          onClick={() => {
-            setOpen(true);
-            if (supported && phase === "idle") void startRecording();
-          }}
-          className="group relative grid h-11 w-11 place-items-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.8)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-95"
-          title="Voice capture (⌘⇧V)"
-          aria-label="Voice capture"
-        >
-          <Mic size={19} className="transition-transform group-hover:scale-110" />
-          {isRecording && (
-            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-background" />
-          )}
-        </button>
-      </DraggableFloatingDock>
+
 
       <>
         {open && (
@@ -728,10 +727,8 @@ export default function VoiceCapture() {
                   <div className="flex items-center gap-1 h-8">
                     {[...Array(24)].map((_, i) => {
                       const distance = Math.abs(i - 12) / 12;
-                      const h = Math.max(
-                        4,
-                        audioLevel * 40 * (1 - distance * 0.5) * (0.6 + Math.random() * 0.4),
-                      );
+                      const pulse = 0.72 + ((i * 37) % 11) / 40;
+                      const h = Math.max(4, audioLevel * 40 * (1 - distance * 0.5) * pulse);
                       return (
                         <div
                           key={i}

@@ -48,12 +48,17 @@ export function isOfficeFile(file: File): boolean {
 }
 
 export function isSupportedFile(file: File): boolean {
-  return file.size > 0 && file.size <= MAX_FILE_BYTES;
+  if (file.size <= 0 || file.size > MAX_FILE_BYTES) return false;
+  return isImageFile(file) || isPdfFile(file) || isTextFile(file) || isOfficeFile(file);
 }
 
 export function describeUnsupported(file: File): string {
-  const ext = file.name.split(".").pop()?.toUpperCase() || "this";
-  return `${ext} files can't be read directly. Upload a PDF, DOCX, XLSX, PPTX, CSV, text file or image instead.`;
+  if (file.size <= 0) return `"${file.name}" appears to be empty.`;
+  if (file.size > MAX_FILE_BYTES) {
+    return `"${file.name}" is too large — upload a file under 18 MB or split it first.`;
+  }
+  const ext = file.name.split(".").pop()?.toUpperCase() || "This";
+  return `${ext} isn't a supported import format. Use PDF, DOCX, XLSX, PPTX, CSV, text, or an image.`;
 }
 
 function readAsDataUrl(file: File): Promise<string> {
@@ -207,12 +212,5 @@ export async function prepareFile(file: File): Promise<PreparedFile> {
     }
     return { name: file.name, mimeType: officeMimeType(file), text: text.slice(0, MAX_EXTRACTED_CHARS) };
   }
-  if (file.size > MAX_FILE_BYTES) {
-    throw new Error(`"${file.name}" is too large — upload a file under 18 MB.`);
-  }
-  return {
-    name: file.name,
-    mimeType: file.type || "application/octet-stream",
-    dataUrl: await readAsDataUrl(file),
-  };
+  throw new Error(describeUnsupported(file));
 }

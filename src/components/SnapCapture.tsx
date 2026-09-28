@@ -17,6 +17,7 @@ import {
   Clipboard,
   FileUp,
   MoreHorizontal,
+  Mic,
 } from "lucide-react";
 import { toast } from "sonner";
 import { aiImageImport, aiAutonomousImport, aiFileImport } from "@/lib/aiImport";
@@ -25,10 +26,13 @@ import {
   isImageFile,
   isSupportedFile,
   prepareFile,
+  compressImageFile,
 } from "@/lib/fileIntake";
 import { deduplicateItems } from "@/lib/dedup";
 import { useBulkAddItems } from "@/hooks/useTableData";
 import { TARGET_META, type ImportTarget } from "@/lib/importEngine";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { VOICE_CAPTURE_OPEN_EVENT } from "@/lib/captureEvents";
 
 type SnapPhase = "idle" | "processing" | "review" | "saving" | "done";
 
@@ -43,68 +47,6 @@ interface SnapResult {
   skippedDupes: number;
 }
 
-function compressImage(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read image"));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error("Invalid image"));
-      img.onload = () => {
-        const MAX = 1800;
-        const scale = Math.min(1, MAX / Math.max(img.width, img.height));
-        const w = Math.round(img.width * scale);
-        const h = Math.round(img.height * scale);
-        const canvas = document.createElement("canvas");
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          resolve(reader.result as string);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL("image/jpeg", 0.85));
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-const TEXT_EXTENSIONS = [
-  ".txt",
-  ".csv",
-  ".tsv",
-  ".json",
-  ".jsonl",
-  ".md",
-  ".markdown",
-  ".html",
-  ".htm",
-  ".xml",
-  ".yaml",
-  ".yml",
-  ".log",
-  ".env",
-];
-
-function isTextFile(file: File): boolean {
-  if (file.type.startsWith("text/")) return true;
-  if (file.type === "application/json" || file.type === "application/xml") return true;
-  const name = file.name.toLowerCase();
-  return TEXT_EXTENSIONS.some((ext) => name.endsWith(ext));
-}
-
-function readFileAsText(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error("Could not read file"));
-    reader.onload = () => resolve(reader.result as string);
-    reader.readAsText(file);
-  });
-}
-
 export default function SnapCapture() {
   const [phase, setPhase] = useState<SnapPhase>("idle");
   const [result, setResult] = useState<SnapResult | null>(null);
@@ -115,7 +57,7 @@ export default function SnapCapture() {
   const galleryRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const longPressFired = useRef(false);
+  const busyRef = useRef(false);
 
   const bulkAddItems = useBulkAddItems();
 
@@ -124,6 +66,7 @@ export default function SnapCapture() {
     setResult(null);
     setPreview(null);
     setShowActions(false);
+    busyRef.current = false;
   }, []);
 
   const executeImport = useCallback(
@@ -208,7 +151,7 @@ export default function SnapCapture() {
       setShowActions(false);
 
       try {
-        const encoded = await Promise.all(imageFiles.map(compressImage));
+        const encoded = await Promise.all(imageFiles.map((file) => compressImageFile(file, 1800, 0.88)));
         setPreview(encoded[0]);
         const importResult = await aiImageImport(encoded);
         await processImportResult(importResult);
@@ -224,23 +167,35 @@ export default function SnapCapture() {
   const processFiles = useCallback(
     async (files: File[]) => {
       if (files.length === 0) return;
-
-      const imageFiles = files.filter(isImageFile).slice(0, 4);
-      if (imageFiles.length === files.length) {
-        await processImages(imageFiles);
+      if (busyRef.current) {
+        toast.info("Capture is already processing. Finish it before adding another.");
         return;
       }
 
-      const unsupported = files.find((file) => !isSupportedFile(file));
+      const selected = files.slice(0, 4);
+      if (files.length > 4) {
+        toast.info("Using the first 4 files", {
+          description: `${files.length - 4} additional file(s) were not included in this capture.`,
+        });
+      }
+
+      const unsupported = selected.find((file) => !isSupportedFile(file));
       if (unsupported) {
         toast.error(describeUnsupported(unsupported));
+        return;
+      }
+
+      busyRef.current = true;
+      const imageFiles = selected.filter(isImageFile);
+      if (imageFiles.length === selected.length) {
+        await processImages(imageFiles);
         return;
       }
 
       setPhase("processing");
       setShowActions(false);
       try {
-        const prepared = await Promise.all(files.slice(0, 4).map(prepareFile));
+        const prepared = await Promise.all(selected.map(prepareFile));
         const importResult = await aiFileImport(prepared);
         await processImportResult(importResult);
       } catch (err: any) {
@@ -261,60 +216,87 @@ export default function SnapCapture() {
     [processFiles],
   );
 
-  const handleFABDown = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if ("button" in e && e.button !== 0) return;
-    longPressFired.current = false;
-    longPressTimer.current = setTimeout(() => {
-      longPressFired.current = true;
-      longPressTimer.current = null;
-      setShowActions(true);
-    }, 400);
+  const cancelPressTimer = useCallback(() => {
+    if (!longPressTimer.current) return;
+    clearTimeout(longPressTimer.current);
+    longPressTimer.current = null;
   }, []);
 
-  const handleFABUp = useCallback((e: React.MouseEvent | React.TouchEvent) => {
-    if ("button" in e && e.button !== 0) return;
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
+  const handleFABDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    cancelPressTimer();
+    longPressTimer.current = setTimeout(() => {
       longPressTimer.current = null;
-      cameraRef.current?.click();
-    }
+      setShowActions(true);
+      if (navigator.vibrate) navigator.vibrate(12);
+    }, 420);
+  }, [cancelPressTimer]);
+
+  const handleFABUp = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
+    if (e.button !== 0) return;
+    if (!longPressTimer.current) return;
+    cancelPressTimer();
+    cameraRef.current?.click();
+  }, [cancelPressTimer]);
+
+  useEffect(() => () => cancelPressTimer(), [cancelPressTimer]);
+
+  const openVoiceCapture = useCallback(() => {
+    setShowActions(false);
+    window.dispatchEvent(new Event(VOICE_CAPTURE_OPEN_EVENT));
   }, []);
 
   const pasteFromClipboard = useCallback(async () => {
     setShowActions(false);
-    try {
-      const clipItems = await navigator.clipboard.read();
-      for (const item of clipItems) {
-        for (const type of item.types) {
-          if (type.startsWith("image/")) {
+    if (busyRef.current) {
+      toast.info("Capture is already processing.");
+      return;
+    }
+    if (!navigator.clipboard) {
+      toast.error("Clipboard API is unavailable in this browser. Use Ctrl/Cmd+V instead.");
+      return;
+    }
+
+    // Rich clipboard first when the browser supports it (images/screenshots).
+    if (typeof navigator.clipboard.read === "function") {
+      try {
+        const clipItems = await navigator.clipboard.read();
+        for (const item of clipItems) {
+          for (const type of item.types) {
+            if (!type.startsWith("image/")) continue;
             const blob = await item.getType(type);
-            processFiles([new File([blob], "pasted.png", { type })]);
+            await processFiles([new File([blob], "pasted-image.png", { type })]);
             return;
           }
         }
+      } catch (err) {
+        // Some browsers deny rich clipboard reads but still allow readText().
+        console.debug("Rich clipboard read unavailable; falling back to text", err);
       }
-      // Try text
-      const text = await navigator.clipboard.readText();
-      if (text && text.trim().length > 5) {
-        setPhase("processing");
-        try {
+    }
+
+    if (typeof navigator.clipboard.readText === "function") {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text.trim().length > 0) {
+          busyRef.current = true;
+          setPhase("processing");
           const importResult = await aiAutonomousImport(text);
           await processImportResult(importResult);
-        } catch (err: any) {
-          toast.error(err?.message || "Could not process clipboard.");
-          reset();
+          return;
         }
-        return;
+      } catch (err) {
+        console.debug("Clipboard text read unavailable", err);
       }
-      toast.error("Nothing importable in clipboard.");
-    } catch {
-      toast.error("Clipboard access denied.");
     }
-  }, [processFiles, processImportResult, reset]);
+
+    toast.error("Could not read the clipboard. Use Ctrl/Cmd+V or upload a file instead.");
+  }, [processFiles, processImportResult]);
 
   // Global paste (Ctrl+V an image or text anywhere)
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
+      if (busyRef.current) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "TEXTAREA" || t.tagName === "INPUT" || t.isContentEditable)) return;
       const items = Array.from(e.clipboardData?.items || []);
@@ -328,8 +310,9 @@ export default function SnapCapture() {
         return;
       }
       const text = e.clipboardData?.getData("text");
-      if (text && text.trim().length > 10) {
+      if (text && text.trim().length > 0) {
         e.preventDefault();
+        busyRef.current = true;
         setPhase("processing");
         aiAutonomousImport(text)
           .then(processImportResult)
@@ -354,6 +337,11 @@ export default function SnapCapture() {
     };
     const handleDrop = (e: DragEvent) => {
       if (!e.dataTransfer?.files?.length) return;
+      if (busyRef.current) {
+        e.preventDefault();
+        toast.info("Capture is already processing.");
+        return;
+      }
       e.preventDefault();
       const files = Array.from(e.dataTransfer.files);
       processFiles(files);
@@ -375,46 +363,75 @@ export default function SnapCapture() {
           label="Move capture controls"
         >
           <div className="relative flex items-center gap-1.5">
-            {showActions && (
-              <>
-                <div className="fixed inset-0 z-[89]" onClick={() => setShowActions(false)} />
-                <div className="absolute bottom-[calc(100%+12px)] left-0 z-[91] w-44 rounded-2xl border border-border/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-150">
-                  <button
-                    onClick={() => {
+            <Popover open={showActions} onOpenChange={setShowActions}>
+              <PopoverContent
+                side="top"
+                align="end"
+                sideOffset={10}
+                collisionPadding={12}
+                className="z-[110] w-[min(320px,calc(100vw-24px))] rounded-[22px] border-border/45 bg-card/95 p-2 shadow-2xl backdrop-blur-2xl"
+              >
+                <div className="px-2.5 pb-2 pt-1">
+                  <div className="text-[11px] font-extrabold tracking-tight text-foreground">Capture anything</div>
+                  <div className="text-[9.5px] text-muted-foreground">AI reads it, classifies it, removes duplicates, then files it.</div>
+                </div>
+                {[
+                  {
+                    label: "Take photo",
+                    detail: "Camera · document, whiteboard, receipt",
+                    icon: Camera,
+                    action: () => {
                       setShowActions(false);
                       cameraRef.current?.click();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
-                  >
-                    <Camera className="h-4 w-4 text-primary" /> Take photo
-                  </button>
-                  <button
-                    onClick={() => {
+                    },
+                  },
+                  {
+                    label: "Choose image",
+                    detail: "Photos or screenshots · up to 4",
+                    icon: ImageIcon,
+                    action: () => {
                       setShowActions(false);
                       galleryRef.current?.click();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
-                  >
-                    <ImageIcon className="h-4 w-4 text-primary" /> Choose image
-                  </button>
-                  <button
-                    onClick={() => {
+                    },
+                  },
+                  {
+                    label: "Upload file",
+                    detail: "PDF, Office, CSV, text, image",
+                    icon: FileUp,
+                    action: () => {
                       setShowActions(false);
                       fileRef.current?.click();
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
-                  >
-                    <FileUp className="h-4 w-4 text-primary" /> Upload file
-                  </button>
+                    },
+                  },
+                  {
+                    label: "Paste",
+                    detail: "Clipboard image or text",
+                    icon: Clipboard,
+                    action: () => void pasteFromClipboard(),
+                  },
+                  {
+                    label: "Voice capture",
+                    detail: "Speak naturally · AI transcribes & classifies",
+                    icon: Mic,
+                    action: openVoiceCapture,
+                  },
+                ].map((item) => (
                   <button
-                    onClick={pasteFromClipboard}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
+                    key={item.label}
+                    type="button"
+                    onClick={item.action}
+                    className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-secondary/75 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/35"
                   >
-                    <Clipboard className="h-4 w-4 text-primary" /> Paste
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/9 text-primary">
+                      <item.icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-xs font-bold text-card-foreground">{item.label}</span>
+                      <span className="block truncate text-[10px] text-muted-foreground">{item.detail}</span>
+                    </span>
                   </button>
-                </div>
-              </>
-            )}
+                ))}
+              </PopoverContent>
 
             <button
               type="button"
@@ -428,16 +445,10 @@ export default function SnapCapture() {
 
             <button
               type="button"
-              onMouseDown={handleFABDown}
-              onMouseUp={handleFABUp}
-              onMouseLeave={() => {
-                if (longPressTimer.current) clearTimeout(longPressTimer.current);
-              }}
-              onTouchStart={handleFABDown}
-              onTouchEnd={(e) => {
-                e.preventDefault();
-                handleFABUp(e);
-              }}
+              onPointerDown={handleFABDown}
+              onPointerUp={handleFABUp}
+              onPointerCancel={cancelPressTimer}
+              onPointerLeave={cancelPressTimer}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setShowActions(true);
@@ -451,13 +462,26 @@ export default function SnapCapture() {
 
             <button
               type="button"
-              onClick={() => setShowActions((open) => !open)}
-              className="grid h-9 w-8 place-items-center rounded-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-95"
-              title="More capture options"
-              aria-label="More capture options"
+              onClick={openVoiceCapture}
+              className="group grid h-11 w-11 place-items-center rounded-2xl border border-primary/10 bg-secondary/70 text-foreground transition hover:-translate-y-0.5 hover:border-primary/25 hover:bg-primary/8 hover:text-primary active:translate-y-0 active:scale-95"
+              title="Voice capture"
+              aria-label="Open voice capture"
             >
-              <MoreHorizontal className="h-4 w-4" />
+              <Mic className="h-[19px] w-[19px] transition-transform group-hover:scale-110" />
             </button>
+
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="grid h-11 w-9 place-items-center rounded-2xl text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-95"
+                title="More capture options"
+                aria-label="More capture options"
+                aria-expanded={showActions}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            </Popover>
           </div>
         </DraggableFloatingDock>
       )}
