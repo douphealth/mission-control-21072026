@@ -1,8 +1,6 @@
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useTasks, useDecisions } from "@/hooks/useTableData";
 import {
-  Crosshair,
-  Inbox,
   Plus,
   Search,
   Grip,
@@ -60,7 +58,7 @@ const moreItems = [
 ];
 
 export default function MobileBottomNav() {
-  const { activeSection, setActiveSection, setCommandPaletteOpen } = useNavigationStore();
+  const { activeSection, setActiveSection } = useNavigationStore();
   const tasks = useTasks();
   const decisions = useDecisions();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -130,18 +128,20 @@ export default function MobileBottomNav() {
             </button>
 
             <button
-              onClick={() => go("control-center")}
-              className={tabCls(activeSection === "control-center")}
+              onClick={() => go("tasks")}
+              className={tabCls(activeSection === "tasks")}
             >
               <div className="relative">
-                <Inbox size={20} strokeWidth={activeSection === "control-center" ? 2.4 : 1.7} />
-                {inboxCount > 0 && (
-                  <span className="absolute -right-2.5 -top-1.5 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
-                    {inboxCount > 99 ? "99+" : inboxCount}
+                <CheckSquare size={20} strokeWidth={activeSection === "tasks" ? 2.4 : 1.7} />
+                {tasks.filter((t) => t.status !== "done").length > 0 && (
+                  <span className="absolute -right-2.5 -top-1.5 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                    {tasks.filter((t) => t.status !== "done").length > 99
+                      ? "99+"
+                      : tasks.filter((t) => t.status !== "done").length}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium leading-none">Inbox</span>
+              <span className="text-[10px] font-medium leading-none">Tasks</span>
             </button>
 
             {/* Central, visually dominant capture */}
@@ -159,14 +159,11 @@ export default function MobileBottomNav() {
             </button>
 
             <button
-              onClick={() => {
-                setMoreOpen(false);
-                setCommandPaletteOpen(true);
-              }}
-              className={tabCls(false)}
+              onClick={() => go("projects")}
+              className={tabCls(activeSection === "projects")}
             >
-              <Search size={20} strokeWidth={1.7} />
-              <span className="text-[10px] font-medium leading-none">Search</span>
+              <PanelsTopLeft size={20} strokeWidth={activeSection === "projects" ? 2.4 : 1.7} />
+              <span className="text-[10px] font-medium leading-none">Projects</span>
             </button>
 
             <button onClick={() => setMoreOpen((o) => !o)} className={tabCls(moreOpen)}>

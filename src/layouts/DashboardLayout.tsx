@@ -137,7 +137,7 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="enterprise-shell relative flex h-screen overflow-hidden bg-background">
+    <div className="enterprise-shell relative flex h-dvh min-h-0 overflow-hidden bg-background">
       <div className="v10-aurora-bg" aria-hidden />
       <a href="#main-content" className="a11y-skip-link">
         Skip to content

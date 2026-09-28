@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task, Subtask } from "@/lib/db";
+import { todayISO } from "@/lib/overdue";
 import {
   REMINDER_LABELS,
   getReminderLabel,
@@ -110,7 +111,7 @@ const PRIORITIES = [
 ] as const;
 
 const CATEGORIES = ["Private", "Business"];
-const today = new Date().toISOString().split("T")[0];
+const today = todayISO();
 
 function getPriority(id: string) {
   return PRIORITIES.find((p) => p.id === id) || PRIORITIES[2];
@@ -169,10 +170,10 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
   const [newSub, setNewSub] = useState("");
   const uf = (k: keyof typeof form, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
-  // reset when task changes
-  useMemo(() => {
+  // Reset modal state when the selected task changes.
+  useEffect(() => {
     setForm(task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" });
-  }, [task?.id, open]);
+  }, [task?.id, open, defaultStatus]);
 
   const addSub = () => {
     if (!newSub.trim()) return;

@@ -13,6 +13,12 @@ import {
   Inbox,
   Moon,
   Zap,
+  CheckSquare,
+  PanelsTopLeft,
+  Globe,
+  Github,
+  Search,
+  ArrowUpRight,
 } from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
@@ -29,6 +35,7 @@ import { useDailyOps } from "@/hooks/useDailyOps";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { hhmmNow } from "@/lib/timeline";
 import { usePlanStore } from "@/stores/planStore";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 const InsightsPanel = lazy(() => import("@/components/dashboard/InsightsPanel"));
 const BelowFold = lazy(() => import("@/components/dashboard/BelowFold"));
@@ -42,6 +49,7 @@ export default function DashboardHome() {
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [dockItem, setDockItem] = useState<WorkItem | null>(null);
   const workdayEnd = usePlanStore((s) => s.workdayEnd);
+  const setActiveSection = useNavigationStore((s) => s.setActiveSection);
   const evening = hhmmNow() >= workdayEnd || showClose;
 
   useEffect(() => {
@@ -119,6 +127,32 @@ export default function DashboardHome() {
 
       <div className="ultra-rise-1">
         <QuickCaptureBar />
+      </div>
+
+      <div className="mc-launch-grid ultra-rise-1" aria-label="Primary workspaces">
+        {[
+          { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare },
+          { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft },
+          { id: "websites", label: "Websites", detail: "Growth", icon: Globe },
+          { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search },
+          { id: "github", label: "GitHub", detail: "Build", icon: Github },
+        ].map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setActiveSection(item.id)}
+            className="mc-launch-card group"
+          >
+            <span className="mc-launch-icon">
+              <item.icon size={16} />
+            </span>
+            <span className="min-w-0 flex-1 text-left">
+              <span className="block truncate text-[12px] font-extrabold text-foreground">{item.label}</span>
+              <span className="block text-[9.5px] font-medium text-muted-foreground">{item.detail}</span>
+            </span>
+            <ArrowUpRight size={13} className="text-muted-foreground/45 transition group-hover:text-primary" />
+          </button>
+        ))}
       </div>
 
       {dockItem && (

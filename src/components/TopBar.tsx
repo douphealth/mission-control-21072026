@@ -23,16 +23,14 @@ function DeferredOverlayFallback() {
 }
 
 const quickAddItems = [
-  { id: "websites", label: "Website", emoji: "🌐" },
   { id: "tasks", label: "Task", emoji: "✅" },
-  { id: "github", label: "GitHub Repo", emoji: "🐙" },
-  { id: "builds", label: "Build Project", emoji: "🛠️" },
-  { id: "links", label: "Link", emoji: "🔗" },
   { id: "notes", label: "Note", emoji: "📝" },
-  { id: "projects", label: "Kanban Card", emoji: "📋" },
-  { id: "payments", label: "Payment", emoji: "💰" },
+  { id: "projects", label: "Project", emoji: "📋" },
+  { id: "websites", label: "Website", emoji: "🌐" },
   { id: "ideas", label: "Idea", emoji: "💡" },
-  { id: "credentials", label: "Credential", emoji: "🔐" },
+  { id: "links", label: "Link", emoji: "🔗" },
+  { id: "payments", label: "Payment", emoji: "💰" },
+  { id: "builds", label: "Build", emoji: "🛠️" },
 ];
 
 const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
@@ -285,7 +283,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
             </div>
           </div>
 
-          {/* Quick Add — floating action button */}
+          {/* Create or capture — floating action button */}
           <div className="relative">
             <button
               onClick={() => setQuickAddOpen(!quickAddOpen)}
@@ -295,7 +293,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
                 size={16}
                 className={`transition-transform duration-200 ${quickAddOpen ? "rotate-45" : ""}`}
               />
-              <span className="hidden sm:inline">Capture</span>
+              <span className="hidden sm:inline">New</span>
             </button>
 
             {quickAddOpen && (

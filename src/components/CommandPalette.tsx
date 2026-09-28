@@ -42,6 +42,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { parseCapture, toRecord } from "@/lib/quickCapture";
 import { todayISO } from "@/lib/overdue";
+import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 
@@ -275,6 +276,22 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [activeTab, setActiveTab] = useState<"all" | "navigate" | "data" | "actions">("all");
 
+  const portfolioRepos = useMemo(() => {
+    const localByUrl = new Map(repos.map((repo) => [repo.url?.toLowerCase(), repo]));
+    const localByName = new Map(repos.map((repo) => [repo.name.toLowerCase(), repo]));
+    return GITHUB_REPO_CATALOG.map((catalog, index) => {
+      const local =
+        localByUrl.get(catalog.url.toLowerCase()) ?? localByName.get(catalog.name.toLowerCase());
+      return {
+        id: local?.id ?? `catalog-${index}-${catalog.name}`,
+        ...catalog,
+        ...(local ?? {}),
+        name: catalog.name,
+        url: catalog.url,
+      };
+    });
+  }, [repos]);
+
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -448,7 +465,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
           priority: 20,
         }),
       );
-    repos.forEach((r) =>
+    portfolioRepos.forEach((r) =>
       items.push({
         id: `repo-${r.id}`,
         type: "data",
@@ -516,7 +533,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
     query,
     websites,
     tasks,
-    repos,
+    portfolioRepos,
     buildProjects,
     links,
     notes,
