@@ -30,7 +30,6 @@ import {
 import {
   useWebsites,
   useTasks,
-  useRepos,
   useBuildProjects,
   useLinks,
   useNotes,
@@ -45,6 +44,7 @@ import { todayISO } from "@/lib/overdue";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import { MISSION_NAV } from "@/lib/navigation";
+import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 
 const sections = MISSION_NAV.map((item) => ({
   id: item.id,
@@ -140,7 +140,7 @@ const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = 
 export default function CommandPalette({ open, onClose, onImport }: CommandPaletteProps) {
   const websites = useWebsites();
   const tasks = useTasks();
-  const repos = useRepos();
+  const repos = GITHUB_REPO_CATALOG;
   const buildProjects = useBuildProjects();
   const links = useLinks();
   const notes = useNotes();
