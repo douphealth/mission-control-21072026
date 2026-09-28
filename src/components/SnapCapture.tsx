@@ -435,7 +435,7 @@ export default function SnapCapture() {
 
             <button
               type="button"
-              onClick={() => fileRef.current?.click()
+              onClick={() => fileRef.current?.click()}
               className="group grid h-11 w-11 place-items-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.8)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-95"
               title="Upload and AI-classify a file"
               aria-label="Upload and classify a file"
