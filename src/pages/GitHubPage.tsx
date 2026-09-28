@@ -1,4 +1,4 @@
-import { useRepos, useUpdateData, useDuplicateItem, useBulkAddItems } from "@/hooks/useTableData";
+import { useRepos, useUpdateData, useDuplicateItem, useBulkAddItems, useBulkPatch } from "@/hooks/useTableData";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ExternalLink,
@@ -78,7 +78,9 @@ export default function GitHubPage() {
   const updateData = useUpdateData();
   const duplicateItem = useDuplicateItem();
   const bulkAddItems = useBulkAddItems();
+  const bulkPatch = useBulkPatch();
   const catalogSeeded = useRef(false);
+  const catalogSynced = useRef(false);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -103,6 +105,47 @@ export default function GitHubPage() {
       });
     }
   }, [repos, bulkAddItems]);
+
+  useEffect(() => {
+    if (catalogSynced.current || repos.length === 0) return;
+
+    const catalogByUrl = new Map(GITHUB_REPO_CATALOG.map((r) => [r.url.toLowerCase(), r]));
+    const catalogByName = new Map(GITHUB_REPO_CATALOG.map((r) => [r.name.toLowerCase(), r]));
+    const syncFields = [
+      "priority",
+      "importance",
+      "doneSummary",
+      "pendingSummary",
+      "visibility",
+      "defaultBranch",
+      "repoSizeKb",
+    ] as const;
+
+    const updates = repos.flatMap((repo) => {
+      const catalog =
+        catalogByUrl.get(repo.url?.toLowerCase()) ?? catalogByName.get(repo.name.toLowerCase());
+      if (!catalog) return [];
+
+      const patch: Partial<GitHubRepo> = {};
+      for (const field of syncFields) {
+        if (repo[field] !== catalog[field]) {
+          (patch as Record<string, unknown>)[field] = catalog[field];
+        }
+      }
+      return Object.keys(patch).length > 0 ? [{ id: repo.id, patch }] : [];
+    });
+
+    catalogSynced.current = true;
+    if (updates.length > 0) {
+      void Promise.all(updates.map(({ id, patch }) => bulkPatch("repos", [id], patch))).catch(
+        (error) => {
+          catalogSynced.current = false;
+          console.error("Could not synchronize GitHub portfolio metadata", error);
+          toast.error("Could not synchronize GitHub portfolio priorities.");
+        },
+      );
+    }
+  }, [repos, bulkPatch]);
 
   const filtered = useMemo(() => {
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -191,7 +234,7 @@ export default function GitHubPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">GitHub Projects</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {repos.length} repositories · {GITHUB_REPO_CATALOG_COUNT} connected GitHub repos catalogued
+            {repos.length}/{GITHUB_REPO_CATALOG_COUNT} repositories loaded · ordered by portfolio importance
           </p>
         </div>
         <div className="flex items-center gap-2">
