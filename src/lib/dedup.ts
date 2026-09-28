@@ -229,9 +229,22 @@ function getTableRef(tableName: string) {
 
 function identityKey(tableName: string, item: any): string | null {
   switch (tableName) {
-    case "websites":
-    case "links":
     case "repos": {
+      const normalized = normUrl(item?.url);
+      if (normalized) {
+        const parts = normalized.split("/").filter(Boolean);
+        // Repositories are identified by the full owner/repo path, never just
+        // by github.com. The old host-only key collapsed every GitHub project
+        // into one record and merged unrelated metadata together.
+        if (parts.length >= 3 && parts[0] === "github.com") {
+          return `repos|${parts[0]}|${parts[1]}|${parts[2]}`;
+        }
+        return `repos|${normalized}`;
+      }
+      return norm(item?.name) ? `repos|${norm(item.name)}` : null;
+    }
+    case "websites":
+    case "links": {
       const host = normUrl(item?.url).split("/")[0];
       return host
         ? `${tableName}|${host}`
