@@ -82,6 +82,7 @@ export default function GitHubPage() {
   const updateItem = useUpdateItem();
   const catalogSeeded = useRef(false);
   const catalogSynced = useRef(false);
+  const canonicalAppsRepaired = useRef(false);
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
   const [compactView, setCompactView] = useState(true);
@@ -141,6 +142,54 @@ export default function GitHubPage() {
           catalogSynced.current = false;
           console.error("Could not synchronize GitHub portfolio metadata", error);
           toast.error("Could not synchronize GitHub portfolio priorities.");
+        },
+      );
+    }
+  }, [repos, bulkPatch]);
+
+  useEffect(() => {
+    if (canonicalAppsRepaired.current || repos.length === 0) return;
+    const canonicalNames = new Set([
+      "runmatch-ai-buddy-1282c193",
+      "body-recomp-os-guru-7c1356da",
+      "frenchie-care-compass",
+      "mystic-blueprint-maker",
+      "mice-solver-pro",
+      "grow-stack-engine-945df4aa",
+      "plantastic-haven-pro-8e23ae56",
+      "neural-prompt-coach",
+      "form-beauty-studio",
+      "claw-skills-hub",
+    ]);
+    const catalogByName = new Map(GITHUB_REPO_CATALOG.map((item) => [item.name, item]));
+    const repairs = repos.flatMap((local) => {
+      if (!canonicalNames.has(local.name)) return [];
+      const catalog = catalogByName.get(local.name);
+      if (!catalog) return [];
+      const wasLegacyMisclassified =
+        local.priority === "low" || local.topics?.includes("canonical-review");
+      if (!wasLegacyMisclassified) return [];
+      return [{
+        id: local.id,
+        patch: {
+          priority: catalog.priority,
+          importance: catalog.importance,
+          status: catalog.status,
+          demoUrl: catalog.demoUrl,
+          description: catalog.description,
+          doneSummary: catalog.doneSummary,
+          pendingSummary: catalog.pendingSummary,
+          topics: catalog.topics,
+        } as Partial<GitHubRepo>,
+      }];
+    });
+
+    canonicalAppsRepaired.current = true;
+    if (repairs.length > 0) {
+      void Promise.all(repairs.map(({ id, patch }) => bulkPatch("repos", [id], patch))).catch(
+        (error) => {
+          canonicalAppsRepaired.current = false;
+          console.error("Could not repair canonical app repo priorities", error);
         },
       );
     }
