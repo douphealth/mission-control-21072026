@@ -331,7 +331,7 @@ export const MISSION_NAV: MissionNavItem[] = [
     label: "Settings",
     description: "Mission Control preferences and connections.",
     group: "systems",
-    icon: Zap,
+    icon: Settings,
     emoji: "⚙",
     keywords: ["settings", "preferences", "config"],
     rank: 40,
