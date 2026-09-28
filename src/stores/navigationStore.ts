@@ -75,6 +75,7 @@ export const useNavigationStore = create<NavigationState>()(
     {
       name: "mc-navigation-v1",
       partialize: (state) => ({
+        activeSection: state.activeSection,
         recentSections: state.recentSections,
         sidebarCollapsed: state.sidebarCollapsed,
       }),
