@@ -84,7 +84,7 @@ export interface GitHubRepo {
 export interface BuildProject {
   id: string;
   name: string;
-  platform: "bolt" | "lovable" | "replit";
+  platform: "bolt" | "lovable" | "replit" | "vercel" | "other";
   projectUrl: string;
   deployedUrl: string;
   description: string;
