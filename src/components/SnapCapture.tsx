@@ -364,9 +364,6 @@ export default function SnapCapture() {
         >
           <div className="relative flex items-center gap-1.5">
             <Popover open={showActions} onOpenChange={setShowActions}>
-              <PopoverTrigger asChild>
-                <span className="sr-only" aria-hidden="true" />
-              </PopoverTrigger>
               <PopoverContent
                 side="top"
                 align="end"
@@ -435,11 +432,10 @@ export default function SnapCapture() {
                   </button>
                 ))}
               </PopoverContent>
-            </Popover>
 
             <button
               type="button"
-              onClick={() => fileRef.current?.click()}
+              onClick={() => fileRef.current?.click()
               className="group grid h-11 w-11 place-items-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.8)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-95"
               title="Upload and AI-classify a file"
               aria-label="Upload and classify a file"
@@ -474,16 +470,18 @@ export default function SnapCapture() {
               <Mic className="h-[19px] w-[19px] transition-transform group-hover:scale-110" />
             </button>
 
-            <button
-              type="button"
-              onClick={() => setShowActions((open) => !open)}
-              className="grid h-11 w-9 place-items-center rounded-2xl text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-95"
-              title="More capture options"
-              aria-label="More capture options"
-              aria-expanded={showActions}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="grid h-11 w-9 place-items-center rounded-2xl text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-95"
+                title="More capture options"
+                aria-label="More capture options"
+                aria-expanded={showActions}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            </PopoverTrigger>
+            </Popover>
           </div>
         </DraggableFloatingDock>
       )}
