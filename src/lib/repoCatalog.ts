@@ -5,8 +5,8 @@ export const GITHUB_REPO_CATALOG_COUNT = 81;
 
 /**
  * Complete snapshot of every repository currently available to the connected
- * douphealth GitHub account. Mission Control synchronizes catalog-owned
- * technical metadata while preserving user-managed planning fields.
+ * douphealth GitHub account. Technical fields are refreshed from GitHub while
+ * portfolio relationships are layered separately from the control workbook.
  */
 export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
   {
@@ -32,7 +32,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Validate this upgrade branch, then merge/deploy after approval. Keep the repo catalog, notes editor, and mobile controls regression-tested.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 3296
+    "repoSizeKb": 3726
   },
   {
     "name": "runmatch-ai-buddy-1282c193",
