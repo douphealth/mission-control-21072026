@@ -33,6 +33,7 @@ const emptyBuild: Omit<BuildProject, "id"> = {
   lastWorkedOn: new Date().toISOString().split("T")[0],
   nextSteps: "",
   githubRepo: "",
+  portfolioGroup: "experiment",
 };
 
 export default function BuildsPage() {
@@ -48,6 +49,7 @@ export default function BuildsPage() {
   const cd = useConfirmDialog();
 
   const filtered = buildProjects
+    .filter((b: any) => !b.portfolioGroup || b.portfolioGroup === "experiment" || b.portfolioGroup === "internal")
     .filter((b: any) => filterPlatform === "all" || b.platform === filterPlatform)
     .filter((b: any) => b.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -137,7 +139,7 @@ export default function BuildsPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Build Projects</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {buildProjects.length} projects across platforms
+            {buildProjects.filter((b: any) => !b.portfolioGroup || b.portfolioGroup === "experiment" || b.portfolioGroup === "internal").length} experiments & internal builds
           </p>
         </div>
         <div className="flex items-center gap-2">
