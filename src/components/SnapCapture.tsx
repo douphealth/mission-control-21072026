@@ -5,6 +5,7 @@
 // long-press menu "Upload File" option and drag-and-drop anywhere on screen.
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import DraggableFloatingDock from "@/components/DraggableFloatingDock";
 import {
   Camera,
   X,
@@ -367,7 +368,12 @@ export default function SnapCapture() {
   return (
     <>
       {phase === "idle" && (
-        <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+152px)] right-4 lg:bottom-[calc(32px+64px+12px)] lg:right-8 z-[90] flex flex-col items-end gap-2">
+        <DraggableFloatingDock
+          storageKey="mc-floating-snap-position"
+          defaultClassName="fixed bottom-[calc(env(safe-area-inset-bottom)+152px)] right-4 lg:bottom-[calc(32px+64px+12px)] lg:right-8 z-[90]"
+          label="Move camera and upload controls"
+        >
+        <div className="flex flex-col items-end gap-2">
           {showActions && (
             <>
               <div className="fixed inset-0 z-[89]" onClick={() => setShowActions(false)} />
@@ -450,6 +456,7 @@ export default function SnapCapture() {
             </button>
           </div>
         </div>
+        </DraggableFloatingDock>
       )}
 
       {(phase === "processing" || phase === "saving") && (

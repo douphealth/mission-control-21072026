@@ -1,5 +1,5 @@
-import { useNotes, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
-import { useState, useCallback } from "react";
+import { useNotes, useAddItem, useUpdateItem, useDeleteItem, useDuplicateItem, useBulkDeleteItems, useBulkPatch } from "@/hooks/useTableData";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Plus,
   Pin,
@@ -21,6 +21,7 @@ import BulkActionBar from "@/components/BulkActionBar";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
+import type { Note } from "@/lib/db";
 
 const noteColors = ["blue", "amber", "green", "rose", "purple", "teal"];
 const colorMap: Record<string, { border: string; dot: string }> = {
@@ -34,11 +35,18 @@ const colorMap: Record<string, { border: string; dot: string }> = {
 
 export default function NotesPage() {
   const notes = useNotes();
-  const updateData = useUpdateData();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
   const duplicateItem = useDuplicateItem();
+  const bulkDeleteItems = useBulkDeleteItems();
+  const bulkPatch = useBulkPatch();
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState<string | null>(notes[0]?.id ?? null);
   const [search, setSearch] = useState("");
+  const [titleDraft, setTitleDraft] = useState("");
+  const [contentDraft, setContentDraft] = useState("");
+  const draftDirty = useRef(false);
   const bulk = useBulkActions<(typeof notes)[0]>();
 
   const selected = notes.find((n) => n.id === selectedId);
@@ -50,42 +58,69 @@ export default function NotesPage() {
     )
     .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 
-  const updateNote = useCallback(
-    (field: string, value: string) => {
-      updateData({
-        notes: notes.map((n) =>
-          n.id === selectedId
-            ? { ...n, [field]: value, updatedAt: new Date().toISOString().split("T")[0] }
-            : n,
-        ),
+  useEffect(() => {
+    if (!selectedId) return;
+    const note = notes.find((n) => n.id === selectedId);
+    if (!note) return;
+    draftDirty.current = false;
+    setTitleDraft(note.title);
+    setContentDraft(note.content);
+  }, [selectedId]);
+
+  useEffect(() => {
+    if (selectedId || notes.length === 0) return;
+    const first = notes[0];
+    setSelectedId(first.id);
+    setTitleDraft(first.title);
+    setContentDraft(first.content);
+  }, [notes, selectedId]);
+
+  useEffect(() => {
+    if (!selectedId || !draftDirty.current) return;
+    const id = selectedId;
+    const timer = window.setTimeout(() => {
+      void updateItem<Note>("notes", id, {
+        title: titleDraft,
+        content: contentDraft,
+        updatedAt: new Date().toISOString().split("T")[0],
+      });
+      draftDirty.current = false;
+    }, 450);
+    return () => window.clearTimeout(timer);
+  }, [selectedId, titleDraft, contentDraft, updateItem]);
+
+  const updateNoteField = useCallback(
+    (field: string, value: string | boolean) => {
+      if (!selectedId) return;
+      void updateItem<Note>("notes", selectedId, {
+        [field]: value,
+        updatedAt: new Date().toISOString().split("T")[0],
       });
     },
-    [notes, selectedId, updateData],
+    [selectedId, updateItem],
   );
 
-  const addNote = () => {
-    const id = Math.random().toString(36).slice(2, 10);
+  const addNote = async () => {
     const now = new Date().toISOString().split("T")[0];
-    updateData({
-      notes: [
-        {
-          id,
-          title: "Untitled Note",
-          content: "",
-          color: "blue",
-          pinned: false,
-          tags: [],
-          createdAt: now,
-          updatedAt: now,
-        },
-        ...notes,
-      ],
+    const id = await addItem<Note>("notes", {
+      title: "Untitled Note",
+      content: "",
+      color: "blue",
+      pinned: false,
+      tags: [],
+      createdAt: now,
+      updatedAt: now,
     });
+    draftDirty.current = false;
+    setTitleDraft("Untitled Note");
+    setContentDraft("");
     setSelectedId(id);
   };
 
   const togglePin = (id: string) => {
-    updateData({ notes: notes.map((n) => (n.id === id ? { ...n, pinned: !n.pinned } : n)) });
+    const note = notes.find((n) => n.id === id);
+    if (!note) return;
+    void updateItem<Note>("notes", id, { pinned: !note.pinned });
   };
 
   const cd = useConfirmDialog();
@@ -95,8 +130,13 @@ export default function NotesPage() {
       description: "This note will be permanently removed.",
       onConfirm: () => {
         const remaining = notes.filter((n) => n.id !== id);
-        updateData({ notes: remaining });
-        if (selectedId === id) setSelectedId(remaining[0]?.id ?? null);
+        void deleteItem("notes", id);
+        if (selectedId === id) {
+          const next = remaining[0];
+          setSelectedId(next?.id ?? null);
+          setTitleDraft(next?.title ?? "");
+          setContentDraft(next?.content ?? "");
+        }
       },
     });
   };
@@ -116,21 +156,27 @@ export default function NotesPage() {
       description: `This will permanently remove ${bulk.selectedCount} notes.`,
       onConfirm: () => {
         const remaining = notes.filter((n) => !bulk.selectedIds.has(n.id));
-        updateData({ notes: remaining });
-        if (bulk.selectedIds.has(selectedId || "")) setSelectedId(remaining[0]?.id ?? null);
+        void bulkDeleteItems("notes", Array.from(bulk.selectedIds));
+        if (bulk.selectedIds.has(selectedId || "")) {
+          const next = remaining[0];
+          setSelectedId(next?.id ?? null);
+          setTitleDraft(next?.title ?? "");
+          setContentDraft(next?.content ?? "");
+        }
         toast.success(`${bulk.selectedCount} notes deleted`);
         bulk.clearSelection();
       },
     });
-  }, [bulk, notes, updateData, selectedId, cd]);
+  }, [bulk, notes, bulkDeleteItems, selectedId, cd]);
 
   const bulkTogglePin = useCallback(() => {
-    updateData({
-      notes: notes.map((n) => (bulk.selectedIds.has(n.id) ? { ...n, pinned: !n.pinned } : n)),
-    });
+    const selectedNotes = notes.filter((n) => bulk.selectedIds.has(n.id));
+    void Promise.all(
+      selectedNotes.map((n) => bulkPatch("notes", [n.id], { pinned: !n.pinned })),
+    );
     toast.success(`${bulk.selectedCount} notes toggled pin`);
     bulk.clearSelection();
-  }, [bulk, notes, updateData]);
+  }, [bulk, notes, bulkPatch]);
 
   // On mobile: show list OR editor, never both
   const showEditor = isMobile ? !!selectedId && !bulk.bulkMode : true;
@@ -200,9 +246,16 @@ export default function NotesPage() {
                 return (
                   <button
                     key={note.id}
-                    onClick={() =>
-                      bulk.bulkMode ? bulk.toggleSelect(note.id) : setSelectedId(note.id)
-                    }
+                    onClick={() => {
+                      if (bulk.bulkMode) {
+                        bulk.toggleSelect(note.id);
+                        return;
+                      }
+                      draftDirty.current = false;
+                      setTitleDraft(note.title);
+                      setContentDraft(note.content);
+                      setSelectedId(note.id);
+                    }}
                     className={`w-full text-left card-elevated p-3.5 border-l-[3px] ${c.border} transition-all touch-manipulation active:scale-[0.98] ${bulk.isSelected(note.id) ? "ring-1 ring-primary/30 border-primary/50" : selectedId === note.id && !bulk.bulkMode ? "ring-1 ring-primary/30 bg-primary/5" : "hover:bg-secondary/50"}`}
                   >
                     <div className="flex items-center gap-1.5">
@@ -270,8 +323,11 @@ export default function NotesPage() {
                     <ChevronLeft size={18} />
                   </button>
                   <input
-                    value={selected.title}
-                    onChange={(e) => updateNote("title", e.target.value)}
+                    value={titleDraft}
+                    onChange={(e) => {
+                      draftDirty.current = true;
+                      setTitleDraft(e.target.value);
+                    }}
                     className="text-lg sm:text-xl font-bold text-card-foreground bg-transparent outline-none flex-1 min-w-0"
                     placeholder="Note title..."
                   />
@@ -312,15 +368,18 @@ export default function NotesPage() {
                   </div>
                 )}
                 <textarea
-                  value={selected.content}
-                  onChange={(e) => updateNote("content", e.target.value)}
+                  value={contentDraft}
+                  onChange={(e) => {
+                    draftDirty.current = true;
+                    setContentDraft(e.target.value);
+                  }}
                   className="flex-1 bg-transparent text-sm text-card-foreground outline-none resize-none leading-relaxed min-h-[300px]"
                   placeholder="Start writing..."
                 />
                 <div className="flex items-center justify-between pt-3 border-t border-border mt-3 flex-wrap gap-2">
                   <div className="flex items-center gap-3">
                     <span className="text-xs text-muted-foreground">
-                      {selected.content.split(/\s+/).filter(Boolean).length} words
+                      {contentDraft.split(/\s+/).filter(Boolean).length} words
                     </span>
                     <span className="text-xs text-muted-foreground hidden sm:inline">
                       Updated {selected.updatedAt}
@@ -330,7 +389,7 @@ export default function NotesPage() {
                     {noteColors.map((c) => (
                       <button
                         key={c}
-                        onClick={() => updateNote("color", c)}
+                        onClick={() => updateNoteField("color", c)}
                         className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full border-2 transition-all touch-manipulation ${selected.color === c ? "border-foreground scale-110" : "border-transparent hover:scale-110"} ${colorMap[c]?.dot}`}
                       />
                     ))}

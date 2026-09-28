@@ -1,5 +1,5 @@
-import { useRepos, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
-import { useState, useCallback } from "react";
+import { useRepos, useUpdateData, useDuplicateItem, useBulkAddItems } from "@/hooks/useTableData";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ExternalLink,
   Star,
@@ -26,6 +26,7 @@ import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
+import { GITHUB_REPO_CATALOG, GITHUB_REPO_CATALOG_COUNT } from "@/lib/repoCatalog";
 
 const langColors: Record<string, string> = {
   TypeScript: "bg-blue-500",
@@ -76,6 +77,8 @@ export default function GitHubPage() {
   const repos = useRepos();
   const updateData = useUpdateData();
   const duplicateItem = useDuplicateItem();
+  const bulkAddItems = useBulkAddItems();
+  const catalogSeeded = useRef(false);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -83,11 +86,44 @@ export default function GitHubPage() {
   const bulk = useBulkActions<GitHubRepo>();
   const cd = useConfirmDialog();
 
-  const filtered = repos.filter(
-    (r) =>
-      r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.description.toLowerCase().includes(search.toLowerCase()),
-  );
+  useEffect(() => {
+    if (catalogSeeded.current) return;
+    const existing = new Set(
+      repos.flatMap((r) => [r.url?.toLowerCase(), r.name?.toLowerCase()].filter(Boolean) as string[]),
+    );
+    const missing = GITHUB_REPO_CATALOG.filter(
+      (r) => !existing.has(r.url.toLowerCase()) && !existing.has(r.name.toLowerCase()),
+    );
+    catalogSeeded.current = true;
+    if (missing.length > 0) {
+      void bulkAddItems("repos", missing).catch((error) => {
+        catalogSeeded.current = false;
+        console.error("Could not seed GitHub repository catalog", error);
+        toast.error("Could not load the GitHub repository catalog.");
+      });
+    }
+  }, [repos, bulkAddItems]);
+
+  const filtered = useMemo(() => {
+    const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const q = search.trim().toLowerCase();
+    return repos
+      .filter(
+        (r) =>
+          !q ||
+          r.name.toLowerCase().includes(q) ||
+          r.description.toLowerCase().includes(q) ||
+          r.doneSummary?.toLowerCase().includes(q) ||
+          r.pendingSummary?.toLowerCase().includes(q),
+      )
+      .sort(
+        (a, b) =>
+          (priorityRank[a.priority || "medium"] ?? 2) -
+            (priorityRank[b.priority || "medium"] ?? 2) ||
+          (b.importance || 0) - (a.importance || 0) ||
+          a.name.localeCompare(b.name),
+      );
+  }, [repos, search]);
 
   const openAdd = () => {
     setEditId(null);
@@ -155,7 +191,7 @@ export default function GitHubPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">GitHub Projects</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {repos.length} repositories
+            {repos.length} repositories · {GITHUB_REPO_CATALOG_COUNT} connected GitHub repos catalogued
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -231,13 +267,45 @@ export default function GitHubPage() {
               >
                 {repo.name}
               </a>
-              <span
-                className={`badge-${repo.status === "active" ? "success" : repo.status === "stable" ? "info" : repo.status === "paused" ? "warning" : "muted"} flex-shrink-0`}
-              >
-                {repo.status}
-              </span>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <span
+                  className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-1 border ${
+                    repo.priority === "critical"
+                      ? "bg-destructive/10 text-destructive border-destructive/20"
+                      : repo.priority === "high"
+                        ? "bg-warning/10 text-warning border-warning/20"
+                        : repo.priority === "low"
+                          ? "bg-secondary text-muted-foreground border-border/30"
+                          : "bg-primary/10 text-primary border-primary/20"
+                  }`}
+                  title={`Importance ${repo.importance ?? "unscored"}/100`}
+                >
+                  {repo.priority || "medium"}
+                </span>
+                <span
+                  className={`badge-${repo.status === "active" ? "success" : repo.status === "stable" ? "info" : repo.status === "paused" ? "warning" : "muted"}`}
+                >
+                  {repo.status}
+                </span>
+              </div>
             </div>
             <p className="text-sm text-muted-foreground line-clamp-2">{repo.description}</p>
+            {(repo.doneSummary || repo.pendingSummary) && (
+              <div className="grid gap-2 rounded-xl border border-border/30 bg-secondary/20 p-3 text-xs">
+                {repo.doneSummary && (
+                  <div>
+                    <div className="mb-1 font-bold uppercase tracking-wide text-success">Done</div>
+                    <p className="leading-relaxed text-muted-foreground">{repo.doneSummary}</p>
+                  </div>
+                )}
+                {repo.pendingSummary && (
+                  <div>
+                    <div className="mb-1 font-bold uppercase tracking-wide text-warning">Pending</div>
+                    <p className="leading-relaxed text-muted-foreground">{repo.pendingSummary}</p>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
                 <span
@@ -245,6 +313,8 @@ export default function GitHubPage() {
                 />
                 {repo.language}
               </span>
+              {repo.visibility && <span>{repo.visibility}</span>}
+              {repo.defaultBranch && <span>branch: {repo.defaultBranch}</span>}
               <span className="flex items-center gap-1">
                 <Star size={12} />
                 {repo.stars}

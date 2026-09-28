@@ -49,6 +49,20 @@ export interface GitHubRepo {
   progress: number;
   topics: string[];
   lastUpdated: string;
+  /** Mission Control portfolio priority. */
+  priority?: "critical" | "high" | "medium" | "low";
+  /** Relative business/operational importance, 0-100. */
+  importance?: number;
+  /** Verified or explicitly known work already in place. */
+  doneSummary?: string;
+  /** Highest-value remaining work or verification gap. */
+  pendingSummary?: string;
+  /** GitHub repository visibility captured by the portfolio inventory. */
+  visibility?: "public" | "private" | "internal";
+  /** Default Git branch captured by the portfolio inventory. */
+  defaultBranch?: string;
+  /** Repository size reported by GitHub, in KiB. */
+  repoSizeKb?: number;
   devPlatformUrl?: string;
   deploymentUrl?: string;
   dbType?:
