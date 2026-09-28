@@ -330,7 +330,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
       );
     repos.forEach((r) =>
       items.push({
-        id: `repo-${r.id}`,
+        id: `repo-${r.name}`,
         type: "data",
         label: r.name,
         sub: r.description?.slice(0, 50) || "",
