@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
+  Edit2,
   ExternalLink,
   Github,
   Globe,
@@ -11,6 +12,16 @@ import {
   Target,
 } from "lucide-react";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
+import { useAddItem, useBuildProjects, useUpdateItem } from "@/hooks/useTableData";
+import type { BuildProject } from "@/lib/db";
+import FormModal, {
+  FormField,
+  FormInput,
+  FormSelect,
+  FormTextarea,
+  FormTagsInput,
+} from "@/components/FormModal";
+import { toast } from "sonner";
 
 const priorityRank: Record<string, number> = {
   critical: 0,
@@ -20,12 +31,68 @@ const priorityRank: Record<string, number> = {
 };
 
 export default function AppsFunnelsPage() {
+  const buildProjects = useBuildProjects();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const seeded = useRef(false);
+
   const [search, setSearch] = useState("");
   const [priority, setPriority] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editRepo, setEditRepo] = useState<string | null>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [form, setForm] = useState<Omit<BuildProject, "id">>(APP_FUNNEL_CATALOG[0]);
+
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    const existing = new Set(
+      buildProjects.flatMap((item) =>
+        [item.githubRepo?.toLowerCase(), item.name?.toLowerCase()].filter(Boolean) as string[],
+      ),
+    );
+    const missing = APP_FUNNEL_CATALOG.filter(
+      (item) =>
+        !existing.has(item.githubRepo.toLowerCase()) &&
+        !existing.has(item.name.toLowerCase()),
+    );
+    if (missing.length > 0) {
+      void Promise.all(missing.map((item) => addItem<BuildProject>("buildProjects", item))).catch(
+        (error) => {
+          seeded.current = false;
+          console.error("Could not seed app portfolio", error);
+          toast.error("Could not initialize Apps & Funnels.");
+        },
+      );
+    }
+  }, [buildProjects, addItem]);
+
+  const portfolio = useMemo(() => {
+    const localByRepo = new Map(
+      buildProjects
+        .filter((item) => item.githubRepo)
+        .map((item) => [item.githubRepo.toLowerCase(), item]),
+    );
+    const localByName = new Map(buildProjects.map((item) => [item.name.toLowerCase(), item]));
+
+    return APP_FUNNEL_CATALOG.map((catalog) => {
+      const local =
+        localByRepo.get(catalog.githubRepo.toLowerCase()) ??
+        localByName.get(catalog.name.toLowerCase());
+      return {
+        ...(catalog as BuildProject),
+        ...(local ?? {}),
+        id: local?.id ?? `catalog-${catalog.name}`,
+        // Repo identity remains canonical; planning/deployment metadata is editable.
+        githubRepo: catalog.githubRepo,
+        projectUrl: catalog.projectUrl,
+      } as BuildProject;
+    });
+  }, [buildProjects]);
 
   const apps = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return [...APP_FUNNEL_CATALOG]
+    return [...portfolio]
       .filter((app) => priority === "all" || app.priority === priority)
       .filter((app) => {
         if (!q) return true;
@@ -49,17 +116,54 @@ export default function AppsFunnelsPage() {
           (b.importance || 0) - (a.importance || 0) ||
           a.name.localeCompare(b.name),
       );
-  }, [priority, search]);
+  }, [portfolio, priority, search]);
 
   const stats = useMemo(
     () => ({
-      total: APP_FUNNEL_CATALOG.length,
-      deployed: APP_FUNNEL_CATALOG.filter((app) => app.status === "deployed").length,
-      critical: APP_FUNNEL_CATALOG.filter((app) => app.priority === "critical").length,
-      growthApps: APP_FUNNEL_CATALOG.filter((app) => app.portfolioGroup === "growth-app").length,
+      total: portfolio.length,
+      deployed: portfolio.filter((app) => app.status === "deployed").length,
+      critical: portfolio.filter((app) => app.priority === "critical").length,
+      growthApps: portfolio.filter((app) => app.portfolioGroup === "growth-app").length,
     }),
-    [],
+    [portfolio],
   );
+
+  const openEdit = (app: BuildProject) => {
+    const persisted = buildProjects.find(
+      (item) =>
+        item.githubRepo?.toLowerCase() === app.githubRepo.toLowerCase() ||
+        item.name.toLowerCase() === app.name.toLowerCase(),
+    );
+    const { id, ...rest } = app;
+    setEditId(persisted?.id ?? null);
+    setEditRepo(app.githubRepo);
+    setForm(rest);
+    setModalOpen(true);
+  };
+
+  const saveForm = async () => {
+    const canonical = APP_FUNNEL_CATALOG.find((item) => item.githubRepo === editRepo);
+    if (!canonical) return;
+
+    const payload: Omit<BuildProject, "id"> = {
+      ...form,
+      githubRepo: canonical.githubRepo,
+      projectUrl: canonical.projectUrl,
+      name: form.name.trim() || canonical.name,
+      lastWorkedOn: new Date().toISOString().split("T")[0],
+    };
+
+    if (editId) {
+      await updateItem<BuildProject>("buildProjects", editId, payload);
+    } else {
+      await addItem<BuildProject>("buildProjects", payload);
+    }
+    setModalOpen(false);
+    toast.success("App portfolio updated");
+  };
+
+  const uf = (field: keyof typeof form, value: unknown) =>
+    setForm((current) => ({ ...current, [field]: value }));
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -106,8 +210,8 @@ export default function AppsFunnelsPage() {
           {(["all", "critical", "high", "medium", "low"] as const).map((item) => {
             const count =
               item === "all"
-                ? APP_FUNNEL_CATALOG.length
-                : APP_FUNNEL_CATALOG.filter((app) => app.priority === item).length;
+                ? portfolio.length
+                : portfolio.filter((app) => app.priority === item).length;
             return (
               <button
                 key={item}
@@ -160,10 +264,14 @@ export default function AppsFunnelsPage() {
                 </p>
               </div>
 
-              <div className="rounded-xl bg-secondary/70 px-2.5 py-1.5 text-right">
-                <div className="text-sm font-extrabold tabular-nums text-foreground">{app.importance}</div>
-                <div className="text-[8px] font-bold uppercase tracking-wide text-muted-foreground">importance</div>
-              </div>
+              <button
+                type="button"
+                onClick={() => openEdit(app)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border/40 bg-secondary/50 text-muted-foreground transition hover:border-primary/25 hover:bg-primary/8 hover:text-primary"
+                title="Edit app"
+              >
+                <Edit2 size={14} />
+              </button>
             </div>
 
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -246,6 +354,72 @@ export default function AppsFunnelsPage() {
           </article>
         ))}
       </div>
+
+      <FormModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title="Edit App & Funnel"
+        onSubmit={saveForm}
+      >
+        <FormField label="Product name">
+          <FormInput value={form.productName || ""} onChange={(value) => uf("productName", value)} />
+        </FormField>
+        <FormField label="Description">
+          <FormTextarea value={form.description} onChange={(value) => uf("description", value)} rows={2} />
+        </FormField>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="Priority">
+            <FormSelect
+              value={form.priority || "medium"}
+              onChange={(value) => uf("priority", value)}
+              options={[
+                { value: "critical", label: "Critical" },
+                { value: "high", label: "High" },
+                { value: "medium", label: "Medium" },
+                { value: "low", label: "Low" },
+              ]}
+            />
+          </FormField>
+          <FormField label="Importance">
+            <FormInput
+              type="number"
+              value={String(form.importance ?? 50)}
+              onChange={(value) => uf("importance", Math.max(0, Math.min(100, Number(value) || 0)))}
+            />
+          </FormField>
+        </div>
+        <FormField label="Status">
+          <FormSelect
+            value={form.status}
+            onChange={(value) => uf("status", value)}
+            options={[
+              { value: "ideation", label: "Ideation" },
+              { value: "building", label: "Building" },
+              { value: "testing", label: "Testing" },
+              { value: "deployed", label: "Deployed" },
+            ]}
+          />
+        </FormField>
+        <FormField label="Production URL">
+          <FormInput value={form.deployedUrl} onChange={(value) => uf("deployedUrl", value)} />
+        </FormField>
+        <FormField label="Parent website">
+          <FormInput value={form.parentWebsite || ""} onChange={(value) => uf("parentWebsite", value)} />
+        </FormField>
+        <FormField label="Landing / funnel page">
+          <FormInput value={form.landingPage || ""} onChange={(value) => uf("landingPage", value)} />
+        </FormField>
+        <FormField label="Alternate live URLs">
+          <FormTagsInput
+            value={form.alternateUrls || []}
+            onChange={(value) => uf("alternateUrls", value)}
+            placeholder="https://..."
+          />
+        </FormField>
+        <FormField label="Next highest-value action">
+          <FormTextarea value={form.nextSteps} onChange={(value) => uf("nextSteps", value)} rows={3} />
+        </FormField>
+      </FormModal>
     </div>
   );
 }
