@@ -639,8 +639,8 @@ export default function VoiceCapture() {
   return (
     <>
       <DraggableFloatingDock
-        storageKey="mc-floating-voice-position"
-        defaultClassName="fixed z-40 bottom-[calc(env(safe-area-inset-bottom)+92px)] right-4 lg:bottom-8 lg:right-8"
+        storageKey="mc-floating-voice-position-v2"
+        defaultClassName="fixed z-40 bottom-[calc(env(safe-area-inset-bottom)+92px)] right-3 lg:bottom-8 lg:right-6"
         label="Move voice capture control"
       >
         <button
@@ -648,12 +648,14 @@ export default function VoiceCapture() {
             setOpen(true);
             if (supported && phase === "idle") void startRecording();
           }}
-          className="relative w-[52px] h-[52px] lg:w-16 lg:h-16 rounded-2xl gradient-primary text-primary-foreground shadow-[0_10px_40px_-8px_hsl(var(--primary)/0.6)] flex items-center justify-center group"
+          className="group relative grid h-11 w-11 place-items-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.8)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-95"
           title="Voice capture (⌘⇧V)"
           aria-label="Voice capture"
         >
-          <Mic size={22} className="lg:w-7 lg:h-7" />
-          <span className="absolute inset-0 rounded-2xl ring-2 ring-primary/40 animate-ping opacity-40 group-hover:opacity-70" />
+          <Mic size={19} className="transition-transform group-hover:scale-110" />
+          {isRecording && (
+            <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-rose-500 ring-2 ring-background" />
+          )}
         </button>
       </DraggableFloatingDock>
 
