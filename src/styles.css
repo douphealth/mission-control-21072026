@@ -2960,3 +2960,98 @@ table,
     transition: none !important;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   PRODUCTIVITY POLISH V2 — Sep 28 2026
+   Dense, calm, premium surfaces with clearer interaction affordances.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+#main-content h1 {
+  letter-spacing: -0.035em;
+  text-wrap: balance;
+}
+
+#main-content h2,
+#main-content h3 {
+  letter-spacing: -0.02em;
+}
+
+.card-elevated {
+  box-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.04) inset,
+    0 12px 32px -28px hsl(var(--foreground) / 0.6);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    background 180ms ease;
+}
+
+.card-elevated:hover {
+  border-color: hsl(var(--primary) / 0.18);
+  box-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.05) inset,
+    0 16px 38px -28px hsl(var(--foreground) / 0.7);
+}
+
+#main-content input,
+#main-content textarea,
+#main-content select {
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background 160ms ease;
+}
+
+#main-content input:focus,
+#main-content textarea:focus,
+#main-content select:focus {
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.08);
+}
+
+#main-content button:focus-visible,
+#main-content a:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px hsl(var(--background)),
+    0 0 0 4px hsl(var(--primary) / 0.36);
+}
+
+#main-content ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+#main-content ::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.18);
+}
+
+#main-content ::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+
+#main-content ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (max-width: 639px) {
+  .card-elevated {
+    border-radius: 20px;
+  }
+
+  #main-content h1 {
+    font-size: 1.45rem;
+    line-height: 1.1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-elevated,
+  #main-content input,
+  #main-content textarea,
+  #main-content select {
+    transition: none !important;
+  }
+}
