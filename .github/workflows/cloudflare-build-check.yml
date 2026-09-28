@@ -28,4 +28,4 @@ jobs:
         if: success()
         run: |
           echo "Cloudflare build output:"
-          find .output -maxdepth 3 -type f | sort | head -200
+          find dist -maxdepth 3 -type f | sort | head -200\n          echo "Legacy Pages-compatible output:"\n          find .output/public -maxdepth 3 -type f | sort | head -200
