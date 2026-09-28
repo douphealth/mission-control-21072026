@@ -10,6 +10,9 @@ import {
   Code2,
   CheckSquare,
   Database,
+  List,
+  LayoutGrid,
+  SlidersHorizontal,
 } from "lucide-react";
 import FormModal, {
   FormField,
@@ -81,6 +84,7 @@ export default function GitHubPage() {
   const catalogSynced = useRef(false);
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
+  const [compactView, setCompactView] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editCatalogName, setEditCatalogName] = useState<string | null>(null);
@@ -111,15 +115,10 @@ export default function GitHubPage() {
 
     const catalogByUrl = new Map(GITHUB_REPO_CATALOG.map((r) => [r.url.toLowerCase(), r]));
     const catalogByName = new Map(GITHUB_REPO_CATALOG.map((r) => [r.name.toLowerCase(), r]));
-    const syncFields = [
-      "priority",
-      "importance",
-      "doneSummary",
-      "pendingSummary",
-      "visibility",
-      "defaultBranch",
-      "repoSizeKb",
-    ] as const;
+    // Only technical catalog metadata is synchronized after seeding.
+    // User-managed planning fields (priority, importance, done/pending, status,
+    // progress) must remain editable and must never be overwritten on mount.
+    const syncFields = ["visibility", "defaultBranch", "repoSizeKb"] as const;
 
     const updates = repos.flatMap((repo) => {
       const catalog =
@@ -295,7 +294,15 @@ export default function GitHubPage() {
             className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
           />
         </div>
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+          <button
+            type="button"
+            onClick={() => setCompactView((v) => !v)}
+            className="shrink-0 rounded-xl border border-border/30 bg-card/60 p-2 text-muted-foreground transition hover:text-foreground"
+            title={compactView ? "Switch to detailed cards" : "Switch to compact cards"}
+          >
+            {compactView ? <LayoutGrid size={14} /> : <List size={14} />}
+          </button>
           {(["all", "critical", "high", "medium", "low"] as const).map((priority) => {
             const count =
               priority === "all"
@@ -319,12 +326,12 @@ export default function GitHubPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+      <div className={compactView ? "grid grid-cols-1 xl:grid-cols-2 gap-2.5 sm:gap-3" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4"}>
         {filtered.map((repo, i) => (
           <div
             key={repo.id}
             onClick={bulk.bulkMode ? () => bulk.toggleSelect(repo.id) : undefined}
-            className={`card-elevated p-4 sm:p-5 space-y-3 group ${bulk.bulkMode ? "cursor-pointer" : ""} ${bulk.isSelected(repo.id) ? "ring-1 ring-primary/30 border-primary/50" : ""}`}
+            className={`card-elevated group ${compactView ? "p-3.5 sm:p-4 space-y-2" : "p-4 sm:p-5 space-y-3"} ${bulk.bulkMode ? "cursor-pointer" : ""} ${bulk.isSelected(repo.id) ? "ring-1 ring-primary/30 border-primary/50" : ""}`}
           >
             <div className="flex items-start justify-between">
               {bulk.bulkMode && (
@@ -366,19 +373,19 @@ export default function GitHubPage() {
                 </span>
               </div>
             </div>
-            <p className="text-sm text-muted-foreground line-clamp-2">{repo.description}</p>
+            {!compactView && <p className="text-sm text-muted-foreground line-clamp-2">{repo.description}</p>}
             {(repo.doneSummary || repo.pendingSummary) && (
-              <div className="grid gap-2 rounded-xl border border-border/30 bg-secondary/20 p-3 text-xs">
+              <div className={`grid rounded-xl border border-border/30 bg-secondary/20 text-xs ${compactView ? "gap-1.5 p-2.5" : "gap-2 p-3"}`}>
                 {repo.doneSummary && (
                   <div>
                     <div className="mb-1 font-bold uppercase tracking-wide text-success">Done</div>
-                    <p className="line-clamp-2 leading-relaxed text-muted-foreground">{repo.doneSummary}</p>
+                    <p className={compactView ? "line-clamp-1 leading-relaxed text-muted-foreground" : "line-clamp-2 leading-relaxed text-muted-foreground"}>{repo.doneSummary}</p>
                   </div>
                 )}
                 {repo.pendingSummary && (
                   <div>
                     <div className="mb-1 font-bold uppercase tracking-wide text-warning">Pending</div>
-                    <p className="line-clamp-2 leading-relaxed text-muted-foreground">{repo.pendingSummary}</p>
+                    <p className={compactView ? "line-clamp-1 leading-relaxed text-muted-foreground" : "line-clamp-2 leading-relaxed text-muted-foreground"}>{repo.pendingSummary}</p>
                   </div>
                 )}
               </div>
@@ -413,7 +420,7 @@ export default function GitHubPage() {
                 />
               </div>
             </div>
-            {repo.topics.length > 0 && (
+            {!compactView && repo.topics.length > 0 && (
               <div className="flex flex-wrap gap-1">
                 {repo.topics.map((t) => (
                   <span

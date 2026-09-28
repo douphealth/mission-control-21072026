@@ -185,7 +185,7 @@ export default function ProjectsPage() {
           {!isMobile && (
             <GripVertical
               size={14}
-              className="text-muted-foreground/30 mt-0.5 flex-shrink-0 opacity-0 group-hover/card:opacity-100 transition-opacity"
+              className="text-muted-foreground/30 mt-0.5 flex-shrink-0"
             />
           )}
           <span className="text-sm font-medium text-card-foreground leading-snug">
@@ -330,7 +330,7 @@ export default function ProjectsPage() {
             return (
               <div
                 key={col.id}
-                className={`flex-shrink-0 w-72 rounded-2xl p-3 flex flex-col transition-all duration-200 ${isDragOver ? "bg-primary/5 ring-2 ring-primary/20 scale-[1.01]" : "bg-secondary/30"}`}
+                className={`flex-shrink-0 w-64 rounded-2xl p-3 flex flex-col transition-all duration-200 ${isDragOver ? "bg-primary/5 ring-2 ring-primary/20 scale-[1.01]" : "bg-secondary/30"}`}
                 onDragOver={(e) => onDragOver(e, col.id)}
                 onDragLeave={onDragLeave}
                 onDrop={() => onDrop(col.id)}
@@ -352,7 +352,7 @@ export default function ProjectsPage() {
                     </button>
                   </div>
                 </div>
-                <div className="space-y-2 flex-1">
+                <div className="space-y-1.5 flex-1">
                   {colCards.map(renderCard)}
                   {colCards.length === 0 && (
                     <div className="text-center py-8 text-muted-foreground/40 border-2 border-dashed border-muted/30 rounded-xl">

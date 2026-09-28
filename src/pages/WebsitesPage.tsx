@@ -149,7 +149,7 @@ export default function WebsitesPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
   const [sortField, setSortField] = useState<SortField>("lastUpdated");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [revealedPasswords, setRevealedPasswords] = useState<Set<string>>(new Set());
@@ -600,7 +600,7 @@ export default function WebsitesPage() {
               <RefreshCw size={9} /> Updated {site.lastUpdated}
             </span>
           </div>
-          <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1">
             <button
               onClick={() => duplicateWebsite(site.id)}
               className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-all"
@@ -721,20 +721,20 @@ export default function WebsitesPage() {
             )}
             <button
               onClick={() => duplicateWebsite(site.id)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-all opacity-0 group-hover:opacity-100"
+              className="p-2 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-all"
               title="Duplicate"
             >
               <Copy size={14} />
             </button>
             <button
               onClick={() => openEdit(site)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-all opacity-0 group-hover:opacity-100"
+              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
             >
               <Edit2 size={14} />
             </button>
             <button
               onClick={() => deleteWebsite(site.id)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all opacity-0 group-hover:opacity-100"
+              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
             >
               <Trash2 size={14} />
             </button>
