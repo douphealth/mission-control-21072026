@@ -340,7 +340,7 @@ export const MISSION_NAV: MissionNavItem[] = [
 
 export const MISSION_NAV_BY_ID = new Map(MISSION_NAV.map((item) => [item.id, item]));
 
-export const PRIMARY_NAV_IDS = ["dashboard", "now", "tasks", "calendar"] as const;
+export const PRIMARY_NAV_IDS = ["dashboard", "now", "tasks", "calendar", "review", "decisions"] as const;
 export const GROW_NAV_IDS = ["websites", "seo", "github", "builds"] as const;
 
 export const NAV_GROUP_LABELS: Record<MissionNavGroup, string> = {
