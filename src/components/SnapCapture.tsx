@@ -16,6 +16,7 @@ import {
   Image as ImageIcon,
   Clipboard,
   FileUp,
+  MoreHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import { aiImageImport, aiAutonomousImport, aiFileImport } from "@/lib/aiImport";
@@ -369,93 +370,95 @@ export default function SnapCapture() {
     <>
       {phase === "idle" && (
         <DraggableFloatingDock
-          storageKey="mc-floating-snap-position"
-          defaultClassName="fixed bottom-[calc(env(safe-area-inset-bottom)+152px)] right-4 lg:bottom-[calc(32px+64px+12px)] lg:right-8 z-[90]"
-          label="Move camera and upload controls"
+          storageKey="mc-floating-snap-position-v2"
+          defaultClassName="fixed bottom-[calc(env(safe-area-inset-bottom)+92px)] left-3 z-[90] lg:bottom-8 lg:left-auto lg:right-[104px]"
+          label="Move capture controls"
         >
-        <div className="flex flex-col items-end gap-2">
-          {showActions && (
-            <>
-              <div className="fixed inset-0 z-[89]" onClick={() => setShowActions(false)} />
-              <div className="flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-2 duration-150">
-                <button
-                  onClick={() => {
-                    setShowActions(false);
-                    cameraRef.current?.click();
-                  }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
-                >
-                  <Camera className="w-4 h-4" /> Take Photo
-                </button>
-                <button
-                  onClick={() => {
-                    setShowActions(false);
-                    galleryRef.current?.click();
-                  }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
-                >
-                  <ImageIcon className="w-4 h-4" /> Choose Image
-                </button>
-                <button
-                  onClick={() => {
-                    setShowActions(false);
-                    fileRef.current?.click();
-                  }}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
-                >
-                  <FileUp className="w-4 h-4" /> Upload File
-                </button>
-                <button
-                  onClick={pasteFromClipboard}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-card border border-border/40 shadow-lg text-xs font-medium text-card-foreground hover:bg-secondary transition-all"
-                >
-                  <Clipboard className="w-4 h-4" /> Paste
-                </button>
-              </div>
-            </>
-          )}
+          <div className="relative flex items-center gap-1.5">
+            {showActions && (
+              <>
+                <div className="fixed inset-0 z-[89]" onClick={() => setShowActions(false)} />
+                <div className="absolute bottom-[calc(100%+12px)] left-0 z-[91] w-44 rounded-2xl border border-border/50 bg-card/95 p-1.5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <button
+                    onClick={() => {
+                      setShowActions(false);
+                      cameraRef.current?.click();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
+                  >
+                    <Camera className="h-4 w-4 text-primary" /> Take photo
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowActions(false);
+                      galleryRef.current?.click();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
+                  >
+                    <ImageIcon className="h-4 w-4 text-primary" /> Choose image
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowActions(false);
+                      fileRef.current?.click();
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
+                  >
+                    <FileUp className="h-4 w-4 text-primary" /> Upload file
+                  </button>
+                  <button
+                    onClick={pasteFromClipboard}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-xs font-semibold text-card-foreground transition hover:bg-secondary"
+                  >
+                    <Clipboard className="h-4 w-4 text-primary" /> Paste
+                  </button>
+                </div>
+              </>
+            )}
 
-          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => fileRef.current?.click()}
-              className="group relative h-[54px] lg:h-16 overflow-hidden rounded-2xl border border-primary/30 bg-gradient-to-br from-primary via-primary to-accent px-3.5 lg:px-5 text-primary-foreground shadow-[0_12px_28px_-10px_hsl(var(--primary)/0.85)] flex items-center gap-2.5 hover:-translate-y-0.5 hover:shadow-[0_18px_34px_-10px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-[0.98] transition-all duration-200"
-              title="Upload and automatically classify any file up to 18 MB"
-              aria-label="Upload a file to classify"
+              className="group grid h-11 w-11 place-items-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.8)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-95"
+              title="Upload and AI-classify a file"
+              aria-label="Upload and classify a file"
             >
-              <span className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,.32),transparent_42%)] opacity-80" />
-              <span className="relative grid h-8 w-8 place-items-center rounded-xl bg-white/20 ring-1 ring-white/25 group-hover:scale-110 transition-transform">
-                <FileUp className="w-[18px] h-[18px]" />
-              </span>
-              <span className="relative flex flex-col items-start leading-none">
-                <span className="text-xs font-bold tracking-wide">Upload</span>
-                <span className="mt-1 text-[9px] font-medium text-primary-foreground/80">AI classify</span>
-              </span>
+              <FileUp className="h-[19px] w-[19px] transition-transform group-hover:scale-110" />
             </button>
+
             <button
               type="button"
               onMouseDown={handleFABDown}
               onMouseUp={handleFABUp}
-            onMouseLeave={() => {
-              if (longPressTimer.current) clearTimeout(longPressTimer.current);
-            }}
-            onTouchStart={handleFABDown}
-            onTouchEnd={(e) => {
-              e.preventDefault();
-              handleFABUp(e);
-            }}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              setShowActions(true);
-            }}
-            className="w-[52px] h-[52px] lg:w-16 lg:h-16 rounded-2xl bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-xl shadow-primary/30 flex items-center justify-center hover:scale-105 active:scale-95 transition-all duration-150"
-            title="Tap: camera · Long-press / right-click: more options"
-            aria-label="Capture a photo or file to import"
-          >
-              <Camera className="w-6 h-6 lg:w-7 lg:h-7" />
+              onMouseLeave={() => {
+                if (longPressTimer.current) clearTimeout(longPressTimer.current);
+              }}
+              onTouchStart={handleFABDown}
+              onTouchEnd={(e) => {
+                e.preventDefault();
+                handleFABUp(e);
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setShowActions(true);
+              }}
+              className="group grid h-11 w-11 place-items-center rounded-2xl border border-primary/20 bg-gradient-to-br from-primary to-accent text-primary-foreground shadow-[0_10px_28px_-12px_hsl(var(--primary)/0.8)] transition hover:-translate-y-0.5 hover:shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.9)] active:translate-y-0 active:scale-95"
+              title="Camera · long-press for more capture options"
+              aria-label="Open camera capture"
+            >
+              <Camera className="h-5 w-5 transition-transform group-hover:scale-110" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setShowActions((open) => !open)}
+              className="grid h-9 w-8 place-items-center rounded-xl text-muted-foreground transition hover:bg-secondary hover:text-foreground active:scale-95"
+              title="More capture options"
+              aria-label="More capture options"
+            >
+              <MoreHorizontal className="h-4 w-4" />
             </button>
           </div>
-        </div>
         </DraggableFloatingDock>
       )}
 
