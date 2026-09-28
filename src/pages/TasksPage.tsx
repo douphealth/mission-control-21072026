@@ -1607,8 +1607,7 @@ export default function TasksPage() {
   const updateItem = useUpdateItem();
   const duplicateItem = useDuplicateItem();
 
-  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const [view, setView] = useState<"kanban" | "list">(isMobile ? "list" : "kanban");
+  const [view, setView] = useState<"kanban" | "list">("list");
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterPriority, setFilterPriority] = useState<string>("all");
@@ -1641,55 +1640,8 @@ export default function TasksPage() {
     setSelectedIds(new Set());
   }, []);
 
-  // ── Phase/Urgent normalization (dry-run preview, then apply) ───────────────
-  const didNormalizeRef = useRef(false);
-  useEffect(() => {
-    if (didNormalizeRef.current) return;
-    if (!tasks || tasks.length === 0) return;
-    didNormalizeRef.current = true;
-
-    const matchPriority = (title: string): Task["priority"] | null => {
-      const t = title || "";
-      if (t.includes("[URGENT") || t.includes("[Phase 1]")) return "critical";
-      if (t.includes("[Phase 2]")) return "high";
-      if (t.includes("[Phase 3]")) return "medium";
-      return null;
-    };
-
-    const candidates = tasks
-      .map((t) => ({ task: t, nextPriority: matchPriority(t.title) }))
-      .filter((x) => x.nextPriority !== null);
-
-    const toUpdate = candidates.filter(
-      ({ task, nextPriority }) => task.category !== "Business" || task.priority !== nextPriority,
-    );
-
-    console.log(
-      `[Phase normalize] DRY RUN — ${candidates.length} matching, ${toUpdate.length} need update.`,
-      toUpdate.map(({ task, nextPriority }) => ({
-        id: task.id,
-        title: task.title,
-        from: { category: task.category, priority: task.priority },
-        to: { category: "Business", priority: nextPriority },
-      })),
-    );
-    toast.message("Phase normalize (dry run)", {
-      description: `${candidates.length} match • ${toUpdate.length} would update`,
-    });
-
-    if (toUpdate.length === 0) return;
-
-    (async () => {
-      for (const { task, nextPriority } of toUpdate) {
-        await updateItem<Task>("tasks", task.id, {
-          category: "Business",
-          priority: nextPriority!,
-        });
-      }
-      toast.success(`Updated ${toUpdate.length} Phase/Urgent task(s) → Business`);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tasks]);
+  // Task metadata is never rewritten implicitly on page load.
+  // Priority/category changes must be explicit user actions.
 
   // ── Stats ────────────────────────────────────────────────────────────────────
   const stats = useMemo(
@@ -1972,7 +1924,7 @@ export default function TasksPage() {
       {/* ── Header ── */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="title-grad text-2xl font-extrabold flex items-center gap-2 sm:text-3xl">
+          <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2 sm:text-3xl">
             <Target size={24} className="text-primary" style={{ WebkitTextFillColor: "initial" }} />
             Task Manager
           </h1>
