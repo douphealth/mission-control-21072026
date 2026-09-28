@@ -2883,6 +2883,12 @@ table,
 
 @media (min-width: 640px) {
   .mc-launch-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .mc-launch-grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
@@ -2946,12 +2952,6 @@ table,
     radial-gradient(circle at 12% -10%, hsl(var(--primary) / 0.05), transparent 28rem),
     radial-gradient(circle at 92% 0%, hsl(var(--info) / 0.035), transparent 26rem),
     hsl(var(--background));
-}
-
-@media (max-width: 639px) {
-  .mc-launch-card:nth-child(5) {
-    grid-column: 1 / -1;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
