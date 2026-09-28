@@ -13,6 +13,13 @@ import {
   List,
   LayoutGrid,
   SlidersHorizontal,
+  Globe2,
+  GitBranch,
+  Link2,
+  ShieldCheck,
+  ServerCog,
+  FolderGit2,
+  ArrowUpRight,
 } from "lucide-react";
 import FormModal, {
   FormField,
@@ -27,6 +34,8 @@ import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
 import { GITHUB_REPO_CATALOG, GITHUB_REPO_CATALOG_COUNT } from "@/lib/repoCatalog";
+import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
+import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 
 const langColors: Record<string, string> = {
   TypeScript: "bg-blue-500",
@@ -85,6 +94,7 @@ export default function GitHubPage() {
   const canonicalAppsRepaired = useRef(false);
   const [search, setSearch] = useState("");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
+  const [portfolioFilter, setPortfolioFilter] = useState<"all" | "live" | "core" | "origin" | "repo-only">("all");
   const [compactView, setCompactView] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -219,15 +229,56 @@ export default function GitHubPage() {
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const q = search.trim().toLowerCase();
     return displayRepos
-      .filter(
-        (r) =>
+      .filter((r) => {
+        const meta = REPO_PORTFOLIO_META[r.name];
+        const relationships = REPO_RELATIONSHIPS[r.name] || [];
+        const state = meta?.portfolioState || "REPO ONLY / NOT PROVEN LIVE";
+        const portfolioMatch =
+          portfolioFilter === "all" ||
+          (portfolioFilter === "live" && (meta?.directWebsiteApp || state.includes("LIVE APP"))) ||
+          (portfolioFilter === "core" && state.includes("WEBSITE CORE")) ||
+          (portfolioFilter === "origin" && state.includes("ORIGIN CANDIDATE")) ||
+          (portfolioFilter === "repo-only" && state.includes("REPO ONLY"));
+
+        const haystack = [
+          r.name,
+          r.description,
+          r.doneSummary,
+          r.pendingSummary,
+          meta?.portfolioState,
+          meta?.category,
+          meta?.nextAction,
+          meta?.evidence,
+          ...(meta?.parentWebsites || []),
+          ...(meta?.productionUrls || []),
+          ...(meta?.pagesUrls || []),
+          ...(meta?.githubPagesUrls || []),
+          ...(meta?.candidateUrls || []),
+          ...relationships.flatMap((relationship) => [
+            relationship.appName,
+            relationship.parentWebsite,
+            relationship.connectionType,
+            relationship.aliasUrl,
+            relationship.canonicalUrl,
+            relationship.pagesUrl,
+            relationship.githubPagesUrl,
+            relationship.candidateUrl,
+            relationship.hosting,
+            relationship.evidenceStatus,
+            relationship.liveStatus,
+            relationship.nextAction,
+          ]),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return (
           (priorityFilter === "all" || (r.priority || "medium") === priorityFilter) &&
-          (!q ||
-            r.name.toLowerCase().includes(q) ||
-            r.description.toLowerCase().includes(q) ||
-            r.doneSummary?.toLowerCase().includes(q) ||
-            r.pendingSummary?.toLowerCase().includes(q)),
-      )
+          portfolioMatch &&
+          (!q || haystack.includes(q))
+        );
+      })
       .sort(
         (a, b) =>
           (priorityRank[a.priority || "medium"] ?? 2) -
@@ -235,7 +286,18 @@ export default function GitHubPage() {
           (b.importance || 0) - (a.importance || 0) ||
           a.name.localeCompare(b.name),
       );
-  }, [displayRepos, search, priorityFilter]);
+  }, [displayRepos, search, priorityFilter, portfolioFilter]);
+
+  const portfolioStats = useMemo(() => {
+    const rows = displayRepos.map((repo) => REPO_PORTFOLIO_META[repo.name]);
+    return {
+      total: displayRepos.length,
+      live: rows.filter((meta) => meta?.directWebsiteApp || meta?.portfolioState.includes("LIVE APP")).length,
+      core: rows.filter((meta) => meta?.portfolioState.includes("WEBSITE CORE")).length,
+      origin: rows.filter((meta) => meta?.portfolioState.includes("ORIGIN CANDIDATE")).length,
+      repoOnly: rows.filter((meta) => !meta || meta.portfolioState.includes("REPO ONLY")).length,
+    };
+  }, [displayRepos]);
 
   const openEdit = (r: GitHubRepo) => {
     const persisted = repos.find(
@@ -293,23 +355,50 @@ export default function GitHubPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">GitHub Projects</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {GITHUB_REPO_CATALOG_COUNT}/{GITHUB_REPO_CATALOG_COUNT} repositories available · ordered by portfolio importance
-          </p>
+      <section className="relative overflow-hidden rounded-[28px] border border-border/40 bg-card/80 p-4 shadow-sm backdrop-blur-xl sm:p-5">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-primary">
+              <FolderGit2 size={11} /> Portfolio command center
+            </div>
+            <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
+              GitHub Projects
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
+              {GITHUB_REPO_CATALOG_COUNT}/{GITHUB_REPO_CATALOG_COUNT} live-account repositories reconciled · production relationships and URLs layered from the portfolio control workbook.
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+            {[
+              { label: "Repos", value: portfolioStats.total },
+              { label: "Live apps", value: portfolioStats.live },
+              { label: "Site core", value: portfolioStats.core },
+              { label: "Origin gaps", value: portfolioStats.origin },
+              { label: "Repo only", value: portfolioStats.repoOnly },
+            ].map((stat) => (
+              <div key={stat.label} className="rounded-2xl border border-border/35 bg-background/55 px-3 py-2.5 text-center">
+                <div className="text-lg font-extrabold tabular-nums text-foreground">{stat.value}</div>
+                <div className="text-[8.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{stat.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="relative mt-4 flex flex-wrap gap-2">
           <button
             onClick={bulk.toggleBulkMode}
-            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-sm font-semibold transition-all ${bulk.bulkMode ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20"}`}
+            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${bulk.bulkMode ? "border-destructive/20 bg-destructive/10 text-destructive" : "border-border/30 bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
           >
-            <CheckSquare size={15} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
+            <CheckSquare size={14} /> {bulk.bulkMode ? "Exit bulk mode" : "Bulk edit"}
           </button>
-
+          <span className="rounded-xl border border-success/15 bg-success/8 px-3 py-2 text-[10px] font-bold text-success">
+            81/81 ACCOUNTED FOR
+          </span>
+          <span className="rounded-xl border border-border/30 bg-secondary/40 px-3 py-2 text-[10px] font-semibold text-muted-foreground">
+            Spreadsheet relationships verified 2026-09-18
+          </span>
         </div>
-      </div>
+      </section>
 
       {bulk.bulkMode && (
         <BulkActionBar
@@ -375,6 +464,25 @@ export default function GitHubPage() {
         </div>
       </div>
 
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {([
+          ["all", "All assets", portfolioStats.total],
+          ["live", "Production apps", portfolioStats.live],
+          ["core", "Website core", portfolioStats.core],
+          ["origin", "Origin proof", portfolioStats.origin],
+          ["repo-only", "Repo only", portfolioStats.repoOnly],
+        ] as const).map(([value, label, count]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setPortfolioFilter(value)}
+            className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${portfolioFilter === value ? "border-primary/30 bg-primary/10 text-primary" : "border-border/30 bg-card/60 text-muted-foreground hover:text-foreground"}`}
+          >
+            {label} <span className="ml-1 opacity-65">{count}</span>
+          </button>
+        ))}
+      </div>
+
       <div className={compactView ? "grid grid-cols-1 xl:grid-cols-2 gap-2.5 sm:gap-3" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4"}>
         {filtered.map((repo, i) => (
           <div
@@ -422,6 +530,123 @@ export default function GitHubPage() {
                 </span>
               </div>
             </div>
+            {(() => {
+              const meta = REPO_PORTFOLIO_META[repo.name];
+              const relationships = REPO_RELATIONSHIPS[repo.name] || [];
+              const primaryRelationship = relationships[0];
+              const state = meta?.portfolioState || "REPO ONLY / NOT PROVEN LIVE";
+              const stateTone = state.includes("DIRECT WEBSITE APP") || state.includes("STANDALONE LIVE APP")
+                ? "border-success/20 bg-success/8 text-success"
+                : state.includes("ORIGIN CANDIDATE")
+                  ? "border-warning/20 bg-warning/8 text-warning"
+                  : state.includes("WEBSITE CORE")
+                    ? "border-primary/20 bg-primary/8 text-primary"
+                    : "border-border/35 bg-secondary/55 text-muted-foreground";
+              const actionLinks = Array.from(new Set([
+                ...(meta?.productionUrls || []),
+                ...(meta?.pagesUrls || []),
+                ...(meta?.githubPagesUrls || []),
+                ...(meta?.candidateUrls || []),
+                ...relationships.flatMap((relationship) => [
+                  relationship.aliasUrl,
+                  relationship.canonicalUrl,
+                  relationship.pagesUrl,
+                  relationship.githubPagesUrl,
+                  relationship.candidateUrl,
+                ].filter(Boolean) as string[]),
+              ]));
+              return (
+                <div className="space-y-2.5">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`rounded-full border px-2 py-1 text-[9px] font-extrabold uppercase tracking-wide ${stateTone}`}>
+                      {state}
+                    </span>
+                    {meta?.portfolioPriority && meta.portfolioPriority !== "—" && (
+                      <span className="rounded-full border border-border/35 bg-background/55 px-2 py-1 text-[9px] font-bold text-foreground">
+                        {meta.portfolioPriority}
+                      </span>
+                    )}
+                    {meta?.category && (
+                      <span className="max-w-full truncate rounded-full bg-secondary/55 px-2 py-1 text-[9px] font-semibold text-muted-foreground">
+                        {meta.category}
+                      </span>
+                    )}
+                  </div>
+
+                  {meta?.parentWebsites?.length ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {meta.parentWebsites.map((website) => (
+                        <span key={website} className="inline-flex items-center gap-1 rounded-lg bg-primary/6 px-2 py-1 text-[10px] font-semibold text-primary">
+                          <Globe2 size={10} /> {website}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {primaryRelationship && (
+                    <div className="rounded-2xl border border-border/35 bg-secondary/20 p-3">
+                      <div className="flex items-start gap-2.5">
+                        <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+                          <ServerCog size={14} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <span className="text-xs font-bold text-foreground">{primaryRelationship.appName}</span>
+                            <span className="rounded-md bg-background/70 px-1.5 py-0.5 text-[8.5px] font-bold uppercase tracking-wide text-muted-foreground">
+                              {primaryRelationship.connectionType}
+                            </span>
+                          </div>
+                          <p className="mt-1 line-clamp-2 text-[10.5px] leading-relaxed text-muted-foreground">
+                            {primaryRelationship.liveStatus}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[9.5px] text-muted-foreground">
+                            <span className="inline-flex items-center gap-1"><ServerCog size={10} /> {primaryRelationship.hosting}</span>
+                            <span className="inline-flex items-center gap-1"><GitBranch size={10} /> {primaryRelationship.branch}</span>
+                            {relationships.length > 1 && <span>{relationships.length} production relationships</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {actionLinks.length > 0 && (
+                    <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+                      {actionLinks.slice(0, compactView ? 4 : 8).map((url) => {
+                        const label = url.includes("pages.dev")
+                          ? "Pages.dev"
+                          : url.includes("github.io")
+                            ? "GitHub Pages"
+                            : url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+                        return (
+                          <a
+                            key={url}
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex min-w-0 items-center gap-2 rounded-xl border border-border/30 bg-background/50 px-2.5 py-2 text-[10.5px] font-semibold text-foreground transition hover:border-primary/25 hover:bg-primary/5"
+                          >
+                            <Link2 size={11} className="shrink-0 text-primary" />
+                            <span className="min-w-0 flex-1 truncate">{label}</span>
+                            <ArrowUpRight size={10} className="shrink-0 text-muted-foreground" />
+                          </a>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {(meta?.nextAction || primaryRelationship?.nextAction) && (
+                    <div className="rounded-xl border border-warning/15 bg-warning/5 px-3 py-2.5">
+                      <div className="mb-1 flex items-center gap-1 text-[8.5px] font-extrabold uppercase tracking-[0.13em] text-warning">
+                        <ShieldCheck size={10} /> Next action
+                      </div>
+                      <p className={compactView ? "line-clamp-2 text-[10.5px] leading-relaxed text-muted-foreground" : "text-[11px] leading-relaxed text-muted-foreground"}>
+                        {primaryRelationship?.nextAction || meta?.nextAction}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
             {!compactView && <p className="text-sm text-muted-foreground line-clamp-2">{repo.description}</p>}
             {(repo.doneSummary || repo.pendingSummary) && (
               <div className={`grid rounded-xl border border-border/30 bg-secondary/20 text-xs ${compactView ? "gap-1.5 p-2.5" : "gap-2 p-3"}`}>
@@ -558,6 +783,7 @@ export default function GitHubPage() {
             onClick={() => {
               setSearch("");
               setPriorityFilter("all");
+              setPortfolioFilter("all");
             }}
             className="mt-3 text-sm text-primary hover:underline"
           >
