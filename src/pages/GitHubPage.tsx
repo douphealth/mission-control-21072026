@@ -1,4 +1,4 @@
-import { useRepos, useUpdateData, useDuplicateItem, useBulkAddItems, useBulkPatch } from "@/hooks/useTableData";
+import { useRepos, useUpdateData, useDuplicateItem, useBulkAddItems, useBulkPatch, useAddItem, useUpdateItem } from "@/hooks/useTableData";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ExternalLink,
@@ -79,11 +79,14 @@ export default function GitHubPage() {
   const duplicateItem = useDuplicateItem();
   const bulkAddItems = useBulkAddItems();
   const bulkPatch = useBulkPatch();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
   const catalogSeeded = useRef(false);
   const catalogSynced = useRef(false);
   const [search, setSearch] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [editCatalogName, setEditCatalogName] = useState<string | null>(null);
   const [form, setForm] = useState(emptyRepo);
   const bulk = useBulkActions<GitHubRepo>();
   const cd = useConfirmDialog();
@@ -147,10 +150,30 @@ export default function GitHubPage() {
     }
   }, [repos, bulkPatch]);
 
+  const displayRepos = useMemo(() => {
+    const localByUrl = new Map(repos.map((r) => [r.url?.toLowerCase(), r]));
+    const localByName = new Map(repos.map((r) => [r.name.toLowerCase(), r]));
+
+    return GITHUB_REPO_CATALOG.map((catalog, index) => {
+      const local =
+        localByUrl.get(catalog.url.toLowerCase()) ?? localByName.get(catalog.name.toLowerCase());
+      return {
+        id: local?.id ?? `catalog-${index}-${catalog.name}`,
+        ...catalog,
+        ...(local ?? {}),
+        // Canonical identity must never be inherited from a stale/corrupt local row.
+        name: catalog.name,
+        url: catalog.url,
+        priority: local?.priority ?? catalog.priority,
+        importance: local?.importance ?? catalog.importance,
+      } as GitHubRepo;
+    });
+  }, [repos]);
+
   const filtered = useMemo(() => {
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const q = search.trim().toLowerCase();
-    return repos
+    return displayRepos
       .filter(
         (r) =>
           !q ||
@@ -166,27 +189,41 @@ export default function GitHubPage() {
           (b.importance || 0) - (a.importance || 0) ||
           a.name.localeCompare(b.name),
       );
-  }, [repos, search]);
+  }, [displayRepos, search]);
 
   const openAdd = () => {
     setEditId(null);
+    setEditCatalogName(null);
     setForm(emptyRepo);
     setModalOpen(true);
   };
   const openEdit = (r: GitHubRepo) => {
-    setEditId(r.id);
+    const persisted = repos.find(
+      (local) =>
+        local.url?.toLowerCase() === r.url.toLowerCase() ||
+        local.name.toLowerCase() === r.name.toLowerCase(),
+    );
+    setEditId(persisted?.id ?? null);
+    setEditCatalogName(r.name);
     const { id, ...rest } = r;
     setForm(rest);
     setModalOpen(true);
   };
-  const saveForm = () => {
+  const saveForm = async () => {
     if (!form.name.trim()) return;
+
     if (editId) {
-      updateData({ repos: repos.map((r) => (r.id === editId ? { ...r, ...form } : r)) });
+      await updateItem<GitHubRepo>("repos", editId, form);
+    } else if (editCatalogName) {
+      await addItem<GitHubRepo>("repos", form);
     } else {
-      updateData({ repos: [{ id: Math.random().toString(36).slice(2, 10), ...form }, ...repos] });
+      await addItem<GitHubRepo>("repos", form);
     }
+
     setModalOpen(false);
+    setEditId(null);
+    setEditCatalogName(null);
+    toast.success("Repository saved");
   };
   const deleteRepo = (id: string) => {
     cd.confirm({
@@ -234,7 +271,7 @@ export default function GitHubPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">GitHub Projects</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {repos.length}/{GITHUB_REPO_CATALOG_COUNT} repositories loaded · ordered by portfolio importance
+            {GITHUB_REPO_CATALOG_COUNT}/{GITHUB_REPO_CATALOG_COUNT} repositories available · ordered by portfolio importance
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -487,7 +524,7 @@ export default function GitHubPage() {
       <FormModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editId ? "Edit Repository" : "Add Repository"}
+        title={editId || editCatalogName ? "Edit Repository" : "Add Repository"}
         onSubmit={saveForm}
       >
         <FormField label="Repo Name *">
