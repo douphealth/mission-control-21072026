@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
-    "build:cloudflare": "NITRO_PRESET=cloudflare-pages vite build",
+    "build:cloudflare": "NITRO_PRESET=cloudflare-pages vite build && rm -rf .output/public && mkdir -p .output/public && cp -R dist/. .output/public/",
     "build:netlify": "NITRO_PRESET=netlify vite build && node scripts/postbuild.mjs",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
