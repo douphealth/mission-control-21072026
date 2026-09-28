@@ -1,17 +1,14 @@
-import { useRepos, useUpdateData, useDuplicateItem, useBulkAddItems, useBulkPatch, useAddItem, useUpdateItem } from "@/hooks/useTableData";
+import { useRepos, useUpdateData, useBulkAddItems, useBulkPatch, useAddItem, useUpdateItem } from "@/hooks/useTableData";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ExternalLink,
   Star,
   GitFork,
-  Trash2,
-  Plus,
   Edit2,
   Search,
   Rocket,
   Code2,
   CheckSquare,
-  Copy,
   Database,
 } from "lucide-react";
 import FormModal, {
@@ -76,7 +73,6 @@ const emptyRepo: Omit<GitHubRepo, "id"> = {
 export default function GitHubPage() {
   const repos = useRepos();
   const updateData = useUpdateData();
-  const duplicateItem = useDuplicateItem();
   const bulkAddItems = useBulkAddItems();
   const bulkPatch = useBulkPatch();
   const addItem = useAddItem();
@@ -226,20 +222,6 @@ export default function GitHubPage() {
     setEditId(null);
     setEditCatalogName(null);
     toast.success("Repository saved");
-  };
-  const deleteRepo = (id: string) => {
-    cd.confirm({
-      title: "Delete Repository",
-      description: "This repository entry will be permanently removed.",
-      onConfirm: () => {
-        updateData({ repos: repos.filter((r) => r.id !== id) });
-        toast.success("Repository deleted");
-      },
-    });
-  };
-  const duplicateRepo = async (id: string) => {
-    const newId = await duplicateItem("repos", id);
-    if (newId) toast.success("Repo duplicated");
   };
   const uf = (field: keyof typeof form, val: any) => setForm((f) => ({ ...f, [field]: val }));
 
@@ -522,8 +504,14 @@ export default function GitHubPage() {
         <div className="text-center py-16 text-muted-foreground">
           <div className="text-5xl mb-3">🐙</div>
           <p className="font-medium">No repositories found</p>
-          <button onClick={openAdd} className="mt-3 text-sm text-primary hover:underline">
-            + Add your first repo
+          <button
+            onClick={() => {
+              setSearch("");
+              setPriorityFilter("all");
+            }}
+            className="mt-3 text-sm text-primary hover:underline"
+          >
+            Clear filters
           </button>
         </div>
       )}
