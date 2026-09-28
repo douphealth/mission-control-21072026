@@ -3,6 +3,7 @@
 // response into the shape the capture UI expects.
 
 import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";
+import { todayISO } from "@/lib/overdue";
 
 export interface SmartCaptureResult extends VoiceCaptureResult {
   source: "ai" | "browser" | "local";
@@ -103,7 +104,7 @@ export async function smartCapture(
       result.priority = s.priority ?? "medium";
       result.dueDate = /^\d{4}-\d{2}-\d{2}$/.test(s.dueDate ?? "")
         ? s.dueDate
-        : new Date().toISOString().slice(0, 10);
+        : todayISO();
       if (/^\d{2}:\d{2}$/.test(s.startTime ?? "")) result.startTime = s.startTime;
       if (/^\d{2}:\d{2}$/.test(s.endTime ?? "")) result.endTime = s.endTime;
     }
