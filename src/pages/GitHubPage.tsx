@@ -189,12 +189,6 @@ export default function GitHubPage() {
       );
   }, [displayRepos, search, priorityFilter]);
 
-  const openAdd = () => {
-    setEditId(null);
-    setEditCatalogName(null);
-    setForm(emptyRepo);
-    setModalOpen(true);
-  };
   const openEdit = (r: GitHubRepo) => {
     const persisted = repos.find(
       (local) =>
