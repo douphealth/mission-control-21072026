@@ -27,6 +27,7 @@ import {
   Newspaper,
   AtSign,
   Users,
+  Settings,
 } from "lucide-react";
 
 export type MissionNavGroup = "operate" | "grow" | "manage" | "systems";
