@@ -46,6 +46,7 @@ import {
   Moon,
   Leaf,
   Blocks,
+  AppWindow,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -66,6 +67,7 @@ const navGroups = [
     hint: "Traffic & revenue",
     items: [
       { id: "websites", label: "Websites", icon: Globe },
+      { id: "apps-funnels", label: "Apps & Funnels", icon: AppWindow },
       { id: "wp-manage", label: "WordPress", icon: Zap },
       { id: "seo", label: "SEO / AI Visibility", icon: Search },
       { id: "github", label: "GitHub Portfolio", icon: Github },
