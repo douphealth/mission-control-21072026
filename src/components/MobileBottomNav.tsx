@@ -1,8 +1,6 @@
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useTasks, useDecisions } from "@/hooks/useTableData";
 import {
-  Crosshair,
-  Inbox,
   Plus,
   Search,
   Grip,
@@ -60,7 +58,7 @@ const moreItems = [
 ];
 
 export default function MobileBottomNav() {
-  const { activeSection, setActiveSection, setCommandPaletteOpen } = useNavigationStore();
+  const { activeSection, setActiveSection } = useNavigationStore();
   const tasks = useTasks();
   const decisions = useDecisions();
   const [moreOpen, setMoreOpen] = useState(false);
