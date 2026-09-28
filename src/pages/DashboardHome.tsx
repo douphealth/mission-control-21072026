@@ -22,6 +22,7 @@ import QuickCaptureBar from "@/components/dashboard/QuickCaptureBar";
 import FirstRunExperience from "@/components/dashboard/FirstRunExperience";
 import HeroNowBand from "@/components/dashboard/HeroNowBand";
 import ShortcutsOverlay from "@/components/dashboard/ShortcutsOverlay";
+import MissionPulseStrip from "@/components/dashboard/MissionPulseStrip";
 import AreaSwitch from "@/components/AreaSwitch";
 import DayClose from "@/components/DayClose";
 import type { WorkItem } from "@/lib/workQueue";
@@ -143,6 +144,10 @@ export default function DashboardHome() {
             onFocus={(item) => setDockItem(item)}
             onComplete={ops.complete}
           />
+
+          <div className="ultra-rise-1">
+            <MissionPulseStrip />
+          </div>
 
           {/* ── Stat tiles: glass grid ── */}
           <div className="ultra-rise-2 ultra-stat-grid" role="status">
