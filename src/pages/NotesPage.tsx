@@ -22,6 +22,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { toast } from "sonner";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import type { Note } from "@/lib/db";
+import { todayISO } from "@/lib/overdue";
 
 const noteColors = ["blue", "amber", "green", "rose", "purple", "teal"];
 const colorMap: Record<string, { border: string; dot: string }> = {
@@ -46,6 +47,7 @@ export default function NotesPage() {
   const [search, setSearch] = useState("");
   const [titleDraft, setTitleDraft] = useState("");
   const [contentDraft, setContentDraft] = useState("");
+  const [saveState, setSaveState] = useState<"saved" | "saving">("saved");
   const draftDirty = useRef(false);
   const bulk = useBulkActions<(typeof notes)[0]>();
 
@@ -78,14 +80,15 @@ export default function NotesPage() {
   useEffect(() => {
     if (!selectedId || !draftDirty.current) return;
     const id = selectedId;
+    setSaveState("saving");
     const timer = window.setTimeout(() => {
       void updateItem<Note>("notes", id, {
         title: titleDraft,
         content: contentDraft,
-        updatedAt: new Date().toISOString().split("T")[0],
-      });
+        updatedAt: todayISO(),
+      }).finally(() => setSaveState("saved"));
       draftDirty.current = false;
-    }, 450);
+    }, 350);
     return () => window.clearTimeout(timer);
   }, [selectedId, titleDraft, contentDraft, updateItem]);
 
@@ -94,14 +97,14 @@ export default function NotesPage() {
       if (!selectedId) return;
       void updateItem<Note>("notes", selectedId, {
         [field]: value,
-        updatedAt: new Date().toISOString().split("T")[0],
+        updatedAt: todayISO(),
       });
     },
     [selectedId, updateItem],
   );
 
   const addNote = async () => {
-    const now = new Date().toISOString().split("T")[0];
+    const now = todayISO();
     const id = await addItem<Note>("notes", {
       title: "Untitled Note",
       content: "",
@@ -371,7 +374,24 @@ export default function NotesPage() {
                   value={contentDraft}
                   onChange={(e) => {
                     draftDirty.current = true;
+                    setSaveState("saving");
                     setContentDraft(e.target.value);
+                  }}
+                  onKeyDown={(e) => {
+                    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+                      e.preventDefault();
+                      if (!selectedId) return;
+                      setSaveState("saving");
+                      void updateItem<Note>("notes", selectedId, {
+                        title: titleDraft,
+                        content: contentDraft,
+                        updatedAt: todayISO(),
+                      }).finally(() => {
+                        draftDirty.current = false;
+                        setSaveState("saved");
+                        toast.success("Note saved");
+                      });
+                    }
                   }}
                   className="flex-1 bg-transparent text-sm text-card-foreground outline-none resize-none leading-relaxed min-h-[300px]"
                   placeholder="Start writing..."
@@ -381,8 +401,8 @@ export default function NotesPage() {
                     <span className="text-xs text-muted-foreground">
                       {contentDraft.split(/\s+/).filter(Boolean).length} words
                     </span>
-                    <span className="text-xs text-muted-foreground hidden sm:inline">
-                      Updated {selected.updatedAt}
+                    <span className="text-xs font-medium text-muted-foreground hidden sm:inline">
+                      {saveState === "saving" ? "Saving…" : "Saved"} · Updated {selected.updatedAt}
                     </span>
                   </div>
                   <div className="flex gap-1.5">
