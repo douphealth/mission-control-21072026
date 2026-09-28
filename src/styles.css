@@ -2868,3 +2868,152 @@ table,
   background: hsl(var(--card)) !important;
   border-color: hsl(var(--foreground) / 0.35) !important;
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mission Control v11 — productivity shell
+   Global polish shared across the entire application.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.mission-pulse-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 112px;
+  border-radius: 22px;
+  border: 1px solid hsl(var(--border) / 0.5);
+  background:
+    linear-gradient(180deg, hsl(var(--card) / 0.86), hsl(var(--card) / 0.62)),
+    var(--gradient-subtle);
+  padding: 14px;
+  color: hsl(var(--foreground));
+  box-shadow: 0 10px 28px -22px hsl(var(--foreground) / 0.45);
+  backdrop-filter: blur(22px) saturate(1.25);
+  transition:
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 180ms ease,
+    box-shadow 220ms ease,
+    background 220ms ease;
+}
+.mission-pulse-card::after {
+  content: "";
+  position: absolute;
+  inset: auto -25% -65% 30%;
+  height: 120px;
+  border-radius: 999px;
+  background: hsl(var(--primary) / 0.08);
+  filter: blur(28px);
+  pointer-events: none;
+}
+.mission-pulse-card:hover {
+  transform: translateY(-2px);
+  border-color: hsl(var(--primary) / 0.28);
+  box-shadow: 0 18px 38px -24px hsl(var(--primary) / 0.42);
+}
+.mission-pulse-card:active {
+  transform: translateY(0) scale(0.985);
+}
+.mission-pulse-card[data-tone="danger"] {
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive) / 0.2);
+}
+.mission-pulse-card[data-tone="warning"] {
+  color: hsl(var(--warning));
+  border-color: hsl(var(--warning) / 0.22);
+}
+.mission-pulse-card[data-tone="good"] {
+  color: hsl(var(--success));
+  border-color: hsl(var(--success) / 0.18);
+}
+.mission-pulse-card[data-tone="info"] {
+  color: hsl(var(--info));
+  border-color: hsl(var(--info) / 0.18);
+}
+.mission-pulse-card[data-tone="violet"] {
+  color: hsl(var(--violet));
+  border-color: hsl(var(--violet) / 0.18);
+}
+.mission-pulse-card .mission-pulse-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 12px;
+  background: currentColor;
+  color: hsl(var(--card));
+  box-shadow: inset 0 0 0 1px hsl(var(--foreground) / 0.04);
+}
+.dark .mission-pulse-card .mission-pulse-icon {
+  color: hsl(var(--background));
+}
+
+/* Make the whole app feel quieter, faster and more consistent. */
+.card-elevated,
+.card-glass,
+.enterprise-card,
+.enterprise-panel,
+.se-card {
+  transition:
+    border-color 180ms ease,
+    box-shadow 220ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.card-elevated:hover,
+.enterprise-card:hover {
+  border-color: hsl(var(--primary) / 0.18);
+  box-shadow: var(--shadow-md);
+}
+
+#main-content {
+  scrollbar-gutter: stable;
+}
+
+#main-content::-webkit-scrollbar,
+nav::-webkit-scrollbar,
+aside::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+#main-content::-webkit-scrollbar-thumb,
+nav::-webkit-scrollbar-thumb,
+aside::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.2);
+  background-clip: padding-box;
+}
+#main-content::-webkit-scrollbar-thumb:hover,
+nav::-webkit-scrollbar-thumb:hover,
+aside::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.35);
+  background-clip: padding-box;
+}
+
+/* Mobile: preserve space for the command bar and floating capture docks. */
+@media (max-width: 1023px) {
+  .mobile-content-pad {
+    padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  }
+  .mission-pulse-card {
+    min-height: 104px;
+    border-radius: 20px;
+    padding: 12px;
+  }
+}
+
+/* Tighten large-screen density without making the UI cramped. */
+@media (min-width: 1280px) {
+  .card-elevated,
+  .enterprise-card {
+    border-radius: 22px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mission-pulse-card,
+  .card-elevated,
+  .enterprise-card,
+  .enterprise-panel {
+    transition: none !important;
+  }
+}

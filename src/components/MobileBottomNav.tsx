@@ -1,177 +1,155 @@
+import { useMemo, useState } from "react";
+import { Grid2X2, Home, Plus, Target, CheckSquare } from "lucide-react";
 import { useNavigationStore } from "@/stores/navigationStore";
-import { useTasks, useDecisions } from "@/hooks/useTableData";
-import {
-  Crosshair,
-  Inbox,
-  Plus,
-  Search,
-  Grip,
-  CheckSquare,
-  Calendar,
-  FileText,
-  Globe,
-  DollarSign,
-  Timer,
-  Flame,
-  Lightbulb,
-  KeyRound,
-  Settings,
-  Github,
-  Hammer,
-  Link2,
-  PanelsTopLeft,
-  RefreshCcw,
-  Scale,
-  Bell,
-  Radar,
-  Newspaper,
-  AtSign,
-  Users,
-  Home,
-} from "lucide-react";
-import { useState } from "react";
+import { useTasks } from "@/hooks/useTableData";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
-
-const moreItems = [
-  { id: "tasks", label: "Tasks", icon: CheckSquare },
-
-  { id: "review", label: "Review", icon: RefreshCcw },
-  { id: "focus", label: "Focus", icon: Timer },
-  { id: "calendar", label: "Calendar", icon: Calendar },
-  { id: "notes", label: "Notes", icon: FileText },
-  { id: "decisions", label: "Findings", icon: Scale },
-  { id: "reminders", label: "Reminders", icon: Bell },
-  { id: "control-center", label: "Captures", icon: Radar },
-  { id: "websites", label: "Sites", icon: Globe },
-  { id: "seo", label: "SEO", icon: Search },
-  { id: "payments", label: "Finance", icon: DollarSign },
-  { id: "industry", label: "Trends", icon: Newspaper },
-  { id: "mentions", label: "Mentions", icon: AtSign },
-  { id: "audience", label: "Audience", icon: Users },
-  { id: "projects", label: "Projects", icon: PanelsTopLeft },
-  { id: "habits", label: "Habits", icon: Flame },
-  { id: "ideas", label: "Ideas", icon: Lightbulb },
-  { id: "credentials", label: "Vault", icon: KeyRound },
-  { id: "github", label: "GitHub", icon: Github },
-  { id: "builds", label: "Builds", icon: Hammer },
-  { id: "links", label: "Links", icon: Link2 },
-  { id: "dashboard", label: "Dashboard", icon: Home },
-  { id: "settings", label: "Settings", icon: Settings },
-];
+import { MISSION_NAV, NAV_GROUP_LABELS, type MissionNavGroup } from "@/lib/navigation";
 
 export default function MobileBottomNav() {
-  const { activeSection, setActiveSection, setCommandPaletteOpen } = useNavigationStore();
+  const { activeSection, setActiveSection } = useNavigationStore();
   const tasks = useTasks();
-  const decisions = useDecisions();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  const inboxCount =
-    tasks.filter((t) => t.status === "todo" && !t.dueDate).length +
-    decisions.filter((d) => d.status === "open").length;
+  const openTasks = tasks.filter((t) => t.status !== "done").length;
+  const groups = useMemo(() => {
+    const out: Record<MissionNavGroup, typeof MISSION_NAV> = {
+      operate: [],
+      grow: [],
+      manage: [],
+      systems: [],
+    };
+    for (const item of MISSION_NAV) out[item.group].push(item);
+    for (const key of Object.keys(out) as MissionNavGroup[]) {
+      out[key].sort((a, b) => b.rank - a.rank);
+    }
+    return out;
+  }, []);
 
   const go = (id: string) => {
     setActiveSection(id);
     setMoreOpen(false);
   };
 
-  const tabCls = (active: boolean) =>
-    `relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl transition-colors touch-manipulation active:scale-[0.94] ${
-      active ? "text-primary" : "text-muted-foreground/70"
+  const capture = () => {
+    setMoreOpen(false);
+    setActiveSection("dashboard");
+    requestAnimationFrame(() => window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT)));
+  };
+
+  const tabClass = (active: boolean) =>
+    `relative flex min-h-[50px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl transition-all touch-manipulation active:scale-[0.94] ${
+      active ? "bg-primary/10 text-primary" : "text-muted-foreground/70"
     }`;
 
   return (
     <>
       {moreOpen && (
         <>
-          <div
+          <button
+            type="button"
+            aria-label="Close all sections"
             className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm lg:hidden"
             onClick={() => setMoreOpen(false)}
           />
-          <div className="mobile-sheet-luxe fixed bottom-[80px] left-2 right-2 z-50 max-h-[70vh] overflow-hidden rounded-[26px] lg:hidden animate-slide-up">
-            <div className="flex justify-center pt-3 pb-1">
+          <section className="mobile-sheet-luxe fixed bottom-[82px] left-2 right-2 z-50 max-h-[72vh] overflow-hidden rounded-[28px] lg:hidden">
+            <div className="flex justify-center pt-3">
               <div className="h-1.5 w-10 rounded-full bg-muted-foreground/20" />
             </div>
-            <div className="px-5 pb-2 pt-1">
-              <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
-                All sections
-              </h2>
-            </div>
-            <div className="overflow-y-auto px-3 pb-5">
-              <div className="grid grid-cols-4 gap-2">
-                {moreItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => go(item.id)}
-                    className={`flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl p-2 text-center transition touch-manipulation active:scale-90 ${
-                      activeSection === item.id
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground active:bg-secondary/70"
-                    }`}
-                  >
-                    <item.icon size={19} strokeWidth={1.8} />
-                    <span className="text-[10px] font-medium leading-tight">{item.label}</span>
-                  </button>
-                ))}
+            <div className="flex items-center justify-between px-5 pb-3 pt-3">
+              <div>
+                <h2 className="font-display text-[16px] font-extrabold tracking-tight text-foreground">
+                  Mission Control
+                </h2>
+                <p className="mt-0.5 text-[10px] font-medium text-muted-foreground">
+                  Jump directly to the work you need.
+                </p>
               </div>
             </div>
-          </div>
+            <div className="max-h-[60vh] overflow-y-auto px-3 pb-5">
+              {(["operate", "grow", "manage", "systems"] as const).map((group) => (
+                <div key={group} className="mb-4 last:mb-0">
+                  <div className="px-2 pb-2 text-[9px] font-extrabold uppercase tracking-[0.16em] text-muted-foreground/55">
+                    {NAV_GROUP_LABELS[group]}
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    {groups[group].map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => go(item.id)}
+                        className={`flex min-h-[76px] flex-col items-center justify-center gap-2 rounded-2xl border p-2 text-center transition active:scale-95 ${
+                          activeSection === item.id
+                            ? "border-primary/25 bg-primary/10 text-primary"
+                            : "border-border/25 bg-card/45 text-muted-foreground hover:bg-secondary/60 hover:text-foreground"
+                        }`}
+                      >
+                        <item.icon size={18} strokeWidth={activeSection === item.id ? 2.3 : 1.7} />
+                        <span className="text-[10px] font-semibold leading-tight">
+                          {item.shortLabel || item.label}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         </>
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)*0.5+0.5rem)] lg:hidden">
-        <div className="mobile-liquid-bar rounded-[24px] px-2 py-1.5">
-          <div className="flex items-stretch justify-around gap-1">
+        <div className="mobile-liquid-bar rounded-[25px] px-2 py-1.5 shadow-[0_20px_50px_-24px_hsl(var(--foreground)/0.45)]">
+          <div className="flex items-stretch gap-1">
             <button
+              type="button"
               onClick={() => go("dashboard")}
-              className={tabCls(activeSection === "dashboard")}
+              className={tabClass(activeSection === "dashboard")}
             >
-              <Home size={20} strokeWidth={activeSection === "dashboard" ? 2.4 : 1.7} />
-              <span className="text-[10px] font-medium leading-none">Home</span>
+              <Home size={19} strokeWidth={activeSection === "dashboard" ? 2.4 : 1.7} />
+              <span className="text-[9.5px] font-semibold leading-none">Home</span>
             </button>
 
             <button
-              onClick={() => go("control-center")}
-              className={tabCls(activeSection === "control-center")}
+              type="button"
+              onClick={() => go("now")}
+              className={tabClass(activeSection === "now")}
+            >
+              <Target size={19} strokeWidth={activeSection === "now" ? 2.4 : 1.7} />
+              <span className="text-[9.5px] font-semibold leading-none">Today</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={capture}
+              aria-label="Capture something"
+              className="relative -mt-6 flex h-[58px] w-[58px] shrink-0 items-center justify-center self-center rounded-full border-[5px] border-background bg-gradient-to-br from-primary via-primary to-cyan-500 text-primary-foreground shadow-[0_16px_36px_-12px_hsl(var(--primary)/0.85)] transition active:scale-90"
+            >
+              <Plus size={24} strokeWidth={2.5} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => go("tasks")}
+              className={tabClass(activeSection === "tasks")}
             >
               <div className="relative">
-                <Inbox size={20} strokeWidth={activeSection === "control-center" ? 2.4 : 1.7} />
-                {inboxCount > 0 && (
-                  <span className="absolute -right-2.5 -top-1.5 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground">
-                    {inboxCount > 99 ? "99+" : inboxCount}
+                <CheckSquare size={19} strokeWidth={activeSection === "tasks" ? 2.4 : 1.7} />
+                {openTasks > 0 && (
+                  <span className="absolute -right-3 -top-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[8px] font-extrabold text-destructive-foreground">
+                    {openTasks > 99 ? "99+" : openTasks}
                   </span>
                 )}
               </div>
-              <span className="text-[10px] font-medium leading-none">Inbox</span>
-            </button>
-
-            {/* Central, visually dominant capture */}
-            <button
-              onClick={() => {
-                setMoreOpen(false);
-                // Capture is a title, not a form: jump to the home input.
-                setActiveSection("dashboard");
-                requestAnimationFrame(() => window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT)));
-              }}
-              aria-label="Capture"
-              className="relative -mt-6 flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.85)] transition active:scale-90 touch-manipulation"
-            >
-              <Plus size={24} strokeWidth={2.4} />
+              <span className="text-[9.5px] font-semibold leading-none">Tasks</span>
             </button>
 
             <button
-              onClick={() => {
-                setMoreOpen(false);
-                setCommandPaletteOpen(true);
-              }}
-              className={tabCls(false)}
+              type="button"
+              onClick={() => setMoreOpen((open) => !open)}
+              className={tabClass(moreOpen)}
             >
-              <Search size={20} strokeWidth={1.7} />
-              <span className="text-[10px] font-medium leading-none">Search</span>
-            </button>
-
-            <button onClick={() => setMoreOpen((o) => !o)} className={tabCls(moreOpen)}>
-              <Grip size={20} strokeWidth={moreOpen ? 2.4 : 1.7} />
-              <span className="text-[10px] font-medium leading-none">More</span>
+              <Grid2X2 size={19} strokeWidth={moreOpen ? 2.4 : 1.7} />
+              <span className="text-[9.5px] font-semibold leading-none">More</span>
             </button>
           </div>
         </div>

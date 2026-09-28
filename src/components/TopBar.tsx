@@ -5,6 +5,7 @@ import { todayISO } from "@/lib/overdue";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 import { Search, Bell, Plus, Menu, Download, Mail, History } from "lucide-react";
 import { forwardRef, lazy, Suspense, useState, useEffect } from "react";
+import { MISSION_NAV_BY_ID } from "@/lib/navigation";
 
 const CommandPalette = lazy(() => import("./CommandPalette"));
 const BulkImportModal = lazy(() => import("./BulkImportModal"));
@@ -40,6 +41,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const exportAllData = useExportAllData();
   const { userName } = useSettingsStore();
   const {
+    activeSection,
     setSidebarOpen,
     setActiveSection,
     commandPaletteOpen,
@@ -50,6 +52,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const activeNav = MISSION_NAV_BY_ID.get(activeSection);
 
   const shortcutLabel =
     typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "")
@@ -131,17 +134,26 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <Menu size={18} />
         </button>
 
-        {/* Search — Dribbble style with shortcut indicator */}
+        <div className="hidden min-w-0 md:block">
+          <div className="truncate font-display text-[13px] font-extrabold tracking-tight text-foreground">
+            {activeNav?.label || "Mission Control"}
+          </div>
+          <div className="max-w-[220px] truncate text-[9.5px] font-medium text-muted-foreground/55">
+            {activeNav?.description || "Decide · Do · Grow"}
+          </div>
+        </div>
+
+        {/* Search — universal command field */}
         <button
           onClick={() => setCommandPaletteOpen(true)}
-          className="flex items-center gap-2 sm:gap-2.5 flex-1 max-w-xl h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
+          className="flex items-center gap-2 sm:gap-2.5 flex-1 max-w-lg h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
         >
           <Search
             size={14}
             className="text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0 sm:w-4 sm:h-4"
           />
           <span className="text-xs sm:text-sm text-muted-foreground/50 flex-1 text-left truncate">
-            Search or jump to…
+            Search tasks, sites, repos, notes…
           </span>
           <div className="hidden md:flex items-center gap-1">
             <kbd className="text-[10px] text-muted-foreground/50 bg-card px-2 py-1 rounded-lg font-medium border border-border/40">
@@ -154,7 +166,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           {/* Action buttons — hidden on mobile for cleaner bar */}
           <button
             onClick={() => setImportModalOpen(true)}
-            className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
+            className="hidden xl:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Import"
           >
             <Mail size={16} />
@@ -162,7 +174,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
 
           <button
             onClick={() => setVersionsOpen(true)}
-            className="flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
+            className="hidden xl:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Versions — save & restore"
           >
             <History size={16} />
@@ -170,7 +182,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
 
           <button
             onClick={handleExport}
-            className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
+            className="hidden xl:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
             title="Export"
           >
             <Download size={16} />

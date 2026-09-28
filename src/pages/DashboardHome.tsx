@@ -4,16 +4,7 @@
 // Desktop: plan beside the day's timeline. Mobile: agenda first.
 
 import { Suspense, lazy, useEffect, useState } from "react";
-import {
-  TriangleAlert as AlertTriangle,
-  ChartBar as BarChart3,
-  CalendarClock,
-  CircleCheck as CheckCircle2,
-  ChevronDown,
-  Inbox,
-  Moon,
-  Zap,
-} from "lucide-react";
+import { ChartBar as BarChart3, ChevronDown, Moon } from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
 import InboxStrip from "@/components/dashboard/InboxStrip";
@@ -22,6 +13,7 @@ import QuickCaptureBar from "@/components/dashboard/QuickCaptureBar";
 import FirstRunExperience from "@/components/dashboard/FirstRunExperience";
 import HeroNowBand from "@/components/dashboard/HeroNowBand";
 import ShortcutsOverlay from "@/components/dashboard/ShortcutsOverlay";
+import MissionPulseStrip from "@/components/dashboard/MissionPulseStrip";
 import AreaSwitch from "@/components/AreaSwitch";
 import DayClose from "@/components/DayClose";
 import type { WorkItem } from "@/lib/workQueue";
@@ -66,9 +58,6 @@ export default function DashboardHome() {
   const commitmentsDone = ops.commitments.filter(
     (c) => c.raw && (c.raw as { status?: string }).status === "done",
   ).length;
-  const attentionCount = ops.timeline.counts.flags;
-  const timedCount = ops.timeline.counts.timed;
-  const queuedCount = ops.timeline.counts.untimed;
 
   const plan = (
     <TodayPlan
@@ -144,51 +133,8 @@ export default function DashboardHome() {
             onComplete={ops.complete}
           />
 
-          {/* ── Stat tiles: glass grid ── */}
-          <div className="ultra-rise-2 ultra-stat-grid" role="status">
-            {attentionCount > 0 && (
-              <div className="ultra-stat" data-tone="bad">
-                <div className="ultra-stat-icon">
-                  <AlertTriangle size={15} />
-                </div>
-                <div className="ultra-stat-num">{attentionCount}</div>
-                <div className="ultra-stat-label">needing attention</div>
-              </div>
-            )}
-            <div className="ultra-stat" data-tone="info">
-              <div className="ultra-stat-icon">
-                <CalendarClock size={15} />
-              </div>
-              <div className="ultra-stat-num">{timedCount}</div>
-              <div className="ultra-stat-label">timed today</div>
-            </div>
-            <div className="ultra-stat">
-              <div className="ultra-stat-icon">
-                <Zap size={15} />
-              </div>
-              <div className="ultra-stat-num">{queuedCount}</div>
-              <div className="ultra-stat-label">queued</div>
-            </div>
-            {commitmentsTotal > 0 && (
-              <div className="ultra-stat" data-tone="good">
-                <div className="ultra-stat-icon">
-                  <CheckCircle2 size={15} />
-                </div>
-                <div className="ultra-stat-num">
-                  {commitmentsDone}/{commitmentsTotal}
-                </div>
-                <div className="ultra-stat-label">outcomes done</div>
-              </div>
-            )}
-            {ops.inboxTasks.length > 0 && (
-              <div className="ultra-stat" data-tone="violet">
-                <div className="ultra-stat-icon">
-                  <Inbox size={15} />
-                </div>
-                <div className="ultra-stat-num">{ops.inboxTasks.length}</div>
-                <div className="ultra-stat-label">in inbox</div>
-              </div>
-            )}
+          <div className="ultra-rise-1">
+            <MissionPulseStrip />
           </div>
 
           {isMobile ? (
