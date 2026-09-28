@@ -23,6 +23,7 @@ const WebsitesPage = lazy(() => import("@/pages/WebsitesPage"));
 const WordPressManagementPage = lazy(() => import("@/pages/WordPressManagementPage"));
 const GitHubPage = lazy(() => import("@/pages/GitHubPage"));
 const BuildsPage = lazy(() => import("@/pages/BuildsPage"));
+const AppsFunnelsPage = lazy(() => import("@/pages/AppsFunnelsPage"));
 const LinksPage = lazy(() => import("@/pages/LinksPage"));
 const NotesPage = lazy(() => import("@/pages/NotesPage"));
 const FocusPage = lazy(() => import("@/pages/FocusPage"));
@@ -57,6 +58,7 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   "wp-manage": WordPressManagementPage,
   github: GitHubPage,
   builds: BuildsPage,
+  "apps-funnels": AppsFunnelsPage,
   links: LinksPage,
   notes: NotesPage,
   focus: FocusPage,
