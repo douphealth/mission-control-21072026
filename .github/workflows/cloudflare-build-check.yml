@@ -1,0 +1,31 @@
+name: Cloudflare Build Check
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloudflare-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-cloudflare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - name: Build exactly for Cloudflare Pages
+        run: bun run build:cloudflare
+      - name: Show Cloudflare output
+        if: success()
+        run: |
+          echo "Cloudflare build output:"
+          find .output -maxdepth 3 -type f | sort | head -200
