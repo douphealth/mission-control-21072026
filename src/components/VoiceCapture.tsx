@@ -20,6 +20,7 @@ import { buildRecognitionSnapshot, type RecognitionResultLike } from "@/lib/spee
 import { encodePcmAsWav } from "@/lib/wavRecorder";
 import { browserRecognitionLanguage, hasUsableVoiceCapture } from "@/lib/voiceCaptureQuality";
 import { toast } from "sonner";
+import DraggableFloatingDock from "@/components/DraggableFloatingDock";
 
 type CaptureType = "tasks" | "notes" | "ideas" | "links";
 
@@ -637,18 +638,24 @@ export default function VoiceCapture() {
 
   return (
     <>
-      <button
-        onClick={() => {
-          setOpen(true);
-          if (supported && phase === "idle") void startRecording();
-        }}
-        className="fixed z-40 bottom-[calc(env(safe-area-inset-bottom)+92px)] right-4 lg:bottom-8 lg:right-8 w-[52px] h-[52px] lg:w-16 lg:h-16 rounded-2xl gradient-primary text-primary-foreground shadow-[0_10px_40px_-8px_hsl(var(--primary)/0.6)] flex items-center justify-center group"
-        title="Voice capture (⌘⇧V)"
-        aria-label="Voice capture"
+      <DraggableFloatingDock
+        storageKey="mc-floating-voice-position"
+        defaultClassName="fixed z-40 bottom-[calc(env(safe-area-inset-bottom)+92px)] right-4 lg:bottom-8 lg:right-8"
+        label="Move voice capture control"
       >
-        <Mic size={22} className="lg:w-7 lg:h-7" />
-        <span className="absolute inset-0 rounded-2xl ring-2 ring-primary/40 animate-ping opacity-40 group-hover:opacity-70" />
-      </button>
+        <button
+          onClick={() => {
+            setOpen(true);
+            if (supported && phase === "idle") void startRecording();
+          }}
+          className="relative w-[52px] h-[52px] lg:w-16 lg:h-16 rounded-2xl gradient-primary text-primary-foreground shadow-[0_10px_40px_-8px_hsl(var(--primary)/0.6)] flex items-center justify-center group"
+          title="Voice capture (⌘⇧V)"
+          aria-label="Voice capture"
+        >
+          <Mic size={22} className="lg:w-7 lg:h-7" />
+          <span className="absolute inset-0 rounded-2xl ring-2 ring-primary/40 animate-ping opacity-40 group-hover:opacity-70" />
+        </button>
+      </DraggableFloatingDock>
 
       <>
         {open && (
