@@ -84,6 +84,7 @@ export default function GitHubPage() {
   const catalogSeeded = useRef(false);
   const catalogSynced = useRef(false);
   const [search, setSearch] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editCatalogName, setEditCatalogName] = useState<string | null>(null);
@@ -176,11 +177,12 @@ export default function GitHubPage() {
     return displayRepos
       .filter(
         (r) =>
-          !q ||
-          r.name.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q) ||
-          r.doneSummary?.toLowerCase().includes(q) ||
-          r.pendingSummary?.toLowerCase().includes(q),
+          (priorityFilter === "all" || (r.priority || "medium") === priorityFilter) &&
+          (!q ||
+            r.name.toLowerCase().includes(q) ||
+            r.description.toLowerCase().includes(q) ||
+            r.doneSummary?.toLowerCase().includes(q) ||
+            r.pendingSummary?.toLowerCase().includes(q)),
       )
       .sort(
         (a, b) =>
@@ -189,7 +191,7 @@ export default function GitHubPage() {
           (b.importance || 0) - (a.importance || 0) ||
           a.name.localeCompare(b.name),
       );
-  }, [displayRepos, search]);
+  }, [displayRepos, search, priorityFilter]);
 
   const openAdd = () => {
     setEditId(null);
@@ -281,12 +283,7 @@ export default function GitHubPage() {
           >
             <CheckSquare size={15} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
           </button>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
-          >
-            <Plus size={16} /> Add Repo
-          </button>
+
         </div>
       </div>
 
@@ -312,14 +309,38 @@ export default function GitHubPage() {
         />
       )}
 
-      <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 w-full sm:max-w-xs">
-        <Search size={14} className="text-muted-foreground" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search repos..."
-          className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
-        />
+      <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 w-full lg:max-w-sm">
+          <Search size={14} className="text-muted-foreground" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search 81 repositories..."
+            className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
+          />
+        </div>
+        <div className="flex gap-1.5 overflow-x-auto pb-1">
+          {(["all", "critical", "high", "medium", "low"] as const).map((priority) => {
+            const count =
+              priority === "all"
+                ? displayRepos.length
+                : displayRepos.filter((repo) => (repo.priority || "medium") === priority).length;
+            return (
+              <button
+                key={priority}
+                type="button"
+                onClick={() => setPriorityFilter(priority)}
+                className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold capitalize transition ${
+                  priorityFilter === priority
+                    ? "border-primary/30 bg-primary/10 text-primary"
+                    : "border-border/30 bg-card/60 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {priority} <span className="ml-1 opacity-70">{count}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
@@ -375,13 +396,13 @@ export default function GitHubPage() {
                 {repo.doneSummary && (
                   <div>
                     <div className="mb-1 font-bold uppercase tracking-wide text-success">Done</div>
-                    <p className="leading-relaxed text-muted-foreground">{repo.doneSummary}</p>
+                    <p className="line-clamp-2 leading-relaxed text-muted-foreground">{repo.doneSummary}</p>
                   </div>
                 )}
                 {repo.pendingSummary && (
                   <div>
                     <div className="mb-1 font-bold uppercase tracking-wide text-warning">Pending</div>
-                    <p className="leading-relaxed text-muted-foreground">{repo.pendingSummary}</p>
+                    <p className="line-clamp-2 leading-relaxed text-muted-foreground">{repo.pendingSummary}</p>
                   </div>
                 )}
               </div>
@@ -484,27 +505,13 @@ export default function GitHubPage() {
                 </a>
               )}
               {!bulk.bulkMode && (
-                <div className="ml-auto flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                  <button
-                    onClick={() => duplicateRepo(repo.id)}
-                    className="text-muted-foreground hover:text-blue-500 p-1.5 rounded-lg hover:bg-secondary transition-colors"
-                    title="Duplicate"
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <button
-                    onClick={() => openEdit(repo)}
-                    className="text-muted-foreground hover:text-foreground p-1.5 rounded-lg hover:bg-secondary transition-colors"
-                  >
-                    <Edit2 size={14} />
-                  </button>
-                  <button
-                    onClick={() => deleteRepo(repo.id)}
-                    className="text-muted-foreground hover:text-destructive p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => openEdit(repo)}
+                  className="ml-auto flex items-center gap-1.5 rounded-lg border border-border/40 bg-secondary/50 px-2.5 py-1.5 text-xs font-semibold text-foreground transition hover:border-primary/30 hover:bg-primary/10 hover:text-primary"
+                >
+                  <Edit2 size={13} /> Edit
+                </button>
               )}
             </div>
           </div>
@@ -549,6 +556,22 @@ export default function GitHubPage() {
             rows={2}
           />
         </FormField>
+        <FormField label="Done / Current State">
+          <FormTextarea
+            value={form.doneSummary || ""}
+            onChange={(v) => uf("doneSummary", v)}
+            placeholder="What is already complete and working?"
+            rows={3}
+          />
+        </FormField>
+        <FormField label="Pending / Next Action">
+          <FormTextarea
+            value={form.pendingSummary || ""}
+            onChange={(v) => uf("pendingSummary", v)}
+            placeholder="What is missing or should happen next?"
+            rows={3}
+          />
+        </FormField>
         <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <FormField label="Language">
             <FormSelect
@@ -576,6 +599,25 @@ export default function GitHubPage() {
                 { value: "paused", label: "Paused" },
                 { value: "archived", label: "Archived" },
               ]}
+            />
+          </FormField>
+          <FormField label="Priority">
+            <FormSelect
+              value={form.priority || "medium"}
+              onChange={(v) => uf("priority", v as any)}
+              options={[
+                { value: "critical", label: "Critical" },
+                { value: "high", label: "High" },
+                { value: "medium", label: "Medium" },
+                { value: "low", label: "Low" },
+              ]}
+            />
+          </FormField>
+          <FormField label="Importance (0-100)">
+            <FormInput
+              value={String(form.importance ?? 50)}
+              onChange={(v) => uf("importance", Math.max(0, Math.min(100, parseInt(v) || 0)))}
+              type="number"
             />
           </FormField>
           <FormField label="Stars">
