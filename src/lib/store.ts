@@ -84,7 +84,7 @@ export interface GitHubRepo {
 export interface BuildProject {
   id: string;
   name: string;
-  platform: "bolt" | "lovable" | "replit";
+  platform: "bolt" | "lovable" | "replit" | "vercel" | "other";
   projectUrl: string;
   deployedUrl: string;
   description: string;
@@ -94,6 +94,20 @@ export interface BuildProject {
   lastWorkedOn: string;
   nextSteps: string;
   githubRepo: string;
+  /** Parent content/business website that owns the funnel. */
+  parentWebsite?: string;
+  /** WordPress or site landing page that routes traffic into the app. */
+  landingPage?: string;
+  /** Additional live/canonical URLs for the same app. */
+  alternateUrls?: string[];
+  /** Portfolio priority used by Mission Control. */
+  priority?: "critical" | "high" | "medium" | "low";
+  /** Relative business importance from 0-100. */
+  importance?: number;
+  /** Human-friendly product name when it differs from the repo/build name. */
+  productName?: string;
+  /** Production portfolio grouping. */
+  portfolioGroup?: "growth-app" | "tool" | "internal" | "experiment";
 }
 
 export interface LinkItem {

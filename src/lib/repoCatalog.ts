@@ -6,7 +6,7 @@ export const GITHUB_REPO_CATALOG_COUNT = 81;
 /**
  * Complete snapshot of every repository currently available to the connected
  * douphealth GitHub account. Mission Control synchronizes catalog-owned
- * portfolio metadata while preserving user-managed progress and notes.
+ * technical metadata while preserving user-managed planning fields.
  */
 export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
   {
@@ -33,6 +33,56 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 3296
+  },
+  {
+    "name": "runmatch-ai-buddy-1282c193",
+    "url": "https://github.com/douphealth/runmatch-ai-buddy-1282c193",
+    "description": "Canonical GearUpToFit RunMatch / Shoe Finder application repository.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://runmatch.gearup-flow-master.pages.dev/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "critical",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "critical",
+    "importance": 100,
+    "doneSummary": "Canonical production Shoe Finder repo is verified in GitHub and mapped to GearUpToFit.",
+    "pendingSummary": "Validate canonical production route, conversion tracking, affiliate monetization, and the WordPress-to-app funnel.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 112577
+  },
+  {
+    "name": "body-recomp-os-guru-7c1356da",
+    "url": "https://github.com/douphealth/body-recomp-os-guru-7c1356da",
+    "description": "Canonical GearUpToFit Body Recomp OS / Fitness Plan application repository.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://fitness-plan.gearup-flow-master.pages.dev/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "critical",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "critical",
+    "importance": 99,
+    "doneSummary": "Canonical production Fitness Plan repo is verified in GitHub and mapped to GearUpToFit.",
+    "pendingSummary": "Validate canonical production domain, Stripe/conversion tracking, and the WordPress landing-page handoff.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 984
   },
   {
     "name": "gearuptofit",
@@ -83,6 +133,56 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "repoSizeKb": 2164
   },
   {
+    "name": "frenchie-care-compass",
+    "url": "https://github.com/douphealth/frenchie-care-compass",
+    "description": "French Bulldog care-plan application connected to FrenchyFab.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://care-plan.frenchyfab.com/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "high",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "high",
+    "importance": 95,
+    "doneSummary": "Canonical Frenchie Care Plan repo and live production domain are mapped.",
+    "pendingSummary": "Verify paid conversion flow, tracking, and contextual placement on high-intent FrenchyFab pages.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 7073
+  },
+  {
+    "name": "mystic-blueprint-maker",
+    "url": "https://github.com/douphealth/mystic-blueprint-maker",
+    "description": "Life-path / numerology application connected to Mystical Digits.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://life-path.mysticaldigits.com/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "high",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "high",
+    "importance": 94,
+    "doneSummary": "Canonical Life Path repo and live production domain are mapped.",
+    "pendingSummary": "Tighten website-to-app routing, conversion measurement, and monetization on high-intent numerology pages.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 1929
+  },
+  {
     "name": "plantastichaven",
     "url": "https://github.com/douphealth/plantastichaven",
     "description": "Plantastic Haven website repository.",
@@ -129,6 +229,31 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 436
+  },
+  {
+    "name": "mice-solver-pro",
+    "url": "https://github.com/douphealth/mice-solver-pro",
+    "description": "Mice elimination application connected to Mice Gone Guide.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://elimination.micegoneguide.com/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "high",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "high",
+    "importance": 93,
+    "doneSummary": "Canonical Mice Elimination repo and live production domain are mapped.",
+    "pendingSummary": "Remove fragile persistence dependencies, verify paid flow, and integrate the app into the site's highest-intent pages.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 2355
   },
   {
     "name": "micegoneguide",
@@ -203,6 +328,56 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "repoSizeKb": 1035
   },
   {
+    "name": "grow-stack-engine-945df4aa",
+    "url": "https://github.com/douphealth/grow-stack-engine-945df4aa",
+    "description": "Canonical Grow Plan application repository connected to GearUpToGrow.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://grow-plan.gearuptogrow.com/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "high",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "high",
+    "importance": 90,
+    "doneSummary": "Canonical Grow Plan repo and production subdomain are mapped.",
+    "pendingSummary": "Confirm canonical production use, measurement, and the highest-value site-to-app funnel.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 648
+  },
+  {
+    "name": "plantastic-haven-pro-8e23ae56",
+    "url": "https://github.com/douphealth/plantastic-haven-pro-8e23ae56",
+    "description": "Canonical Plantastic Haven Pro Care application repository.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://procare.plantastichaven.com/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "high",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "high",
+    "importance": 89,
+    "doneSummary": "Canonical Pro Care repo and production subdomain are mapped.",
+    "pendingSummary": "Connect the app to high-intent plant-care pages and measure conversion from organic traffic.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 1727
+  },
+  {
     "name": "growthscribe-os",
     "url": "https://github.com/douphealth/growthscribe-os",
     "description": "SEO/GEO/AEO growth automation and website operations repository.",
@@ -225,78 +400,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 746
-  },
-  {
-    "name": "frenchie-care-compass",
-    "url": "https://github.com/douphealth/frenchie-care-compass",
-    "description": "French Bulldog care-plan application connected to FrenchyFab.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "active",
-    "demoUrl": "https://care-plan.frenchyfab.com/",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "high"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "high",
-    "importance": 87,
-    "doneSummary": "Application repository exists and has a live care-plan deployment.",
-    "pendingSummary": "Verify Stripe/conversion tracking and canonical deployment; connect the app tightly to FrenchyFab content and CTAs.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 7073
-  },
-  {
-    "name": "mice-solver-pro",
-    "url": "https://github.com/douphealth/mice-solver-pro",
-    "description": "Mice elimination application connected to Mice Gone Guide.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "active",
-    "demoUrl": "https://elimination.micegoneguide.com/",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "high"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "high",
-    "importance": 86,
-    "doneSummary": "Application repository exists and has a live elimination-app deployment.",
-    "pendingSummary": "Remove the frozen Supabase dependency, verify the paid flow, and validate production persistence.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 2355
-  },
-  {
-    "name": "mystic-blueprint-maker",
-    "url": "https://github.com/douphealth/mystic-blueprint-maker",
-    "description": "Life-path / numerology application connected to Mystical Digits.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "active",
-    "demoUrl": "https://life-path.mysticaldigits.com/",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "high"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "high",
-    "importance": 85,
-    "doneSummary": "Application repository exists and has a live life-path deployment.",
-    "pendingSummary": "Verify Stripe/conversion tracking and integrate the app into the highest-intent Mystical Digits pages.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 1929
   },
   {
     "name": "runmatch-ai-buddy",
@@ -345,30 +448,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 1229
-  },
-  {
-    "name": "claw-skills-hub",
-    "url": "https://github.com/douphealth/claw-skills-hub",
-    "description": "OpenClaw skills hub application/repository.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "active",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "high"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "high",
-    "importance": 82,
-    "doneSummary": "OpenClaw skills-hub repository exists and is connected.",
-    "pendingSummary": "Confirm canonical domain/deployment, tighten content/indexation architecture, and avoid duplicate skill-hub variants.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 5753
   },
   {
     "name": "image-alchemy-pro",
@@ -491,6 +570,56 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "repoSizeKb": 2280
   },
   {
+    "name": "neural-prompt-coach",
+    "url": "https://github.com/douphealth/neural-prompt-coach",
+    "description": "Canonical PromptGrade application repository.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "stable",
+    "demoUrl": "",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "medium",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "medium",
+    "importance": 78,
+    "doneSummary": "PromptGrade's canonical repo is mapped in Mission Control.",
+    "pendingSummary": "Confirm the canonical production URL, target site/funnel, monetization model, and analytics before promotion.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 813
+  },
+  {
+    "name": "form-beauty-studio",
+    "url": "https://github.com/douphealth/form-beauty-studio",
+    "description": "Canonical ImageAlchemy application repository.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://imagealchemy.app/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "medium",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "medium",
+    "importance": 77,
+    "doneSummary": "ImageAlchemy's canonical repo and production domain are mapped.",
+    "pendingSummary": "Confirm production conversion path, pricing/monetization, analytics, and canonical repository/domain alignment.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 1521
+  },
+  {
     "name": "traffic-growth-engine",
     "url": "https://github.com/douphealth/traffic-growth-engine",
     "description": "Traffic Growth Engine repository tracked in Mission Control.",
@@ -513,6 +642,31 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 649
+  },
+  {
+    "name": "claw-skills-hub",
+    "url": "https://github.com/douphealth/claw-skills-hub",
+    "description": "OpenClaw skills hub application/repository.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "https://openclaw-skillshub.com/",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "medium",
+      "canonical-production"
+    ],
+    "lastUpdated": "2026-09-28",
+    "priority": "medium",
+    "importance": 75,
+    "doneSummary": "Canonical OpenClaw Skills Hub repo and public domain are mapped.",
+    "pendingSummary": "Confirm canonical public domain, consolidate duplicate hub variants, and improve indexation/content architecture.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 5753
   },
   {
     "name": "surgical-seo-suite",
@@ -779,30 +933,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "repoSizeKb": 61633
   },
   {
-    "name": "form-beauty-studio",
-    "url": "https://github.com/douphealth/form-beauty-studio",
-    "description": "Form Beauty Studio repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "stable",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "medium"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "medium",
-    "importance": 50,
-    "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
-    "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 1521
-  },
-  {
     "name": "gearup-flow-master",
     "url": "https://github.com/douphealth/gearup-flow-master",
     "description": "Gearup Flow Master repository tracked in Mission Control.",
@@ -897,30 +1027,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 533
-  },
-  {
-    "name": "neural-prompt-coach",
-    "url": "https://github.com/douphealth/neural-prompt-coach",
-    "description": "Neural Prompt Coach repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "stable",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "medium"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "medium",
-    "importance": 50,
-    "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
-    "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 813
   },
   {
     "name": "plantastic-haven-pro",
@@ -1391,31 +1497,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "repoSizeKb": 914
   },
   {
-    "name": "body-recomp-os-guru-7c1356da",
-    "url": "https://github.com/douphealth/body-recomp-os-guru-7c1356da",
-    "description": "Body Recomp Os Guru 7c1356da repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 984
-  },
-  {
     "name": "body-recomp-os-guru-cb7e904e",
     "url": "https://github.com/douphealth/body-recomp-os-guru-cb7e904e",
     "description": "Body Recomp Os Guru Cb7e904e repository tracked in Mission Control.",
@@ -1489,31 +1570,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "private",
     "defaultBranch": "main",
     "repoSizeKb": 362
-  },
-  {
-    "name": "grow-stack-engine-945df4aa",
-    "url": "https://github.com/douphealth/grow-stack-engine-945df4aa",
-    "description": "Grow Stack Engine 945df4aa repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 648
   },
   {
     "name": "growthscribe-os-1",
@@ -1714,56 +1770,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 1524
-  },
-  {
-    "name": "plantastic-haven-pro-8e23ae56",
-    "url": "https://github.com/douphealth/plantastic-haven-pro-8e23ae56",
-    "description": "Plantastic Haven Pro 8e23ae56 repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 1727
-  },
-  {
-    "name": "runmatch-ai-buddy-1282c193",
-    "url": "https://github.com/douphealth/runmatch-ai-buddy-1282c193",
-    "description": "Runmatch Ai Buddy 1282c193 repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "public",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "public",
-    "defaultBranch": "main",
-    "repoSizeKb": 112577
   },
   {
     "name": "runmatch-ai-buddy-c4c42964",

@@ -26,6 +26,7 @@ import {
   ExternalLink,
   Star,
   TrendingUp,
+  AppWindow,
 } from "lucide-react";
 import {
   useWebsites,
@@ -43,6 +44,7 @@ import { useNavigationStore } from "@/stores/navigationStore";
 import { parseCapture, toRecord } from "@/lib/quickCapture";
 import { todayISO } from "@/lib/overdue";
 import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
+import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 
@@ -95,6 +97,13 @@ const sections = [
     icon: Globe,
     emoji: "🌐",
     keywords: ["sites", "domains", "hosting"],
+  },
+  {
+    id: "apps-funnels",
+    label: "Apps & Funnels",
+    icon: AppWindow,
+    emoji: "🚀",
+    keywords: ["apps", "funnels", "revenue", "products", "tools"],
   },
   {
     id: "github",
@@ -479,6 +488,28 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
         icon: ExternalLink,
         keywords: [r.language, ...(r.topics || [])],
         priority: 15,
+      }),
+    );
+    APP_FUNNEL_CATALOG.forEach((app) =>
+      items.push({
+        id: `app-${app.name}`,
+        type: "data",
+        label: app.productName || app.name,
+        sub: app.deployedUrl || app.parentWebsite || app.githubRepo,
+        action: () => {
+          setActiveSection("apps-funnels");
+          onClose();
+        },
+        emoji: "🚀",
+        icon: AppWindow,
+        keywords: [
+          app.name,
+          app.githubRepo,
+          app.parentWebsite || "",
+          app.landingPage || "",
+          ...(app.alternateUrls || []),
+        ],
+        priority: 25,
       }),
     );
     buildProjects.forEach((b) =>
