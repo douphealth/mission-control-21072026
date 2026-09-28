@@ -45,6 +45,8 @@ import { parseCapture, toRecord } from "@/lib/quickCapture";
 import { todayISO } from "@/lib/overdue";
 import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
+import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
+import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 
@@ -474,22 +476,45 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
           priority: 20,
         }),
       );
-    portfolioRepos.forEach((r) =>
+    portfolioRepos.forEach((r) => {
+      const meta = REPO_PORTFOLIO_META[r.name];
+      const master = REPO_MASTER_LINKS[r.name];
       items.push({
         id: `repo-${r.id}`,
         type: "data",
         label: r.name,
-        sub: r.description?.slice(0, 50) || "",
+        sub:
+          meta?.parentWebsites?.join(" · ") ||
+          master?.u?.[0]?.replace(/^https?:\/\//, "").replace(/\/$/, "") ||
+          r.description?.slice(0, 50) ||
+          "",
         action: () => {
-          window.open(r.url, "_blank");
+          setActiveSection("github");
           onClose();
         },
         emoji: "🐙",
         icon: ExternalLink,
-        keywords: [r.language, ...(r.topics || [])],
-        priority: 15,
-      }),
-    );
+        keywords: [
+          r.language,
+          ...(r.topics || []),
+          meta?.portfolioState || "",
+          meta?.category || "",
+          ...(meta?.parentWebsites || []),
+          ...(meta?.productionUrls || []),
+          ...(meta?.pagesUrls || []),
+          ...(meta?.githubPagesUrls || []),
+          ...(meta?.candidateUrls || []),
+          master?.s || "",
+          master?.h || "",
+          ...(master?.u || []),
+          ...(master?.p || []),
+          ...(master?.c || []),
+          ...(master?.l || []),
+          ...(master?.z || []),
+        ],
+        priority: meta?.directWebsiteApp ? 30 : master?.m === "Verified" ? 22 : 15,
+      });
+    });
     APP_FUNNEL_CATALOG.forEach((app) =>
       items.push({
         id: `app-${app.name}`,
