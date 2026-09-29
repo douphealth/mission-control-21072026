@@ -105,6 +105,11 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         const file = form.get("audio");
         const browserTranscript = String(form.get("browserTranscript") ?? "").trim();
         const requestedLanguage = String(form.get("language") ?? "auto").trim();
+        const languageHint = String(form.get("languageHint") ?? "").trim();
+        const effectiveLanguage =
+          requestedLanguage !== "auto"
+            ? requestedLanguage
+            : languageHint || "auto";
         const localDateRaw = String(form.get("localDate") ?? "").trim();
         const localDate = /^\d{4}-\d{2}-\d{2}$/.test(localDateRaw)
           ? localDateRaw
@@ -118,7 +123,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
 
         if (hasAudio) {
           try {
-            const result = await transcribeAudio(file as File, requestedLanguage);
+            const result = await transcribeAudio(file as File, effectiveLanguage);
             if (result?.text) {
               transcript = result.text;
               source = "ai";
