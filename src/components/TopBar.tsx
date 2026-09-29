@@ -119,7 +119,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
     <>
       <header
         ref={ref}
-        className="mobile-top-glass sm:enterprise-panel sticky top-0 z-30 px-3 sm:px-6 lg:px-8 h-[62px] sm:h-[72px] flex items-center gap-2 sm:gap-3 border-x-0 border-t-0 rounded-none shadow-none"
+        className="mc13-topbar mobile-top-glass sm:enterprise-panel sticky top-0 z-30 px-3 sm:px-6 lg:px-8 h-[62px] sm:h-[72px] flex items-center gap-2 sm:gap-3 border-x-0 border-t-0 rounded-none shadow-none"
       >
         {/* Mobile menu */}
         <button
@@ -132,7 +132,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
         {/* Search — Dribbble style with shortcut indicator */}
         <button
           onClick={() => setCommandPaletteOpen(true)}
-          className="flex items-center gap-2 sm:gap-2.5 flex-1 max-w-xl h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
+          className="mc13-global-search flex items-center gap-2 sm:gap-2.5 flex-1 max-w-xl h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
         >
           <Search
             size={14}
@@ -287,7 +287,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <div className="relative">
             <button
               onClick={() => setQuickAddOpen(!quickAddOpen)}
-              className="h-10 px-3 sm:px-4 rounded-xl bg-primary text-primary-foreground flex items-center gap-2 text-sm font-medium hover:opacity-90 transition touch-manipulation"
+              className="mc13-new-button h-10 px-3 sm:px-4 rounded-xl bg-primary text-primary-foreground flex items-center gap-2 text-sm font-medium hover:opacity-90 transition touch-manipulation"
             >
               <Plus
                 size={16}

@@ -100,7 +100,7 @@ export default function MobileBottomNav() {
               setQuery("");
             }}
           />
-          <div className="mobile-sheet-luxe fixed bottom-[82px] left-2 right-2 z-50 max-h-[72vh] overflow-hidden rounded-[28px] lg:hidden animate-slide-up">
+          <div className="mc13-mobile-sheet mobile-sheet-luxe fixed bottom-[82px] left-2 right-2 z-50 max-h-[72vh] overflow-hidden rounded-[28px] lg:hidden animate-slide-up">
             <div className="flex justify-center pb-1 pt-3">
               <div className="h-1.5 w-10 rounded-full bg-muted-foreground/20" />
             </div>
@@ -161,7 +161,7 @@ export default function MobileBottomNav() {
       )}
 
       <nav className="fixed bottom-0 left-0 right-0 z-40 px-3 pb-[calc(env(safe-area-inset-bottom)*0.5+0.5rem)] lg:hidden">
-        <div className="mobile-liquid-bar rounded-[24px] px-2 py-1.5">
+        <div className="mc13-bottom-bar mobile-liquid-bar rounded-[24px] px-2 py-1.5">
           <div className="flex items-stretch justify-around gap-1">
             <button
               onClick={() => go("dashboard")}
@@ -197,7 +197,7 @@ export default function MobileBottomNav() {
                 requestAnimationFrame(() => window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT)));
               }}
               aria-label="Capture"
-              className="relative -mt-6 flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.85)] transition active:scale-90 touch-manipulation"
+              className="mc13-mobile-capture relative -mt-6 flex h-[56px] w-[56px] shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_14px_34px_-12px_hsl(var(--primary)/0.85)] transition active:scale-90 touch-manipulation"
             >
               <Plus size={24} strokeWidth={2.4} />
             </button>

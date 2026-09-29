@@ -177,7 +177,7 @@ export default function Sidebar() {
         type="button"
         onClick={() => go(item.id)}
         title={collapsed ? item.label : undefined}
-        className={`group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all duration-150 ${
+        className={`mc13-nav-item group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all duration-150 ${
           collapsed ? "justify-center px-0" : ""
         } ${
           active
@@ -211,7 +211,7 @@ export default function Sidebar() {
       )}
 
       <aside
-        className={`fixed left-0 top-0 z-50 flex h-full flex-col border-r border-sidebar-border/70 bg-sidebar/96 text-sidebar-foreground shadow-[20px_0_70px_-55px_hsl(var(--foreground)/0.7)] backdrop-blur-2xl transition-all duration-200 lg:relative lg:translate-x-0 ${
+        className={`mc13-sidebar fixed left-0 top-0 z-50 flex h-full flex-col border-r border-sidebar-border/70 bg-sidebar/96 text-sidebar-foreground shadow-[20px_0_70px_-55px_hsl(var(--foreground)/0.7)] backdrop-blur-2xl transition-all duration-200 lg:relative lg:translate-x-0 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
         style={{ width: collapsed ? 72 : 248 }}
@@ -228,7 +228,7 @@ export default function Sidebar() {
         <div className={`flex h-[72px] items-center border-b border-sidebar-border/60 ${
           collapsed ? "justify-center px-3" : "gap-3 px-4"
         }`}>
-          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-sm font-black text-primary-foreground shadow-[var(--shadow-primary)]">
+          <div className="mc13-brand-mark grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-sm font-black text-primary-foreground shadow-[var(--shadow-primary)]">
             MC
           </div>
           {!collapsed && (

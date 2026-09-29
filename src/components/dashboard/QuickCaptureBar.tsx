@@ -107,9 +107,9 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
   const isTask = preview?.target === "tasks";
 
   return (
-    <section className="se-capture p-3 sm:p-4" aria-label="Quick capture">
+    <section className="se-capture mc13-capture p-3 sm:p-4" aria-label="Quick capture">
       <div className="flex items-center gap-3">
-        <span className="ultra-capture-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-300">
+        <span className="mc13-capture-icon ultra-capture-icon flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform duration-300">
           <CornerDownLeft size={16} />
         </span>
         <input
@@ -126,7 +126,7 @@ export default function QuickCaptureBar({ autoFocus = false }: { autoFocus?: boo
           }}
           aria-label="Capture a task, note, idea, link or reminder"
           placeholder='What needs doing? e.g. "Send proposal by Friday, 45 min, Work"'
-          className="min-w-0 flex-1 bg-transparent text-[14px] text-foreground outline-none placeholder:text-muted-foreground/55"
+          className="mc13-capture-input min-w-0 flex-1 bg-transparent text-[14px] text-foreground outline-none placeholder:text-muted-foreground/55"
         />
         <kbd className="hidden rounded-md border border-border/50 bg-secondary/50 px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground sm:inline">
           N
