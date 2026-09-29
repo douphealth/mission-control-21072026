@@ -36,9 +36,12 @@ export class GatewayError extends Error {
 export async function transcribeAudio(
   file: File,
   language?: string,
-): Promise<{ text: string } | null> {
+): Promise<{ text: string; provider: "lovable" | "gemini" } | null> {
   const key = apiKey();
-  if (!key) return null;
+
+  if (!key) {
+    return transcribeAudioWithGemini(file, language);
+  }
 
   const form = new FormData();
   form.append("model", TRANSCRIBE_MODEL);
@@ -85,7 +88,87 @@ export async function transcribeAudio(
       }
     }
     const trimmed = text.trim();
-    return trimmed ? { text: trimmed } : null;
+    return trimmed ? { text: trimmed, provider: "lovable" } : null;
+  } catch (error) {
+    // If the Lovable transcription path is unavailable or rate-limited, use
+    // the configured direct Gemini key rather than dropping to browser STT.
+    const fallback = await transcribeAudioWithGemini(file, language).catch(() => null);
+    if (fallback) return fallback;
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(bytes.length, i + chunkSize));
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+}
+
+async function transcribeAudioWithGemini(
+  file: File,
+  language?: string,
+): Promise<{ text: string; provider: "gemini" } | null> {
+  const key = geminiKey();
+  if (!key) return null;
+
+  const requestedLanguage = normalizeRequestedLanguage(language ?? "auto");
+  const mimeType = (file.type || "audio/wav").split(";")[0] || "audio/wav";
+  const data = arrayBufferToBase64(await file.arrayBuffer());
+  const languageRule = requestedLanguage
+    ? `The spoken language is ${requestedLanguage}. Preserve that language exactly.`
+    : "Detect the spoken language automatically and preserve it exactly.";
+
+  const prompt = [
+    "Transcribe this audio verbatim.",
+    languageRule,
+    "Do not summarize, translate, paraphrase, or omit words.",
+    "Preserve proper nouns, domains, acronyms, numbers, and product names.",
+    "Add only punctuation/casing needed for readability.",
+    "Return only the transcript text and nothing else.",
+  ].join(" ");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+  try {
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          contents: [
+            {
+              role: "user",
+              parts: [
+                { text: prompt },
+                { inlineData: { mimeType, data } },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 8192,
+          },
+        }),
+      },
+    );
+    if (!res.ok) return null;
+    const json = (await res.json()) as {
+      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+    };
+    const text = json.candidates?.[0]?.content?.parts
+      ?.map((part) => part.text || "")
+      .join("")
+      .trim();
+    return text ? { text, provider: "gemini" } : null;
   } finally {
     clearTimeout(timeout);
   }
