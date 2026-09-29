@@ -8,6 +8,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { anthropicToolUse, isAnthropicAvailable } from "@/lib/anthropicServer";
 import { hasGateway, responsesJson, transcribeAudio } from "@/lib/aiGateway.server";
+import { chooseGroundedTranscript, transcriptAgreement } from "@/lib/voiceTranscriptGrounding";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -103,6 +104,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         // ── 1. Server-side speech-to-text (auto language detection) ─────────
         let transcript = "";
         let source: "ai" | "browser" = "browser";
+        let provider: "lovable" | "gemini" | "browser" = "browser";
 
         if (hasAudio) {
           try {
@@ -110,6 +112,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
             if (result?.text) {
               transcript = result.text;
               source = "ai";
+              provider = result.provider;
             }
           } catch (err) {
             console.error("[voice] transcription failed", err);
@@ -138,15 +141,31 @@ export const Route = createFileRoute("/api/voice/transcribe")({
           try {
             const structured = await responsesJson<Record<string, unknown>>({
               system: `${SYSTEM_PROMPT}\nCurrent date: ${today}.`,
-              parts: [{ type: "input_text", text: `Transcript:\n"""${transcript}"""` }],
+              parts: [{
+                type: "input_text",
+                text: [
+                  `Primary audio transcript:\n"""${transcript}"""`,
+                  browserTranscript
+                    ? `Browser recognition hypothesis (use only to correct names/domains/obvious recognition errors, never to add content):\n"""${browserTranscript}"""`
+                    : "",
+                ].filter(Boolean).join("\n\n"),
+              }],
               schemaName: "capture_item",
               schema: STRICT_SCHEMA,
               effort: "low",
             });
             if (structured) {
+              const cleanedTranscript =
+                typeof structured.cleanedTranscript === "string"
+                  ? structured.cleanedTranscript
+                  : null;
               return json({
-                transcript,
+                transcript: chooseGroundedTranscript(transcript, cleanedTranscript),
+                rawTranscript: transcript,
+                browserTranscript,
+                agreement: browserTranscript ? transcriptAgreement(transcript, browserTranscript) : null,
                 source,
+                provider,
                 structured,
               });
             }
@@ -158,7 +177,12 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         if (isAnthropicAvailable()) {
           const structured = await anthropicToolUse(
             `${SYSTEM_PROMPT}\nCurrent date: ${today}.`,
-            `Transcript:\n"""${transcript}"""`,
+            [
+              `Primary audio transcript:\n"""${transcript}"""`,
+              browserTranscript
+                ? `Browser recognition hypothesis (correction hints only):\n"""${browserTranscript}"""`
+                : "",
+            ].filter(Boolean).join("\n\n"),
             {
               name: "capture_item",
               description: "Structure a voice capture into a Mission Control item",
@@ -167,16 +191,24 @@ export const Route = createFileRoute("/api/voice/transcribe")({
           );
 
           if (structured) {
+            const cleanedTranscript =
+              typeof structured.cleanedTranscript === "string"
+                ? structured.cleanedTranscript
+                : null;
             return json({
-              transcript,
+              transcript: chooseGroundedTranscript(transcript, cleanedTranscript),
+              rawTranscript: transcript,
+              browserTranscript,
+              agreement: browserTranscript ? transcriptAgreement(transcript, browserTranscript) : null,
               source,
+              provider,
               structured,
             });
           }
         }
 
         // AI unavailable — return the transcript for client-side classification.
-        return json({ transcript, source, structured: null });
+        return json({ transcript, rawTranscript: transcript, browserTranscript, agreement: browserTranscript ? transcriptAgreement(transcript, browserTranscript) : null, source, provider, structured: null });
       },
     },
   },
