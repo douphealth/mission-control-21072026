@@ -61,6 +61,12 @@ export function countTranscriptWords(text: string): number {
   return splitWords(text).length;
 }
 
+export function maxReasonableVoiceWords(durationMs: number): number {
+  // 330 words/minute is deliberately generous. The guard is designed to catch
+  // recognition replay inflation, not fast speakers.
+  return Math.max(80, Math.ceil((Math.max(0, durationMs) / 1000) * 5.5));
+}
+
 /**
  * Removes exact adjacent phrase duplication caused by Web Speech replaying
  * already-finalized segments. Long replay blocks are supported deliberately;
