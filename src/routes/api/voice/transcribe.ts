@@ -105,6 +105,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         const file = form.get("audio");
         const browserTranscript = String(form.get("browserTranscript") ?? "").trim();
         const requestedLanguage = String(form.get("language") ?? "auto").trim();
+        const languageHint = String(form.get("languageHint") ?? "").trim();
         const localDateRaw = String(form.get("localDate") ?? "").trim();
         const localDate = /^\d{4}-\d{2}-\d{2}$/.test(localDateRaw)
           ? localDateRaw
@@ -118,6 +119,8 @@ export const Route = createFileRoute("/api/voice/transcribe")({
 
         if (hasAudio) {
           try {
+            // The AI audio model can genuinely detect language. Keep "auto"
+            // truly automatic instead of forcing a browser-derived hint.
             const result = await transcribeAudio(file as File, requestedLanguage);
             if (result?.text) {
               transcript = result.text;
@@ -157,6 +160,9 @@ export const Route = createFileRoute("/api/voice/transcribe")({
                   `Primary audio transcript:\n"""${transcript}"""`,
                   browserTranscript
                     ? `Browser recognition hypothesis (use only to correct names/domains/obvious recognition errors, never to add content):\n"""${browserTranscript}"""`
+                    : "",
+                  requestedLanguage === "auto" && languageHint
+                    ? `Previous successful language hint: ${languageHint}. This is only a hint; trust the actual transcript language.`
                     : "",
                 ].filter(Boolean).join("\n\n"),
               }],

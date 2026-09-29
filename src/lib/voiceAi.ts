@@ -48,6 +48,7 @@ export async function smartCapture(
   audio: Blob | null,
   browserTranscript: string,
   language = "auto",
+  languageHint?: string | null,
 ): Promise<SmartCaptureResult> {
   const form = new FormData();
   if (audio && audio.size > 0) {
@@ -63,6 +64,7 @@ export async function smartCapture(
   }
   form.append("browserTranscript", browserTranscript ?? "");
   form.append("language", language || "auto");
+  if (languageHint) form.append("languageHint", languageHint);
   form.append("localDate", todayISO());
 
   try {
