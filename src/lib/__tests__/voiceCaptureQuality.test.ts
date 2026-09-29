@@ -18,6 +18,10 @@ describe("voice capture quality guards", () => {
     expect(hasUsableVoiceCapture("yes", 2200, 650)).toBe(true);
   });
 
+  it("sends quiet captured audio to server STT even when browser recognition heard nothing", () => {
+    expect(hasUsableVoiceCapture("", 18_000, 900)).toBe(true);
+  });
+
   it("maps language preferences to browser BCP-47 locales", () => {
     expect(browserRecognitionLanguage("el", "en-US")).toBe("el-GR");
     expect(browserRecognitionLanguage("auto", "fr-CA")).toBe("fr-CA");

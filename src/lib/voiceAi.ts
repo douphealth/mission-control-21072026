@@ -7,6 +7,10 @@ import { todayISO } from "@/lib/overdue";
 
 export interface SmartCaptureResult extends VoiceCaptureResult {
   source: "ai" | "browser" | "local";
+  provider?: "lovable" | "gemini" | "browser";
+  agreement?: number | null;
+  rawTranscript?: string;
+  browserTranscript?: string;
   subtasks?: string[];
   tags?: string[];
   startTime?: string;
@@ -17,6 +21,10 @@ export interface SmartCaptureResult extends VoiceCaptureResult {
 interface ServerResponse {
   transcript?: string;
   source?: "ai" | "browser";
+  provider?: "lovable" | "gemini" | "browser";
+  agreement?: number | null;
+  rawTranscript?: string;
+  browserTranscript?: string;
   structured?: {
     type?: VoiceCaptureResult["type"];
     title?: string;
@@ -55,6 +63,7 @@ export async function smartCapture(
   }
   form.append("browserTranscript", browserTranscript ?? "");
   form.append("language", language || "auto");
+  form.append("localDate", todayISO());
 
   try {
     const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
@@ -95,6 +104,10 @@ export async function smartCapture(
       type: s.type,
       title: (s.title || transcript.slice(0, 80)).trim(),
       source: data.source ?? "ai",
+      provider: data.provider,
+      agreement: typeof data.agreement === "number" ? data.agreement : null,
+      rawTranscript: data.rawTranscript,
+      browserTranscript: data.browserTranscript,
       subtasks: Array.isArray(s.subtasks) ? s.subtasks.filter(Boolean).slice(0, 20) : undefined,
       tags: Array.isArray(s.tags) ? s.tags.filter(Boolean).slice(0, 6) : undefined,
       language: typeof s.language === "string" ? s.language : undefined,
