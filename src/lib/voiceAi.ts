@@ -63,6 +63,7 @@ export async function smartCapture(
   }
   form.append("browserTranscript", browserTranscript ?? "");
   form.append("language", language || "auto");
+  form.append("localDate", todayISO());
 
   try {
     const res = await fetch("/api/voice/transcribe", { method: "POST", body: form });
