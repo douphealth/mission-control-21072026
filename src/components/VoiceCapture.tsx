@@ -16,7 +16,13 @@ import { useAddItem } from "@/hooks/useTableData";
 import type { Task, Note, Idea, LinkItem } from "@/lib/db";
 import { smartCapture, type SmartCaptureResult } from "@/lib/voiceAi";
 import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";
-import { buildRecognitionSnapshot, type RecognitionResultLike } from "@/lib/speechTranscript";
+import {
+  buildRecognitionSnapshot,
+  countTranscriptWords,
+  maxReasonableVoiceWords,
+  sanitizeVoiceTranscript,
+  type RecognitionResultLike,
+} from "@/lib/speechTranscript";
 import { encodePcmAsWav } from "@/lib/wavRecorder";
 import {
   browserEnvironmentLanguageHint,
@@ -215,6 +221,8 @@ export default function VoiceCapture() {
   const liveTranscriptRef = useRef("");
   const lastFinalResultIndexRef = useRef(0);
   const browserFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRecordingDurationMsRef = useRef(0);
+  const transcriptManuallyEditedRef = useRef(false);
 
   // Detect the production voice path before recording. On Android Chrome we
   // must not run getUserMedia and SpeechRecognition at the same time because
@@ -320,7 +328,9 @@ export default function VoiceCapture() {
       browserFinalizeTimerRef.current = null;
     }
 
-    const cleaned = (liveTranscriptRef.current || committedTranscriptRef.current).trim();
+    const cleaned = sanitizeVoiceTranscript(
+      liveTranscriptRef.current || committedTranscriptRef.current,
+    );
     cleanupRecognition();
     setAudioLevel(0);
 
@@ -338,6 +348,7 @@ export default function VoiceCapture() {
     if (inferredLanguage) rememberLanguageHint(inferredLanguage);
 
     const local = classifyTranscript(cleaned);
+    transcriptManuallyEditedRef.current = false;
     setTranscript(local.transcript);
     setAiResult({
       ...local,
@@ -368,7 +379,10 @@ export default function VoiceCapture() {
       }
 
       const elapsed = Date.now() - startedAtRef.current;
-      const browserTranscript = liveTranscriptRef.current || committedTranscriptRef.current;
+      lastRecordingDurationMsRef.current = elapsed;
+      const browserTranscript = sanitizeVoiceTranscript(
+        liveTranscriptRef.current || committedTranscriptRef.current,
+      );
 
       if (voiceModeRef.current === "browser") {
         // Android Chrome (especially Greek) may emit the final recognition
@@ -415,8 +429,15 @@ export default function VoiceCapture() {
             result.language?.split("-")[0]?.toLowerCase() ||
             inferLanguageFromTranscript(result.transcript);
           if (learnedLanguage) rememberLanguageHint(learnedLanguage);
-          setTranscript(result.transcript);
-          setAiResult(result);
+          const safeTranscript = sanitizeVoiceTranscript(result.transcript);
+          if (!safeTranscript) {
+            setErrorMsg("The transcription was empty after validation. Please record again.");
+            setPhase("error");
+            return;
+          }
+          transcriptManuallyEditedRef.current = false;
+          setTranscript(safeTranscript);
+          setAiResult({ ...result, transcript: safeTranscript });
           if (typeAuto) setType(result.type);
           setPhase("ready");
         })
@@ -449,6 +470,8 @@ export default function VoiceCapture() {
     stopReasonRef.current = null;
     pcmChunksRef.current = [];
     hasSpokenRef.current = false;
+    lastRecordingDurationMsRef.current = 0;
+    transcriptManuallyEditedRef.current = false;
 
     const Recognition = getSpeechRecognition();
     const useServerAudio = serverSttAvailable === true;
@@ -723,18 +746,60 @@ export default function VoiceCapture() {
     committedTranscriptRef.current = "";
     liveTranscriptRef.current = "";
     lastFinalResultIndexRef.current = 0;
+    lastRecordingDurationMsRef.current = 0;
+    transcriptManuallyEditedRef.current = false;
   }, [cleanupAudio, cleanupRecognition]);
 
   const handleSave = async () => {
-    if (!transcript) {
+    if (!transcript.trim()) {
       toast.error("Nothing to save — try speaking first");
       return;
     }
+
+    const sanitized = sanitizeVoiceTranscript(transcript);
+    const originalWords = countTranscriptWords(transcript);
+    const sanitizedWords = countTranscriptWords(sanitized);
+    const maxReasonable = maxReasonableVoiceWords(lastRecordingDurationMsRef.current);
+
+    // Generated voice text must never silently expand far beyond what could
+    // plausibly be spoken during the actual recording.
+    if (
+      !transcriptManuallyEditedRef.current &&
+      lastRecordingDurationMsRef.current > 0 &&
+      sanitizedWords > maxReasonable
+    ) {
+      setTranscript(sanitized);
+      setErrorMsg(
+        `Transcript blocked: ${sanitizedWords} words from a ${Math.max(
+          1,
+          Math.round(lastRecordingDurationMsRef.current / 1000),
+        )}-second recording looks duplicated. Re-record or review the transcript before saving.`,
+      );
+      toast.error("Not saved — duplicate voice transcription detected");
+      return;
+    }
+
+    // A hard backstop remains even after manual edits. It prevents the exact
+    // 50-word → 1,698-word corruption from ever being saved silently again.
+    if (sanitizedWords > 1200) {
+      setTranscript(sanitized);
+      setErrorMsg(
+        `Transcript has ${sanitizedWords} words and was blocked for safety. Review it before saving.`,
+      );
+      toast.error("Not saved — transcript is implausibly large");
+      return;
+    }
+
+    if (sanitizedWords < originalWords) {
+      setTranscript(sanitized);
+      toast.info(`Removed ${originalWords - sanitizedWords} duplicated voice words before saving.`);
+    }
+
     setSaving(true);
     try {
       const now = todayISO();
-      const title = aiResult?.title || transcript.slice(0, 80);
-      const text = transcript;
+      const text = sanitized;
+      const title = aiResult?.title || text.slice(0, 80);
 
       if (type === "tasks") {
         const taskPayload: Omit<Task, "id"> = {
@@ -933,6 +998,7 @@ export default function VoiceCapture() {
                     <textarea
                       value={transcript}
                       onChange={(e) => {
+                        transcriptManuallyEditedRef.current = true;
                         setTranscript(e.target.value);
                         if (typeAuto) setType(inferTypeLocal(e.target.value));
                       }}
@@ -961,11 +1027,24 @@ export default function VoiceCapture() {
                         setTranscript("");
                         setAiResult(null);
                         setPhase("idle");
+                        lastRecordingDurationMsRef.current = 0;
+                        transcriptManuallyEditedRef.current = false;
                       }}
                       className="text-[11px] text-muted-foreground hover:text-foreground transition"
                     >
                       Clear & re-record
                     </button>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span>{countTranscriptWords(transcript)} words</span>
+                      {!transcriptManuallyEditedRef.current &&
+                        lastRecordingDurationMsRef.current > 0 &&
+                        countTranscriptWords(transcript) >
+                          maxReasonableVoiceWords(lastRecordingDurationMsRef.current) && (
+                          <span className="rounded-full bg-destructive/10 px-2 py-1 font-bold text-destructive">
+                            duplicate transcript suspected
+                          </span>
+                        )}
+                    </div>
                     {aiResult && (
                       <div className="flex flex-wrap items-center justify-end gap-1.5 text-[10px]">
                         <span className="inline-flex items-center gap-1 rounded-full bg-primary/8 px-2 py-1 font-semibold text-primary">
