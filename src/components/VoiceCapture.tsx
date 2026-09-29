@@ -18,7 +18,13 @@ import { smartCapture, type SmartCaptureResult } from "@/lib/voiceAi";
 import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";
 import { buildRecognitionSnapshot, type RecognitionResultLike } from "@/lib/speechTranscript";
 import { encodePcmAsWav } from "@/lib/wavRecorder";
-import { browserRecognitionLanguage, hasUsableVoiceCapture } from "@/lib/voiceCaptureQuality";
+import {
+  browserEnvironmentLanguageHint,
+  browserRecognitionLanguage,
+  hasUsableVoiceCapture,
+  inferLanguageFromTranscript,
+  languageToLocale,
+} from "@/lib/voiceCaptureQuality";
 import { toast } from "sonner";
 import { VOICE_CAPTURE_OPEN_EVENT } from "@/lib/captureEvents";
 import { todayISO } from "@/lib/overdue";
@@ -70,6 +76,7 @@ const MAX_RECORD_MS = 180_000; // hard cap
 const MIN_RECORD_MS = 600; // ignore taps shorter than this
 
 const LANG_KEY = "mc:voiceLang";
+const AUTO_HINT_KEY = "mc:voiceAutoHint";
 const LANGUAGES: { id: string; label: string }[] = [
   { id: "auto", label: "Auto detect" },
   { id: "en", label: "English" },
@@ -149,6 +156,8 @@ export default function VoiceCapture() {
   const [language, setLanguage] = useState<string>("auto");
   const languageRef = useRef("auto");
   const [serverSttAvailable, setServerSttAvailable] = useState<boolean | null>(null);
+  const [adaptiveLanguageHint, setAdaptiveLanguageHint] = useState<string | null>(null);
+  const adaptiveLanguageHintRef = useRef<string | null>(null);
   const voiceModeRef = useRef<"server" | "browser">("server");
 
   useEffect(() => {
@@ -158,17 +167,34 @@ export default function VoiceCapture() {
       setLanguage(stored);
       languageRef.current = stored;
     }
+    const storedHint = localStorage.getItem(AUTO_HINT_KEY);
+    if (storedHint && LANGUAGES.some((l) => l.id === storedHint && l.id !== "auto")) {
+      setAdaptiveLanguageHint(storedHint);
+      adaptiveLanguageHintRef.current = storedHint;
+    }
+  }, []);
+
+  const rememberLanguageHint = useCallback((id?: string | null) => {
+    if (!id || id === "auto" || !LANGUAGES.some((l) => l.id === id)) return;
+    adaptiveLanguageHintRef.current = id;
+    setAdaptiveLanguageHint(id);
+    try {
+      localStorage.setItem(AUTO_HINT_KEY, id);
+    } catch {
+      /* */
+    }
   }, []);
 
   const changeLanguage = useCallback((id: string) => {
     setLanguage(id);
     languageRef.current = id;
+    if (id !== "auto") rememberLanguageHint(id);
     try {
       localStorage.setItem(LANG_KEY, id);
     } catch {
       /* */
     }
-  }, []);
+  }, [rememberLanguageHint]);
 
   const recordingRef = useRef(false);
   const recognitionRef = useRef<BrowserSpeechRecognition | null>(null);
@@ -308,17 +334,23 @@ export default function VoiceCapture() {
       return;
     }
 
+    const inferredLanguage = inferLanguageFromTranscript(cleaned);
+    if (inferredLanguage) rememberLanguageHint(inferredLanguage);
+
     const local = classifyTranscript(cleaned);
     setTranscript(local.transcript);
     setAiResult({
       ...local,
       source: "browser",
       provider: "browser",
-      language: languageRef.current === "el" ? "el" : undefined,
+      language:
+        languageRef.current !== "auto"
+          ? languageRef.current
+          : inferredLanguage,
     });
     if (typeAuto) setType(local.type);
     setPhase("ready");
-  }, [cleanupRecognition, typeAuto]);
+  }, [cleanupRecognition, rememberLanguageHint, typeAuto]);
 
   const stopRecording = useCallback(
     (reason: "manual" | "silence" | "maxlen") => {
@@ -362,7 +394,12 @@ export default function VoiceCapture() {
 
       setPhase("processing");
       setAudioLevel(0);
-      void smartCapture(blob, browserTranscript, languageRef.current)
+      void smartCapture(
+        blob,
+        browserTranscript,
+        languageRef.current,
+        languageRef.current === "auto" ? adaptiveLanguageHintRef.current : languageRef.current,
+      )
         .then((result) => {
           if (!result.transcript) {
             setServerSttAvailable(false);
@@ -374,6 +411,10 @@ export default function VoiceCapture() {
             setPhase("ready");
             return;
           }
+          const learnedLanguage =
+            result.language?.split("-")[0]?.toLowerCase() ||
+            inferLanguageFromTranscript(result.transcript);
+          if (learnedLanguage) rememberLanguageHint(learnedLanguage);
           setTranscript(result.transcript);
           setAiResult(result);
           if (typeAuto) setType(result.type);
@@ -391,7 +432,7 @@ export default function VoiceCapture() {
           setPhase("error");
         });
     },
-    [cleanupAudio, cleanupRecognition, finalizeBrowserTranscript, typeAuto],
+    [cleanupAudio, cleanupRecognition, finalizeBrowserTranscript, rememberLanguageHint, typeAuto],
   );
 
   const startRecording = useCallback(async () => {
@@ -429,9 +470,22 @@ export default function VoiceCapture() {
       const recognition = new Recognition();
       recognition.continuous = true;
       recognition.interimResults = true;
+      const environmentHint =
+        typeof Intl !== "undefined"
+          ? browserEnvironmentLanguageHint(
+              navigator.languages || [],
+              navigator.language || "en-US",
+              Intl.DateTimeFormat().resolvedOptions().timeZone,
+            )
+          : undefined;
+      const browserLanguageHint =
+        languageRef.current === "auto"
+          ? adaptiveLanguageHintRef.current || environmentHint
+          : languageRef.current;
       recognition.lang = browserRecognitionLanguage(
         languageRef.current,
         navigator.language || "en-US",
+        browserLanguageHint,
       );
       recognition.maxAlternatives = 3;
 
@@ -447,6 +501,8 @@ export default function VoiceCapture() {
           .filter(Boolean)
           .join(" ")
           .trim();
+        const liveLanguage = inferLanguageFromTranscript(liveTranscriptRef.current);
+        if (liveLanguage) rememberLanguageHint(liveLanguage);
         setTranscript(liveTranscriptRef.current);
         setPhase("hearing");
         setAudioLevel(0.75);
@@ -617,7 +673,7 @@ export default function VoiceCapture() {
     startedAtRef.current = Date.now();
     lastVoiceAtRef.current = Date.now();
     setPhase("listening");
-  }, [cleanupAudio, finalizeBrowserTranscript, serverSttAvailable, stopRecording]);
+  }, [cleanupAudio, finalizeBrowserTranscript, rememberLanguageHint, serverSttAvailable, stopRecording]);
 
   // Open from the unified Capture Hub or keyboard shortcut.
   useEffect(() => {
@@ -942,11 +998,22 @@ export default function VoiceCapture() {
                   <span className="font-semibold text-muted-foreground">VOICE ENGINE</span>
                   <span className="font-bold text-foreground">
                     {serverSttAvailable === true
-                      ? "AI audio transcription"
+                      ? language === "auto"
+                        ? "AI auto-detect"
+                        : `AI · ${languageToLocale(language)}`
                       : serverSttAvailable === false
-                        ? language === "el"
-                          ? "Chrome Greek · el-GR"
-                          : "Chrome speech recognition"
+                        ? language === "auto"
+                          ? `Chrome Auto · ${languageToLocale(
+                              adaptiveLanguageHint ||
+                                browserEnvironmentLanguageHint(
+                                  typeof navigator !== "undefined" ? navigator.languages || [] : [],
+                                  typeof navigator !== "undefined" ? navigator.language || "en-US" : "en-US",
+                                  typeof Intl !== "undefined"
+                                    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                                    : undefined,
+                                ) || "en",
+                            )}`
+                          : `Chrome · ${languageToLocale(language)}`
                         : "Checking…"}
                   </span>
                 </div>
@@ -969,6 +1036,20 @@ export default function VoiceCapture() {
                     </option>
                   ))}
                 </select>
+                {language === "auto" && serverSttAvailable === false && (
+                  <span className="text-[9px] font-medium text-muted-foreground">
+                    Adaptive: {languageToLocale(
+                      adaptiveLanguageHint ||
+                        browserEnvironmentLanguageHint(
+                          typeof navigator !== "undefined" ? navigator.languages || [] : [],
+                          typeof navigator !== "undefined" ? navigator.language || "en-US" : "en-US",
+                          typeof Intl !== "undefined"
+                            ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                            : undefined,
+                        ) || "en",
+                    )}
+                  </span>
+                )}
               </div>
 
               {/* Type selector */}
