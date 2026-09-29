@@ -28,7 +28,7 @@ import {
   Home,
   AppWindow,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 
 const moreItems = [
@@ -64,6 +64,7 @@ export default function MobileBottomNav() {
   const tasks = useTasks();
   const decisions = useDecisions();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   const inboxCount =
     tasks.filter((t) => t.status === "todo" && !t.dueDate).length +
@@ -72,7 +73,16 @@ export default function MobileBottomNav() {
   const go = (id: string) => {
     setActiveSection(id);
     setMoreOpen(false);
+    setQuery("");
   };
+
+  const filteredItems = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return moreItems;
+    return moreItems.filter((item) =>
+      [item.label, item.id].some((value) => value.toLowerCase().includes(q)),
+    );
+  }, [query]);
 
   const tabCls = (active: boolean) =>
     `relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl transition-colors touch-manipulation active:scale-[0.94] ${
@@ -85,34 +95,66 @@ export default function MobileBottomNav() {
         <>
           <div
             className="fixed inset-0 z-40 bg-foreground/30 backdrop-blur-sm lg:hidden"
-            onClick={() => setMoreOpen(false)}
+            onClick={() => {
+              setMoreOpen(false);
+              setQuery("");
+            }}
           />
-          <div className="mobile-sheet-luxe fixed bottom-[80px] left-2 right-2 z-50 max-h-[70vh] overflow-hidden rounded-[26px] lg:hidden animate-slide-up">
-            <div className="flex justify-center pt-3 pb-1">
+          <div className="mobile-sheet-luxe fixed bottom-[82px] left-2 right-2 z-50 max-h-[72vh] overflow-hidden rounded-[28px] lg:hidden animate-slide-up">
+            <div className="flex justify-center pb-1 pt-3">
               <div className="h-1.5 w-10 rounded-full bg-muted-foreground/20" />
             </div>
-            <div className="px-5 pb-2 pt-1">
-              <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
-                All sections
-              </h2>
+            <div className="px-4 pb-3 pt-1">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-primary/75">Navigate</div>
+                  <h2 className="mt-0.5 text-[18px] font-extrabold tracking-tight text-foreground">All workspaces</h2>
+                </div>
+                <span className="text-[10px] font-semibold text-muted-foreground">{filteredItems.length} sections</span>
+              </div>
+              <label className="mt-3 flex h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/65 px-3">
+                <Search size={15} className="shrink-0 text-muted-foreground" />
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search sections…"
+                  className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/55"
+                />
+              </label>
             </div>
             <div className="overflow-y-auto px-3 pb-5">
-              <div className="grid grid-cols-4 gap-2">
-                {moreItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => go(item.id)}
-                    className={`flex min-h-[76px] flex-col items-center justify-center gap-1.5 rounded-2xl p-2 text-center transition touch-manipulation active:scale-90 ${
-                      activeSection === item.id
-                        ? "bg-primary/10 text-primary"
-                        : "text-muted-foreground active:bg-secondary/70"
-                    }`}
-                  >
-                    <item.icon size={19} strokeWidth={1.8} />
-                    <span className="text-[10px] font-medium leading-tight">{item.label}</span>
-                  </button>
-                ))}
-              </div>
+              {filteredItems.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {filteredItems.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => go(item.id)}
+                      className={`group flex min-h-[72px] items-center gap-3 rounded-[20px] border p-3 text-left transition touch-manipulation active:scale-[0.97] ${
+                        activeSection === item.id
+                          ? "border-primary/25 bg-primary/10 text-primary"
+                          : "border-border/35 bg-card/65 text-foreground hover:border-primary/20 hover:bg-card"
+                      }`}
+                    >
+                      <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-2xl ${
+                        activeSection === item.id ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground group-hover:text-primary"
+                      }`}>
+                        <item.icon size={18} strokeWidth={1.9} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-[12px] font-bold">{item.label}</span>
+                        <span className="mt-0.5 block text-[9px] font-medium text-muted-foreground">
+                          {item.id === "dashboard" ? "Daily command" : item.id.replaceAll("-", " ")}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-border/50 px-4 py-8 text-center text-sm text-muted-foreground">
+                  No section matches “{query}”.
+                </div>
+              )}
             </div>
           </div>
         </>
@@ -168,7 +210,13 @@ export default function MobileBottomNav() {
               <span className="text-[10px] font-medium leading-none">Projects</span>
             </button>
 
-            <button onClick={() => setMoreOpen((o) => !o)} className={tabCls(moreOpen)}>
+            <button
+              onClick={() => {
+                setMoreOpen((o) => !o);
+                if (moreOpen) setQuery("");
+              }}
+              className={tabCls(moreOpen)}
+            >
               <Grip size={20} strokeWidth={moreOpen ? 2.4 : 1.7} />
               <span className="text-[10px] font-medium leading-none">More</span>
             </button>
