@@ -188,6 +188,7 @@ export default function VoiceCapture() {
   const committedTranscriptRef = useRef("");
   const liveTranscriptRef = useRef("");
   const lastFinalResultIndexRef = useRef(0);
+  const browserFinalizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Detect the production voice path before recording. On Android Chrome we
   // must not run getUserMedia and SpeechRecognition at the same time because
@@ -287,6 +288,38 @@ export default function VoiceCapture() {
     streamRef.current = null;
   }, []);
 
+  const finalizeBrowserTranscript = useCallback(() => {
+    if (browserFinalizeTimerRef.current) {
+      clearTimeout(browserFinalizeTimerRef.current);
+      browserFinalizeTimerRef.current = null;
+    }
+
+    const cleaned = (liveTranscriptRef.current || committedTranscriptRef.current).trim();
+    cleanupRecognition();
+    setAudioLevel(0);
+
+    if (!cleaned) {
+      setPhase("idle");
+      setErrorMsg(
+        languageRef.current === "el"
+          ? "Δεν αναγνωρίστηκε ελληνική ομιλία. Πάτησε ξανά το μικρόφωνο και μίλησε καθαρά."
+          : "I didn't catch any speech. Tap the mic and speak again.",
+      );
+      return;
+    }
+
+    const local = classifyTranscript(cleaned);
+    setTranscript(local.transcript);
+    setAiResult({
+      ...local,
+      source: "browser",
+      provider: "browser",
+      language: languageRef.current === "el" ? "el" : undefined,
+    });
+    if (typeAuto) setType(local.type);
+    setPhase("ready");
+  }, [cleanupRecognition, typeAuto]);
+
   const stopRecording = useCallback(
     (reason: "manual" | "silence" | "maxlen") => {
       if (!recordingRef.current) return;
@@ -306,23 +339,13 @@ export default function VoiceCapture() {
       const browserTranscript = liveTranscriptRef.current || committedTranscriptRef.current;
 
       if (voiceModeRef.current === "browser") {
-        cleanupRecognition();
-        setAudioLevel(0);
-        const cleaned = browserTranscript.trim();
-        if (!cleaned) {
-          setPhase("idle");
-          setErrorMsg("I didn't catch any speech. Tap the mic and speak again.");
-          return;
-        }
-        const local = classifyTranscript(cleaned);
-        setTranscript(local.transcript);
-        setAiResult({
-          ...local,
-          source: "browser",
-          provider: "browser",
-        });
-        if (typeAuto) setType(local.type);
-        setPhase("ready");
+        // Android Chrome (especially Greek) may emit the final recognition
+        // result only after recognition.stop(). Keep callbacks alive until
+        // onresult/onend deliver that final phrase instead of discarding it.
+        setPhase("processing");
+        setAudioLevel(0.15);
+        browserFinalizeTimerRef.current = setTimeout(finalizeBrowserTranscript, 1800);
+        if (!recognition) finalizeBrowserTranscript();
         return;
       }
 
@@ -368,7 +391,7 @@ export default function VoiceCapture() {
           setPhase("error");
         });
     },
-    [cleanupAudio, cleanupRecognition, typeAuto],
+    [cleanupAudio, cleanupRecognition, finalizeBrowserTranscript, typeAuto],
   );
 
   const startRecording = useCallback(async () => {
@@ -433,7 +456,17 @@ export default function VoiceCapture() {
         const message = event.error || "speech recognition failed";
         if (message === "aborted") return;
         if (message === "not-allowed" || message === "service-not-allowed") {
-          setErrorMsg("Microphone permission is blocked for Chrome. Allow microphone access for this site and try again.");
+          setErrorMsg(
+            languageRef.current === "el"
+              ? "Η πρόσβαση στο μικρόφωνο είναι μπλοκαρισμένη στο Chrome. Επίτρεψέ την και δοκίμασε ξανά."
+              : "Microphone permission is blocked for Chrome. Allow microphone access for this site and try again.",
+          );
+          recordingRef.current = false;
+          setPhase("error");
+          return;
+        }
+        if (message === "language-not-supported") {
+          setErrorMsg("Το Chrome δεν ενεργοποίησε αναγνώριση Ελληνικών (el-GR). Κλείσε και άνοιξε ξανά το Voice Capture.");
           recordingRef.current = false;
           setPhase("error");
           return;
@@ -446,16 +479,22 @@ export default function VoiceCapture() {
 
       recognition.onend = () => {
         if (recognitionRef.current !== recognition) return;
-        if (!stopReasonRef.current && recordingRef.current) {
-          lastFinalResultIndexRef.current = 0;
-          try {
-            recognition.start();
-            return;
-          } catch {
-            /* */
-          }
+
+        if (stopReasonRef.current || !recordingRef.current) {
+          finalizeBrowserTranscript();
+          return;
         }
-        recognitionRef.current = null;
+
+        // Chrome can end recognition after a short pause. Restart while the
+        // user is still recording so multi-sentence Greek dictation continues.
+        lastFinalResultIndexRef.current = 0;
+        try {
+          recognition.start();
+          return;
+        } catch {
+          recognitionRef.current = null;
+          finalizeBrowserTranscript();
+        }
       };
 
       recognitionRef.current = recognition;
@@ -578,7 +617,7 @@ export default function VoiceCapture() {
     startedAtRef.current = Date.now();
     lastVoiceAtRef.current = Date.now();
     setPhase("listening");
-  }, [cleanupAudio, serverSttAvailable, stopRecording]);
+  }, [cleanupAudio, finalizeBrowserTranscript, serverSttAvailable, stopRecording]);
 
   // Open from the unified Capture Hub or keyboard shortcut.
   useEffect(() => {
@@ -604,6 +643,7 @@ export default function VoiceCapture() {
   useEffect(() => {
     return () => {
       recordingRef.current = false;
+      if (browserFinalizeTimerRef.current) clearTimeout(browserFinalizeTimerRef.current);
       cleanupRecognition();
       cleanupAudio();
     };
@@ -611,6 +651,10 @@ export default function VoiceCapture() {
 
   const handleClose = useCallback(() => {
     recordingRef.current = false;
+    if (browserFinalizeTimerRef.current) {
+      clearTimeout(browserFinalizeTimerRef.current);
+      browserFinalizeTimerRef.current = null;
+    }
     cleanupRecognition();
     cleanupAudio();
     setOpen(false);
@@ -720,11 +764,21 @@ export default function VoiceCapture() {
       : phase === "starting"
         ? "Starting microphone…"
         : phase === "listening"
-          ? "Listening… speak naturally (auto-stops on silence)"
+          ? voiceModeRef.current === "browser" && language === "el"
+            ? "Ακούω Ελληνικά (el-GR)… μίλησε κανονικά"
+            : voiceModeRef.current === "browser"
+              ? "Listening with Chrome speech recognition…"
+              : "Recording for AI transcription…"
           : phase === "hearing"
-            ? "Hearing your speech…"
+            ? language === "el"
+              ? "Αναγνωρίζω την ελληνική ομιλία…"
+              : "Hearing your speech…"
             : phase === "processing"
-              ? "Transcribing with AI…"
+              ? voiceModeRef.current === "browser"
+                ? language === "el"
+                  ? "Ολοκληρώνω την ελληνική μεταγραφή…"
+                  : "Finishing browser transcription…"
+                : "Transcribing with AI…"
               : phase === "ready"
                 ? "✨ Transcribed — review and save"
                 : "Tap mic to start";
@@ -890,7 +944,9 @@ export default function VoiceCapture() {
                     {serverSttAvailable === true
                       ? "AI audio transcription"
                       : serverSttAvailable === false
-                        ? "Chrome speech recognition"
+                        ? language === "el"
+                          ? "Chrome Greek · el-GR"
+                          : "Chrome speech recognition"
                         : "Checking…"}
                   </span>
                 </div>
