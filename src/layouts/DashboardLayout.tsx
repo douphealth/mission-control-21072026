@@ -139,23 +139,23 @@ export default function DashboardLayout() {
   }
 
   return (
-    <div className="enterprise-shell relative flex h-dvh min-h-0 overflow-hidden bg-background">
+    <div className="enterprise-shell mc13-shell relative flex h-dvh min-h-0 overflow-hidden bg-background">
       <div className="v10-aurora-bg" aria-hidden />
       <a href="#main-content" className="a11y-skip-link">
         Skip to content
       </a>
       {/* Hide sidebar on mobile — use bottom nav instead */}
-      <div className="relative z-[1] hidden lg:block">
+      <div className="mc13-sidebar-wrap relative z-[1] hidden lg:block">
         <Sidebar />
       </div>
-      <div className="relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="mc13-main-wrap relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
         <main
           id="main-content"
           tabIndex={-1}
-          className="mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain"
+          className="mc13-main mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain"
         >
-          <div className="max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
+          <div className="mc13-page max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
             {(activeSection === "tasks" ||
               activeSection === "focus" ||
               activeSection === "review") && <DailyBriefingBanner />}
