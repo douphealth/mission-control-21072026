@@ -1,4 +1,6 @@
 const TARGET_SAMPLE_RATE = 16_000;
+const EDGE_SILENCE_THRESHOLD = 0.0015;
+const EDGE_PAD_MS = 180;
 
 function downsample(input: Float32Array, sourceRate: number): Float32Array {
   if (sourceRate <= TARGET_SAMPLE_RATE) return input;
@@ -16,6 +18,51 @@ function downsample(input: Float32Array, sourceRate: number): Float32Array {
   return output;
 }
 
+function conditionSpeech(input: Float32Array): Float32Array {
+  if (!input.length) return input;
+
+  // Remove DC offset first. This improves headroom without changing words.
+  let mean = 0;
+  for (let i = 0; i < input.length; i += 1) mean += input[i];
+  mean /= input.length;
+
+  const centered = new Float32Array(input.length);
+  let peak = 0;
+  for (let i = 0; i < input.length; i += 1) {
+    const value = input[i] - mean;
+    centered[i] = value;
+    peak = Math.max(peak, Math.abs(value));
+  }
+
+  // Trim only near-zero leading/trailing silence, retaining context around
+  // speech so consonants at word boundaries are not clipped.
+  let first = 0;
+  let last = centered.length - 1;
+  while (first < centered.length && Math.abs(centered[first]) < EDGE_SILENCE_THRESHOLD) first += 1;
+  while (last > first && Math.abs(centered[last]) < EDGE_SILENCE_THRESHOLD) last -= 1;
+
+  const pad = Math.round((EDGE_PAD_MS / 1000) * TARGET_SAMPLE_RATE);
+  const start = Math.max(0, first - pad);
+  const end = Math.min(centered.length, last + pad + 1);
+  const trimmed =
+    first >= centered.length
+      ? centered
+      : centered.slice(start, Math.max(start + 1, end));
+
+  // Gentle normalization for quiet recordings only. Never boost near-silence
+  // because that would amplify background noise.
+  peak = 0;
+  for (let i = 0; i < trimmed.length; i += 1) peak = Math.max(peak, Math.abs(trimmed[i]));
+  const gain = peak >= 0.01 && peak < 0.35 ? Math.min(4, 0.72 / peak) : 1;
+
+  if (gain === 1) return trimmed;
+  const normalized = new Float32Array(trimmed.length);
+  for (let i = 0; i < trimmed.length; i += 1) {
+    normalized[i] = Math.max(-1, Math.min(1, trimmed[i] * gain));
+  }
+  return normalized;
+}
+
 export function encodePcmAsWav(chunks: Float32Array[], sourceRate: number): Blob {
   const sampleCount = chunks.reduce((total, chunk) => total + chunk.length, 0);
   const joined = new Float32Array(sampleCount);
@@ -25,7 +72,7 @@ export function encodePcmAsWav(chunks: Float32Array[], sourceRate: number): Blob
     offset += chunk.length;
   }
 
-  const samples = downsample(joined, sourceRate);
+  const samples = conditionSpeech(downsample(joined, sourceRate));
   const buffer = new ArrayBuffer(44 + samples.length * 2);
   const view = new DataView(buffer);
   const write = (at: number, value: string) => {

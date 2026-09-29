@@ -7,7 +7,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 import { anthropicToolUse, isAnthropicAvailable } from "@/lib/anthropicServer";
-import { hasGateway, responsesJson, transcribeAudio } from "@/lib/aiGateway.server";
+import { gatewayStatus, hasGateway, responsesJson, transcribeAudio } from "@/lib/aiGateway.server";
 import { chooseGroundedTranscript, transcriptAgreement } from "@/lib/voiceTranscriptGrounding";
 
 function json(body: unknown, status = 200) {
@@ -89,12 +89,19 @@ const STRICT_SCHEMA = {
 export const Route = createFileRoute("/api/voice/transcribe")({
   server: {
     handlers: {
-      GET: async () =>
-        json({
+      GET: async () => {
+        const gateway = gatewayStatus();
+        return json({
           ok: true,
-          transcriptionConfigured: hasGateway(),
+          transcriptionConfigured: gateway.configured,
+          providers: {
+            lovable: gateway.lovable,
+            gemini: gateway.gemini,
+          },
+          mode: gateway.configured ? "ai_multilingual" : "browser_fallback",
           browserFallbackSupported: true,
-        }),
+        });
+      },
       POST: async ({ request }) => {
         const contentType = request.headers.get("content-type") ?? "";
         if (!contentType.includes("multipart/form-data")) {

@@ -17,8 +17,18 @@ function geminiKey(): string | undefined {
   return process.env["GEMINI_API_KEY"];
 }
 
+export function gatewayStatus() {
+  const lovable = Boolean(apiKey());
+  const gemini = Boolean(geminiKey());
+  return {
+    configured: lovable || gemini,
+    lovable,
+    gemini,
+  };
+}
+
 export function hasGateway(): boolean {
-  return Boolean(apiKey() || geminiKey());
+  return gatewayStatus().configured;
 }
 
 export class GatewayError extends Error {

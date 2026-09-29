@@ -162,6 +162,10 @@ export default function VoiceCapture() {
   const [language, setLanguage] = useState<string>("auto");
   const languageRef = useRef("auto");
   const [serverSttAvailable, setServerSttAvailable] = useState<boolean | null>(null);
+  const [voiceProviders, setVoiceProviders] = useState<{ lovable: boolean; gemini: boolean }>({
+    lovable: false,
+    gemini: false,
+  });
   const [adaptiveLanguageHint, setAdaptiveLanguageHint] = useState<string | null>(null);
   const adaptiveLanguageHintRef = useRef<string | null>(null);
   const voiceModeRef = useRef<"server" | "browser">("server");
@@ -224,44 +228,45 @@ export default function VoiceCapture() {
   const lastRecordingDurationMsRef = useRef(0);
   const transcriptManuallyEditedRef = useRef(false);
 
-  // Detect the production voice path before recording. On Android Chrome we
-  // must not run getUserMedia and SpeechRecognition at the same time because
-  // they can compete for the microphone.
-  useEffect(() => {
-    let cancelled = false;
-    const probe = async () => {
-      const Recognition = getSpeechRecognition();
-      const canBrowserRecognize = Boolean(Recognition);
-      const canRecordServerAudio =
-        typeof window !== "undefined" &&
-        !!navigator.mediaDevices?.getUserMedia &&
-        typeof AudioContext !== "undefined";
+  const probeVoiceEngine = useCallback(async () => {
+    const Recognition = getSpeechRecognition();
+    const canBrowserRecognize = Boolean(Recognition);
+    const canRecordServerAudio =
+      typeof window !== "undefined" &&
+      !!navigator.mediaDevices?.getUserMedia &&
+      typeof AudioContext !== "undefined";
 
-      try {
-        const response = await fetch("/api/voice/transcribe", {
-          method: "GET",
-          cache: "no-store",
-        });
-        const data = (await response.json().catch(() => ({}))) as {
-          transcriptionConfigured?: boolean;
-        };
-        if (cancelled) return;
-        const serverReady = response.ok && data.transcriptionConfigured === true;
-        setServerSttAvailable(serverReady);
-        setSupported(serverReady ? canRecordServerAudio : canBrowserRecognize);
-      } catch {
-        if (cancelled) return;
-        setServerSttAvailable(false);
-        setSupported(canBrowserRecognize);
-      }
-    };
-    void probe();
-    return () => {
-      cancelled = true;
-    };
+    try {
+      const response = await fetch("/api/voice/transcribe", {
+        method: "GET",
+        cache: "no-store",
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        transcriptionConfigured?: boolean;
+        providers?: { lovable?: boolean; gemini?: boolean };
+        mode?: string;
+      };
+      const serverReady = response.ok && data.transcriptionConfigured === true;
+      setServerSttAvailable(serverReady);
+      setVoiceProviders({
+        lovable: Boolean(data.providers?.lovable),
+        gemini: Boolean(data.providers?.gemini),
+      });
+      setSupported(serverReady ? canRecordServerAudio : canBrowserRecognize);
+      return serverReady;
+    } catch {
+      setServerSttAvailable(false);
+      setVoiceProviders({ lovable: false, gemini: false });
+      setSupported(canBrowserRecognize);
+      return false;
+    }
   }, []);
 
-
+  // Initial health check. Every recording re-checks this again so Auto never
+  // gets stuck in a stale browser-fallback state for an entire session.
+  useEffect(() => {
+    void probeVoiceEngine();
+  }, [probeVoiceEngine]);
 
   const cleanupRecognition = useCallback(() => {
     const recognition = recognitionRef.current;
@@ -474,7 +479,7 @@ export default function VoiceCapture() {
     transcriptManuallyEditedRef.current = false;
 
     const Recognition = getSpeechRecognition();
-    const useServerAudio = serverSttAvailable === true;
+    const useServerAudio = await probeVoiceEngine();
     voiceModeRef.current = useServerAudio ? "server" : "browser";
 
     // Browser-only fallback: crucial on Android Chrome. Do NOT open getUserMedia
@@ -696,7 +701,7 @@ export default function VoiceCapture() {
     startedAtRef.current = Date.now();
     lastVoiceAtRef.current = Date.now();
     setPhase("listening");
-  }, [cleanupAudio, finalizeBrowserTranscript, rememberLanguageHint, serverSttAvailable, stopRecording]);
+  }, [cleanupAudio, finalizeBrowserTranscript, probeVoiceEngine, rememberLanguageHint, stopRecording]);
 
   // Open from the unified Capture Hub or keyboard shortcut.
   useEffect(() => {
@@ -1078,11 +1083,23 @@ export default function VoiceCapture() {
                   <span className="font-bold text-foreground">
                     {serverSttAvailable === true
                       ? language === "auto"
-                        ? "AI auto-detect"
-                        : `AI · ${languageToLocale(language)}`
+                        ? `AI multilingual auto · ${
+                            voiceProviders.lovable
+                              ? "Lovable STT"
+                              : voiceProviders.gemini
+                                ? "Gemini STT"
+                                : "server STT"
+                          }`
+                        : `AI · ${languageToLocale(language)} · ${
+                            voiceProviders.lovable
+                              ? "Lovable STT"
+                              : voiceProviders.gemini
+                                ? "Gemini STT"
+                                : "server STT"
+                          }`
                       : serverSttAvailable === false
                         ? language === "auto"
-                          ? `Chrome Auto · ${languageToLocale(
+                          ? `Chrome adaptive fallback · ${languageToLocale(
                               adaptiveLanguageHint ||
                                 browserEnvironmentLanguageHint(
                                   typeof navigator !== "undefined" ? navigator.languages || [] : [],
@@ -1092,10 +1109,16 @@ export default function VoiceCapture() {
                                     : undefined,
                                 ) || "en",
                             )}`
-                          : `Chrome · ${languageToLocale(language)}`
-                        : "Checking…"}
+                          : `Chrome fallback · ${languageToLocale(language)}`
+                        : "Checking multilingual engine…"}
                   </span>
                 </div>
+                {serverSttAvailable === false && (
+                  <p className="mt-1.5 px-1 text-[9px] leading-relaxed text-warning">
+                    Auto is using Chrome's single-language fallback, not true multilingual AI detection.
+                    Mission Control will retry the AI engine automatically on every recording.
+                  </p>
+                )}
               </div>
 
               {/* Language */}
