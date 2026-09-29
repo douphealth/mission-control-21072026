@@ -89,6 +89,12 @@ const STRICT_SCHEMA = {
 export const Route = createFileRoute("/api/voice/transcribe")({
   server: {
     handlers: {
+      GET: async () =>
+        json({
+          ok: true,
+          transcriptionConfigured: hasGateway(),
+          browserFallbackSupported: true,
+        }),
       POST: async ({ request }) => {
         const contentType = request.headers.get("content-type") ?? "";
         if (!contentType.includes("multipart/form-data")) {

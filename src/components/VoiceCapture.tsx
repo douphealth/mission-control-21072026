@@ -148,6 +148,8 @@ export default function VoiceCapture() {
   const [saving, setSaving] = useState(false);
   const [language, setLanguage] = useState<string>("auto");
   const languageRef = useRef("auto");
+  const [serverSttAvailable, setServerSttAvailable] = useState<boolean | null>(null);
+  const voiceModeRef = useRef<"server" | "browser">("server");
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -187,15 +189,41 @@ export default function VoiceCapture() {
   const liveTranscriptRef = useRef("");
   const lastFinalResultIndexRef = useRef(0);
 
-  // Browser support check (MediaRecorder + getUserMedia)
+  // Detect the production voice path before recording. On Android Chrome we
+  // must not run getUserMedia and SpeechRecognition at the same time because
+  // they can compete for the microphone.
   useEffect(() => {
-    // Server-side AI transcription is the primary path, so the browser
-    // SpeechRecognition API is a bonus (live preview) — never a requirement.
-    const ok =
-      typeof window !== "undefined" &&
-      !!navigator.mediaDevices?.getUserMedia &&
-      typeof AudioContext !== "undefined";
-    setSupported(ok);
+    let cancelled = false;
+    const probe = async () => {
+      const Recognition = getSpeechRecognition();
+      const canBrowserRecognize = Boolean(Recognition);
+      const canRecordServerAudio =
+        typeof window !== "undefined" &&
+        !!navigator.mediaDevices?.getUserMedia &&
+        typeof AudioContext !== "undefined";
+
+      try {
+        const response = await fetch("/api/voice/transcribe", {
+          method: "GET",
+          cache: "no-store",
+        });
+        const data = (await response.json().catch(() => ({}))) as {
+          transcriptionConfigured?: boolean;
+        };
+        if (cancelled) return;
+        const serverReady = response.ok && data.transcriptionConfigured === true;
+        setServerSttAvailable(serverReady);
+        setSupported(serverReady ? canRecordServerAudio : canBrowserRecognize);
+      } catch {
+        if (cancelled) return;
+        setServerSttAvailable(false);
+        setSupported(canBrowserRecognize);
+      }
+    };
+    void probe();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
 
@@ -264,6 +292,7 @@ export default function VoiceCapture() {
       if (!recordingRef.current) return;
       stopReasonRef.current = reason;
       recordingRef.current = false;
+
       const recognition = recognitionRef.current;
       if (recognition) {
         try {
@@ -272,20 +301,36 @@ export default function VoiceCapture() {
           /* */
         }
       }
+
       const elapsed = Date.now() - startedAtRef.current;
+      const browserTranscript = liveTranscriptRef.current || committedTranscriptRef.current;
+
+      if (voiceModeRef.current === "browser") {
+        cleanupRecognition();
+        setAudioLevel(0);
+        const cleaned = browserTranscript.trim();
+        if (!cleaned) {
+          setPhase("idle");
+          setErrorMsg("I didn't catch any speech. Tap the mic and speak again.");
+          return;
+        }
+        const local = classifyTranscript(cleaned);
+        setTranscript(local.transcript);
+        setAiResult({
+          ...local,
+          source: "browser",
+          provider: "browser",
+        });
+        if (typeAuto) setType(local.type);
+        setPhase("ready");
+        return;
+      }
+
       const blob = encodePcmAsWav(pcmChunksRef.current, sampleRateRef.current);
       cleanupRecognition();
       cleanupAudio();
 
-      // Do not discard a quiet recording just because VAD/browser STT missed it.
-      // If we captured enough PCM, send it to server STT and let the audio model decide.
-      if (
-        !hasUsableVoiceCapture(
-          liveTranscriptRef.current || committedTranscriptRef.current,
-          blob.size,
-          elapsed,
-        )
-      ) {
+      if (!hasUsableVoiceCapture(browserTranscript, blob.size, elapsed)) {
         setPhase("idle");
         setAudioLevel(0);
         if (reason !== "silence") toast.error("I didn't catch any speech. Try again.");
@@ -294,17 +339,14 @@ export default function VoiceCapture() {
 
       setPhase("processing");
       setAudioLevel(0);
-      void smartCapture(
-        blob,
-        liveTranscriptRef.current || committedTranscriptRef.current,
-        languageRef.current,
-      )
+      void smartCapture(blob, browserTranscript, languageRef.current)
         .then((result) => {
           if (!result.transcript) {
-            // Browser STT failed and no server STT available — show text
-            // input fallback so the user can type what they said.
+            setServerSttAvailable(false);
             setErrorMsg(
-              "Could not transcribe your voice in this browser. Type your note below, or try Chrome for voice recognition.",
+              getSpeechRecognition()
+                ? "AI transcription is unavailable right now. Tap the mic again — Mission Control will switch to Chrome speech recognition."
+                : "AI transcription is unavailable and this browser has no speech-recognition fallback.",
             );
             setPhase("ready");
             return;
@@ -316,7 +358,12 @@ export default function VoiceCapture() {
         })
         .catch((err: unknown) => {
           console.error("transcribe failed", err);
-          const message = err instanceof Error ? err.message : "Transcription failed";
+          setServerSttAvailable(false);
+          const message = getSpeechRecognition()
+            ? "AI transcription failed. Tap the mic again — Mission Control will use Chrome speech recognition."
+            : err instanceof Error
+              ? err.message
+              : "Transcription failed";
           setErrorMsg(message);
           setPhase("error");
         });
@@ -326,6 +373,7 @@ export default function VoiceCapture() {
 
   const startRecording = useCallback(async () => {
     if (recordingRef.current) return;
+
     setErrorMsg(null);
     setTranscript("");
     setAiResult(null);
@@ -338,47 +386,32 @@ export default function VoiceCapture() {
     pcmChunksRef.current = [];
     hasSpokenRef.current = false;
 
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1,
-        },
-      });
-    } catch (err) {
-      const e = err as DOMException;
-      console.warn("mic permission denied", e);
-      const msg =
-        e?.name === "NotAllowedError"
-          ? "Microphone access denied. Allow it in your browser, then try again."
-          : e?.name === "NotFoundError"
-            ? "No microphone detected on this device."
-            : "Could not access the microphone.";
-      setErrorMsg(msg);
-      setPhase("error");
-      setAudioLevel(0);
-      toast.error(msg);
-      return;
-    }
-
-    streamRef.current = stream;
-
     const Recognition = getSpeechRecognition();
-    const recognition = Recognition ? new Recognition() : null;
-    if (recognition) {
+    const useServerAudio = serverSttAvailable === true;
+    voiceModeRef.current = useServerAudio ? "server" : "browser";
+
+    // Browser-only fallback: crucial on Android Chrome. Do NOT open getUserMedia
+    // here, otherwise SpeechRecognition can lose access to the microphone.
+    if (!useServerAudio) {
+      if (!Recognition) {
+        setSupported(false);
+        setErrorMsg(
+          "Voice transcription is not configured on the server and this browser does not support speech recognition.",
+        );
+        setPhase("error");
+        setAudioLevel(0);
+        return;
+      }
+
+      const recognition = new Recognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = browserRecognitionLanguage(
         languageRef.current,
         navigator.language || "en-US",
       );
-      // Keep the best three hypotheses available to the browser engine. The
-      // server transcript remains authoritative, but this materially improves
-      // the fallback preview for names, URLs, and uncommon words.
       recognition.maxAlternatives = 3;
+
       recognition.onresult = (event) => {
         const snapshot = buildRecognitionSnapshot(
           event.results,
@@ -392,18 +425,28 @@ export default function VoiceCapture() {
           .join(" ")
           .trim();
         setTranscript(liveTranscriptRef.current);
+        setPhase("hearing");
+        setAudioLevel(0.75);
       };
+
       recognition.onerror = (event) => {
         const message = event.error || "speech recognition failed";
-        if (message === "aborted" || message === "no-speech") return;
-        console.warn("speech recognition error", message);
+        if (message === "aborted") return;
+        if (message === "not-allowed" || message === "service-not-allowed") {
+          setErrorMsg("Microphone permission is blocked for Chrome. Allow microphone access for this site and try again.");
+          recordingRef.current = false;
+          setPhase("error");
+          return;
+        }
+        if (message !== "no-speech") {
+          console.warn("speech recognition error", message);
+          setErrorMsg(`Chrome speech recognition error: ${message}`);
+        }
       };
+
       recognition.onend = () => {
-        // Chrome ends recognition on short pauses — restart while still recording
-        // so long, multi-sentence dictation is never truncated.
         if (recognitionRef.current !== recognition) return;
         if (!stopReasonRef.current && recordingRef.current) {
-          // A restarted session numbers its results from zero again.
           lastFinalResultIndexRef.current = 0;
           try {
             recognition.start();
@@ -414,10 +457,54 @@ export default function VoiceCapture() {
         }
         recognitionRef.current = null;
       };
+
       recognitionRef.current = recognition;
+      recordingRef.current = true;
+      startedAtRef.current = Date.now();
+      try {
+        recognition.start();
+        setPhase("listening");
+        setAudioLevel(0.35);
+      } catch (error) {
+        console.error("browser speech start failed", error);
+        recordingRef.current = false;
+        recognitionRef.current = null;
+        setErrorMsg("Could not start Chrome speech recognition. Check microphone permission and try again.");
+        setPhase("error");
+        setAudioLevel(0);
+      }
+      return;
     }
 
-    // Audio level + VAD via WebAudio
+    // Server STT path: record high-quality PCM only. Do not also start browser
+    // recognition on Android; the server model is the source of truth.
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+        },
+      });
+    } catch (err) {
+      const e = err as DOMException;
+      const msg =
+        e?.name === "NotAllowedError"
+          ? "Microphone access denied. Allow microphone access for this site, then try again."
+          : e?.name === "NotFoundError"
+            ? "No microphone detected on this device."
+            : "Could not access the microphone.";
+      setErrorMsg(msg);
+      setPhase("error");
+      setAudioLevel(0);
+      toast.error(msg);
+      return;
+    }
+
+    streamRef.current = stream;
+
     try {
       const Ctx =
         window.AudioContext ||
@@ -464,11 +551,9 @@ export default function VoiceCapture() {
           lastVoiceAtRef.current = now;
           setPhase((p) => (p === "starting" || p === "listening" ? "hearing" : p));
         } else if (rms > SILENCE_RMS_THRESHOLD) {
-          // ambient/marginal — keep timer, no state change
           lastVoiceAtRef.current = Math.max(lastVoiceAtRef.current, now - 200);
         }
 
-        // Auto-stop on sustained silence (after at least one detected speech segment)
         if (hasSpokenRef.current && now - lastVoiceAtRef.current > SILENCE_HANG_MS) {
           stopRecording("silence");
           return;
@@ -481,28 +566,19 @@ export default function VoiceCapture() {
       };
       rafRef.current = requestAnimationFrame(tick);
     } catch (err) {
-      console.warn("audio meter init failed", err);
+      console.warn("audio capture init failed", err);
+      cleanupAudio();
+      setErrorMsg("Could not initialize audio recording.");
+      setPhase("error");
+      setAudioLevel(0);
+      return;
     }
 
     recordingRef.current = true;
     startedAtRef.current = Date.now();
     lastVoiceAtRef.current = Date.now();
-    try {
-      try {
-        recognition?.start();
-      } catch {
-        /* live preview is optional */
-      }
-      setPhase("listening");
-    } catch (err) {
-      console.error("recording start failed", err);
-      cleanupRecognition();
-      cleanupAudio();
-      recordingRef.current = false;
-      setErrorMsg("Could not start recording. Try again.");
-      setPhase("error");
-    }
-  }, [cleanupAudio, cleanupRecognition, stopRecording]);
+    setPhase("listening");
+  }, [cleanupAudio, serverSttAvailable, stopRecording]);
 
   // Open from the unified Capture Hub or keyboard shortcut.
   useEffect(() => {
@@ -805,6 +881,19 @@ export default function VoiceCapture() {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div className="px-5 sm:px-6 pb-3">
+                <div className="flex items-center justify-between rounded-2xl border border-border/30 bg-secondary/25 px-3 py-2 text-[10px]">
+                  <span className="font-semibold text-muted-foreground">VOICE ENGINE</span>
+                  <span className="font-bold text-foreground">
+                    {serverSttAvailable === true
+                      ? "AI audio transcription"
+                      : serverSttAvailable === false
+                        ? "Chrome speech recognition"
+                        : "Checking…"}
+                  </span>
+                </div>
               </div>
 
               {/* Language */}
