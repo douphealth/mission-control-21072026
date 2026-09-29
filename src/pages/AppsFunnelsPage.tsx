@@ -10,6 +10,11 @@ import {
   ShieldCheck,
   Sparkles,
   Target,
+  Rocket,
+  Route,
+  BarChart3,
+  BadgeDollarSign,
+  Layers3,
 } from "lucide-react";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
 import { useAddItem, useBuildProjects, useUpdateItem } from "@/hooks/useTableData";
@@ -83,9 +88,15 @@ export default function AppsFunnelsPage() {
         ...(catalog as BuildProject),
         ...(local ?? {}),
         id: local?.id ?? `catalog-${catalog.name}`,
-        // Repo identity remains canonical; planning/deployment metadata is editable.
+        // Canonical relationship fields always come from the catalog so stale
+        // persisted records can never resurrect retired domains or deployments.
         githubRepo: catalog.githubRepo,
         projectUrl: catalog.projectUrl,
+        deployedUrl: catalog.deployedUrl,
+        parentWebsite: catalog.parentWebsite,
+        landingPage: catalog.landingPage,
+        alternateUrls: catalog.alternateUrls,
+        productName: catalog.productName,
       } as BuildProject;
     });
   }, [buildProjects]);
@@ -149,6 +160,11 @@ export default function AppsFunnelsPage() {
       ...form,
       githubRepo: canonical.githubRepo,
       projectUrl: canonical.projectUrl,
+      deployedUrl: canonical.deployedUrl,
+      parentWebsite: canonical.parentWebsite,
+      landingPage: canonical.landingPage,
+      alternateUrls: canonical.alternateUrls,
+      productName: canonical.productName,
       name: form.name.trim() || canonical.name,
       lastWorkedOn: new Date().toISOString().split("T")[0],
     };
@@ -230,129 +246,148 @@ export default function AppsFunnelsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-        {apps.map((app) => (
-          <article key={app.githubRepo} className="card-elevated group p-4 sm:p-5">
-            <div className="flex items-start gap-3">
-              <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary/10 text-primary">
-                <Target size={18} />
-              </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+        {apps.map((app, index) => {
+          const live = app.status === "deployed" && Boolean(app.deployedUrl);
+          const importance = Math.max(0, Math.min(100, app.importance || 0));
+          const host = (url?: string) => {
+            if (!url) return "";
+            try {
+              return new URL(url).host;
+            } catch {
+              return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+            }
+          };
+          return (
+            <article
+              key={app.githubRepo}
+              className="revenue-card group"
+              data-priority={app.priority || "medium"}
+              style={{ "--revenue-card-index": index } as React.CSSProperties}
+            >
+              <div className="revenue-card-glow" aria-hidden />
 
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="truncate text-base font-extrabold text-foreground">
-                    {app.productName || app.name}
-                  </h2>
-                  <span
-                    className={`rounded-full border px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-wide ${
-                      app.priority === "critical"
-                        ? "border-destructive/20 bg-destructive/10 text-destructive"
-                        : app.priority === "high"
-                          ? "border-warning/20 bg-warning/10 text-warning"
-                          : "border-border/40 bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    {app.priority}
-                  </span>
-                  <span className="rounded-full bg-success/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-success">
-                    {app.status}
-                  </span>
+              <div className="revenue-card-head">
+                <div className="revenue-card-icon">
+                  <Rocket size={19} />
                 </div>
 
-                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                  {app.description}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="revenue-card-kicker">
+                      {app.portfolioGroup === "growth-app" ? "Revenue app" : "Product tool"}
+                    </span>
+                    <span className={`revenue-status ${live ? "is-live" : "is-testing"}`}>
+                      <span />
+                      {live ? "Live" : app.status}
+                    </span>
+                  </div>
+                  <h2 className="revenue-card-title">{app.productName || app.name}</h2>
+                  <p className="revenue-card-description">{app.description}</p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => openEdit(app)}
+                  className="revenue-edit"
+                  title="Edit planning details"
+                >
+                  <Edit2 size={14} />
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => openEdit(app)}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-border/40 bg-secondary/50 text-muted-foreground transition hover:border-primary/25 hover:bg-primary/8 hover:text-primary"
-                title="Edit app"
-              >
-                <Edit2 size={14} />
-              </button>
-            </div>
-
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <a
-                href={app.githubRepo}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex min-w-0 items-center gap-2 rounded-xl border border-border/35 bg-secondary/35 px-3 py-2.5 text-xs font-semibold text-foreground transition hover:border-primary/25 hover:bg-primary/5"
-              >
-                <Github size={14} className="shrink-0 text-primary" />
-                <span className="min-w-0 flex-1 truncate">{app.githubRepo.replace("https://github.com/", "")}</span>
-                <ArrowUpRight size={12} className="shrink-0 text-muted-foreground" />
-              </a>
-
-              {app.deployedUrl ? (
-                <a
-                  href={app.deployedUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-w-0 items-center gap-2 rounded-xl border border-border/35 bg-secondary/35 px-3 py-2.5 text-xs font-semibold text-foreground transition hover:border-success/25 hover:bg-success/5"
-                >
-                  <Globe size={14} className="shrink-0 text-success" />
-                  <span className="min-w-0 flex-1 truncate">{app.deployedUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
-                  <ExternalLink size={12} className="shrink-0 text-muted-foreground" />
-                </a>
-              ) : (
-                <div className="flex items-center gap-2 rounded-xl border border-dashed border-border/40 px-3 py-2.5 text-xs text-muted-foreground">
-                  <Globe size={14} /> Production URL pending
+              <div className="revenue-score-row">
+                <div className="revenue-score">
+                  <div className="revenue-score-ring" style={{ "--score": importance } as React.CSSProperties}>
+                    <strong>{importance}</strong>
+                  </div>
+                  <div>
+                    <span>Importance</span>
+                    <strong>{app.priority || "medium"} priority</strong>
+                  </div>
                 </div>
-              )}
-            </div>
+                <div className="revenue-health">
+                  <BarChart3 size={14} />
+                  <span>{live ? "Production asset" : "Needs production validation"}</span>
+                </div>
+              </div>
 
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {app.parentWebsite && (
-                <a
-                  href={app.parentWebsite}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-w-0 items-center gap-2 rounded-xl bg-card/50 px-3 py-2 text-[11px] text-muted-foreground transition hover:text-foreground"
-                >
-                  <ShieldCheck size={13} className="shrink-0" />
-                  <span className="truncate">{app.parentWebsite.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
+              <div className="revenue-link-stack">
+                <a href={app.githubRepo} target="_blank" rel="noopener noreferrer" className="revenue-link revenue-link-repo">
+                  <span className="revenue-link-icon"><Github size={15} /></span>
+                  <span className="revenue-link-copy">
+                    <small>GitHub repository</small>
+                    <strong>{app.githubRepo.replace("https://github.com/", "")}</strong>
+                  </span>
+                  <ArrowUpRight size={13} />
                 </a>
-              )}
-              {app.landingPage && (
-                <a
-                  href={app.landingPage}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex min-w-0 items-center gap-2 rounded-xl bg-card/50 px-3 py-2 text-[11px] text-muted-foreground transition hover:text-foreground"
-                >
-                  <Link2 size={13} className="shrink-0" />
-                  <span className="truncate">{app.landingPage.replace(/^https?:\/\//, "").replace(/\/$/, "")}</span>
-                </a>
-              )}
-            </div>
 
-            {app.alternateUrls && app.alternateUrls.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {app.alternateUrls.map((url) => (
-                  <a
-                    key={url}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="rounded-lg bg-secondary/60 px-2 py-1 text-[10px] font-medium text-muted-foreground transition hover:text-foreground"
-                  >
-                    {url.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                {app.deployedUrl ? (
+                  <a href={app.deployedUrl} target="_blank" rel="noopener noreferrer" className="revenue-link revenue-link-live">
+                    <span className="revenue-link-icon"><Globe size={15} /></span>
+                    <span className="revenue-link-copy">
+                      <small>Production app</small>
+                      <strong>{host(app.deployedUrl)}</strong>
+                    </span>
+                    <ExternalLink size={13} />
                   </a>
-                ))}
-              </div>
-            )}
+                ) : (
+                  <div className="revenue-link revenue-link-muted">
+                    <span className="revenue-link-icon"><Globe size={15} /></span>
+                    <span className="revenue-link-copy">
+                      <small>Production app</small>
+                      <strong>URL pending</strong>
+                    </span>
+                  </div>
+                )}
 
-            <div className="mt-3 rounded-2xl border border-warning/10 bg-warning/5 p-3">
-              <div className="mb-1 text-[9px] font-extrabold uppercase tracking-[0.14em] text-warning">
-                Next highest-value action
+                {app.landingPage && (
+                  <a href={app.landingPage} target="_blank" rel="noopener noreferrer" className="revenue-link">
+                    <span className="revenue-link-icon"><Route size={15} /></span>
+                    <span className="revenue-link-copy">
+                      <small>Funnel entry</small>
+                      <strong>{host(app.landingPage)}{new URL(app.landingPage).pathname !== "/" ? new URL(app.landingPage).pathname : ""}</strong>
+                    </span>
+                    <ArrowUpRight size={13} />
+                  </a>
+                )}
+
+                {app.parentWebsite && app.parentWebsite !== app.landingPage && (
+                  <a href={app.parentWebsite} target="_blank" rel="noopener noreferrer" className="revenue-link">
+                    <span className="revenue-link-icon"><ShieldCheck size={15} /></span>
+                    <span className="revenue-link-copy">
+                      <small>Parent website</small>
+                      <strong>{host(app.parentWebsite)}</strong>
+                    </span>
+                    <ArrowUpRight size={13} />
+                  </a>
+                )}
               </div>
-              <p className="text-xs leading-relaxed text-muted-foreground">{app.nextSteps}</p>
-            </div>
-          </article>
-        ))}
+
+              {app.alternateUrls && app.alternateUrls.length > 0 && (
+                <div className="revenue-alt-wrap">
+                  <div className="revenue-alt-label"><Layers3 size={12} /> Alternate deployments</div>
+                  <div className="revenue-alt-list">
+                    {app.alternateUrls.map((url) => (
+                      <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                        {host(url)}
+                        <ArrowUpRight size={10} />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="revenue-next">
+                <div className="revenue-next-label">
+                  <BadgeDollarSign size={13} />
+                  Highest-value revenue action
+                </div>
+                <p>{app.nextSteps}</p>
+              </div>
+            </article>
+          );
+        })}
       </div>
 
       <FormModal
