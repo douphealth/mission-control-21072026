@@ -63,9 +63,9 @@ const TYPE_OPTIONS: {
 ];
 
 // Voice activity detection constants
-const SILENCE_RMS_THRESHOLD = 0.012; // below this = silence
-const SPEECH_RMS_THRESHOLD = 0.025; // above this = clearly speaking
-const SILENCE_HANG_MS = 3500; // auto-stop after this much continuous silence (post-speech)
+const SILENCE_RMS_THRESHOLD = 0.006; // quiet speech/noise floor guard
+const SPEECH_RMS_THRESHOLD = 0.012; // deliberately sensitive: server STT is authoritative
+const SILENCE_HANG_MS = 6000; // allow natural pauses, names, URLs and slower dictation
 const MAX_RECORD_MS = 180_000; // hard cap
 const MIN_RECORD_MS = 600; // ignore taps shorter than this
 
@@ -273,14 +273,13 @@ export default function VoiceCapture() {
         }
       }
       const elapsed = Date.now() - startedAtRef.current;
-      const heardSomething =
-        hasSpokenRef.current || !!(liveTranscriptRef.current || committedTranscriptRef.current);
       const blob = encodePcmAsWav(pcmChunksRef.current, sampleRateRef.current);
       cleanupRecognition();
       cleanupAudio();
 
+      // Do not discard a quiet recording just because VAD/browser STT missed it.
+      // If we captured enough PCM, send it to server STT and let the audio model decide.
       if (
-        !heardSomething ||
         !hasUsableVoiceCapture(
           liveTranscriptRef.current || committedTranscriptRef.current,
           blob.size,
@@ -782,10 +781,27 @@ export default function VoiceCapture() {
                       Clear & re-record
                     </button>
                     {aiResult && (
-                      <span className="text-[10px] text-primary/80 font-medium flex items-center gap-1">
-                        <Sparkles size={10} /> AI-classified as {aiResult.type}
-                        {aiResult.language ? ` · ${aiResult.language.toUpperCase()}` : ""}
-                      </span>
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 text-[10px]">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/8 px-2 py-1 font-semibold text-primary">
+                          <Sparkles size={10} /> {aiResult.source === "ai" ? "Audio AI" : aiResult.source === "browser" ? "Browser STT" : "Local fallback"}
+                        </span>
+                        {aiResult.provider && (
+                          <span className="rounded-full bg-secondary px-2 py-1 font-medium text-muted-foreground">
+                            {aiResult.provider === "lovable" ? "Lovable STT" : aiResult.provider === "gemini" ? "Gemini STT" : "Browser"}
+                          </span>
+                        )}
+                        {typeof aiResult.agreement === "number" && aiResult.browserTranscript && (
+                          <span
+                            className="rounded-full bg-secondary px-2 py-1 font-medium text-muted-foreground"
+                            title="Word overlap between server audio transcription and browser live recognition; this is not a confidence score."
+                          >
+                            {aiResult.agreement}% cross-check
+                          </span>
+                        )}
+                        <span className="font-medium text-primary/80">
+                          {aiResult.type}{aiResult.language ? ` · ${aiResult.language.toUpperCase()}` : ""}
+                        </span>
+                      </div>
                     )}
                   </div>
                 )}
