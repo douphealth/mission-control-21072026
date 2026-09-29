@@ -1,7 +1,14 @@
 const WORD_RE = /[\p{L}\p{N}@._:/-]+/gu;
 
+function canonicalToken(token: string): string {
+  return token
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "");
+}
+
 function words(text: string): string[] {
-  return (text.toLowerCase().match(WORD_RE) || []).filter(Boolean);
+  return (text.match(WORD_RE) || []).map(canonicalToken).filter(Boolean);
 }
 
 function overlapRatio(a: string, b: string): number {
