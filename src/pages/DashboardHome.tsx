@@ -20,6 +20,7 @@ import {
   Search,
   ArrowUpRight,
   AppWindow,
+  Command,
 } from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
@@ -51,6 +52,7 @@ export default function DashboardHome() {
   const [dockItem, setDockItem] = useState<WorkItem | null>(null);
   const workdayEnd = usePlanStore((s) => s.workdayEnd);
   const setActiveSection = useNavigationStore((s) => s.setActiveSection);
+  const setCommandPaletteOpen = useNavigationStore((s) => s.setCommandPaletteOpen);
   const evening = hhmmNow() >= workdayEnd || showClose;
 
   useEffect(() => {
@@ -105,32 +107,107 @@ export default function DashboardHome() {
 
   return (
     <div className="flex flex-col gap-4 pb-8 sm:gap-5">
-      {/* Date + area switch + close day */}
-      <div className="ultra-fade flex items-center justify-between gap-3">
-        <p className="text-[12px] font-semibold text-muted-foreground">
-          {new Date().toLocaleDateString(undefined, {
-            weekday: "long",
-            day: "numeric",
-            month: "long",
-          })}
-        </p>
-        <div className="flex items-center gap-2">
+      <div className="mc-home-toolbar ultra-fade">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="mc-home-toolbar-label">Today</span>
           <AreaSwitch />
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCommandPaletteOpen(true)}
+            className="mc-home-toolbar-action"
+            aria-label="Open command search"
+            title="Search everything"
+          >
+            <Command size={13} />
+            <span className="hidden sm:inline">Search</span>
+            <kbd className="hidden lg:inline">Ctrl K</kbd>
+          </button>
           <button
             onClick={() => setShowClose((v) => !v)}
-            className="flex h-8 items-center gap-1.5 rounded-xl border border-border/50 bg-secondary/40 px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            className="mc-home-toolbar-action"
             aria-pressed={showClose}
           >
-            <Moon size={12} /> Close day
+            <Moon size={13} />
+            <span>Close day</span>
           </button>
         </div>
+      </div>
+
+      <div className="ultra-rise-1">
+        <HeroNowBand
+          nextAction={ops.nextAction}
+          commitmentsTotal={commitmentsTotal}
+          commitmentsDone={commitmentsDone}
+          plannedMin={ops.capacity.plannedMin}
+          availableMin={ops.capacity.availableMin}
+          onFocus={(item) => setDockItem(item)}
+          onComplete={ops.complete}
+        />
       </div>
 
       <div className="ultra-rise-1">
         <QuickCaptureBar />
       </div>
 
-      <div className="mc-launch-grid ultra-rise-1" aria-label="Primary workspaces">
+      {!ops.isEmpty && (
+        <div className="mc-kpi-grid ultra-rise-2" role="navigation" aria-label="Today at a glance">
+          {attentionCount > 0 && (
+            <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="bad">
+              <span className="mc-kpi-icon"><AlertTriangle size={15} /></span>
+              <span className="mc-kpi-value">{attentionCount}</span>
+              <span className="mc-kpi-copy">
+                <strong>Needs attention</strong>
+                <small>Open tasks that need a decision</small>
+              </span>
+              <ArrowUpRight size={13} className="mc-kpi-arrow" />
+            </button>
+          )}
+          <button type="button" onClick={() => setActiveSection("calendar")} className="mc-kpi-card" data-tone="info">
+            <span className="mc-kpi-icon"><CalendarClock size={15} /></span>
+            <span className="mc-kpi-value">{timedCount}</span>
+            <span className="mc-kpi-copy">
+              <strong>Timed today</strong>
+              <small>Calendar and scheduled work</small>
+            </span>
+            <ArrowUpRight size={13} className="mc-kpi-arrow" />
+          </button>
+          <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card">
+            <span className="mc-kpi-icon"><Zap size={15} /></span>
+            <span className="mc-kpi-value">{queuedCount}</span>
+            <span className="mc-kpi-copy">
+              <strong>Queued</strong>
+              <small>Ready to plan or execute</small>
+            </span>
+            <ArrowUpRight size={13} className="mc-kpi-arrow" />
+          </button>
+          {commitmentsTotal > 0 && (
+            <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="good">
+              <span className="mc-kpi-icon"><CheckCircle2 size={15} /></span>
+              <span className="mc-kpi-value">{commitmentsDone}/{commitmentsTotal}</span>
+              <span className="mc-kpi-copy">
+                <strong>Outcomes done</strong>
+                <small>Today's committed results</small>
+              </span>
+              <ArrowUpRight size={13} className="mc-kpi-arrow" />
+            </button>
+          )}
+          {ops.inboxTasks.length > 0 && (
+            <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="violet">
+              <span className="mc-kpi-icon"><Inbox size={15} /></span>
+              <span className="mc-kpi-value">{ops.inboxTasks.length}</span>
+              <span className="mc-kpi-copy">
+                <strong>Inbox</strong>
+                <small>Captured, not yet planned</small>
+              </span>
+              <ArrowUpRight size={13} className="mc-kpi-arrow" />
+            </button>
+          )}
+        </div>
+      )}
+
+      <div className="mc-launch-grid ultra-rise-2" aria-label="Primary workspaces">
         {[
           { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare },
           { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft },
@@ -169,64 +246,6 @@ export default function DashboardHome() {
         <FirstRunExperience />
       ) : (
         <>
-          {/* ── Hero: greeting + progress + next action ── */}
-          <HeroNowBand
-            nextAction={ops.nextAction}
-            commitmentsTotal={commitmentsTotal}
-            commitmentsDone={commitmentsDone}
-            plannedMin={ops.capacity.plannedMin}
-            availableMin={ops.capacity.availableMin}
-            onFocus={(item) => setDockItem(item)}
-            onComplete={ops.complete}
-          />
-
-          {/* ── Stat tiles: glass grid ── */}
-          <div className="ultra-rise-2 ultra-stat-grid" role="status">
-            {attentionCount > 0 && (
-              <div className="ultra-stat" data-tone="bad">
-                <div className="ultra-stat-icon">
-                  <AlertTriangle size={15} />
-                </div>
-                <div className="ultra-stat-num">{attentionCount}</div>
-                <div className="ultra-stat-label">needing attention</div>
-              </div>
-            )}
-            <div className="ultra-stat" data-tone="info">
-              <div className="ultra-stat-icon">
-                <CalendarClock size={15} />
-              </div>
-              <div className="ultra-stat-num">{timedCount}</div>
-              <div className="ultra-stat-label">timed today</div>
-            </div>
-            <div className="ultra-stat">
-              <div className="ultra-stat-icon">
-                <Zap size={15} />
-              </div>
-              <div className="ultra-stat-num">{queuedCount}</div>
-              <div className="ultra-stat-label">queued</div>
-            </div>
-            {commitmentsTotal > 0 && (
-              <div className="ultra-stat" data-tone="good">
-                <div className="ultra-stat-icon">
-                  <CheckCircle2 size={15} />
-                </div>
-                <div className="ultra-stat-num">
-                  {commitmentsDone}/{commitmentsTotal}
-                </div>
-                <div className="ultra-stat-label">outcomes done</div>
-              </div>
-            )}
-            {ops.inboxTasks.length > 0 && (
-              <div className="ultra-stat" data-tone="violet">
-                <div className="ultra-stat-icon">
-                  <Inbox size={15} />
-                </div>
-                <div className="ultra-stat-num">{ops.inboxTasks.length}</div>
-                <div className="ultra-stat-label">in inbox</div>
-              </div>
-            )}
-          </div>
-
           {isMobile ? (
             <div className="ultra-rise-3 flex flex-col gap-4">
               {plan}
