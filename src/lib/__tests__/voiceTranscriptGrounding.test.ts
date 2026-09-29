@@ -11,6 +11,15 @@ describe("voice transcript grounding", () => {
     ).toBe("Remind me to call Alexios tomorrow.");
   });
 
+  it("accepts Greek diacritic cleanup as the same spoken wording", () => {
+    expect(
+      chooseGroundedTranscript(
+        "να θυμηθω να παρω τηλεφωνο αυριο",
+        "Να θυμηθώ να πάρω τηλέφωνο αύριο.",
+      ),
+    ).toBe("Να θυμηθώ να πάρω τηλέφωνο αύριο.");
+  });
+
   it("rejects a cleaned transcript that paraphrases or drops too much content", () => {
     const raw = "send the client the report and call maria tomorrow morning";
     expect(chooseGroundedTranscript(raw, "Contact Maria tomorrow.")).toBe(raw);
