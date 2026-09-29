@@ -88,7 +88,8 @@ export async function transcribeAudio(
       }
     }
     const trimmed = text.trim();
-    return trimmed ? { text: trimmed, provider: "lovable" } : null;
+    if (trimmed) return { text: trimmed, provider: "lovable" };
+    return transcribeAudioWithGemini(file, language);
   } catch (error) {
     // If the Lovable transcription path is unavailable or rate-limited, use
     // the configured direct Gemini key rather than dropping to browser STT.
