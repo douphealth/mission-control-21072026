@@ -99,6 +99,10 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         const file = form.get("audio");
         const browserTranscript = String(form.get("browserTranscript") ?? "").trim();
         const requestedLanguage = String(form.get("language") ?? "auto").trim();
+        const localDateRaw = String(form.get("localDate") ?? "").trim();
+        const localDate = /^\d{4}-\d{2}-\d{2}$/.test(localDateRaw)
+          ? localDateRaw
+          : new Date().toISOString().slice(0, 10);
         const hasAudio = file instanceof File && file.size > 2048;
 
         // ── 1. Server-side speech-to-text (auto language detection) ─────────
@@ -134,7 +138,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
           );
         }
 
-        const today = new Date().toISOString().slice(0, 10);
+        const today = localDate;
 
         // ── 2. Structure the transcript ─────────────────────────────────────
         if (hasGateway()) {
