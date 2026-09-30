@@ -1,5 +1,10 @@
 import {
   useWebsites,
+  useTasks,
+  useBuildProjects,
+  useSEOProfiles,
+  useSEOIssues,
+  useSEOSnapshots,
   useAddItem,
   useUpdateItem,
   useDeleteItem,
@@ -48,6 +53,10 @@ import {
   CheckSquare,
   Square,
   XCircle,
+  Target,
+  Rocket,
+  CircleDollarSign,
+  Gauge,
 } from "lucide-react";
 import FormModal, {
   FormField,
@@ -59,6 +68,8 @@ import FormModal, {
 import type { Website } from "@/lib/store";
 import { toast } from "sonner";
 import { deduplicateTable } from "@/lib/dedup";
+import { buildSitePulse } from "@/lib/sitePulse";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
@@ -109,7 +120,7 @@ const CATEGORY_CONFIG: Record<string, { gradient: string; emoji: string }> = {
   Portfolio: { gradient: "from-rose-500 to-pink-500", emoji: "🎨" },
 };
 
-type SortField = "name" | "status" | "category" | "dateAdded" | "lastUpdated";
+type SortField = "priority" | "name" | "status" | "category" | "dateAdded" | "lastUpdated";
 type SortDirection = "asc" | "desc";
 
 const emptyWebsite: Omit<Website, "id"> = {
@@ -140,6 +151,12 @@ const fadeUp = (i: number) => ({
 
 export default function WebsitesPage() {
   const websites = useWebsites();
+  const tasks = useTasks();
+  const buildProjects = useBuildProjects();
+  const seoProfiles = useSEOProfiles();
+  const seoIssues = useSEOIssues();
+  const seoSnapshots = useSEOSnapshots();
+  const setActiveSection = useNavigationStore((s) => s.setActiveSection);
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
@@ -149,8 +166,8 @@ export default function WebsitesPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
-  const [sortField, setSortField] = useState<SortField>("lastUpdated");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [sortField, setSortField] = useState<SortField>("priority");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [revealedPasswords, setRevealedPasswords] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -190,6 +207,12 @@ export default function WebsitesPage() {
       .sort((a, b) => {
         let cmp = 0;
         switch (sortField) {
+          case "priority": {
+            const rank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+            cmp = (rank[a.priority || "low"] || 0) - (rank[b.priority || "low"] || 0);
+            if (cmp === 0) cmp = (a.importance || 0) - (b.importance || 0);
+            break;
+          }
           case "name":
             cmp = a.name.localeCompare(b.name);
             break;
@@ -222,6 +245,67 @@ export default function WebsitesPage() {
       providers: new Set(websites.map((w) => w.hostingProvider).filter(Boolean)).size,
       totalPlugins: websites.reduce((sum, w) => sum + w.plugins.length, 0),
     }),
+    [websites],
+  );
+
+  const normalizeHost = useCallback((url: string) => {
+    try {
+      return new URL(ensureUrl(url)).hostname.replace(/^www\./, "").toLowerCase();
+    } catch {
+      return url.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").toLowerCase();
+    }
+  }, []);
+
+  const pulseById = useMemo(() => {
+    return new Map(
+      buildSitePulse({ websites, seoProfiles, seoIssues, seoSnapshots, limit: websites.length }).map((row) => [
+        row.id,
+        row,
+      ]),
+    );
+  }, [websites, seoProfiles, seoIssues, seoSnapshots]);
+
+  const websiteOperationalData = useMemo(() => {
+    const result = new Map<string, { openTasks: number; criticalTasks: number; apps: number; issues: number }>();
+    for (const site of websites) {
+      const host = normalizeHost(site.url);
+      const matchesProject = (value?: string) => {
+        const v = (value || "").toLowerCase();
+        return !!v && (v.includes(host) || v.includes(site.name.toLowerCase()));
+      };
+      const linkedTasks = tasks.filter((t) => t.status !== "done" && !t.deletedAt && matchesProject(t.linkedProject));
+      const apps = buildProjects.filter((app) => {
+        const parent = normalizeHost(app.parentWebsite || "");
+        return parent === host || matchesProject(app.parentWebsite) || matchesProject(app.landingPage);
+      });
+      const issues = seoIssues.filter(
+        (issue) => issue.websiteId === site.id && (issue.status === "open" || issue.status === "in-progress"),
+      );
+      result.set(site.id, {
+        openTasks: linkedTasks.length,
+        criticalTasks: linkedTasks.filter((t) => t.priority === "critical").length,
+        apps: apps.length,
+        issues: issues.length,
+      });
+    }
+    return result;
+  }, [websites, tasks, buildProjects, seoIssues, normalizeHost]);
+
+  const portfolioStats = useMemo(() => {
+    const openTasks = tasks.filter((t) => t.status !== "done" && !t.deletedAt && !t.archived);
+    return {
+      openTasks: openTasks.length,
+      criticalTasks: openTasks.filter((t) => t.priority === "critical").length,
+      appFunnels: buildProjects.filter((app) => app.status === "deployed").length,
+      openSeoIssues: seoIssues.filter((i) => i.status === "open" || i.status === "in-progress").length,
+    };
+  }, [tasks, buildProjects, seoIssues]);
+
+  const nextLeverageSite = useMemo(
+    () =>
+      [...websites]
+        .filter((site) => site.status === "active" && site.nextAction)
+        .sort((a, b) => (b.importance || 0) - (a.importance || 0))[0],
     [websites],
   );
 
