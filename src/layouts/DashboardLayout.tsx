@@ -7,6 +7,7 @@ import DailyBriefingBanner from "@/components/DailyBriefingBanner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardProvider, useDashboardOptional } from "@/contexts/DashboardContext";
 import { useNavigationStore } from "@/stores/navigationStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 import React, { Suspense, useEffect } from "react";
 import { useA11yStore } from "@/stores/a11yStore";
@@ -105,6 +106,7 @@ export default function DashboardLayout() {
   // Hooks must run before any early return so their order is identical on
   // every render (react-hooks/rules-of-hooks).
   const { activeSection } = useNavigationStore();
+  const floatingCaptureDockVisible = useSettingsStore((state) => state.floatingCaptureDockVisible);
   const isMobile = useIsMobile();
   useEffect(() => {
     applyA11y();
@@ -176,8 +178,8 @@ export default function DashboardLayout() {
       </div>
       {/* Mobile bottom navigation */}
       <MobileBottomNav />
-      {/* Instant photo capture → AI import */}
-      <SnapCapture />
+      {/* Instant photo/file/voice capture → AI import. User can hide this dock in Settings. */}
+      {floatingCaptureDockVisible && <SnapCapture />}
       {/* Voice capture — lazy-loaded floating mic */}
       <Suspense fallback={null}>
         <VoiceCapture />
