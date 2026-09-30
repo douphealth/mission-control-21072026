@@ -17,6 +17,18 @@ export interface Website {
   plugins: string[];
   dateAdded: string;
   lastUpdated: string;
+  favicon?: string;
+  tags?: string[];
+  /** Productivity / portfolio metadata. Never contains secrets or synthetic metrics. */
+  siteType?: "wordpress" | "hybrid" | "app" | "website";
+  priority?: "critical" | "high" | "medium" | "low";
+  importance?: number;
+  focus?: string;
+  nextAction?: string;
+  revenueModel?: string[];
+  evidenceStatus?: "verified" | "known" | "needs-verification";
+  verifiedAsOf?: string;
+  portfolioRevision?: string;
 }
 
 export interface Task {
