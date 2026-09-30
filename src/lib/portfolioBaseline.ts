@@ -339,6 +339,10 @@ const ENRICHMENT_KEYS: Array<keyof BaselineWebsite> = [
 ];
 
 export async function ensurePortfolioBaseline(): Promise<{ websitesAdded: number; websitesEnriched: number; tasksAdded: number; appsAdded: number }> {
+  const settings = await db.settings.get("default");
+  if (settings?.portfolioBaselineRevision === PORTFOLIO_BASELINE_REVISION) {
+    return { websitesAdded: 0, websitesEnriched: 0, tasksAdded: 0, appsAdded: 0 };
+  }
   let websitesAdded = 0;
   let websitesEnriched = 0;
   let tasksAdded = 0;
@@ -414,6 +418,8 @@ export async function ensurePortfolioBaseline(): Promise<{ websitesAdded: number
     tasksAdded++;
   }
 
+  await db.settings.update("default", { portfolioBaselineRevision: PORTFOLIO_BASELINE_REVISION });
+  markCloudRecordDirty("settings", "default");
   if (websitesAdded || websitesEnriched || tasksAdded || appsAdded) queueCloudPush();
 
   return { websitesAdded, websitesEnriched, tasksAdded, appsAdded };
