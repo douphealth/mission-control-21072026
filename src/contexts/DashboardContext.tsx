@@ -30,6 +30,7 @@ import { useDataStore } from "@/stores/dataStore";
 import { deduplicateAll } from "@/lib/dedup";
 import { restoreLatestNonEmptyVersion } from "@/lib/versions";
 import { startCloudSync } from "@/lib/cloudSync";
+import { ensurePortfolioBaseline } from "@/lib/portfolioBaseline";
 
 // Re-export types for backward compat with old imports
 export type {
@@ -102,8 +103,17 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         }
 
         await ensureSettingsRow();
+        // Repair the known portfolio additively. Existing records, credentials,
+        // statuses and user edits always win; only missing baseline data is added.
+        await ensurePortfolioBaseline();
         await deduplicateAll();
         await loadSettings();
+
+        // Ask supported browsers to protect IndexedDB from storage-pressure eviction.
+        // Failure is non-fatal: local data, versions and Drive sync still work normally.
+        if (typeof navigator !== "undefined" && navigator.storage?.persist) {
+          void navigator.storage.persist().catch(() => false);
+        }
 
         const settings = await db.settings.get("default");
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
