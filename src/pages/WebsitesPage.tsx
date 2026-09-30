@@ -6,6 +6,7 @@ import {
   useBulkPatch,
   useBulkDeleteItems,
   useDuplicateItem,
+  useTasks,
 } from "@/hooks/useTableData";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { useState, useMemo, useCallback } from "react";
@@ -59,6 +60,7 @@ import FormModal, {
 import type { Website } from "@/lib/store";
 import { toast } from "sonner";
 import { deduplicateTable } from "@/lib/dedup";
+import PortfolioWebsiteCard from "@/components/websites/PortfolioWebsiteCard";
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
@@ -140,6 +142,7 @@ const fadeUp = (i: number) => ({
 
 export default function WebsitesPage() {
   const websites = useWebsites();
+  const tasks = useTasks();
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
@@ -149,7 +152,7 @@ export default function WebsitesPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [sortField, setSortField] = useState<SortField>("lastUpdated");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [revealedPasswords, setRevealedPasswords] = useState<Set<string>>(new Set());
@@ -417,214 +420,20 @@ export default function WebsitesPage() {
 
   // ─── Grid card ─────────────────────────────────────────────────
 
-  const renderGridCard = (site: Website, i: number) => {
-    const catConfig = CATEGORY_CONFIG[site.category] || {
-      gradient: "from-zinc-500 to-zinc-600",
-      emoji: "🌐",
-    };
-    const statusCfg = STATUS_CONFIG[site.status] || STATUS_CONFIG.active;
-    const isExpanded = expandedSite === site.id;
-    const hasCredentials = site.wpUsername || site.hostingUsername;
-
-    return (
-      <div
-        key={site.id}
-        {...fadeUp(i)}
-        onClick={bulkMode ? () => toggleSelect(site.id) : undefined}
-        className={`group relative bg-card rounded-2xl border transition-all duration-300 overflow-hidden hover:shadow-lg hover:shadow-primary/5 ${bulkMode ? "cursor-pointer" : ""} ${selectedIds.has(site.id) ? "border-primary/50 ring-1 ring-primary/20" : "border-border/30 hover:border-border/60"}`}
-      >
-        {/* Bulk select checkbox */}
-        {bulkMode && (
-          <div className="absolute top-3 right-3 z-10">
-            {selectedIds.has(site.id) ? (
-              <CheckSquare size={18} className="text-primary" />
-            ) : (
-              <Square size={18} className="text-muted-foreground" />
-            )}
-          </div>
-        )}
-
-        {/* Top accent bar */}
-        <div className={`h-1 bg-gradient-to-r ${catConfig.gradient}`} />
-
-        {/* Header with favicon-like avatar */}
-        <div className="p-5 pb-3">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <div
-                className={`w-11 h-11 rounded-xl bg-gradient-to-br ${catConfig.gradient} flex items-center justify-center text-white text-lg font-bold flex-shrink-0 shadow-md shadow-primary/10`}
-              >
-                {site.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0">
-                <h3 className="font-bold text-card-foreground text-[15px] truncate leading-tight">
-                  {site.name}
-                </h3>
-                <a
-                  href={ensureUrl(site.url)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors truncate block mt-0.5 font-mono"
-                >
-                  {site.url.replace(/^https?:\/\//, "")}
-                </a>
-              </div>
-            </div>
-            {renderStatusBadge(site.status)}
-          </div>
-
-          {/* Quick info badges */}
-          <div className="flex flex-wrap gap-1.5 mb-3">
-            <span
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-gradient-to-r ${catConfig.gradient} text-white`}
-            >
-              {catConfig.emoji} {site.category}
-            </span>
-            {site.hostingProvider && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-secondary/50 text-muted-foreground border border-border/20">
-                <Server size={9} /> {site.hostingProvider}
-              </span>
-            )}
-            {site.wpAdminUrl && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-500/10 text-blue-500 border border-blue-500/15">
-                <Globe size={9} /> WordPress
-              </span>
-            )}
-            {site.plugins.length > 0 && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-violet-500/10 text-violet-500 border border-violet-500/15">
-                <Puzzle size={9} /> {site.plugins.length} plugins
-              </span>
-            )}
-          </div>
-
-          {/* Quick links row */}
-          <div className="flex items-center gap-2 border-t border-border/15 pt-3 mb-2">
-            <a
-              href={ensureUrl(site.url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-primary/8 text-primary hover:bg-primary/15 transition-all border border-primary/10"
-            >
-              <ExternalLink size={11} /> Visit Site
-            </a>
-            {site.wpAdminUrl && (
-              <a
-                href={ensureUrl(site.wpAdminUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-secondary/50 text-muted-foreground hover:text-foreground transition-all border border-border/20"
-              >
-                <Lock size={11} /> WP Admin
-              </a>
-            )}
-            {site.hostingLoginUrl && (
-              <a
-                href={ensureUrl(site.hostingLoginUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-secondary/50 text-muted-foreground hover:text-foreground transition-all border border-border/20"
-              >
-                <Server size={11} /> Hosting
-              </a>
-            )}
-          </div>
-
-          {/* Expandable credentials section */}
-          {hasCredentials && (
-            <div className="mt-2">
-              <button
-                onClick={() => setExpandedSite(isExpanded ? null : site.id)}
-                className="flex items-center gap-1.5 w-full px-2.5 py-2 rounded-lg bg-secondary/20 hover:bg-secondary/40 transition-all border border-border/15 text-xs font-semibold text-muted-foreground"
-              >
-                <Shield size={12} className="text-amber-500" />
-                <span>Credentials & Access</span>
-                <span className="ml-auto">
-                  {isExpanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
-                </span>
-              </button>
-
-              <>
-                {isExpanded && (
-                  <div className="overflow-hidden">
-                    <div className="mt-2 space-y-1 p-2.5 rounded-xl bg-secondary/15 border border-border/15">
-                      {site.wpUsername && (
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2.5 pb-1">
-                          WordPress
-                        </div>
-                      )}
-                      {renderCredentialField("User", site.wpUsername, site.id)}
-                      {renderCredentialField("Pass", site.wpPassword, site.id, true)}
-                      {site.hostingUsername && (
-                        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider px-2.5 pb-1 pt-2">
-                          Hosting
-                        </div>
-                      )}
-                      {renderCredentialField("User", site.hostingUsername, `${site.id}-host`)}
-                      {renderCredentialField("Pass", site.hostingPassword, `${site.id}-host`, true)}
-                    </div>
-                  </div>
-                )}
-              </>
-            </div>
-          )}
-
-          {/* Plugins */}
-          {site.plugins.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-1">
-              {site.plugins.map((p) => (
-                <span
-                  key={p}
-                  className="text-[10px] px-2 py-0.5 rounded-md bg-secondary/40 text-muted-foreground border border-border/10 font-medium"
-                >
-                  {p}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* Notes */}
-          {site.notes && (
-            <p className="mt-2.5 text-[11px] text-muted-foreground/80 leading-relaxed line-clamp-2 italic">
-              {site.notes}
-            </p>
-          )}
-        </div>
-
-        {/* Footer with meta & actions */}
-        <div className="flex items-center justify-between px-5 py-2.5 bg-secondary/8 border-t border-border/15">
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground/60 font-medium">
-            <span className="flex items-center gap-1">
-              <Clock size={9} /> Added {site.dateAdded}
-            </span>
-            <span className="flex items-center gap-1">
-              <RefreshCw size={9} /> Updated {site.lastUpdated}
-            </span>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => duplicateWebsite(site.id)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-all"
-              title="Duplicate"
-            >
-              <Copy size={13} />
-            </button>
-            <button
-              onClick={() => openEdit(site)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-            >
-              <Edit2 size={13} />
-            </button>
-            <button
-              onClick={() => deleteWebsite(site.id)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-            >
-              <Trash2 size={13} />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const renderGridCard = (site: Website, _i: number) => (
+    <PortfolioWebsiteCard
+      key={site.id}
+      site={site}
+      tasks={tasks}
+      selected={selectedIds.has(site.id)}
+      bulkMode={bulkMode}
+      onToggleSelect={() => toggleSelect(site.id)}
+      onEdit={() => openEdit(site)}
+      onDuplicate={() => void duplicateWebsite(site.id)}
+      onDelete={() => deleteWebsite(site.id)}
+      onCopy={copyText}
+    />
+  );
 
   // ─── List row ──────────────────────────────────────────────────
 

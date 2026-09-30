@@ -127,8 +127,8 @@ export default function DashboardLayout() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="text-center space-y-4">
-          <div className="w-12 h-12 mx-auto rounded-xl gradient-primary flex items-center justify-center shadow-[var(--shadow-primary)] animate-in zoom-in-75 fade-in duration-400">
-            <span className="text-primary-foreground font-bold text-lg">N</span>
+          <div className="mx-auto h-14 w-14 overflow-hidden rounded-2xl shadow-[var(--shadow-primary)] animate-in zoom-in-75 fade-in duration-400">
+            <img src="/mission-control-mark.svg" alt="" className="h-full w-full" />
           </div>
           <div className="text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-1 duration-300 delay-200 fill-mode-both">
             Loading Mission Control...

@@ -228,13 +228,13 @@ export default function Sidebar() {
         <div className={`flex h-[72px] items-center border-b border-sidebar-border/60 ${
           collapsed ? "justify-center px-3" : "gap-3 px-4"
         }`}>
-          <div className="mc13-brand-mark grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-primary to-accent text-sm font-black text-primary-foreground shadow-[var(--shadow-primary)]">
-            MC
+          <div className="mc13-brand-mark grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl shadow-[var(--shadow-primary)]">
+            <img src="/mission-control-mark.svg" alt="" className="h-10 w-10" />
           </div>
           {!collapsed && (
             <div className="min-w-0">
               <div className="truncate text-[14px] font-extrabold tracking-tight">Mission Control</div>
-              <div className="text-[10px] font-medium text-sidebar-foreground/42">Execute. Grow. Review.</div>
+              <div className="text-[10px] font-medium text-sidebar-foreground/42">Focus. Execute. Grow.</div>
             </div>
           )}
         </div>

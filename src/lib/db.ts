@@ -25,6 +25,20 @@ export interface Website {
   lastUpdated: string;
   favicon?: string;
   tags?: string[];
+  /** Mission Control portfolio priority. */
+  priority?: "critical" | "high" | "medium" | "low";
+  /** Relative business importance, 0-100. */
+  importance?: number;
+  /** Human-readable niche / audience context. */
+  niche?: string;
+  /** Single most important outcome for this property. */
+  primaryGoal?: string;
+  /** Primary monetization model. */
+  revenueModel?: string;
+  /** Production apps/funnels connected to this property. */
+  appUrls?: string[];
+  /** Repositories that power this property's apps or systems. */
+  githubRepos?: string[];
 }
 
 // ─── Evidence-backed SEO control-plane entities ───────────────────────────────
