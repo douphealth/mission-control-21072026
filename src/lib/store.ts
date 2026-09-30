@@ -17,6 +17,15 @@ export interface Website {
   plugins: string[];
   dateAdded: string;
   lastUpdated: string;
+  favicon?: string;
+  tags?: string[];
+  priority?: "critical" | "high" | "medium" | "low";
+  importance?: number;
+  niche?: string;
+  primaryGoal?: string;
+  revenueModel?: string;
+  appUrls?: string[];
+  githubRepos?: string[];
 }
 
 export interface Task {
