@@ -737,10 +737,9 @@ function HealthTab({ status }: { status: SiteStatus }) {
                   </span>
                 </div>
                 {test.description && (
-                  <div
-                    className="mt-1.5 text-[11px] leading-5 text-muted-foreground"
-                    dangerouslySetInnerHTML={{ __html: test.description }}
-                  />
+                  <p className="mt-1.5 text-[11px] leading-5 text-muted-foreground">
+                    {test.description}
+                  </p>
                 )}
               </div>
             ))}
