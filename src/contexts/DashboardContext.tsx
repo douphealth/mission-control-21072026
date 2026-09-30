@@ -31,6 +31,7 @@ import { deduplicateAll } from "@/lib/dedup";
 import { restoreLatestNonEmptyVersion } from "@/lib/versions";
 import { startCloudSync } from "@/lib/cloudSync";
 import { ensurePortfolioBootstrap } from "@/lib/portfolioBootstrap";
+import { ensureWorkspaceBootstrap } from "@/lib/workspaceBootstrap";
 
 // Re-export types for backward compat with old imports
 export type {
@@ -104,6 +105,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
         await ensureSettingsRow();
         await ensurePortfolioBootstrap();
+        await ensureWorkspaceBootstrap();
         await deduplicateAll();
         await loadSettings();
 

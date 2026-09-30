@@ -25,7 +25,7 @@ interface ServiceEntry {
   id: string;
   name: string;
   url: string;
-  status: "operational" | "degraded" | "outage" | "maintenance";
+  status: "unknown" | "operational" | "degraded" | "outage" | "maintenance";
   category: string;
   notes: string;
   lastChecked: string;
@@ -45,7 +45,7 @@ function loadServices(): ServiceEntry[] {
 const emptyForm: Omit<ServiceEntry, "id"> = {
   name: "",
   url: "",
-  status: "operational",
+  status: "unknown",
   category: "API",
   notes: "",
   lastChecked: new Date().toISOString().split("T")[0],
@@ -53,6 +53,7 @@ const emptyForm: Omit<ServiceEntry, "id"> = {
 
 function StatusBadge({ status }: { status: ServiceEntry["status"] }) {
   const map = {
+    unknown: { cls: "badge-muted", label: "⚪ Not checked" },
     operational: { cls: "badge-success", label: "🟢 Operational" },
     degraded: { cls: "badge-warning", label: "🟡 Degraded" },
     outage: { cls: "badge-destructive", label: "🔴 Outage" },
@@ -118,7 +119,8 @@ export default function OpenClawPage() {
   );
 
   const operational = services.filter((s) => s.status === "operational").length;
-  const issues = services.filter((s) => s.status !== "operational").length;
+  const issues = services.filter((s) => s.status === "degraded" || s.status === "outage").length;
+  const unknown = services.filter((s) => s.status === "unknown").length;
 
   const openAdd = () => {
     setEditId(null);
@@ -170,7 +172,7 @@ export default function OpenClawPage() {
             <Bug size={20} className="text-violet-500" /> OpenClaw
           </h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Track OpenClaw services and API endpoints
+            Track OpenClaw services and API endpoints · status stays unknown until a real HTTP probe completes
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -196,7 +198,7 @@ export default function OpenClawPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         <div className="card-glass p-4 flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
             <CheckCircle2 size={17} className="text-emerald-500" />
@@ -213,6 +215,15 @@ export default function OpenClawPage() {
           <div>
             <div className="text-xl font-bold">{issues}</div>
             <div className="text-xs text-muted-foreground">Issues</div>
+          </div>
+        </div>
+        <div className="card-glass p-4 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-zinc-500/10 flex items-center justify-center">
+            <Clock size={17} className="text-zinc-500" />
+          </div>
+          <div>
+            <div className="text-xl font-bold">{unknown}</div>
+            <div className="text-xs text-muted-foreground">Not checked</div>
           </div>
         </div>
         <div className="card-glass p-4 flex items-center gap-3">

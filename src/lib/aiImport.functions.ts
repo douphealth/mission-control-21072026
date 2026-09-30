@@ -261,7 +261,7 @@ function buildParts(data: z.infer<typeof InputSchema>): ResponseInputPart[] {
     } else if (file.dataUrl) {
       parts.push({
         type: "input_file",
-        filename: file.name.replace(/[^\w.\-]+/g, "_"),
+        filename: file.name.replace(/[^\w.-]+/g, "_"),
         file_data: file.dataUrl.startsWith("data:")
           ? file.dataUrl
           : `data:${mime || "application/octet-stream"};base64,${file.dataUrl}`,

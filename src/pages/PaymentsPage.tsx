@@ -206,6 +206,41 @@ export default function PaymentsPage() {
         </div>
       </div>
 
+      {payments.length === 0 && (
+        <section className="relative overflow-hidden rounded-[26px] border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.08] via-card to-primary/[0.05] p-4 sm:p-5">
+          <div className="pointer-events-none absolute -right-12 -top-16 h-36 w-36 rounded-full bg-violet-500/10 blur-3xl" />
+          <div className="relative">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="inline-flex rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-violet-600 dark:text-violet-300">
+                  Demo preview · not saved · excluded from totals
+                </div>
+                <h2 className="mt-2 text-sm font-extrabold text-foreground">How the finance workspace will look with records</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  These examples are visual-only. Add real transactions above to replace this preview.
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              {[
+                { title: "Affiliate commission", type: "Income", amount: "+€250", state: "Paid" },
+                { title: "Hosting subscription", type: "Subscription", amount: "−€29", state: "Paid" },
+                { title: "Client invoice", type: "Invoice", amount: "€500", state: "Pending" },
+              ].map((item) => (
+                <div key={item.title} className="rounded-2xl border border-border/40 bg-background/55 p-3">
+                  <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{item.type}</div>
+                  <div className="mt-1 text-xs font-bold text-foreground">{item.title}</div>
+                  <div className="mt-3 flex items-end justify-between gap-2">
+                    <span className="text-lg font-black tabular-nums text-foreground">{item.amount}</span>
+                    <span className="text-[9px] font-bold text-muted-foreground">{item.state}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       {bulk.bulkMode && (
         <BulkActionBar
           selectedCount={bulk.selectedCount}

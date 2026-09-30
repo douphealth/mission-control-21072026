@@ -28,7 +28,7 @@ import {
   Home,
   AppWindow,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 
 const moreItems = [
@@ -66,6 +66,27 @@ export default function MobileBottomNav() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [query, setQuery] = useState("");
 
+  useEffect(() => {
+    if (!moreOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscroll = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMoreOpen(false);
+        setQuery("");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscroll;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [moreOpen]);
+
   const inboxCount =
     tasks.filter((t) => t.status === "todo" && !t.dueDate).length +
     decisions.filter((d) => d.status === "open").length;
@@ -100,11 +121,16 @@ export default function MobileBottomNav() {
               setQuery("");
             }}
           />
-          <div className="mc13-mobile-sheet mobile-sheet-luxe fixed bottom-[82px] left-2 right-2 z-50 max-h-[72vh] overflow-hidden rounded-[28px] lg:hidden animate-slide-up">
-            <div className="flex justify-center pb-1 pt-3">
-              <div className="h-1.5 w-10 rounded-full bg-muted-foreground/20" />
-            </div>
-            <div className="px-4 pb-3 pt-1">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-label="All workspaces"
+            className="mc13-mobile-sheet mobile-sheet-luxe fixed inset-x-2 top-[max(0.65rem,env(safe-area-inset-top))] bottom-[calc(82px+env(safe-area-inset-bottom,0px))] z-50 flex min-h-0 flex-col overflow-hidden rounded-[30px] lg:hidden animate-slide-up"
+          >
+            <div className="shrink-0 border-b border-border/35 bg-card/82 px-4 pb-3 pt-3 backdrop-blur-xl">
+              <div className="flex justify-center pb-2">
+                <div className="h-1.5 w-10 rounded-full bg-muted-foreground/20" />
+              </div>
               <div className="flex items-end justify-between gap-3">
                 <div>
                   <div className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-primary/75">Navigate</div>
@@ -112,18 +138,21 @@ export default function MobileBottomNav() {
                 </div>
                 <span className="text-[10px] font-semibold text-muted-foreground">{filteredItems.length} sections</span>
               </div>
-              <label className="mt-3 flex h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/65 px-3">
+              <label className="mt-3 flex h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/70 px-3 shadow-sm">
                 <Search size={15} className="shrink-0 text-muted-foreground" />
                 <input
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search sections…"
+                  placeholder="Search all workspaces…"
                   className="min-w-0 flex-1 bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground/55"
                 />
               </label>
             </div>
-            <div className="overflow-y-auto px-3 pb-5">
+            <div
+              className="mc13-mobile-workspace-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] pt-3 touch-pan-y"
+              tabIndex={0}
+            >
               {filteredItems.length > 0 ? (
                 <div className="grid grid-cols-2 gap-2">
                   {filteredItems.map((item) => (
@@ -156,7 +185,7 @@ export default function MobileBottomNav() {
                 </div>
               )}
             </div>
-          </div>
+          </section>
         </>
       )}
 

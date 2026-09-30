@@ -1,6 +1,6 @@
 import type { GitHubRepo } from "@/lib/db";
 
-export const GITHUB_REPO_CATALOG_GENERATED_AT = "2026-09-28";
+export const GITHUB_REPO_CATALOG_GENERATED_AT = "2026-09-30";
 export const GITHUB_REPO_CATALOG_COUNT = 81;
 
 /**
@@ -25,14 +25,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "critical",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "critical",
     "importance": 100,
     "doneSummary": "Current Mission Control codebase is connected; the app already includes task, website, GitHub, notes, capture, calendar, SEO, finance and control-center modules.",
     "pendingSummary": "Validate this upgrade branch, then merge/deploy after approval. Keep the repo catalog, notes editor, and mobile controls regression-tested.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 3726
+    "repoSizeKb": 4007
   },
   {
     "name": "runmatch-ai-buddy-1282c193",
@@ -50,14 +50,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "critical",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "critical",
     "importance": 100,
     "doneSummary": "Canonical production Shoe Finder repo is verified in GitHub and mapped to GearUpToFit.",
     "pendingSummary": "Validate canonical production route, conversion tracking, affiliate monetization, and the WordPress-to-app funnel.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 112577
+    "repoSizeKb": 112686
   },
   {
     "name": "body-recomp-os-guru-7c1356da",
@@ -75,14 +75,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "critical",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "critical",
     "importance": 99,
     "doneSummary": "Canonical production Fitness Plan repo is verified in GitHub and mapped to GearUpToFit.",
     "pendingSummary": "Validate canonical production domain, Stripe/conversion tracking, and the WordPress landing-page handoff.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 984
+    "repoSizeKb": 1043
   },
   {
     "name": "gearuptofit",
@@ -99,7 +99,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "critical"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "critical",
     "importance": 99,
     "doneSummary": "Primary site repository is connected and tracked as the highest-value website recovery project.",
@@ -123,7 +123,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "critical"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "critical",
     "importance": 98,
     "doneSummary": "Site repository is connected; analytics/affiliate-click work and content/monetization infrastructure already exist.",
@@ -148,14 +148,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "high",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 95,
     "doneSummary": "Canonical Frenchie Care Plan repo and live production domain are mapped.",
     "pendingSummary": "Verify paid conversion flow, tracking, and contextual placement on high-intent FrenchyFab pages.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 7073
+    "repoSizeKb": 7249
   },
   {
     "name": "mystic-blueprint-maker",
@@ -165,7 +165,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "stars": 0,
     "forks": 0,
     "status": "active",
-    "demoUrl": "https://life-path.mysticaldigits.com/",
+    "demoUrl": "https://blueprint.mysticaldigits.com/",
     "progress": 0,
     "topics": [
       "github",
@@ -173,14 +173,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "high",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 94,
     "doneSummary": "Canonical Life Path repo and live production domain are mapped.",
     "pendingSummary": "Tighten website-to-app routing, conversion measurement, and monetization on high-intent numerology pages.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1929
+    "repoSizeKb": 1972
   },
   {
     "name": "plantastichaven",
@@ -197,7 +197,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 94,
     "doneSummary": "Website repository exists and is connected; the site has established search-demand pages worth optimizing.",
@@ -221,7 +221,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 93,
     "doneSummary": "Website repository exists and is connected; the care-plan app is a linked monetization asset.",
@@ -246,14 +246,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "high",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 93,
     "doneSummary": "Canonical Mice Elimination repo and live production domain are mapped.",
     "pendingSummary": "Remove fragile persistence dependencies, verify paid flow, and integrate the app into the site's highest-intent pages.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2355
+    "repoSizeKb": 1616
   },
   {
     "name": "micegoneguide",
@@ -270,7 +270,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 92,
     "doneSummary": "Website repository exists and is connected; the elimination app is a linked monetization asset.",
@@ -294,7 +294,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 91,
     "doneSummary": "Website repository exists and is connected; the life-path app is a linked funnel asset.",
@@ -318,7 +318,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 90,
     "doneSummary": "Website repository exists and is connected.",
@@ -343,7 +343,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "high",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 90,
     "doneSummary": "Canonical Grow Plan repo and production subdomain are mapped.",
@@ -368,14 +368,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "high",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 89,
     "doneSummary": "Canonical Pro Care repo and production subdomain are mapped.",
     "pendingSummary": "Connect the app to high-intent plant-care pages and measure conversion from organic traffic.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1727
+    "repoSizeKb": 2027
   },
   {
     "name": "growthscribe-os",
@@ -392,7 +392,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "critical"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 88,
     "doneSummary": "Growth/SEO automation repository exists and is connected.",
@@ -416,7 +416,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 84,
     "doneSummary": "Running-shoe matching app repository exists and is connected to the GearUpToFit app ecosystem.",
@@ -440,7 +440,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 83,
     "doneSummary": "Nutrition-matching app repository exists and is connected.",
@@ -464,7 +464,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 80,
     "doneSummary": "Image Alchemy repository exists and is connected.",
@@ -488,7 +488,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 78,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -512,7 +512,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 75,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -536,7 +536,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 75,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -560,7 +560,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "high",
     "importance": 75,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -577,7 +577,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "stars": 0,
     "forks": 0,
     "status": "stable",
-    "demoUrl": "",
+    "demoUrl": "https://promptgrade.efficientgptprompts.com/",
     "progress": 0,
     "topics": [
       "github",
@@ -585,14 +585,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "medium",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 78,
     "doneSummary": "PromptGrade's canonical repo is mapped in Mission Control.",
     "pendingSummary": "Confirm the canonical production URL, target site/funnel, monetization model, and analytics before promotion.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 813
+    "repoSizeKb": 792
   },
   {
     "name": "form-beauty-studio",
@@ -610,14 +610,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "medium",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 77,
     "doneSummary": "ImageAlchemy's canonical repo and production domain are mapped.",
     "pendingSummary": "Confirm production conversion path, pricing/monetization, analytics, and canonical repository/domain alignment.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1521
+    "repoSizeKb": 1656
   },
   {
     "name": "traffic-growth-engine",
@@ -634,7 +634,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 76,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -659,14 +659,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "medium",
       "canonical-production"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 75,
     "doneSummary": "Canonical OpenClaw Skills Hub repo and public domain are mapped.",
     "pendingSummary": "Confirm canonical public domain, consolidate duplicate hub variants, and improve indexation/content architecture.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 5753
+    "repoSizeKb": 4368
   },
   {
     "name": "surgical-seo-suite",
@@ -683,7 +683,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 74,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -707,7 +707,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 72,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -731,7 +731,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -755,7 +755,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -779,7 +779,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -803,7 +803,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -827,7 +827,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -851,7 +851,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "private",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
@@ -875,7 +875,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -899,7 +899,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -923,14 +923,14 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 61633
+    "repoSizeKb": 65162
   },
   {
     "name": "gearup-flow-master",
@@ -947,7 +947,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "private",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
@@ -971,7 +971,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -995,7 +995,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1019,7 +1019,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1043,7 +1043,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1067,7 +1067,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1091,7 +1091,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1115,7 +1115,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "medium"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 50,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1139,7 +1139,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "critical"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 45,
     "doneSummary": "Control-plane repository exists and is connected to the current automation stack.",
@@ -1163,7 +1163,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "critical"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 44,
     "doneSummary": "Hermes agent source repository exists and is connected.",
@@ -1188,7 +1188,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "critical",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 43,
     "doneSummary": "Private live configuration repository exists and is connected.",
@@ -1212,7 +1212,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "public",
       "high"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "medium",
     "importance": 42,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1237,7 +1237,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1262,7 +1262,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1287,7 +1287,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1312,7 +1312,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1337,7 +1337,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1362,7 +1362,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
@@ -1387,7 +1387,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1412,7 +1412,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1437,7 +1437,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1462,7 +1462,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1487,7 +1487,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1512,7 +1512,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
@@ -1537,7 +1537,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1562,7 +1562,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
@@ -1587,7 +1587,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1612,7 +1612,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1637,7 +1637,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1662,7 +1662,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1687,7 +1687,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1712,7 +1712,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1737,7 +1737,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
@@ -1762,7 +1762,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "high",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1787,7 +1787,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1812,7 +1812,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1837,7 +1837,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1862,7 +1862,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is codex/enhance-design-of-wordpress-content-app.",
@@ -1887,7 +1887,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
@@ -1912,7 +1912,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "high",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1937,7 +1937,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",
@@ -1962,7 +1962,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
       "low",
       "canonical-review"
     ],
-    "lastUpdated": "2026-09-28",
+    "lastUpdated": "2026-09-30",
     "priority": "low",
     "importance": 25,
     "doneSummary": "Repository is connected in GitHub (public); default branch is main.",

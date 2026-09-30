@@ -33,7 +33,11 @@ import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
-import { GITHUB_REPO_CATALOG, GITHUB_REPO_CATALOG_COUNT } from "@/lib/repoCatalog";
+import {
+  GITHUB_REPO_CATALOG,
+  GITHUB_REPO_CATALOG_COUNT,
+  GITHUB_REPO_CATALOG_GENERATED_AT,
+} from "@/lib/repoCatalog";
 import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
@@ -417,10 +421,13 @@ export default function GitHubPage() {
             <CheckSquare size={14} /> {bulk.bulkMode ? "Exit bulk mode" : "Bulk edit"}
           </button>
           <span className="rounded-xl border border-success/15 bg-success/8 px-3 py-2 text-[10px] font-bold text-success">
-            81/81 ACCOUNTED FOR
+            {GITHUB_REPO_CATALOG_COUNT}/{GITHUB_REPO_CATALOG_COUNT} LIVE ACCOUNT REPOS
           </span>
           <span className="rounded-xl border border-border/30 bg-secondary/40 px-3 py-2 text-[10px] font-semibold text-muted-foreground">
-            Spreadsheet relationships verified 2026-09-18
+            GitHub technical snapshot {GITHUB_REPO_CATALOG_GENERATED_AT}
+          </span>
+          <span className="rounded-xl border border-blue-500/15 bg-blue-500/8 px-3 py-2 text-[10px] font-semibold text-blue-600 dark:text-blue-300">
+            GitHub = technical truth · Mission Control = editable planning truth
           </span>
         </div>
       </section>
