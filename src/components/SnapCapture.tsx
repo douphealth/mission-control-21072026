@@ -18,6 +18,7 @@ import {
   FileUp,
   MoreHorizontal,
   Mic,
+  EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { aiImageImport, aiAutonomousImport, aiFileImport } from "@/lib/aiImport";
@@ -33,6 +34,7 @@ import { useBulkAddItems } from "@/hooks/useTableData";
 import { TARGET_META, type ImportTarget } from "@/lib/importEngine";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { VOICE_CAPTURE_OPEN_EVENT } from "@/lib/captureEvents";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 type SnapPhase = "idle" | "processing" | "review" | "saving" | "done";
 
@@ -60,6 +62,9 @@ export default function SnapCapture() {
   const busyRef = useRef(false);
 
   const bulkAddItems = useBulkAddItems();
+  const setFloatingCaptureDockVisible = useSettingsStore(
+    (state) => state.setFloatingCaptureDockVisible,
+  );
 
   const reset = useCallback(() => {
     setPhase("idle");
@@ -414,6 +419,18 @@ export default function SnapCapture() {
                     detail: "Speak naturally · AI transcribes & classifies",
                     icon: Mic,
                     action: openVoiceCapture,
+                  },
+                  {
+                    label: "Hide floating buttons",
+                    detail: "Hide this dock · restore it in Settings → Appearance",
+                    icon: EyeOff,
+                    action: () => {
+                      setShowActions(false);
+                      setFloatingCaptureDockVisible(false);
+                      toast.success("Floating capture controls hidden", {
+                        description: "Restore them in Settings → Appearance.",
+                      });
+                    },
                   },
                 ].map((item) => (
                   <button
