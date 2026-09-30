@@ -486,6 +486,7 @@ export interface UserSettings {
   userRole: string;
   theme: "light" | "dark" | "sage" | "system";
   sidebarCollapsed: boolean;
+  floatingCaptureDockVisible?: boolean;
   dashboardLayout: WidgetLayout[];
   supabaseUrl?: string;
   supabaseAnonKey?: string;
