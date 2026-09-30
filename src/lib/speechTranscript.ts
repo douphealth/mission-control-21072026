@@ -85,7 +85,10 @@ export function compressRepeatedPhrases(text: string): string {
     let bestRepeats = 1;
     const maxLength = Math.min(128, Math.floor((words.length - i) / 2));
 
-    for (let length = maxLength; length >= 1; length--) {
+    // Prefer the smallest exact repeated unit. Scanning from the largest
+    // unit can preserve two copies of a 50-word replay by matching a 100-word
+    // super-block repeated several times.
+    for (let length = 1; length <= maxLength; length++) {
       const pattern = words.slice(i, i + length);
       let repeats = 1;
 
