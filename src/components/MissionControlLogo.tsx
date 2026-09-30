@@ -25,7 +25,7 @@ export function MissionControlMark({
           <stop offset="1" stopColor="#22C55E" />
         </linearGradient>
       </defs>
-      <rect x="4" y="4" width="56" height="56" rx="18" fill="url(#${gradientId})" />
+      <rect x="4" y="4" width="56" height="56" rx="18" fill={`url(#${gradientId})`} />
       <path
         d="M18 40.5V23.5L27.1 34L32 27.7L36.9 34L46 23.5V40.5"
         stroke="white"
