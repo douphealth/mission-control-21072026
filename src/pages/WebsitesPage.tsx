@@ -509,6 +509,15 @@ export default function WebsitesPage() {
     const statusCfg = STATUS_CONFIG[site.status] || STATUS_CONFIG.active;
     const isExpanded = expandedSite === site.id;
     const hasCredentials = site.wpUsername || site.hostingUsername;
+    const ops = websiteOperationalData.get(site.id) || { openTasks: 0, criticalTasks: 0, apps: 0, issues: 0 };
+    const pulse = pulseById.get(site.id);
+    const priorityLabel = site.priority ? site.priority.toUpperCase() : null;
+    const priorityClass =
+      site.priority === "critical"
+        ? "bg-red-500/10 text-red-500 border-red-500/20"
+        : site.priority === "high"
+          ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+          : "bg-primary/8 text-primary border-primary/15";
 
     return (
       <div
@@ -554,7 +563,14 @@ export default function WebsitesPage() {
                 </a>
               </div>
             </div>
-            {renderStatusBadge(site.status)}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {renderStatusBadge(site.status)}
+              {priorityLabel && (
+                <span className={`rounded-lg border px-2 py-0.5 text-[9px] font-black tracking-[0.12em] ${priorityClass}`}>
+                  {priorityLabel}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Quick info badges */}
@@ -577,6 +593,21 @@ export default function WebsitesPage() {
             {site.plugins.length > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-violet-500/10 text-violet-500 border border-violet-500/15">
                 <Puzzle size={9} /> {site.plugins.length} plugins
+              </span>
+            )}
+            {ops.apps > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-cyan-500/10 text-cyan-600 border border-cyan-500/15">
+                <Rocket size={9} /> {ops.apps} app{ops.apps === 1 ? "" : "s"}
+              </span>
+            )}
+            {ops.openTasks > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/15">
+                <CheckSquare size={9} /> {ops.openTasks} open
+              </span>
+            )}
+            {ops.issues > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-500/10 text-red-500 border border-red-500/15">
+                <AlertTriangle size={9} /> {ops.issues} SEO
               </span>
             )}
           </div>
@@ -611,7 +642,47 @@ export default function WebsitesPage() {
                 <Server size={11} /> Hosting
               </a>
             )}
+            <button
+              type="button"
+              onClick={() => setActiveSection("tasks")}
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-border/20 bg-secondary/35 px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
+            >
+              <Target size={11} /> Tasks
+            </button>
           </div>
+
+          {(site.focus || site.nextAction || pulse) && (
+            <div className="mb-3 grid gap-2 rounded-xl border border-border/20 bg-secondary/15 p-3">
+              {site.focus && (
+                <div>
+                  <div className="mb-1 text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground/65">Growth focus</div>
+                  <div className="text-[11px] font-semibold leading-relaxed text-foreground">{site.focus}</div>
+                </div>
+              )}
+              {site.nextAction && (
+                <div className="rounded-lg border border-primary/10 bg-primary/[0.045] p-2.5">
+                  <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.14em] text-primary">
+                    <Zap size={10} /> Next leverage
+                  </div>
+                  <div className="text-[11px] leading-relaxed text-foreground/85">{site.nextAction}</div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9.5px] font-semibold text-muted-foreground">
+                {pulse && (
+                  <span className={pulse.status === "attention" ? "text-red-500" : pulse.status === "healthy" ? "text-emerald-500" : ""}>
+                    <Gauge size={10} className="mr-1 inline" />
+                    {pulse.headline}
+                  </span>
+                )}
+                {site.revenueModel && site.revenueModel.length > 0 && (
+                  <span>
+                    <CircleDollarSign size={10} className="mr-1 inline" />
+                    {site.revenueModel.join(" · ")}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Expandable credentials section */}
           {hasCredentials && (
