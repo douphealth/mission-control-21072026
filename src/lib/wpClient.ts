@@ -70,6 +70,25 @@ export async function wpFetch<T = any>(
 
 // ─── Health check (works without auth where possible) ───────────────────────
 
+export type SiteHealthStatus = "good" | "recommended" | "critical";
+export type SiteHealthTest = {
+  key: string;
+  label: string;
+  status: SiteHealthStatus;
+  badge?: { label?: string; color?: string };
+  description?: string;
+  actions?: string;
+};
+
+export type WpCurrentUser = {
+  id: number;
+  username?: string;
+  name?: string;
+  email?: string;
+  roles?: string[];
+  capabilities?: Record<string, boolean>;
+};
+
 export type HealthResult = {
   reachable: boolean;
   status?: number;
@@ -227,6 +246,52 @@ export type WpTheme = {
   description?: { raw?: string; rendered?: string };
 };
 
+export async function fetchCurrentUser(url: string, c: { username: string; appPassword: string }) {
+  return wpFetch<WpCurrentUser>(url, "/wp/v2/users/me?context=edit", c);
+}
+
+const SITE_HEALTH_TESTS = [
+  ["background-updates", "Background updates"],
+  ["loopback-requests", "Loopback requests"],
+  ["https-status", "HTTPS status"],
+  ["dotorg-communication", "WordPress.org communication"],
+  ["authorization-header", "Authorization header"],
+  ["page-cache", "Page cache"],
+] as const;
+
+export async function fetchSiteHealthTests(
+  url: string,
+  c: { username: string; appPassword: string },
+): Promise<SiteHealthTest[]> {
+  const results = await Promise.all(
+    SITE_HEALTH_TESTS.map(async ([key, label]) => {
+      try {
+        const result = await wpFetch<any>(url, `/wp-site-health/v1/tests/${key}`, c);
+        const status: SiteHealthStatus =
+          result?.status === "critical" || result?.status === "recommended" ? result.status : "good";
+        return {
+          key,
+          label,
+          status,
+          badge: result?.badge,
+          description: typeof result?.description === "string" ? result.description : undefined,
+          actions: typeof result?.actions === "string" ? result.actions : undefined,
+        } satisfies SiteHealthTest;
+      } catch (error: any) {
+        // Some tests are conditional (for example page-cache or authorization-header).
+        // A missing/forbidden route is unknown evidence, not a passing test.
+        return {
+          key,
+          label,
+          status: "recommended",
+          description: `Unavailable: ${error?.message || "endpoint not available"}`,
+        } satisfies SiteHealthTest;
+      }
+    }),
+  );
+  return results;
+}
+
 export async function fetchPlugins(url: string, c: { username: string; appPassword: string }) {
   return wpFetch<WpPlugin[]>(url, "/wp/v2/plugins?context=edit", c);
 }
@@ -236,33 +301,41 @@ export async function fetchThemes(url: string, c: { username: string; appPasswor
 export async function fetchUsers(url: string, c: { username: string; appPassword: string }) {
   return wpFetch<any[]>(url, "/wp/v2/users?context=edit&per_page=100", c);
 }
-export async function fetchPostsCount(url: string, c: { username: string; appPassword: string }) {
-  const res = await fetch(`${normalizeUrl(url)}/wp-json/wp/v2/posts?per_page=1`, {
-    headers: {
-      Authorization: "Basic " + btoa(`${c.username}:${c.appPassword.replace(/\s+/g, "")}`),
-    },
-  });
-  return Number(res.headers.get("x-wp-total") || 0);
-}
-export async function fetchPagesCount(url: string, c: { username: string; appPassword: string }) {
-  const res = await fetch(`${normalizeUrl(url)}/wp-json/wp/v2/pages?per_page=1`, {
-    headers: {
-      Authorization: "Basic " + btoa(`${c.username}:${c.appPassword.replace(/\s+/g, "")}`),
-    },
-  });
-  return Number(res.headers.get("x-wp-total") || 0);
-}
-export async function fetchCommentsCount(
+async function fetchTotalCount(
   url: string,
   c: { username: string; appPassword: string },
+  route: "posts" | "pages" | "comments",
 ) {
-  const res = await fetch(`${normalizeUrl(url)}/wp-json/wp/v2/comments?per_page=1`, {
+  const res = await fetch(`${normalizeUrl(url)}/wp-json/wp/v2/${route}?per_page=1&context=edit`, {
     headers: {
-      Authorization: "Basic " + btoa(`${c.username}:${c.appPassword.replace(/\s+/g, "")}`),
+      Accept: "application/json",
+      Authorization: authHeader(c),
     },
+    credentials: "omit",
   });
-  return Number(res.headers.get("x-wp-total") || 0);
+  if (!res.ok) {
+    let message = `${res.status} ${res.statusText}`;
+    try {
+      const body = await res.json();
+      if (body?.message) message = body.message;
+    } catch {
+      /* leave HTTP status */
+    }
+    throw new Error(`${route}: ${message}`);
+  }
+  const raw = res.headers.get("x-wp-total");
+  if (raw === null) throw new Error(`${route}: WordPress did not return X-WP-Total`);
+  const total = Number(raw);
+  if (!Number.isFinite(total)) throw new Error(`${route}: invalid X-WP-Total`);
+  return total;
 }
+
+export const fetchPostsCount = (url: string, c: { username: string; appPassword: string }) =>
+  fetchTotalCount(url, c, "posts");
+export const fetchPagesCount = (url: string, c: { username: string; appPassword: string }) =>
+  fetchTotalCount(url, c, "pages");
+export const fetchCommentsCount = (url: string, c: { username: string; appPassword: string }) =>
+  fetchTotalCount(url, c, "comments");
 
 // Toggle plugin active/inactive
 export async function setPluginStatus(
