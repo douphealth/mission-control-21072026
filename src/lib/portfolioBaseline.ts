@@ -1,5 +1,6 @@
 import { db, type Task, type Website } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
+import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
 
 export const PORTFOLIO_BASELINE_REVISION = "2026-09-30-v1";
 
@@ -337,10 +338,11 @@ const ENRICHMENT_KEYS: Array<keyof BaselineWebsite> = [
   "portfolioRevision",
 ];
 
-export async function ensurePortfolioBaseline(): Promise<{ websitesAdded: number; websitesEnriched: number; tasksAdded: number }> {
+export async function ensurePortfolioBaseline(): Promise<{ websitesAdded: number; websitesEnriched: number; tasksAdded: number; appsAdded: number }> {
   let websitesAdded = 0;
   let websitesEnriched = 0;
   let tasksAdded = 0;
+  let appsAdded = 0;
 
   const existingSites = await db.websites.toArray();
 
@@ -381,6 +383,25 @@ export async function ensurePortfolioBaseline(): Promise<{ websitesAdded: number
     }
   }
 
+  const existingApps = await db.buildProjects.toArray();
+  const appKeys = new Set(
+    existingApps.flatMap((row) =>
+      [row.githubRepo?.trim().toLowerCase(), row.name?.trim().toLowerCase()].filter(Boolean) as string[],
+    ),
+  );
+  for (const source of APP_FUNNEL_CATALOG) {
+    const repoKey = source.githubRepo?.trim().toLowerCase();
+    const nameKey = source.name.trim().toLowerCase();
+    if ((repoKey && appKeys.has(repoKey)) || appKeys.has(nameKey)) continue;
+    const repoSlug = (repoKey || nameKey).split("/").pop()!.replace(/[^a-z0-9-]+/g, "-");
+    const id = `portfolio-app-${repoSlug}`;
+    await db.buildProjects.put({ id, ...source });
+    markCloudRecordDirty("buildProjects", id);
+    appKeys.add(nameKey);
+    if (repoKey) appKeys.add(repoKey);
+    appsAdded++;
+  }
+
   for (const source of PORTFOLIO_TASK_BASELINE) {
     const existing = await db.tasks.get(source.id);
     if (existing) continue;
@@ -393,7 +414,7 @@ export async function ensurePortfolioBaseline(): Promise<{ websitesAdded: number
     tasksAdded++;
   }
 
-  if (websitesAdded || websitesEnriched || tasksAdded) queueCloudPush();
+  if (websitesAdded || websitesEnriched || tasksAdded || appsAdded) queueCloudPush();
 
-  return { websitesAdded, websitesEnriched, tasksAdded };
+  return { websitesAdded, websitesEnriched, tasksAdded, appsAdded };
 }
