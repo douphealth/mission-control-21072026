@@ -365,8 +365,8 @@ export async function ensurePortfolioBaseline(): Promise<{ websitesAdded: number
 
     const patch: Partial<Website> = {};
     for (const key of ENRICHMENT_KEYS) {
-      const next = source[key] as never;
-      const current = existing[key] as never;
+      const next = source[key] as unknown;
+      const current = existing[key] as unknown;
       if (key === "portfolioRevision" || current == null || current === "" || (Array.isArray(current) && current.length === 0)) {
         (patch as Record<string, unknown>)[key] = next;
       }
