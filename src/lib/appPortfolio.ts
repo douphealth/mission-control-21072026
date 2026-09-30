@@ -2,6 +2,26 @@ import type { BuildProject } from "@/lib/db";
 
 export const APP_FUNNEL_CATALOG: Array<Omit<BuildProject, "id">> = [
   {
+    name: "Affiliate Marketing Growth Funnel",
+    productName: "Business Growth Funnel",
+    platform: "other",
+    projectUrl: "https://github.com/douphealth/marketing-forge-boost",
+    deployedUrl: "",
+    description: "Business-growth funnel connected to Affiliate Marketing for Success.",
+    techStack: [],
+    status: "testing",
+    startedDate: "",
+    lastWorkedOn: "",
+    nextSteps: "Confirm the canonical production URL, then measure WordPress-to-funnel lead and product conversion before expanding traffic.",
+    githubRepo: "https://github.com/douphealth/marketing-forge-boost",
+    parentWebsite: "https://affiliatemarketingforsuccess.com/",
+    landingPage: "https://affiliatemarketingforsuccess.com/",
+    alternateUrls: [],
+    priority: "critical",
+    importance: 96,
+    portfolioGroup: "growth-app",
+  },
+  {
     name: "GearUpToFit Shoe Finder",
     productName: "RunMatch / Shoe Finder",
     platform: "other",

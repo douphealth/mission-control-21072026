@@ -30,6 +30,7 @@ import { useDataStore } from "@/stores/dataStore";
 import { deduplicateAll } from "@/lib/dedup";
 import { restoreLatestNonEmptyVersion } from "@/lib/versions";
 import { startCloudSync } from "@/lib/cloudSync";
+import { ensurePortfolioBaseline } from "@/lib/portfolioBaseline";
 
 // Re-export types for backward compat with old imports
 export type {
@@ -103,13 +104,26 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
         await ensureSettingsRow();
         await deduplicateAll();
+
+        // Pull the account backup before one-time defaults are considered. This
+        // preserves remote deletions and the synced baseline revision marker.
+        void import("@/lib/googleDirectAuth").then((m) => m.ensureGoogleClientId());
+        await startCloudSync();
+
+        // Repair the known portfolio once per synced baseline revision.
+        // Existing records, credentials, statuses and user edits always win.
+        await ensurePortfolioBaseline();
+        await deduplicateAll();
         await loadSettings();
+
+        // Ask supported browsers to protect IndexedDB from storage-pressure eviction.
+        // Failure is non-fatal: local data, versions and Drive sync still work normally.
+        if (typeof navigator !== "undefined" && navigator.storage?.persist) {
+          void navigator.storage.persist().catch(() => false);
+        }
 
         const settings = await db.settings.get("default");
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
-        // Pre-load the app's Google identity so "Connect Google" is one click.
-        void import("@/lib/googleDirectAuth").then((m) => m.ensureGoogleClientId());
-        await startCloudSync();
       } catch (e) {
         console.error("DB init error:", e);
       } finally {

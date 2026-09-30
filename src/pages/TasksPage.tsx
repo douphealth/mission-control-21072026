@@ -1660,6 +1660,31 @@ export default function TasksPage() {
     [tasks],
   );
 
+  const focusQueue = useMemo(() => {
+    const priorityRank: Record<Task["priority"], number> = {
+      critical: 40,
+      high: 30,
+      medium: 20,
+      low: 10,
+    };
+    return tasks
+      .filter((t) => t.status !== "done" && !t.archived && !t.deletedAt)
+      .map((t) => {
+        const overdueBoost = t.dueDate && t.dueDate < today ? 35 : 0;
+        const todayBoost = t.dueDate === today ? 25 : 0;
+        const progressBoost = t.status === "in-progress" ? 12 : 0;
+        const blockedPenalty = t.status === "blocked" ? -18 : 0;
+        const committedBoost = t.committedOn === today ? 18 : 0;
+        return {
+          task: t,
+          score: priorityRank[t.priority] + overdueBoost + todayBoost + progressBoost + committedBoost + blockedPenalty,
+        };
+      })
+      .sort((a, b) => b.score - a.score || (a.task.dueDate || "9999").localeCompare(b.task.dueDate || "9999"))
+      .slice(0, 3)
+      .map((row) => row.task);
+  }, [tasks, today]);
+
   // ── Filtered + sorted ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const PORD: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
@@ -1926,10 +1951,10 @@ export default function TasksPage() {
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2 sm:text-3xl">
             <Target size={24} className="text-primary" style={{ WebkitTextFillColor: "initial" }} />
-            Task Manager
+            Execution Queue
           </h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {stats.open} open · {stats.done} done
+            Focus on the highest-impact work first · {stats.open} open · {stats.done} done
             {stats.overdue > 0 && (
               <span className="text-red-400 font-semibold"> · ⚠ {stats.overdue} overdue</span>
             )}
@@ -1948,6 +1973,52 @@ export default function TasksPage() {
           <Plus size={15} /> New Task
         </button>
       </div>
+
+      {focusQueue.length > 0 && (
+        <section className="rounded-[24px] border border-border/25 bg-card p-4 shadow-[0_24px_70px_-54px_hsl(var(--foreground)/0.6)]">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.16em] text-primary">
+                <Flame size={12} /> Focus next
+              </div>
+              <div className="mt-1 text-sm font-semibold text-foreground">Your highest-leverage open work</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setPreset("critical");
+                setSortBy("priority");
+                setView("list");
+              }}
+              className="rounded-xl border border-border/30 bg-secondary/35 px-3 py-2 text-[11px] font-bold text-muted-foreground transition hover:text-foreground"
+            >
+              Show priority queue
+            </button>
+          </div>
+          <div className="grid gap-2 lg:grid-cols-3">
+            {focusQueue.map((item, index) => (
+              <button
+                type="button"
+                key={item.id}
+                onClick={() => setModal({ open: true, task: item })}
+                className="group rounded-2xl border border-border/20 bg-secondary/15 p-3.5 text-left transition hover:-translate-y-0.5 hover:border-primary/25 hover:bg-primary/[0.045]"
+              >
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[9px] font-black uppercase tracking-[0.13em] text-primary">#{index + 1} next</span>
+                  <span className={`rounded-lg px-2 py-0.5 text-[9px] font-black uppercase ${getPriority(item.priority).bg}`}>
+                    {item.priority}
+                  </span>
+                </div>
+                <div className="line-clamp-2 text-[13px] font-bold leading-snug text-foreground">{item.title}</div>
+                <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+                  <span className="truncate">{item.linkedProject || item.category || "Unassigned"}</span>
+                  {item.dueDate && <span className="ml-auto shrink-0">Due {item.dueDate}</span>}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Stats bar — horizontally scrollable on mobile ── */}
       <div className="flex gap-2.5 overflow-x-auto pb-1 hide-scrollbar sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:overflow-visible">

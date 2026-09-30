@@ -7,6 +7,7 @@
  * stale remote copy from overwriting newer local edits.
  */
 import { db } from "@/lib/db";
+import { stripSecretsForExport } from "@/lib/secrets";
 import {
   GDRIVE_APPDATA_SCOPE,
   GOOGLE_SCOPES,
@@ -188,7 +189,23 @@ export async function pullFromCloud(): Promise<{ ok: boolean; restored: number; 
       const table = COLLECTIONS[collection];
       if (!table) continue;
       if (remote.deleted) await table.delete(recordId);
-      else if (validRecord(collection, remote.data, recordId)) { await table.put(remote.data); restored++; }
+      else if (validRecord(collection, remote.data, recordId)) {
+        if (collection === "websites") {
+          // Website passwords are deliberately local-only. A cloud restore must
+          // merge non-secret website metadata without erasing credentials that
+          // already exist on this device.
+          const current = await table.get(recordId);
+          await table.put({
+            ...(current || {}),
+            ...remote.data,
+            wpPassword: current?.wpPassword || "",
+            hostingPassword: current?.hostingPassword || "",
+          });
+        } else {
+          await table.put(remote.data);
+        }
+        restored++;
+      }
     }
     localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
     setStatus("synced");
@@ -218,7 +235,15 @@ async function pushNow(): Promise<void> {
       const remote = backup.records[recordKey];
       if (remote && remote.updatedAt > change.changedAt) continue;
       const local = change.operation === "delete" ? null : await table.get(recordId);
-      backup.records[recordKey] = { data: local || null, deleted: !local, updatedAt: change.changedAt };
+      const cloudSafeLocal =
+        local && collection === "websites"
+          ? stripSecretsForExport(local)
+          : local;
+      backup.records[recordKey] = {
+        data: cloudSafeLocal || null,
+        deleted: !local,
+        updatedAt: change.changedAt,
+      };
     }
     backup.updatedAt = new Date().toISOString();
     await writeRemote(fileId, backup);

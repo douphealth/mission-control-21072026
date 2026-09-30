@@ -1,5 +1,10 @@
 import {
   useWebsites,
+  useTasks,
+  useBuildProjects,
+  useSEOProfiles,
+  useSEOIssues,
+  useSEOSnapshots,
   useAddItem,
   useUpdateItem,
   useDeleteItem,
@@ -48,6 +53,10 @@ import {
   CheckSquare,
   Square,
   XCircle,
+  Target,
+  Rocket,
+  CircleDollarSign,
+  Gauge,
 } from "lucide-react";
 import FormModal, {
   FormField,
@@ -59,6 +68,8 @@ import FormModal, {
 import type { Website } from "@/lib/store";
 import { toast } from "sonner";
 import { deduplicateTable } from "@/lib/dedup";
+import { buildSitePulse } from "@/lib/sitePulse";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 // ─── Constants ──────────────────────────────────────────────────────────────────
 
@@ -109,7 +120,7 @@ const CATEGORY_CONFIG: Record<string, { gradient: string; emoji: string }> = {
   Portfolio: { gradient: "from-rose-500 to-pink-500", emoji: "🎨" },
 };
 
-type SortField = "name" | "status" | "category" | "dateAdded" | "lastUpdated";
+type SortField = "priority" | "name" | "status" | "category" | "dateAdded" | "lastUpdated";
 type SortDirection = "asc" | "desc";
 
 const emptyWebsite: Omit<Website, "id"> = {
@@ -140,6 +151,12 @@ const fadeUp = (i: number) => ({
 
 export default function WebsitesPage() {
   const websites = useWebsites();
+  const tasks = useTasks();
+  const buildProjects = useBuildProjects();
+  const seoProfiles = useSEOProfiles();
+  const seoIssues = useSEOIssues();
+  const seoSnapshots = useSEOSnapshots();
+  const setActiveSection = useNavigationStore((s) => s.setActiveSection);
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
@@ -149,8 +166,8 @@ export default function WebsitesPage() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("list");
-  const [sortField, setSortField] = useState<SortField>("lastUpdated");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [sortField, setSortField] = useState<SortField>("priority");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [revealedPasswords, setRevealedPasswords] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
@@ -190,6 +207,12 @@ export default function WebsitesPage() {
       .sort((a, b) => {
         let cmp = 0;
         switch (sortField) {
+          case "priority": {
+            const rank: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
+            cmp = (rank[a.priority || "low"] || 0) - (rank[b.priority || "low"] || 0);
+            if (cmp === 0) cmp = (a.importance || 0) - (b.importance || 0);
+            break;
+          }
           case "name":
             cmp = a.name.localeCompare(b.name);
             break;
@@ -222,6 +245,67 @@ export default function WebsitesPage() {
       providers: new Set(websites.map((w) => w.hostingProvider).filter(Boolean)).size,
       totalPlugins: websites.reduce((sum, w) => sum + w.plugins.length, 0),
     }),
+    [websites],
+  );
+
+  const normalizeHost = useCallback((url: string) => {
+    try {
+      return new URL(ensureUrl(url)).hostname.replace(/^www\./, "").toLowerCase();
+    } catch {
+      return url.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "").toLowerCase();
+    }
+  }, []);
+
+  const pulseById = useMemo(() => {
+    return new Map(
+      buildSitePulse({ websites, seoProfiles, seoIssues, seoSnapshots, limit: websites.length }).map((row) => [
+        row.id,
+        row,
+      ]),
+    );
+  }, [websites, seoProfiles, seoIssues, seoSnapshots]);
+
+  const websiteOperationalData = useMemo(() => {
+    const result = new Map<string, { openTasks: number; criticalTasks: number; apps: number; issues: number }>();
+    for (const site of websites) {
+      const host = normalizeHost(site.url);
+      const matchesProject = (value?: string) => {
+        const v = (value || "").toLowerCase();
+        return !!v && (v.includes(host) || v.includes(site.name.toLowerCase()));
+      };
+      const linkedTasks = tasks.filter((t) => t.status !== "done" && !t.deletedAt && matchesProject(t.linkedProject));
+      const apps = buildProjects.filter((app) => {
+        const parent = normalizeHost(app.parentWebsite || "");
+        return parent === host || matchesProject(app.parentWebsite) || matchesProject(app.landingPage);
+      });
+      const issues = seoIssues.filter(
+        (issue) => issue.websiteId === site.id && (issue.status === "open" || issue.status === "in-progress"),
+      );
+      result.set(site.id, {
+        openTasks: linkedTasks.length,
+        criticalTasks: linkedTasks.filter((t) => t.priority === "critical").length,
+        apps: apps.length,
+        issues: issues.length,
+      });
+    }
+    return result;
+  }, [websites, tasks, buildProjects, seoIssues, normalizeHost]);
+
+  const portfolioStats = useMemo(() => {
+    const openTasks = tasks.filter((t) => t.status !== "done" && !t.deletedAt && !t.archived);
+    return {
+      openTasks: openTasks.length,
+      criticalTasks: openTasks.filter((t) => t.priority === "critical").length,
+      appFunnels: buildProjects.filter((app) => app.status === "deployed").length,
+      openSeoIssues: seoIssues.filter((i) => i.status === "open" || i.status === "in-progress").length,
+    };
+  }, [tasks, buildProjects, seoIssues]);
+
+  const nextLeverageSite = useMemo(
+    () =>
+      [...websites]
+        .filter((site) => site.status === "active" && site.nextAction)
+        .sort((a, b) => (b.importance || 0) - (a.importance || 0))[0],
     [websites],
   );
 
@@ -425,6 +509,15 @@ export default function WebsitesPage() {
     const statusCfg = STATUS_CONFIG[site.status] || STATUS_CONFIG.active;
     const isExpanded = expandedSite === site.id;
     const hasCredentials = site.wpUsername || site.hostingUsername;
+    const ops = websiteOperationalData.get(site.id) || { openTasks: 0, criticalTasks: 0, apps: 0, issues: 0 };
+    const pulse = pulseById.get(site.id);
+    const priorityLabel = site.priority ? site.priority.toUpperCase() : null;
+    const priorityClass =
+      site.priority === "critical"
+        ? "bg-red-500/10 text-red-500 border-red-500/20"
+        : site.priority === "high"
+          ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+          : "bg-primary/8 text-primary border-primary/15";
 
     return (
       <div
@@ -470,7 +563,14 @@ export default function WebsitesPage() {
                 </a>
               </div>
             </div>
-            {renderStatusBadge(site.status)}
+            <div className="flex shrink-0 flex-col items-end gap-1.5">
+              {renderStatusBadge(site.status)}
+              {priorityLabel && (
+                <span className={`rounded-lg border px-2 py-0.5 text-[9px] font-black tracking-[0.12em] ${priorityClass}`}>
+                  {priorityLabel}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Quick info badges */}
@@ -493,6 +593,21 @@ export default function WebsitesPage() {
             {site.plugins.length > 0 && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-violet-500/10 text-violet-500 border border-violet-500/15">
                 <Puzzle size={9} /> {site.plugins.length} plugins
+              </span>
+            )}
+            {ops.apps > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-cyan-500/10 text-cyan-600 border border-cyan-500/15">
+                <Rocket size={9} /> {ops.apps} app{ops.apps === 1 ? "" : "s"}
+              </span>
+            )}
+            {ops.openTasks > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-600 border border-amber-500/15">
+                <CheckSquare size={9} /> {ops.openTasks} open
+              </span>
+            )}
+            {ops.issues > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-red-500/10 text-red-500 border border-red-500/15">
+                <AlertTriangle size={9} /> {ops.issues} SEO
               </span>
             )}
           </div>
@@ -527,7 +642,47 @@ export default function WebsitesPage() {
                 <Server size={11} /> Hosting
               </a>
             )}
+            <button
+              type="button"
+              onClick={() => setActiveSection("tasks")}
+              className="ml-auto flex items-center gap-1.5 rounded-lg border border-border/20 bg-secondary/35 px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
+            >
+              <Target size={11} /> Tasks
+            </button>
           </div>
+
+          {(site.focus || site.nextAction || pulse) && (
+            <div className="mb-3 grid gap-2 rounded-xl border border-border/20 bg-secondary/15 p-3">
+              {site.focus && (
+                <div>
+                  <div className="mb-1 text-[9px] font-black uppercase tracking-[0.14em] text-muted-foreground/65">Growth focus</div>
+                  <div className="text-[11px] font-semibold leading-relaxed text-foreground">{site.focus}</div>
+                </div>
+              )}
+              {site.nextAction && (
+                <div className="rounded-lg border border-primary/10 bg-primary/[0.045] p-2.5">
+                  <div className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-[0.14em] text-primary">
+                    <Zap size={10} /> Next leverage
+                  </div>
+                  <div className="text-[11px] leading-relaxed text-foreground/85">{site.nextAction}</div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[9.5px] font-semibold text-muted-foreground">
+                {pulse && (
+                  <span className={pulse.status === "attention" ? "text-red-500" : pulse.status === "healthy" ? "text-emerald-500" : ""}>
+                    <Gauge size={10} className="mr-1 inline" />
+                    {pulse.headline}
+                  </span>
+                )}
+                {site.revenueModel && site.revenueModel.length > 0 && (
+                  <span>
+                    <CircleDollarSign size={10} className="mr-1 inline" />
+                    {site.revenueModel.join(" · ")}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Expandable credentials section */}
           {hasCredentials && (
@@ -808,7 +963,7 @@ export default function WebsitesPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-foreground tracking-tight">My Websites</h1>
           <p className="text-sm text-muted-foreground mt-0.5 font-medium">
-            Manage all your websites, credentials, and hosting from one place
+            Run every website as a growth asset — priorities, tasks, apps, evidence and access in one place
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -841,6 +996,48 @@ export default function WebsitesPage() {
           </button>
         </div>
       </div>
+
+      <section className="relative overflow-hidden rounded-[24px] border border-border/25 bg-card p-4 shadow-[0_24px_70px_-54px_hsl(var(--foreground)/0.6)] sm:p-5">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative grid gap-4 lg:grid-cols-[1.35fr_.65fr] lg:items-stretch">
+          <div className="rounded-2xl border border-border/20 bg-gradient-to-br from-primary/[0.085] via-card to-card p-4 sm:p-5">
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-primary">
+              <Target size={12} /> Portfolio command center
+            </div>
+            <h2 className="max-w-2xl text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">
+              Know the next highest-leverage move without scanning every site.
+            </h2>
+            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+              Website cards combine your portfolio priorities with live tasks, app funnels and evidence-backed SEO state. Unknown data stays unknown.
+            </p>
+            {nextLeverageSite?.nextAction && (
+              <div className="mt-4 rounded-2xl border border-primary/15 bg-background/55 p-3.5">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-primary">
+                  <Zap size={11} /> Next leverage · {nextLeverageSite.name}
+                </div>
+                <div className="mt-1.5 text-sm font-semibold leading-relaxed text-foreground">
+                  {nextLeverageSite.nextAction}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { label: "Portfolio", value: stats.total, detail: `${stats.withWP} WordPress`, icon: Globe },
+              { label: "Open work", value: portfolioStats.openTasks, detail: `${portfolioStats.criticalTasks} critical`, icon: CheckSquare },
+              { label: "Live apps", value: portfolioStats.appFunnels, detail: "deployed funnels", icon: Rocket },
+              { label: "SEO issues", value: portfolioStats.openSeoIssues, detail: "evidence-backed", icon: Activity },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-border/20 bg-secondary/20 p-3.5">
+                <item.icon size={14} className="mb-3 text-primary" />
+                <div className="text-2xl font-black tabular-nums tracking-tight text-foreground">{item.value}</div>
+                <div className="mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">{item.label}</div>
+                <div className="mt-1 text-[9.5px] text-muted-foreground/70">{item.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Bulk Action Bar */}
       {bulkMode && (
@@ -900,84 +1097,6 @@ export default function WebsitesPage() {
           )}
         </div>
       )}
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-        {[
-          {
-            label: "Total",
-            value: stats.total,
-            icon: Globe,
-            color: "text-foreground",
-            bg: "bg-secondary/30",
-          },
-          {
-            label: "Active",
-            value: stats.active,
-            icon: CheckCircle2,
-            color: "text-emerald-500",
-            bg: "bg-emerald-500/8",
-          },
-          {
-            label: "Maintenance",
-            value: stats.maintenance,
-            icon: RefreshCw,
-            color: "text-amber-500",
-            bg: "bg-amber-500/8",
-          },
-          {
-            label: "Down",
-            value: stats.down,
-            icon: AlertTriangle,
-            color: "text-red-500",
-            bg: "bg-red-500/8",
-          },
-          {
-            label: "Archived",
-            value: stats.archived,
-            icon: Archive,
-            color: "text-zinc-400",
-            bg: "bg-zinc-500/8",
-          },
-          {
-            label: "WordPress",
-            value: stats.withWP,
-            icon: Globe,
-            color: "text-blue-500",
-            bg: "bg-blue-500/8",
-          },
-          {
-            label: "Providers",
-            value: stats.providers,
-            icon: Server,
-            color: "text-purple-500",
-            bg: "bg-purple-500/8",
-          },
-          {
-            label: "Plugins",
-            value: stats.totalPlugins,
-            icon: Puzzle,
-            color: "text-violet-500",
-            bg: "bg-violet-500/8",
-          },
-        ].map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.label}
-              className={`${stat.bg} rounded-xl p-3 border border-border/15 text-center`}
-            >
-              <Icon size={14} className={`${stat.color} mx-auto mb-1`} />
-              <div className={`text-lg font-extrabold ${stat.color} tabular-nums`}>
-                {stat.value}
-              </div>
-              <div className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">
-                {stat.label}
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
       {/* Filters & Controls */}
       <div className="flex flex-wrap items-center gap-2">

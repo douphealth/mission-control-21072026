@@ -1,9 +1,10 @@
 import { useTasks, useExportAllData } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
+import { onSaveStatus } from "@/stores/dataStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { todayISO } from "@/lib/overdue";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
-import { Search, Bell, Plus, Menu, Download, Mail, History } from "lucide-react";
+import { Search, Bell, Plus, Menu, Download, Mail, History, CheckCircle2, Loader2 } from "lucide-react";
 import { forwardRef, lazy, Suspense, useState, useEffect } from "react";
 
 const CommandPalette = lazy(() => import("./CommandPalette"));
@@ -48,6 +49,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">("saved");
 
   const shortcutLabel =
     typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "")
@@ -62,6 +64,8 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const overdueCount = overdueTasks.length;
   const dueTodayCount = dueTodayTasks.length;
   const notifCount = overdueCount + dueTodayCount;
+
+  useEffect(() => onSaveStatus(setSaveStatus), []);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -149,6 +153,21 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
         </button>
 
         <div className="flex items-center gap-1 sm:gap-1.5 ml-auto">
+          <div
+            className={`hidden items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[10px] font-bold sm:flex ${
+              saveStatus === "error"
+                ? "border-red-500/20 bg-red-500/8 text-red-500"
+                : "border-emerald-500/15 bg-emerald-500/8 text-emerald-600"
+            }`}
+            title="Changes are written to IndexedDB immediately; versioning and optional Google Drive backup run separately."
+          >
+            {saveStatus === "saving" ? (
+              <Loader2 size={11} className="animate-spin" />
+            ) : (
+              <CheckCircle2 size={11} />
+            )}
+            {saveStatus === "saving" ? "Saving" : saveStatus === "error" ? "Save issue" : "Saved locally"}
+          </div>
           {/* Action buttons — hidden on mobile for cleaner bar */}
           <button
             onClick={() => setImportModalOpen(true)}
