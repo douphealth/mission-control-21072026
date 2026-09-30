@@ -52,4 +52,11 @@ export default tseslint.config(
     },
   },
   eslintPluginPrettier,
+  {
+    // Formatting debt remains visible without blocking correctness, tests or deploys.
+    // Use `bun run format` for deliberate repository-wide formatting passes.
+    rules: {
+      "prettier/prettier": "warn",
+    },
+  },
 );
