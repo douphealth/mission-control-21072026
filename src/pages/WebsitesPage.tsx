@@ -963,7 +963,7 @@ export default function WebsitesPage() {
         <div>
           <h1 className="text-2xl font-extrabold text-foreground tracking-tight">My Websites</h1>
           <p className="text-sm text-muted-foreground mt-0.5 font-medium">
-            Manage all your websites, credentials, and hosting from one place
+            Run every website as a growth asset — priorities, tasks, apps, evidence and access in one place
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -996,6 +996,48 @@ export default function WebsitesPage() {
           </button>
         </div>
       </div>
+
+      <section className="relative overflow-hidden rounded-[24px] border border-border/25 bg-card p-4 shadow-[0_24px_70px_-54px_hsl(var(--foreground)/0.6)] sm:p-5">
+        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+        <div className="relative grid gap-4 lg:grid-cols-[1.35fr_.65fr] lg:items-stretch">
+          <div className="rounded-2xl border border-border/20 bg-gradient-to-br from-primary/[0.085] via-card to-card p-4 sm:p-5">
+            <div className="mb-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.18em] text-primary">
+              <Target size={12} /> Portfolio command center
+            </div>
+            <h2 className="max-w-2xl text-xl font-extrabold tracking-tight text-foreground sm:text-2xl">
+              Know the next highest-leverage move without scanning every site.
+            </h2>
+            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
+              Website cards combine your portfolio priorities with live tasks, app funnels and evidence-backed SEO state. Unknown data stays unknown.
+            </p>
+            {nextLeverageSite?.nextAction && (
+              <div className="mt-4 rounded-2xl border border-primary/15 bg-background/55 p-3.5">
+                <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.15em] text-primary">
+                  <Zap size={11} /> Next leverage · {nextLeverageSite.name}
+                </div>
+                <div className="mt-1.5 text-sm font-semibold leading-relaxed text-foreground">
+                  {nextLeverageSite.nextAction}
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {[
+              { label: "Portfolio", value: stats.total, detail: `${stats.withWP} WordPress`, icon: Globe },
+              { label: "Open work", value: portfolioStats.openTasks, detail: `${portfolioStats.criticalTasks} critical`, icon: CheckSquare },
+              { label: "Live apps", value: portfolioStats.appFunnels, detail: "deployed funnels", icon: Rocket },
+              { label: "SEO issues", value: portfolioStats.openSeoIssues, detail: "evidence-backed", icon: Activity },
+            ].map((item) => (
+              <div key={item.label} className="rounded-2xl border border-border/20 bg-secondary/20 p-3.5">
+                <item.icon size={14} className="mb-3 text-primary" />
+                <div className="text-2xl font-black tabular-nums tracking-tight text-foreground">{item.value}</div>
+                <div className="mt-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-muted-foreground">{item.label}</div>
+                <div className="mt-1 text-[9.5px] text-muted-foreground/70">{item.detail}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* Bulk Action Bar */}
       {bulkMode && (
@@ -1055,84 +1097,6 @@ export default function WebsitesPage() {
           )}
         </div>
       )}
-
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-        {[
-          {
-            label: "Total",
-            value: stats.total,
-            icon: Globe,
-            color: "text-foreground",
-            bg: "bg-secondary/30",
-          },
-          {
-            label: "Active",
-            value: stats.active,
-            icon: CheckCircle2,
-            color: "text-emerald-500",
-            bg: "bg-emerald-500/8",
-          },
-          {
-            label: "Maintenance",
-            value: stats.maintenance,
-            icon: RefreshCw,
-            color: "text-amber-500",
-            bg: "bg-amber-500/8",
-          },
-          {
-            label: "Down",
-            value: stats.down,
-            icon: AlertTriangle,
-            color: "text-red-500",
-            bg: "bg-red-500/8",
-          },
-          {
-            label: "Archived",
-            value: stats.archived,
-            icon: Archive,
-            color: "text-zinc-400",
-            bg: "bg-zinc-500/8",
-          },
-          {
-            label: "WordPress",
-            value: stats.withWP,
-            icon: Globe,
-            color: "text-blue-500",
-            bg: "bg-blue-500/8",
-          },
-          {
-            label: "Providers",
-            value: stats.providers,
-            icon: Server,
-            color: "text-purple-500",
-            bg: "bg-purple-500/8",
-          },
-          {
-            label: "Plugins",
-            value: stats.totalPlugins,
-            icon: Puzzle,
-            color: "text-violet-500",
-            bg: "bg-violet-500/8",
-          },
-        ].map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.label}
-              className={`${stat.bg} rounded-xl p-3 border border-border/15 text-center`}
-            >
-              <Icon size={14} className={`${stat.color} mx-auto mb-1`} />
-              <div className={`text-lg font-extrabold ${stat.color} tabular-nums`}>
-                {stat.value}
-              </div>
-              <div className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">
-                {stat.label}
-              </div>
-            </div>
-          );
-        })}
-      </div>
 
       {/* Filters & Controls */}
       <div className="flex flex-wrap items-center gap-2">
