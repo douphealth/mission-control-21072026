@@ -36,6 +36,8 @@ import {
   Check,
   X,
   KeyRound,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
@@ -88,7 +90,15 @@ const CopyButton = forwardRef<HTMLButtonElement, { text: string }>(function Copy
 });
 
 export default function SettingsPage() {
-  const { userName, userRole, theme, setTheme, toggleTheme } = useSettingsStore();
+  const {
+    userName,
+    userRole,
+    theme,
+    setTheme,
+    toggleTheme,
+    floatingCaptureDockVisible,
+    setFloatingCaptureDockVisible,
+  } = useSettingsStore();
   const updateData = useUpdateData();
   const exportAllData = useExportAllData();
   const importAllData = useImportAllData();
@@ -281,7 +291,7 @@ export default function SettingsPage() {
                     <label className="text-xs font-semibold text-muted-foreground mb-3 block">
                       Theme
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       {themes.map((t) => (
                         <button
                           key={t.id}
@@ -296,6 +306,44 @@ export default function SettingsPage() {
                           {t.label}
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-border/40 pt-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          {floatingCaptureDockVisible ? (
+                            <Eye size={16} className="text-primary" />
+                          ) : (
+                            <EyeOff size={16} className="text-muted-foreground" />
+                          )}
+                          <span className="text-sm font-semibold text-foreground">
+                            Floating capture controls
+                          </span>
+                        </div>
+                        <p className="mt-1 max-w-xl text-xs leading-relaxed text-muted-foreground">
+                          Show or hide the floating upload, camera, microphone and more buttons. Hiding them does not disable capture features; you can turn the dock back on here at any time.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={floatingCaptureDockVisible}
+                        onClick={() => setFloatingCaptureDockVisible(!floatingCaptureDockVisible)}
+                        className={`relative h-8 w-14 shrink-0 rounded-full border transition-all ${
+                          floatingCaptureDockVisible
+                            ? "border-primary/30 bg-primary"
+                            : "border-border/60 bg-secondary"
+                        }`}
+                        aria-label={floatingCaptureDockVisible ? "Hide floating capture controls" : "Show floating capture controls"}
+                      >
+                        <span
+                          className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow-sm transition-all ${
+                            floatingCaptureDockVisible ? "left-7" : "left-1"
+                          }`}
+                        />
+                      </button>
                     </div>
                   </div>
                 </div>
