@@ -487,6 +487,8 @@ export interface UserSettings {
   supabaseAnonKey?: string;
   encryptionKey?: string;
   lastSync?: string;
+  /** Synced one-time portfolio bootstrap marker; prevents deleted defaults reappearing. */
+  portfolioBaselineRevision?: string;
 }
 
 export interface CustomModule {
