@@ -40,6 +40,8 @@ import {
   checkSeo,
   fetchPlugins,
   fetchThemes,
+  fetchCurrentUser,
+  fetchSiteHealthTests,
   fetchUsers,
   fetchPostsCount,
   fetchPagesCount,
@@ -49,6 +51,8 @@ import {
   type SeoResult,
   type WpPlugin,
   type WpTheme,
+  type WpCurrentUser,
+  type SiteHealthTest,
 } from "@/lib/wpClient";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -59,6 +63,8 @@ type SiteStatus = {
   plugins?: WpPlugin[];
   themes?: WpTheme[];
   users?: any[];
+  currentUser?: WpCurrentUser;
+  siteHealth?: SiteHealthTest[];
   counts?: { posts: number; pages: number; comments: number };
   loading?: boolean;
   authError?: string;
@@ -69,15 +75,18 @@ type Tab = "overview" | "health" | "plugins" | "themes" | "security" | "seo" | "
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-const Score = ({ value, label }: { value: number; label: string }) => {
-  const color = value >= 80 ? "text-emerald-500" : value >= 50 ? "text-amber-500" : "text-red-500";
-  const bg = value >= 80 ? "bg-emerald-500/10" : value >= 50 ? "bg-amber-500/10" : "bg-red-500/10";
+const Score = ({ value, label }: { value: number | null; label: string }) => {
+  const color = value === null ? "text-muted-foreground" : value >= 80 ? "text-emerald-500" : value >= 50 ? "text-amber-500" : "text-red-500";
+  const bg = value === null ? "bg-secondary/50" : value >= 80 ? "bg-emerald-500/10" : value >= 50 ? "bg-amber-500/10" : "bg-red-500/10";
   return (
     <div className={`p-3 rounded-xl ${bg} border border-border/30`}>
       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">
         {label}
       </div>
-      <div className={`text-2xl font-extrabold ${color} mt-1`}>{value}</div>
+      <div className={`text-2xl font-extrabold ${color} mt-1`}>{value === null ? "—" : value}</div>
+      <div className="mt-1 text-[9px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {value === null ? "Needs evidence" : "Observed"}
+      </div>
     </div>
   );
 };
@@ -116,8 +125,16 @@ export default function WordPressManagementPage() {
   const [authForm, setAuthForm] = useState({ username: "", appPassword: "" });
   const [revealPwd, setRevealPwd] = useState(false);
 
-  // Filter to WP-related websites (those with wpAdminUrl OR all websites)
-  const wpSites = useMemo(() => websites.filter((w) => w.status !== "archived"), [websites]);
+  // WordPress management must never include unrelated web properties.
+  const wpSites = useMemo(
+    () =>
+      websites.filter(
+        (w) =>
+          w.status !== "archived" &&
+          Boolean(w.wpAdminUrl || w.tags?.some((tag) => tag.toLowerCase() === "wordpress")),
+      ),
+    [websites],
+  );
 
   const selected = wpSites.find((w) => w.id === selectedId) || null;
   const selectedCred = selected ? credsMap[selected.id] : null;
@@ -202,23 +219,28 @@ export default function WordPressManagementPage() {
 
     if (cred?.username && cred?.appPassword) {
       try {
-        const [plugins, themes, users, posts, pages, comments] = await Promise.all([
+        const currentUser = await fetchCurrentUser(url, cred);
+        const [plugins, themes, users, siteHealth, posts, pages, comments] = await Promise.all([
           fetchPlugins(url, cred).catch((e) => {
             throw new Error("Plugins: " + e.message);
           }),
-          fetchThemes(url, cred).catch(() => []),
-          fetchUsers(url, cred).catch(() => []),
-          fetchPostsCount(url, cred).catch(() => 0),
-          fetchPagesCount(url, cred).catch(() => 0),
-          fetchCommentsCount(url, cred).catch(() => 0),
+          fetchThemes(url, cred),
+          fetchUsers(url, cred),
+          fetchSiteHealthTests(url, cred),
+          fetchPostsCount(url, cred),
+          fetchPagesCount(url, cred),
+          fetchCommentsCount(url, cred),
         ]);
         next = {
           ...next,
+          currentUser,
           plugins,
           themes,
           users,
+          siteHealth,
           counts: { posts, pages, comments },
           loading: false,
+          authError: undefined,
         };
         setStatuses((s) => ({ ...s, [id]: next }));
         toast.success("All checks complete");
@@ -233,11 +255,15 @@ export default function WordPressManagementPage() {
   }
 
   async function checkAllSites() {
-    toast.info(`Running checks on ${wpSites.length} sites...`);
+    toast.info(`Running evidence checks on ${wpSites.length} WordPress sites...`);
     for (const site of wpSites) {
-      await runQuickCheck(site.id, site.url);
+      const cred = loadCreds()[site.id];
+      if (cred?.username && cred?.appPassword) await runFullCheck(site.id, site.url);
+      else await runQuickCheck(site.id, site.url);
     }
-    toast.success("Bulk health check complete");
+    toast.success("Portfolio WordPress checks complete", {
+      description: "Authenticated sites received full checks; unconnected sites received public evidence checks only.",
+    });
   }
 
   async function togglePlugin(pl: WpPlugin) {
@@ -256,38 +282,47 @@ export default function WordPressManagementPage() {
 
   const scores = useMemo(() => {
     const h = selectedStatus.health;
-    const s = selectedStatus.seo;
-    const p = selectedStatus.plugins;
-    let health = 0,
-      seo = 0,
-      security = 0;
-    if (h?.reachable) health += 50;
-    if (h?.protocol === "https") health += 25;
-    if (h?.isWordPress) health += 15;
-    if (h?.responseMs && h.responseMs < 1500) health += 10;
+    const seoEvidence = selectedStatus.seo;
+    const plugins = selectedStatus.plugins;
+    const siteHealth = selectedStatus.siteHealth;
 
-    if (s?.hasSitemap) seo += 30;
-    if (s?.hasRobots) seo += 20;
-    if (s?.title) seo += 20;
-    if (s?.description) seo += 15;
-    if (s?.ogTitle) seo += 8;
-    if (s?.canonical) seo += 7;
+    const health =
+      !h
+        ? null
+        : Math.min(
+            100,
+            (h.reachable ? 45 : 0) +
+              (h.protocol === "https" ? 20 : 0) +
+              (h.isWordPress ? 20 : 0) +
+              (h.responseMs && h.responseMs < 1500 ? 15 : 0),
+          );
 
-    if (h?.protocol === "https") security += 40;
-    if (p) {
-      const updates = p.filter((x) => x.update && x.update !== "none").length;
-      security += updates === 0 ? 40 : Math.max(0, 40 - updates * 10);
-      const inactive = p.filter((x) => x.status === "inactive").length;
-      security += inactive < 5 ? 20 : 10;
-    } else if (h?.isWordPress) {
-      security += 20; // unknown plugin state
-    }
+    const seo =
+      !seoEvidence
+        ? null
+        : Math.min(
+            100,
+            (seoEvidence.hasSitemap ? 30 : 0) +
+              (seoEvidence.hasRobots ? 20 : 0) +
+              (seoEvidence.title ? 20 : 0) +
+              (seoEvidence.description ? 15 : 0) +
+              (seoEvidence.ogTitle ? 8 : 0) +
+              (seoEvidence.canonical ? 7 : 0),
+          );
 
-    return {
-      health: Math.min(100, health),
-      seo: Math.min(100, seo),
-      security: Math.min(100, security),
-    };
+    const security =
+      !plugins || !siteHealth || !selectedStatus.currentUser
+        ? null
+        : Math.min(
+            100,
+            (h?.protocol === "https" ? 20 : 0) +
+              (plugins.filter((x) => x.update && x.update !== "none").length === 0 ? 20 : 5) +
+              (siteHealth.filter((test) => test.status === "critical").length === 0 ? 35 : 0) +
+              (siteHealth.filter((test) => test.status === "recommended").length <= 1 ? 15 : 5) +
+              (selectedStatus.currentUser.roles?.includes("administrator") ? 10 : 5),
+          );
+
+    return { health, seo, security };
   }, [selectedStatus]);
 
   const pluginUpdates =
@@ -330,8 +365,7 @@ export default function WordPressManagementPage() {
               WordPress Management
             </h1>
             <p className="text-xs text-muted-foreground mt-0.5">
-              Health, plugins, security & SEO across all your WP sites — powered by REST API +
-              Application Passwords.
+              Evidence-based health, plugins, themes, security, SEO and content across verified WordPress properties. Authenticated checks use core REST API + Application Passwords.
             </p>
           </div>
         </div>
@@ -351,7 +385,7 @@ export default function WordPressManagementPage() {
             onClick={checkAllSites}
             className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90"
           >
-            <Activity size={14} /> Check All Sites
+            <Activity size={14} /> Run All Checks
           </button>
         </div>
       </div>
@@ -418,7 +452,7 @@ export default function WordPressManagementPage() {
                     {selectedCred ? (
                       <>
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 text-[11px] font-semibold border border-emerald-500/20">
-                          <Lock size={11} /> Authenticated
+                          <Lock size={11} /> REST authenticated
                         </span>
                         <button
                           onClick={openAuth}
@@ -461,6 +495,17 @@ export default function WordPressManagementPage() {
                     <AlertTriangle size={12} className="inline mr-1" /> {selectedStatus.authError}
                   </div>
                 )}
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-border/50 bg-secondary/45 px-2.5 py-1 text-[10px] font-bold text-muted-foreground">
+                    {selectedStatus.currentUser ? `VERIFIED · ${selectedStatus.currentUser.name || selectedStatus.currentUser.username || "WordPress user"}` : selectedCred ? "AUTH NOT YET VERIFIED" : "PUBLIC CHECKS ONLY"}
+                  </span>
+                  {selectedStatus.lastChecked && (
+                    <span className="rounded-full border border-border/50 bg-secondary/45 px-2.5 py-1 text-[10px] font-semibold text-muted-foreground">
+                      checked {new Date(selectedStatus.lastChecked).toLocaleString()}
+                    </span>
+                  )}
+                </div>
 
                 {/* Score row */}
                 <div className="grid grid-cols-3 gap-2 mt-4">
@@ -671,6 +716,37 @@ function HealthTab({ status }: { status: SiteStatus }) {
           ⚠️ {h.error}
         </div>
       )}
+      {status.siteHealth && status.siteHealth.length > 0 && (
+        <div className="pt-3">
+          <div className="mb-2 text-[10px] font-extrabold uppercase tracking-[0.14em] text-muted-foreground">
+            WordPress core Site Health tests
+          </div>
+          <div className="space-y-2">
+            {status.siteHealth.map((test) => (
+              <div key={test.key} className="rounded-xl border border-border/35 bg-secondary/20 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs font-bold text-foreground">{test.label}</span>
+                  <span className={`rounded-full px-2 py-1 text-[9px] font-black uppercase tracking-wide ${
+                    test.status === "good"
+                      ? "bg-emerald-500/10 text-emerald-500"
+                      : test.status === "critical"
+                        ? "bg-red-500/10 text-red-500"
+                        : "bg-amber-500/10 text-amber-500"
+                  }`}>
+                    {test.status}
+                  </span>
+                </div>
+                {test.description && (
+                  <div
+                    className="mt-1.5 text-[11px] leading-5 text-muted-foreground"
+                    dangerouslySetInnerHTML={{ __html: test.description }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -761,7 +837,10 @@ function ThemesTab({ status, hasAuth }: { status: SiteStatus; hasAuth: boolean }
 
 function SecurityTab({ status }: { status: SiteStatus }) {
   const h = status.health;
-  const updates = status.plugins?.filter((p) => p.update && p.update !== "none").length || 0;
+  const pluginsKnown = Array.isArray(status.plugins);
+  const updates = pluginsKnown ? status.plugins!.filter((p) => p.update && p.update !== "none").length : null;
+  const inactive = pluginsKnown ? status.plugins!.filter((p) => p.status === "inactive").length : null;
+  const criticalHealth = status.siteHealth?.filter((test) => test.status === "critical").length ?? null;
   return (
     <div className="space-y-3">
       <Row
@@ -784,14 +863,14 @@ function SecurityTab({ status }: { status: SiteStatus }) {
       />
       <Row
         label="Plugins needing update"
-        pill={<StatusPill ok={updates === 0} label={String(updates)} />}
+        pill={<StatusPill ok={updates === null ? null : updates === 0} label={updates === null ? "Unknown" : String(updates)} />}
       />
       <Row
         label="Inactive plugins (attack surface)"
         pill={
           <StatusPill
-            ok={(status.plugins?.filter((p) => p.status === "inactive").length || 0) < 3}
-            label={String(status.plugins?.filter((p) => p.status === "inactive").length || 0)}
+            ok={inactive === null ? null : inactive < 3}
+            label={inactive === null ? "Unknown" : String(inactive)}
           />
         }
       />
@@ -800,15 +879,15 @@ function SecurityTab({ status }: { status: SiteStatus }) {
         {h?.protocol !== "https" && (
           <div>• Force HTTPS via your host or a plugin like Really Simple SSL</div>
         )}
-        {updates > 0 && (
+        {updates !== null && updates > 0 && (
           <div>
-            • Update {updates} outdated plugin{updates > 1 ? "s" : ""} immediately
+            • Review and update {updates} outdated plugin{updates > 1 ? "s" : ""} after backup/staging validation
           </div>
         )}
-        {(status.plugins?.filter((p) => p.status === "inactive").length || 0) >= 3 && (
-          <div>• Remove unused inactive plugins</div>
-        )}
-        <div>• Use strong Application Passwords and rotate them regularly</div>
+        {inactive !== null && inactive >= 3 && <div>• Review and remove unused inactive plugins</div>}
+        {criticalHealth !== null && criticalHealth > 0 && <div>• Resolve {criticalHealth} critical WordPress Site Health test{criticalHealth > 1 ? "s" : ""}</div>}
+        {!status.currentUser && <div>• Authenticate before treating plugin, theme, user or core-health state as known</div>}
+        <div>• Use revocable WordPress Application Passwords for remote REST access</div>
       </div>
     </div>
   );
