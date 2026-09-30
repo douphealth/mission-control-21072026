@@ -346,7 +346,7 @@ export async function ensurePortfolioBootstrap() {
     }
 
     const additivePatch: Partial<Website> = {};
-    const optionalFields: Array<keyof Website> = [
+    const optionalFields = [
       "favicon",
       "tags",
       "priority",
@@ -356,7 +356,7 @@ export async function ensurePortfolioBootstrap() {
       "revenueModel",
       "appUrls",
       "githubRepos"
-    ];
+    ] as const satisfies ReadonlyArray<keyof Omit<Website, "id">>;
     for (const field of optionalFields) {
       const current = existing[field];
       const incoming = record[field];
