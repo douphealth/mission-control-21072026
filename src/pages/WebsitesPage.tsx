@@ -109,7 +109,36 @@ const CATEGORY_CONFIG: Record<string, { gradient: string; emoji: string }> = {
   Blog: { gradient: "from-green-500 to-emerald-500", emoji: "📝" },
   SaaS: { gradient: "from-orange-500 to-amber-500", emoji: "🚀" },
   Portfolio: { gradient: "from-rose-500 to-pink-500", emoji: "🎨" },
+  "Fitness & Running": { gradient: "from-cyan-500 to-blue-500", emoji: "🏃" },
+  "Affiliate Marketing": { gradient: "from-amber-500 to-orange-500", emoji: "💸" },
+  "Plant Care": { gradient: "from-emerald-500 to-lime-500", emoji: "🌿" },
+  Numerology: { gradient: "from-violet-500 to-fuchsia-500", emoji: "🔢" },
+  "French Bulldog": { gradient: "from-rose-500 to-orange-400", emoji: "🐾" },
+  "Pest Control": { gradient: "from-slate-500 to-zinc-600", emoji: "🏠" },
+  Growth: { gradient: "from-sky-500 to-indigo-500", emoji: "📈" },
+  "AI & Prompts": { gradient: "from-violet-500 to-blue-500", emoji: "✨" },
+  "Developer Tools": { gradient: "from-zinc-600 to-slate-700", emoji: "🛠️" },
+  "AI Image Tool": { gradient: "from-fuchsia-500 to-pink-500", emoji: "🖼️" },
 };
+
+const WEBSITE_CATEGORY_OPTIONS = [
+  "Fitness & Running",
+  "Affiliate Marketing",
+  "Plant Care",
+  "Numerology",
+  "French Bulldog",
+  "Pest Control",
+  "Growth",
+  "AI & Prompts",
+  "Developer Tools",
+  "AI Image Tool",
+  "Personal",
+  "Client Site",
+  "E-Commerce",
+  "Blog",
+  "SaaS",
+  "Portfolio",
+] as const;
 
 type SortField = "name" | "status" | "category" | "dateAdded" | "lastUpdated";
 type SortDirection = "asc" | "desc";
@@ -692,12 +721,11 @@ export default function WebsitesPage() {
                 className="px-2.5 py-1.5 rounded-lg bg-secondary/50 text-xs font-semibold text-muted-foreground border border-border/15 outline-none cursor-pointer"
               >
                 <option value="">Set Category...</option>
-                <option value="Personal">🏠 Personal</option>
-                <option value="Client Site">👔 Client Site</option>
-                <option value="E-Commerce">🛒 E-Commerce</option>
-                <option value="Blog">📝 Blog</option>
-                <option value="SaaS">🚀 SaaS</option>
-                <option value="Portfolio">🎨 Portfolio</option>
+                {WEBSITE_CATEGORY_OPTIONS.map((category) => (
+                  <option key={category} value={category}>
+                    {CATEGORY_CONFIG[category]?.emoji || "🌐"} {category}
+                  </option>
+                ))}
               </select>
               <button
                 onClick={bulkDelete}
@@ -1002,14 +1030,10 @@ export default function WebsitesPage() {
                 <FormSelect
                   value={form.category}
                   onChange={(v) => uf("category", v)}
-                  options={[
-                    { value: "Personal", label: "🏠 Personal" },
-                    { value: "Client Site", label: "👔 Client Site" },
-                    { value: "E-Commerce", label: "🛒 E-Commerce" },
-                    { value: "Blog", label: "📝 Blog" },
-                    { value: "SaaS", label: "🚀 SaaS" },
-                    { value: "Portfolio", label: "🎨 Portfolio" },
-                  ]}
+                  options={WEBSITE_CATEGORY_OPTIONS.map((category) => ({
+                    value: category,
+                    label: `${CATEGORY_CONFIG[category]?.emoji || "🌐"} ${category}`,
+                  }))}
                 />
               </FormField>
               <FormField label="Status">
