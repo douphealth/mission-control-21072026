@@ -103,8 +103,15 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         }
 
         await ensureSettingsRow();
-        // Repair the known portfolio additively. Existing records, credentials,
-        // statuses and user edits always win; only missing baseline data is added.
+        await deduplicateAll();
+
+        // Pull the account backup before one-time defaults are considered. This
+        // preserves remote deletions and the synced baseline revision marker.
+        void import("@/lib/googleDirectAuth").then((m) => m.ensureGoogleClientId());
+        await startCloudSync();
+
+        // Repair the known portfolio once per synced baseline revision.
+        // Existing records, credentials, statuses and user edits always win.
         await ensurePortfolioBaseline();
         await deduplicateAll();
         await loadSettings();
@@ -117,9 +124,6 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 
         const settings = await db.settings.get("default");
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
-        // Pre-load the app's Google identity so "Connect Google" is one click.
-        void import("@/lib/googleDirectAuth").then((m) => m.ensureGoogleClientId());
-        await startCloudSync();
       } catch (e) {
         console.error("DB init error:", e);
       } finally {
