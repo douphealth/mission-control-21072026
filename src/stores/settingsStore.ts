@@ -11,11 +11,14 @@ interface SettingsState {
   userName: string;
   userRole: string;
   theme: ThemeName;
+  floatingCaptureDockVisible: boolean;
   isLoading: boolean;
 
   // Actions
   setTheme: (t: ThemeName) => void;
   toggleTheme: () => void;
+  setFloatingCaptureDockVisible: (visible: boolean) => void;
+  toggleFloatingCaptureDock: () => void;
   updateSettings: (changes: Partial<UserSettings>) => Promise<void>;
   loadSettings: () => Promise<void>;
 }
@@ -24,6 +27,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   userName: "Alex",
   userRole: "Digital Creator & Developer",
   theme: "dark",
+  floatingCaptureDockVisible: true,
   isLoading: true,
 
   setTheme: (t) => {
@@ -39,6 +43,15 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     get().setTheme(next);
   },
 
+  setFloatingCaptureDockVisible: (visible) => {
+    set({ floatingCaptureDockVisible: visible });
+    void db.settings.update("default", { floatingCaptureDockVisible: visible });
+  },
+
+  toggleFloatingCaptureDock: () => {
+    get().setFloatingCaptureDockVisible(!get().floatingCaptureDockVisible);
+  },
+
   updateSettings: async (changes) => {
     await db.settings.update("default", changes);
     if (changes.userName) set({ userName: changes.userName });
@@ -46,6 +59,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (changes.theme) {
       set({ theme: changes.theme });
       applyTheme(changes.theme);
+    }
+    if (typeof changes.floatingCaptureDockVisible === "boolean") {
+      set({ floatingCaptureDockVisible: changes.floatingCaptureDockVisible });
     }
   },
 
@@ -56,6 +72,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         userName: settings.userName || "Alex",
         userRole: settings.userRole || "Digital Creator & Developer",
         theme: settings.theme || "sage",
+        floatingCaptureDockVisible: settings.floatingCaptureDockVisible !== false,
         isLoading: false,
       });
       applyTheme(settings.theme || "sage");
