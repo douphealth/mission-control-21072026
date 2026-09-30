@@ -250,6 +250,20 @@ export async function fetchCurrentUser(url: string, c: { username: string; appPa
   return wpFetch<WpCurrentUser>(url, "/wp/v2/users/me?context=edit", c);
 }
 
+function wpPlainText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  return value
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#039;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 const SITE_HEALTH_TESTS = [
   ["background-updates", "Background updates"],
   ["loopback-requests", "Loopback requests"],
@@ -274,8 +288,8 @@ export async function fetchSiteHealthTests(
           label,
           status,
           badge: result?.badge,
-          description: typeof result?.description === "string" ? result.description : undefined,
-          actions: typeof result?.actions === "string" ? result.actions : undefined,
+          description: wpPlainText(result?.description),
+          actions: wpPlainText(result?.actions),
         } satisfies SiteHealthTest;
       } catch (error: any) {
         // Some tests are conditional (for example page-cache or authorization-header).
