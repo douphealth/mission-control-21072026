@@ -22,6 +22,7 @@ jobs:
           python3 scripts/apply-cross-device-fixes.py
           python3 - <<'PY'
           from pathlib import Path
+          import json
           p = Path('src/pages/TasksPage.tsx')
           s = p.read_text()
           assert s.count('function TaskModal(') == 1
@@ -34,12 +35,34 @@ jobs:
                 }} className="mb-4 min-h-11 rounded-xl bg-destructive/10 px-4 text-sm text-destructive">Move to Trash</button>}
           ''' + marker)
           p.write_text(s)
+          p = Path('src/lib/cloudSync.ts')
+          s = p.read_text()
+          start = s.index('  activeSync = (typeof navigator')
+          end = s.index('\n}', start)
+          s = s[:start] + '''  const operation: Promise<SyncResult> = Promise.resolve().then(async () => {
+              if (typeof navigator !== 'undefined' && navigator.locks) return await navigator.locks.request('mc-cloud-sync-v2', run);
+              return await run();
+            }).finally(() => { activeSync = null; });
+            activeSync = operation;
+            return operation;''' + s[end:]
+          s = s.replace('let logicalTime = 0;', 'let logicalTime = 0;\nlet localSeedChecked = false;')
+          s = s.replace('    await seedMissingRecords(remote.records);', '    if (!localSeedChecked) await seedMissingRecords(remote.records);')
+          s = s.replace('        const dirty = readDirty()[recordKey];', '        const dirty = readDirty()[recordKey];\n        if (!dirty && receipts[recordKey] === revisionOf(record)) continue;')
+          s = s.replace('    retryAttempt = 0;\n    setStatus(', '    retryAttempt = 0;\n    localSeedChecked = true;\n    setStatus(')
+          s = s.replace("    epoch++; verifiedToken = ''; remoteCache.clear(); retryAttempt = 0;", "    epoch++; verifiedToken = ''; remoteCache.clear(); retryAttempt = 0; localSeedChecked = false;")
+          p.write_text(s)
+          p = Path('package.json')
+          package = json.loads(p.read_text())
+          for name in ('build', 'build:cloudflare', 'build:netlify', 'build:dev'):
+              package['scripts'][name] = 'node scripts/write-build-info.mjs && ' + package['scripts'][name]
+          p.write_text(json.dumps(package, indent=2) + '\n')
           PY
       - run: bun install --frozen-lockfile
       - name: Pin browser regression dependency
-        run: bun add --dev --exact playwright
+        run: bun add --dev --exact playwright@1.63.0
       - run: bun run typecheck
-      - run: bun run lint
+      - name: Lint
+        run: bun run lint > /tmp/mc-lint.log 2>&1 || { tail -n 100 /tmp/mc-lint.log; exit 1; }
       - run: bun run test
       - run: bun run build:cloudflare
       - name: Install Chromium and WebKit
