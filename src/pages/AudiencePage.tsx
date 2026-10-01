@@ -264,7 +264,7 @@ export default function AudiencePage() {
             </p>
           </div>
           <span className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-1 text-[9px] font-bold text-muted-foreground">
-            {recentChecks}/{accounts.length} checked in last 24h
+            {freshVerified}/{accounts.length} fresh verified in last 24h
           </span>
         </div>
 
