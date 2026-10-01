@@ -115,7 +115,7 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
           </p>
         )}
       </div>
-      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex flex-col gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         <a
           href={item.url}
           target="_blank"
