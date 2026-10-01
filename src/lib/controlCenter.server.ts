@@ -323,6 +323,35 @@ export async function readAudience(
     };
   }
 
+  if (profilePageLooksBlocked(html)) {
+    return {
+      followers: null,
+      posts: null,
+      status: "unavailable",
+      method: "public-page",
+      provider: "Public profile page",
+      confidence: "low",
+      evidence: "The returned page was a login/challenge/block page, not reliable profile evidence.",
+      approximate: false,
+      identityVerified: false,
+    };
+  }
+
+  const identityVerified = profileIdentityVerified(platform, url, html);
+  if (!identityVerified) {
+    return {
+      followers: null,
+      posts: null,
+      status: "unavailable",
+      method: "public-page",
+      provider: "Public profile page",
+      confidence: "low",
+      evidence: "The returned page could not be tied confidently to the requested profile identity.",
+      approximate: false,
+      identityVerified: false,
+    };
+  }
+
   const num = (raw: string): number | null => {
     const cleaned = raw.replace(/[,\s]/g, "").toUpperCase();
     const m = cleaned.match(/^([\d.]+)([KMB])?$/);
