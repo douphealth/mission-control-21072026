@@ -407,7 +407,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Enabled sources", value: enabledFeeds.length, tone: "primary" },
         { label: "Active stories", value: activeStories.length, tone: "info" },
-        { label: "Collector", value: healthState("feeds").replace("-", " "), tone: healthState("feeds") === "ok" ? "success" : feedErrors.length ? "warning" : "neutral" },
+        { label: "Collector", value: healthState("feeds").replace("-", " "), tone: healthState("feeds") === "ok" ? "success" : healthState("feeds") === "error" ? "danger" : healthState("feeds") === "stale" ? "warning" : "neutral" },
       ],
       related: [
         { label: "Captures", section: "control-center" },
