@@ -189,7 +189,8 @@ export const useDataStore = create<DataState>((set, _get) => ({
         ? { ...changes, touchedAt: new Date().toISOString().split("T")[0] }
         : (changes as any);
     const previous = AUDIT_SKIP.has(table) ? null : await tableRef.get(id);
-    await tableRef.update(id, patch);
+    const updated = await tableRef.update(id, patch);
+    if (!updated) throw new Error("This record no longer exists. Your edits were not saved; keep the draft and refresh the task list.");
     if (previous)
       logAudit({
         action: "update",

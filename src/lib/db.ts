@@ -586,6 +586,8 @@ export interface WatchTerm {
   enabled: boolean;
   lastCheckedAt?: string;
   createdAt: string;
+  lastError?: string;
+  lastSuccessAt?: string;
 }
 
 export type AudiencePlatform =
@@ -595,7 +597,9 @@ export type AudiencePlatform =
   | "facebook"
   | "linkedin"
   | "threads"
-  | "tiktok";
+  | "tiktok"
+  | "github"
+  | "bluesky";
 
 export interface AudienceAccount {
   id: string;
@@ -606,6 +610,10 @@ export interface AudienceAccount {
   createdAt: string;
   lastCheckedAt?: string;
   lastStatus?: "ok" | "unavailable" | "limited";
+  lastEvidence?: string;
+  lastAction?: string;
+  lastError?: string;
+  lastSuccessAt?: string;
 }
 
 export interface AudienceReading {

@@ -1,3 +1,4 @@
+import { collectMentionCoverage, collectAudienceMetrics } from "./intelligenceCollectors.server";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
@@ -5,14 +6,13 @@ import {
   hostOf,
   httpGet,
   parseFeed,
-  readAudience,
   type RawItem,
 } from "./controlCenter.server";
 import { anthropicComplete, isAnthropicAvailable } from "@/lib/anthropicServer";
 import {
   canonicalWebUrl,
-  matchIdentity,
   queryRelevance,
+  isRecentIso,
   titleSimilarity,
 } from "@/lib/intelligenceQuality";
 import {
@@ -37,7 +37,7 @@ function evidenceStrength(input: {
   if (corroboration >= 2) {
     return {
       level: "high" as const,
-      reason: `Similar coverage appears across ${corroboration + 1} publisher results.`,
+      reason: `Similar headlines appear across ${corroboration + 1} publishers. This is not a factual verification.`,
     };
   }
   if (input.source || input.sourceUrl) {
@@ -159,7 +159,7 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
       };
     }
 
-    const items = coverage.items.slice(0, 90).map((item) => ({
+    const items = coverage.items.filter(item => isRecentIso(item.publishedAt, data.days)).slice(0, 90).map((item) => ({
       ...item,
       source: item.source || hostOf(item.sourceUrl || "") || "News coverage",
       sourceUrl: item.sourceUrl,
@@ -173,8 +173,8 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
           const publisher = other.source || hostOf(other.sourceUrl || "");
           if (publisher && publisher !== item.source) publishers.add(publisher);
         });
-        const retrievalCorroboration = Math.max(0, item.retrievalProviders.length - 1);
-        const corroborationCount = Math.max(publishers.size, retrievalCorroboration);
+        // Search-engine duplication is not independent reporting or fact verification.
+        const corroborationCount = publishers.size;
         const relevanceScore = queryRelevance(query, item.title, item.summary);
         const evidence = evidenceStrength({
           source: item.source,
@@ -188,7 +188,7 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
           evidenceLevel: evidence.level,
           evidenceReason:
             item.retrievalProviders.length > 1
-              ? `${evidence.reason} Independently retrieved via ${item.retrievalProviders.length} search providers.`
+              ? `${evidence.reason} Also indexed by ${item.retrievalProviders.length} search providers.`
               : evidence.reason,
         };
       })
@@ -223,103 +223,7 @@ const TermSchema = z.object({
 
 export const collectMentions = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ terms: z.array(TermSchema).max(12) }).parse(d))
-  .handler(async ({ data }) => {
-    const results = await Promise.all(
-      data.terms.map(async (t) => {
-        const cleanTerm = t.term.replace(/^@/, "").trim();
-        const anchors = (t.anchors ?? []).map((a) => a.trim()).filter(Boolean);
-        const negatives = (t.negatives ?? []).map((n) => n.trim()).filter(Boolean);
-        if (t.type === "name" && !anchors.length) {
-          return {
-            termId: t.id,
-            term: t.term,
-            items: [] as Array<RawItem & {
-              matchedAnchors?: string[];
-              verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand";
-              confidence?: "high" | "medium" | "low";
-              verificationReason?: string;
-              corroborationCount?: number;
-            }>,
-            error: "Name monitoring requires at least one identity anchor.",
-          };
-        }
-
-        const queries =
-          (t.type === "name" || t.type === "brand") && anchors.length
-            ? anchors.slice(0, 5).map((anchor) => '"' + cleanTerm + '" "' + anchor + '"')
-            : ['"' + (t.type === "handle" ? "@" : "") + cleanTerm + '"'];
-
-        try {
-          const coverages = await Promise.all(
-            queries.map((query) => searchNewsCoverage(query, 30)),
-          );
-          const successfulCoverage = coverages.filter((coverage) => !coverage.allFailed);
-          if (!successfulCoverage.length) {
-            const failures = coverages.flatMap((coverage) => summarizeProviderFailures(coverage));
-            throw new Error(
-              failures.join(" · ") || "All live news providers are temporarily unavailable",
-            );
-          }
-          const batches = successfulCoverage.map((coverage) => coverage.items.slice(0, 45));
-          const dedup = new Map<string, RawItem>();
-          batches.flat().forEach((item) => {
-            const key = canonicalWebUrl(item.url);
-            if (!dedup.has(key)) dedup.set(key, item);
-          });
-
-          const candidates = [...dedup.values()].map((item) => {
-            const source = item.source || hostOf(item.sourceUrl || "") || "News coverage";
-            const identity = matchIdentity({
-              term: t.term,
-              type: t.type,
-              anchors,
-              negatives,
-              text: item.title + " " + (item.summary ?? ""),
-              sourceUrl: item.sourceUrl,
-            });
-            return identity
-              ? {
-                  ...item,
-                  source,
-                  sourceUrl: item.sourceUrl,
-                  matchedAnchors: identity.matchedAnchors,
-                  verification: identity.verification,
-                  verificationReason: identity.reason,
-                  confidence: identity.confidence,
-                }
-              : null;
-          });
-
-          const verified = candidates.filter((item): item is NonNullable<typeof item> => item !== null);
-          const items = verified.map((item, index) => {
-            const publishers = new Set<string>();
-            verified.forEach((other, otherIndex) => {
-              if (index === otherIndex || titleSimilarity(item.title, other.title) < 0.5) return;
-              const publisher = other.source || hostOf(other.sourceUrl || "");
-              if (publisher && publisher !== item.source) publishers.add(publisher);
-            });
-            return { ...item, corroborationCount: publishers.size };
-          });
-
-          return { termId: t.id, term: t.term, items, error: null as string | null };
-        } catch (e: any) {
-          return {
-            termId: t.id,
-            term: t.term,
-            items: [] as Array<RawItem & {
-              matchedAnchors?: string[];
-              verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand";
-              confidence?: "high" | "medium" | "low";
-              verificationReason?: string;
-              corroborationCount?: number;
-            }>,
-            error: String(e?.message ?? e).slice(0, 200),
-          };
-        }
-      }),
-    );
-    return { results };
-  });
+  .handler(async ({ data }) => collectMentionCoverage(data.terms));
 
 // ─── Audience metrics ─────────────────────────────────────────────────────────
 
@@ -339,6 +243,8 @@ export const collectAudience = createServerFn({ method: "POST" })
                 "linkedin",
                 "threads",
                 "tiktok",
+                "github",
+                "bluesky",
               ]),
               url: z.string().url(),
             }),
@@ -347,15 +253,7 @@ export const collectAudience = createServerFn({ method: "POST" })
       })
       .parse(d),
   )
-  .handler(async ({ data }) => {
-    const readings = await Promise.all(
-      data.accounts.map(async (a) => {
-        const r = await readAudience(a.platform, a.url);
-        return { accountId: a.id, ...r };
-      }),
-    );
-    return { readings };
-  });
+  .handler(async ({ data }) => collectAudienceMetrics(data.accounts));
 
 // ─── Optional AI ranking / summarising (no user API key needed) ───────────────
 

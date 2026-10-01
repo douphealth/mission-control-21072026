@@ -1,9 +1,10 @@
+import TaskDialogFrame from "@/components/TaskDialogFrame";
 // ─── Task quick editor ───────────────────────────────────────────────────────
 // A single, reusable editing surface for a task. Every change is written to
 // Dexie immediately, so every live-query view (Tasks, Review, Calendar, Focus,
 // Dashboard) updates at once. No "Save" round-trip, no stale copies.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   X,
   CheckCircle2,
@@ -47,50 +48,54 @@ export default function TaskQuickEditor({
   const [description, setDescription] = useState(task?.description ?? "");
   const [newSubtask, setNewSubtask] = useState("");
   const [saving, setSaving] = useState(false);
+  const [category, setCategory] = useState(task?.category || "");
+  const [project, setProject] = useState(task?.linkedProject || "");
+  const pendingWrites = useRef<Promise<void>>(Promise.resolve());
+  const pendingFields = useRef<Partial<Task>>({});
+  const saveLock = useRef(false);
 
   useEffect(() => {
     setTitle(task?.title ?? "");
     setDescription(task?.description ?? "");
-  }, [task?.id, task?.title, task?.description]);
-
-  useEffect(() => {
-    if (!task) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [task, onClose]);
+    setCategory(task?.category || "");
+    setProject(task?.linkedProject || "");
+    pendingFields.current = {};
+  }, [task?.id]);
 
   if (!task) return null;
 
-  const patch = async (changes: Partial<Task>) => {
-    await updateItem<Task>("tasks", task.id, { ...changes, touchedAt: today } as Partial<Task>);
+  const patch = (changes: Partial<Task>) => {
+    Object.assign(pendingFields.current, changes);
+    const taskId = task.id;
+    const operation = pendingWrites.current.then(async () => {
+      await updateItem<Task>("tasks", taskId, { ...changes, touchedAt: today });
+      for (const field of Object.keys(changes) as Array<keyof Task>) {
+        if (pendingFields.current[field] === changes[field]) delete pendingFields.current[field];
+      }
+    });
+    pendingWrites.current = operation.catch(() => {
+      toast.error("Autosave failed. Your draft is retained; press Save changes to retry.");
+    });
+    return pendingWrites.current;
   };
 
   const archived = (task as any).archived === true;
 
   const saveDraft = async () => {
-    const cleanTitle = title.trim();
-    if (!cleanTitle) {
-      toast.error("Task title is required");
-      return;
-    }
-
+    if (saveLock.current) return;
+    if (!title.trim()) { toast.error("Task title is required"); return; }
+    saveLock.current = true;
     setSaving(true);
     try {
-      const changes: Partial<Task> = {};
-      if (cleanTitle !== task.title) changes.title = cleanTitle;
-      if (description !== (task.description ?? "")) changes.description = description;
-      if (Object.keys(changes).length) await patch(changes);
-      toast.success("Task saved");
+      await pendingWrites.current;
+      await updateItem<Task>("tasks", task.id, { ...pendingFields.current, title: title.trim(),
+        description, category, linkedProject: project, touchedAt: today });
+      pendingFields.current = {};
+      toast.success("Task saved on this device", { description: "The synchronization bar shows when the cloud confirms the change." });
       onClose();
     } catch (error) {
-      console.error("Task save failed", error);
-      toast.error("Task could not be saved");
-    } finally {
-      setSaving(false);
-    }
+      toast.error("Task could not be saved", { description: error instanceof Error ? error.message : "Your draft has been retained." });
+    } finally { saveLock.current = false; setSaving(false); }
   };
 
   const addSubtask = async () => {
@@ -103,39 +108,12 @@ export default function TaskQuickEditor({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center"
-      role="dialog"
-      aria-modal="true"
-    >
-      <button
-        aria-label="Close editor"
-        onClick={onClose}
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-      />
-
-      <div className="relative z-10 flex max-h-[94vh] w-full flex-col overflow-y-auto rounded-t-2xl border border-border/50 bg-card p-4 shadow-2xl sm:max-w-2xl sm:rounded-2xl sm:p-5">
-        <div className="mb-3 flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Edit task
-            </div>
-            <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Changes autosave. Use Save changes to explicitly commit the current draft.
-            </p>
-          </div>
-          <Button
-            aria-label="Close task editor"
-            title="Close"
-            variant="secondary"
-            size="icon"
-            onClick={onClose}
-            className="h-9 w-9 rounded-xl text-muted-foreground"
-          >
-            <X size={15} />
-          </Button>
-        </div>
-
+    <TaskDialogFrame title="Edit task" onClose={() => { if (!saveLock.current) onClose(); }} action={
+      <button type="button" onClick={() => void saveDraft()} disabled={saving || !title.trim()}
+        className="flex min-h-11 items-center gap-2 rounded-xl bg-primary px-3 text-sm font-bold text-primary-foreground disabled:opacity-50">
+        <Save size={15} />{saving ? "Saving..." : "Save changes"}
+      </button>
+    }>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -164,7 +142,8 @@ export default function TaskQuickEditor({
           <label className="text-[11px] font-semibold text-muted-foreground">
             Category
             <input
-              defaultValue={task.category ?? ""}
+              value={category}
+              onChange={e => setCategory(e.target.value)}
               onBlur={(e) => {
                 if (e.target.value !== task.category) void patch({ category: e.target.value });
               }}
@@ -175,7 +154,8 @@ export default function TaskQuickEditor({
           <label className="text-[11px] font-semibold text-muted-foreground">
             Project
             <input
-              defaultValue={task.linkedProject ?? ""}
+              value={project}
+              onChange={e => setProject(e.target.value)}
               onBlur={(e) => {
                 if (e.target.value !== task.linkedProject)
                   void patch({ linkedProject: e.target.value });
@@ -379,15 +359,7 @@ export default function TaskQuickEditor({
         </div>
 
         {/* Footer actions */}
-        <div className="sticky bottom-0 -mx-4 mt-5 flex flex-wrap items-center gap-1.5 border-t border-border/50 bg-card/95 px-4 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:-mx-5 sm:px-5">
-          <button
-            type="button"
-            onClick={() => void saveDraft()}
-            disabled={saving || !title.trim()}
-            className="flex min-h-10 items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-[12px] font-bold text-primary-foreground shadow-[var(--shadow-primary)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 touch-manipulation"
-          >
-            <Save size={13} /> {saving ? "Saving…" : "Save changes"}
-          </button>
+        <div className="-mx-4 mt-5 flex flex-wrap items-center gap-1.5 border-t border-border/50 bg-card/95 px-4 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:-mx-5 sm:px-5">
           <button
             onClick={async () => {
               await patch({ status: "done", completedAt: new Date().toISOString() });
@@ -431,7 +403,6 @@ export default function TaskQuickEditor({
             <Trash2 size={13} /> Delete
           </button>
         </div>
-      </div>
-    </div>
+    </TaskDialogFrame>
   );
 }

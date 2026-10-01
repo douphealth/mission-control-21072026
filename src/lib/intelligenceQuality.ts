@@ -240,7 +240,9 @@ export function isTrustedAudienceReading(reading: {
 }): boolean {
   return (
     reading.status === "ok" &&
-    reading.followers !== null &&
+    typeof reading.followers === "number" &&
+    Number.isSafeInteger(reading.followers) &&
+    reading.followers >= 0 &&
     (reading.method === "official-api" || reading.identityVerified === true)
   );
 }

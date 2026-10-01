@@ -1,3 +1,4 @@
+import CrossDeviceSyncBar from "@/components/CrossDeviceSyncBar";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import StatusBar from "@/components/StatusBar";
@@ -155,6 +156,7 @@ export default function DashboardLayout() {
       </div>
       <div className="mc13-main-wrap relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
+        <CrossDeviceSyncBar />
         <main
           id="main-content"
           tabIndex={-1}

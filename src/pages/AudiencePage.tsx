@@ -1,3 +1,4 @@
+import { audienceProfile } from "@/lib/audienceEvidence";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
@@ -30,8 +31,10 @@ const PLATFORMS: {
   { id: "instagram", label: "Instagram", hint: "https://instagram.com/handle", hosts: ["instagram.com"] },
   { id: "facebook", label: "Facebook", hint: "https://facebook.com/page", hosts: ["facebook.com", "fb.com"] },
   { id: "linkedin", label: "LinkedIn", hint: "https://linkedin.com/company/x", hosts: ["linkedin.com"] },
-  { id: "threads", label: "Threads", hint: "https://threads.net/@handle", hosts: ["threads.net"] },
+  { id: "threads", label: "Threads", hint: "https://threads.net/@handle", hosts: ["threads.net", "threads.com"] },
   { id: "tiktok", label: "TikTok", hint: "https://tiktok.com/@handle", hosts: ["tiktok.com"] },
+  { id: "github", label: "GitHub", hint: "https://github.com/username", hosts: ["github.com"] },
+  { id: "bluesky", label: "Bluesky", hint: "https://bsky.app/profile/handle", hosts: ["bsky.app"] },
 ];
 
 const nf = new Intl.NumberFormat("en-US");
@@ -46,7 +49,7 @@ function hostOf(url: string) {
 
 function Sparkline({ readings }: { readings: AudienceReading[] }) {
   const values = readings
-    .filter((reading) => reading.followers !== null)
+    .filter((reading) => isTrustedAudienceReading(reading))
     .slice(-12)
     .map((reading) => reading.followers as number);
   if (values.length < 2) {
@@ -149,6 +152,9 @@ export default function AudiencePage() {
       return;
     }
 
+    try { audienceProfile(platform, normalised); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Invalid profile URL"); return; }
+
     const duplicate = accounts.find((account) => account.url.toLowerCase() === normalised.toLowerCase());
     if (duplicate) {
       toast.info("This profile is already tracked");
@@ -173,16 +179,10 @@ export default function AudiencePage() {
   const refresh = async () => {
     setBusy(true);
     try {
-      const { updated } = await runAudienceCollector();
-      toast.success(
-        updated
-          ? `Checked ${updated} ${updated === 1 ? "profile" : "profiles"}`
-          : "Nothing to update",
-        {
-          description:
-            "Valid metrics are stored; failed/limited checks never overwrite the last good reading.",
-        },
-      );
+      const result = await runAudienceCollector();
+      if (!result.updated) toast.info("Add a profile before refreshing");
+      else if (!result.succeeded) toast.error("No current audience metrics retrieved", { description: "Every attempted profile was unavailable. See the exact reason and next action on each profile card." });
+      else toast[result.unavailable ? "warning" : "success"](`${result.succeeded}/${result.updated} profiles returned verified metrics`, { description: result.unavailable ? `${result.unavailable} unavailable; previous valid readings are preserved and labeled.` : "The displayed readings came from the stated source methods." });
     } catch (error: any) {
       toast.error("Audience refresh failed", { description: String(error?.message ?? error) });
     } finally {
@@ -229,7 +229,7 @@ export default function AudiencePage() {
               Measurement policy
             </div>
             <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted-foreground">
-              YouTube uses the official YouTube Data API when <code>YOUTUBE_API_KEY</code> is
+              GitHub and Bluesky support public official API counts. YouTube uses its official API when <code>YOUTUBE_API_KEY</code> is
               configured. Public-page fallbacks are accepted only when the returned page matches
               the requested profile identity and is not a login/challenge page. Hidden or uncertain
               counts stay unavailable — never zero, never guessed.
@@ -275,7 +275,7 @@ export default function AudiencePage() {
           {accounts.map((account) => {
             const list = byAccount.get(account.id) ?? [];
             const valid = list.filter(
-              (reading) => reading.followers !== null && reading.status === "ok",
+              (reading) => isTrustedAudienceReading(reading),
             );
             const latest = valid.at(-1);
             const previousComparable = latest
@@ -289,9 +289,9 @@ export default function AudiencePage() {
                       Boolean(reading.approximate) === Boolean(latest.approximate),
                   )
               : undefined;
-            const comparable = Boolean(latest && previousComparable);
+            const comparable = Boolean(latest && previousComparable && !latest.approximate && !previousComparable.approximate);
             const delta =
-              latest && previousComparable
+              latest && previousComparable && comparable
                 ? (latest.followers as number) - (previousComparable.followers as number)
                 : null;
             const DeltaIcon =
@@ -301,6 +301,11 @@ export default function AudiencePage() {
 
             return (
               <article key={account.id} className="cc-audience-card">
+                {account.lastEvidence && <div className={`mb-3 rounded-xl border p-3 text-xs ${account.lastStatus === "ok" ? "border-border text-muted-foreground" : "border-warning/30 text-warning"}`} role="status">
+                  <strong>{account.lastStatus === "ok" ? "Current measurement available" : "Current measurement unavailable"}</strong>
+                  <p className="mt-1">{account.lastEvidence}</p>
+                  {account.lastAction && <p className="mt-1 font-semibold">{account.lastAction}</p>}
+                </div>}
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -361,7 +366,7 @@ export default function AudiencePage() {
                 <div className="mt-4 flex items-end justify-between gap-3">
                   <div>
                     <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                      Followers
+                      {account.lastStatus !== "ok" && latest ? "Last valid follower reading (not current)" : "Followers"}
                     </div>
                     <div className="mt-0.5 text-3xl font-black tabular-nums tracking-tight text-foreground">
                       {latest?.followers !== null && latest?.followers !== undefined

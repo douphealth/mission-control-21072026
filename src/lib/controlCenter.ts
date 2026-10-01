@@ -1,3 +1,4 @@
+import { coverageOutcome, isOwnedDomainCoverage } from "./intelligenceRunQuality";
 // Client-side orchestration for the Control Center collectors.
 // Deterministic ranking always works; AI reranking is a bonus layer.
 
@@ -33,12 +34,13 @@ async function writeCollectorHealth(
   error?: string,
 ) {
   const now = new Date().toISOString();
+  const previous = await db.syncHealth.get(id);
   await db.syncHealth.put({
     id,
     label,
     status,
     lastAttemptAt: now,
-    lastSuccessAt: status === "ok" ? now : undefined,
+    lastSuccessAt: status === "ok" ? now : previous?.lastSuccessAt,
     detail,
     error,
   });
@@ -46,7 +48,7 @@ async function writeCollectorHealth(
 }
 
 export function canonicalUrl(raw: string): string {
-  return canonicalWebUrl(raw).toLowerCase();
+  return canonicalWebUrl(raw);
 }
 
 /** Local importance model: recency + source weight + topic hits. */
@@ -80,10 +82,10 @@ async function persistItems(
 ) {
   if (!incoming.length) return 0;
   const existing = (await db.streamItems.toArray()).filter((item) => item.kind === kind);
-  const seen = new Set(existing.map((i) => canonicalUrl(i.url)));
+  const seen = new Set(existing.map((i) => `${canonicalUrl(i.url)}${kind === "mention" ? `::${i.sourceId || i.matchedTerm || ""}` : ""}`));
   const fresh: StreamItem[] = [];
   for (const item of incoming) {
-    const key = canonicalUrl(item.url);
+    const key = `${canonicalUrl(item.url)}${kind === "mention" ? `::${item.sourceId || item.matchedTerm || ""}` : ""}`;
     if (!item.title || !item.url || seen.has(key)) continue;
     seen.add(key);
     fresh.push({
@@ -214,208 +216,97 @@ export async function runIndustryCollector(useAi = true) {
   return { added, errors };
 }
 
-export async function runMentionCollector(useAi = true) {
-  const terms = (await db.watchTerms.toArray()).filter((t) => t.enabled);
-  if (!terms.length) {
-    await writeCollectorHealth("mentions", "Mentions", "not-configured", "No enabled mention watch terms.");
-    queueCloudPush();
-    return { added: 0, errors: [] as string[] };
-  }
-  const results: Awaited<ReturnType<typeof collectMentions>>["results"] = [];
-  for (const batch of chunksOf(terms, 12)) {
-    const response = await collectMentions({
-      data: {
-        terms: batch.map((term) => ({
-          id: term.id,
-          term: term.term,
-          type: term.type,
-          anchors: term.anchors,
-          negatives: term.negatives,
-        })),
-      },
-    });
-    results.push(...response.results);
-  }
-
-  const now = new Date().toISOString();
+let mentionFlight: Promise<Awaited<ReturnType<typeof collectMentionsOnce>>> | null = null;
+export function runMentionCollector(useAi = true) {
+  if (!mentionFlight) mentionFlight = collectMentionsOnce(useAi).finally(() => { mentionFlight = null; });
+  return mentionFlight;
+}
+async function collectMentionsOnce(_useAi: boolean) {
+  const terms = (await db.watchTerms.toArray()).filter(t => t.enabled);
   const errors: string[] = [];
-  const payload: any[] = [];
-
-  for (const r of results) {
-    await db.watchTerms.update(r.termId, { lastCheckedAt: now });
-    markCloudRecordDirty("watchTerms", r.termId);
-    if (r.error) errors.push(`${r.term}: ${r.error}`);
-    for (const item of r.items) {
-      const sourcePublishedAt = item.publishedAt;
-      const publishedAt = sourcePublishedAt ?? now;
-      payload.push({
-        title: item.title,
-        url: item.url,
-        source: item.source ?? "",
-        sourceUrl: item.sourceUrl,
-        sourceId: r.termId,
-        summary: item.summary,
-        publishedAt,
-        dateBasis: sourcePublishedAt ? "published" : "discovered",
-        score: Math.min(100, localScore({ ...item, publishedAt }) + (item.confidence === "high" ? 15 : 5)),
-        matchedTerm: r.term,
-        matchedAnchors: item.matchedAnchors,
-        verification: item.verification,
-        verificationReason: item.verificationReason,
-        confidence: item.confidence,
-        corroborationCount: item.corroborationCount,
-        evidenceType:
-          Array.isArray((item as any).retrievalProviders) && (item as any).retrievalProviders.length > 1
-            ? "multi-news"
-            : (item as any).retrievalProvider === "bing-news"
-              ? "bing-news"
-              : (item as any).retrievalProvider === "dataforseo"
-                ? "dataforseo"
-                : "google-news",
-      });
+  const results: Awaited<ReturnType<typeof collectMentions>>["results"] = [];
+  for (const batch of chunksOf(terms, 3)) {
+    try {
+      const response = await collectMentions({ data: { terms: batch.map(t => ({ id: t.id, term: t.term, type: t.type, anchors: t.anchors, negatives: t.negatives })) } });
+      results.push(...response.results);
+    } catch (error) {
+      for (const t of batch) results.push({ termId: t.id, term: t.term, items: [], checked: false,
+        candidates: 0, excludedOwned: 0, rejected: 0, partial: true, providers: [], fetchedAt: new Date().toISOString(), cached: false,
+        error: error instanceof Error ? error.message : "Coverage service unavailable" });
     }
   }
-
-  // Reuse already-collected tracked-feed stories as a second, user-curated evidence source.
-  // This broadens coverage without introducing unverified web scraping.
-  const mentionLookback = Date.now() - 30 * 86_400_000;
-  const trackedStories = (await db.streamItems.where("kind").equals("industry").toArray()).filter(
-    (item) =>
-      item.status === "active" &&
-      new Date(item.publishedAt).getTime() >= mentionLookback,
-  );
-  for (const term of terms) {
-    for (const story of trackedStories) {
-      const verified = verifyMentionAgainstText(
-        term,
-        `${story.title} ${story.summary ?? ""}`,
-        story.sourceUrl,
-      );
-      if (!verified) continue;
-      payload.push({
-        title: story.title,
-        url: story.url,
-        source: story.source,
-        sourceUrl: story.sourceUrl,
-        sourceId: term.id,
-        summary: story.summary,
-        publishedAt: story.publishedAt,
-        dateBasis: story.dateBasis,
-        score: Math.min(
-          100,
-          localScore(
-            {
-              title: story.title,
-              summary: story.summary,
-              publishedAt: story.publishedAt,
-            },
-            term.anchors ?? [],
-          ) + (verified.confidence === "high" ? 15 : 5),
-        ),
-        matchedTerm: term.term,
-        matchedAnchors: verified.matchedAnchors,
-        verification: verified.verification,
-        verificationReason: verified.reason,
-        confidence: verified.confidence,
-        evidenceType: "tracked-feed",
-      });
-    }
+  const now = new Date().toISOString();
+  const payload: Omit<StreamItem, "id" | "kind" | "status" | "discoveredAt">[] = [];
+  for (const result of results) {
+    const watch = terms.find(t => t.id === result.termId);
+    await db.watchTerms.update(result.termId, { lastCheckedAt: now,
+      lastSuccessAt: result.checked ? result.fetchedAt : watch?.lastSuccessAt, lastError: result.error || undefined });
+    markCloudRecordDirty("watchTerms", result.termId);
+    if (result.error) errors.push(`${result.term}: ${result.error}`);
+    for (const item of result.items) payload.push({ ...item, source: item.source || "Publisher unavailable",
+      sourceId: result.termId, matchedTerm: result.term, publishedAt: item.publishedAt || result.fetchedAt,
+      dateBasis: item.publishedAt ? "published" : "discovered", score: localScore({ ...item, publishedAt: item.publishedAt || result.fetchedAt }),
+      evidenceType: "multi-news" });
   }
-
+  const cutoff = Date.now() - 30 * 86_400_000;
+  const stories = (await db.streamItems.where("kind").equals("industry").toArray()).filter(i => i.status === "active" && i.evidenceType === "direct-feed" && i.dateBasis === "published" && Date.parse(i.publishedAt) >= cutoff);
+  for (const term of terms) for (const story of stories) {
+    if (isOwnedDomainCoverage(term, story)) continue;
+    const identity = verifyMentionAgainstText(term, `${story.title} ${story.summary || ""}`, story.sourceUrl);
+    if (!identity) continue;
+    payload.push({ title: story.title, url: story.url, source: story.source, sourceUrl: story.sourceUrl,
+      sourceId: term.id, matchedTerm: term.term, summary: story.summary, publishedAt: story.publishedAt,
+      dateBasis: "published", score: localScore(story), verification: identity.verification,
+      verificationReason: identity.reason, confidence: identity.confidence, matchedAnchors: identity.matchedAnchors, evidenceType: "tracked-feed" });
+  }
   const added = await persistItems("mention", payload);
-  if (useAi && added)
-    await aiRerank("mention", "These are identity-filtered mentions of the operator’s own name, brand, handle, or domain.");
-  await writeCollectorHealth(
-    "mentions",
-    "Mentions",
-    errors.length === terms.length ? "error" : errors.length ? "stale" : "ok",
-    `${terms.length} enabled watch term${terms.length === 1 ? "" : "s"} scanned with identity filters.`,
-    errors.length ? errors.slice(0, 3).join(" · ") : undefined,
-  );
+  const checked = results.filter(r => r.checked).length;
+  const matched = new Set(payload.map(i => `${i.sourceId}:${canonicalUrl(i.url)}`)).size;
+  const failed = terms.length - checked;
+  const outcome = coverageOutcome(terms.length, failed, matched);
+  const partial = errors.length > 0 && checked > 0;
+  await writeCollectorHealth("mentions", "Mentions", outcome === "not-configured" ? "not-configured" : outcome === "unavailable" ? "error" : partial || outcome === "partial" ? "stale" : "ok",
+    `${checked}/${terms.length} watch terms checked; ${matched} matching results; ${added} newly stored. Identity matching is not fact-checking.`, errors.join(" · ") || undefined);
   queueCloudPush();
-  return { added, errors };
+  return { added, errors, checked, failed, matched, total: terms.length, partial, outcome, details: results.map(r => ({ term: r.term, checked: r.checked, matches: r.items.length, candidates: r.candidates, excludedOwned: r.excludedOwned, error: r.error, cached: r.cached, providers: r.providers })) };
 }
 
-export async function runAudienceCollector() {
+let audienceFlight: Promise<Awaited<ReturnType<typeof collectAudienceOnce>>> | null = null;
+export function runAudienceCollector() {
+  if (!audienceFlight) audienceFlight = collectAudienceOnce().finally(() => { audienceFlight = null; });
+  return audienceFlight;
+}
+async function collectAudienceOnce() {
   const accounts = await db.audienceAccounts.toArray();
-  if (!accounts.length) {
-    await writeCollectorHealth("audience", "Audience", "not-configured", "No audience profiles configured.");
-    queueCloudPush();
-    return { updated: 0 };
-  }
   const readings: Awaited<ReturnType<typeof collectAudience>>["readings"] = [];
-  for (const batch of chunksOf(accounts, 20)) {
-    const response = await collectAudience({
-      data: {
-        accounts: batch.map((account) => ({
-          id: account.id,
-          platform: account.platform,
-          url: account.url,
-        })),
-      },
-    });
+  for (const batch of chunksOf(accounts, 6)) {
+    const response = await collectAudience({ data: { accounts: batch.map(a => ({ id: a.id, platform: a.platform, url: a.url })) } });
     readings.push(...response.readings);
   }
-
-  const now = new Date().toISOString();
-  let updated = 0;
-  for (const r of readings) {
-    // Keep one anchor per 12h bucket so manual refreshes don't skew growth.
-    const prior = await db.audienceReadings.where("accountId").equals(r.accountId).toArray();
-    const recent = prior
-      .filter((p) => Date.now() - new Date(p.capturedAt).getTime() < 12 * 3_600_000)
-      .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
-
-    const trusted = isTrustedAudienceReading(r);
+  let succeeded = 0;
+  for (const reading of readings) {
+    const trusted = isTrustedAudienceReading(reading);
+    const account = accounts.find(a => a.id === reading.accountId);
     if (trusted) {
-      if (recent) {
-        await db.audienceReadings.update(recent.id, {
-          followers: r.followers,
-          posts: r.posts,
-          capturedAt: now,
-          status: r.status,
-          method: r.method,
-          provider: r.provider,
-          confidence: r.confidence,
-          evidence: r.evidence,
-          approximate: r.approximate,
-          identityVerified: r.identityVerified,
-        });
-        markCloudRecordDirty("audienceReadings", recent.id);
-      } else {
-        const rec = {
-          id: genId(),
-          accountId: r.accountId,
-          capturedAt: now,
-          followers: r.followers,
-          posts: r.posts,
-          status: r.status,
-          method: r.method,
-          provider: r.provider,
-          confidence: r.confidence,
-          evidence: r.evidence,
-          approximate: r.approximate,
-          identityVerified: r.identityVerified,
-        };
-        await db.audienceReadings.put(rec);
-        markCloudRecordDirty("audienceReadings", rec.id);
-      }
+      succeeded++;
+      const prior = await db.audienceReadings.where("accountId").equals(reading.accountId).toArray();
+      const recent = prior.filter(p => isTrustedAudienceReading(p) && Date.parse(reading.capturedAt) - Date.parse(p.capturedAt) < 12 * 3_600_000).sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
+      const record = { ...reading, id: recent?.id || genId() };
+      await db.audienceReadings.put(record);
+      markCloudRecordDirty("audienceReadings", record.id);
     }
-    // Failed/limited checks update account health but never overwrite the last valid metric.
-    await db.audienceAccounts.update(r.accountId, { lastCheckedAt: now, lastStatus: r.status });
-    markCloudRecordDirty("audienceAccounts", r.accountId);
-    updated++;
+    await db.audienceAccounts.update(reading.accountId, { lastCheckedAt: reading.capturedAt,
+      lastStatus: trusted ? "ok" : reading.status === "ok" ? "unavailable" : reading.status,
+      lastEvidence: reading.evidence, lastAction: reading.action, lastError: trusted ? undefined : reading.errorCode || "metric-unavailable",
+      lastSuccessAt: trusted ? reading.capturedAt : account?.lastSuccessAt });
+    markCloudRecordDirty("audienceAccounts", reading.accountId);
   }
-  const okCount = readings.filter((reading) => isTrustedAudienceReading(reading)).length;
-  await writeCollectorHealth(
-    "audience",
-    "Audience",
-    okCount === readings.length ? "ok" : okCount > 0 ? "stale" : "error",
-    `${okCount}/${readings.length} profile${readings.length === 1 ? "" : "s"} returned a usable metric.`,
-    okCount === readings.length ? undefined : "Some platforms did not expose a reliable current count.",
-  );
+  const unavailable = readings.length - succeeded;
+  const details = readings.map(r => ({ ...r, label: accounts.find(a => a.id === r.accountId)?.handle || r.accountId }));
+  await writeCollectorHealth("audience", "Audience", !accounts.length ? "not-configured" : !succeeded ? "error" : unavailable ? "stale" : "ok",
+    `${succeeded}/${readings.length} profiles returned a current verified metric.`, unavailable ? details.filter(r => !isTrustedAudienceReading(r)).map(r => `${r.label}: ${r.evidence}`).join(" · ") : undefined);
   queueCloudPush();
-  return { updated };
+  return { updated: readings.length, succeeded, unavailable, details };
 }
 
 export async function runAllCollectors(useAi = true) {

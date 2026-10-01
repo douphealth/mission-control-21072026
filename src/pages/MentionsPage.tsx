@@ -1,3 +1,4 @@
+import { isOwnedDomainCoverage } from "@/lib/intelligenceRunQuality";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -34,13 +35,15 @@ export default function MentionsPage() {
   const [negatives, setNegatives] = useState("");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
-  const [confidence, setConfidence] = useState<"all" | "high" | "medium">("high");
+  const [confidence, setConfidence] = useState<"all" | "high" | "medium">("all");
   const autoScanStarted = useRef(false);
+  const [report, setReport] = useState<Awaited<ReturnType<typeof runMentionCollector>> | null>(null);
 
   const mentions = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items
       .filter((item) => item.kind === "mention" && item.status === "active")
+      .filter(item => { const watch = terms.find(t => t.id === item.sourceId); return !watch || !isOwnedDomainCoverage(watch, item); })
       .filter((item) => confidence === "all" || item.confidence === confidence)
       .filter((item) =>
         !q
@@ -56,7 +59,7 @@ export default function MentionsPage() {
         return rank(a.confidence) - rank(b.confidence) || b.publishedAt.localeCompare(a.publishedAt);
       })
       .slice(0, 160);
-  }, [items, search, confidence]);
+  }, [items, search, confidence, terms]);
 
   const highConfidence = items.filter(
     (item) =>
@@ -137,13 +140,11 @@ export default function MentionsPage() {
   const refresh = async () => {
     setBusy(true);
     try {
-      const { added, errors } = await runMentionCollector();
-      toast[errors.length && !added ? "warning" : "success"](
-        added ? `${added} new verified mention${added === 1 ? "" : "s"}` : "No new verified mentions",
-        {
-          description: errors.slice(0, 3).join(" · ") || undefined,
-        },
-      );
+      const result = await runMentionCollector();
+      setReport(result);
+      if (result.outcome === "unavailable") toast.error("Mention coverage unavailable", { description: "No provider completed the scan. This is not evidence that no mentions exist." });
+      else if (result.partial || result.failed) toast.warning("Mention scan partially completed", { description: `${result.checked}/${result.total} terms checked; ${result.matched} matches, ${result.added} newly saved.` });
+      else toast.success(result.added ? `${result.added} new identity-matched mentions` : result.matched ? `${result.matched} matches already in your stream` : "Scan completed: no matching external coverage", { description: "Search results cover the providers checked, not the entire web. Owned-domain articles are excluded." });
     } catch (error: any) {
       toast.error("Mention scan failed", { description: String(error?.message ?? error) });
     } finally {
@@ -168,6 +169,14 @@ export default function MentionsPage() {
         }
       />
 
+      {report && <Panel>
+        <div role="status" className="text-sm font-bold">{report.checked}/{report.total} terms checked · {report.matched} matches · {report.added} new</div>
+        <p className="mt-1 text-xs text-muted-foreground">Identity matched in retrieved titles/snippets; not independently fact-checked. Undated web results are discovery evidence, not new publications.</p>
+        <div className="mt-3 space-y-2">{report.details.map(detail => <div key={detail.term} className="rounded-xl border border-border p-3 text-xs">
+          <strong>{detail.term}</strong>: {detail.checked ? `${detail.matches} matches from ${detail.candidates} candidates; ${detail.excludedOwned} owned pages excluded` : "Not checked successfully"}{detail.cached ? " · cached lookup (up to 5 minutes)" : ""}
+          {detail.error && <p className="mt-1 text-warning">{detail.error}</p>}
+        </div>)}</div>
+      </Panel>}
       <section className="grid gap-2 sm:grid-cols-4">
         {[
           ["Enabled terms", enabledTerms.length, "primary"],
@@ -196,7 +205,7 @@ export default function MentionsPage() {
             </p>
           </div>
           <span className="rounded-full border border-info/20 bg-info/8 px-2.5 py-1 text-[9px] font-bold text-info">
-            Multi-provider live coverage + tracked feeds
+            Web search + news + tracked feeds
           </span>
         </div>
 
@@ -253,7 +262,7 @@ export default function MentionsPage() {
                   <div className="mt-1 text-[9px] text-muted-foreground">
                     {watch.anchors?.length ? `${watch.anchors.length} anchor${watch.anchors.length === 1 ? "" : "s"}` : "No anchors"}
                     {" · "}
-                    {watch.lastCheckedAt ? `scanned ${relTime(watch.lastCheckedAt)}` : "never scanned"}
+                    {watch.lastSuccessAt ? `last successful lookup ${relTime(watch.lastSuccessAt)}` : "no successful lookup recorded"}
                   </div>
                   {!!watch.negatives?.length && (
                     <div className="mt-1 truncate text-[8px] text-muted-foreground/70">
@@ -328,10 +337,10 @@ export default function MentionsPage() {
 
       {mentions.length === 0 ? (
         <EmptyState
-          title={terms.length ? "No verified mentions match these filters" : "Add a term to watch"}
+          title={terms.length ? "No identity-matched mentions in this view" : "Add a term to watch"}
           hint={
             terms.length
-              ? "A zero here means the identity filters rejected ambiguous coverage or no current live/tracked source produced a verified match."
+              ? "Check the scan report above: failed providers mean unknown coverage, not zero mentions. Successful searches may return no matching external coverage."
               : "Start with your brand/domain. For personal names, add identity anchors before scanning."
           }
         />
