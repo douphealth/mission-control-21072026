@@ -151,24 +151,33 @@ export default function WorkspacePulseBar() {
     (item) => item.kind === "industry" && item.status === "active",
   );
   const freshStories = activeStories.filter(
-    (item) => Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
+    (item) => Date.now() - new Date(item.publishedAt).getTime() <= 24 * 3_600_000,
   );
   const activeMentions = stream.filter(
     (item) => item.kind === "mention" && item.status === "active",
   );
   const freshVerifiedMentions = activeMentions.filter(
     (item) =>
-      (item.confidence === "high" || item.confidence === "medium") &&
+      item.confidence === "high" &&
       Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
+  );
+  const trackedFeedMentions = activeMentions.filter(
+    (item) => item.evidenceType === "tracked-feed",
   );
   const enabledTerms = terms.filter((term) => term.enabled);
   const freshAudienceAccounts = new Set(
     readings
       .filter(
         (reading) =>
+          reading.status === "ok" &&
           reading.followers !== null &&
           Date.now() - new Date(reading.capturedAt).getTime() <= 24 * 3_600_000,
       )
+      .map((reading) => reading.accountId),
+  );
+  const officialAudienceAccounts = new Set(
+    readings
+      .filter((reading) => reading.status === "ok" && reading.method === "official-api")
       .map((reading) => reading.accountId),
   );
   const audienceUnavailable = accounts.filter(
@@ -416,11 +425,11 @@ export default function WorkspacePulseBar() {
     industry: {
       group: "Systems & tools",
       label: "Trends pulse",
-      subtitle: "Focused industry monitoring from sources you explicitly track.",
+      subtitle: "Current subject research plus publisher feeds, with freshness and evidence provenance.",
       icon: Newspaper,
       stats: [
-        { label: "Enabled sources", value: enabledFeeds.length, tone: "primary" },
-        { label: "Fresh 7d", value: freshStories.length, tone: "info" },
+        { label: "Fresh <24h", value: freshStories.length, tone: "info" },
+        { label: "Tracked sources", value: enabledFeeds.length, tone: "primary" },
         { label: "Collector", value: healthState("feeds").replace("-", " "), tone: healthState("feeds") === "ok" ? "success" : healthState("feeds") === "error" ? "danger" : healthState("feeds") === "stale" ? "warning" : "neutral" },
       ],
       related: [
@@ -432,12 +441,12 @@ export default function WorkspacePulseBar() {
     mentions: {
       group: "Systems & tools",
       label: "Mentions pulse",
-      subtitle: "Monitor brands and domains with anchors and negative filters to reduce noise.",
+      subtitle: "Identity-verified monitoring across current news and your tracked publisher feeds.",
       icon: AtSign,
       stats: [
-        { label: "Enabled terms", value: enabledTerms.length, tone: "primary" },
-        { label: "Verified 7d", value: freshVerifiedMentions.length, tone: "violet" },
-        { label: "Collector", value: healthState("mentions").replace("-", " "), tone: healthState("mentions") === "ok" ? "success" : "neutral" },
+        { label: "High confidence 7d", value: freshVerifiedMentions.length, tone: "violet" },
+        { label: "Tracked-feed matches", value: trackedFeedMentions.length, tone: "info" },
+        { label: "Collector", value: healthState("mentions").replace("-", " "), tone: healthState("mentions") === "ok" ? "success" : healthState("mentions") === "error" ? "danger" : "neutral" },
       ],
       related: [
         { label: "Captures", section: "control-center" },
@@ -448,12 +457,12 @@ export default function WorkspacePulseBar() {
     audience: {
       group: "Systems & tools",
       label: "Audience pulse",
-      subtitle: "Track public profiles while keeping unavailable metrics blank rather than zero.",
+      subtitle: "Observed profile metrics with explicit method, confidence, freshness and failure states.",
       icon: Users,
       stats: [
-        { label: "Profiles", value: accounts.length, tone: "primary" },
-        { label: "Fresh <24h", value: freshAudienceAccounts.size, tone: "success" },
-        { label: "Collector", value: healthState("audience").replace("-", " "), tone: healthState("audience") === "ok" ? "success" : audienceUnavailable.length ? "warning" : "neutral" },
+        { label: "Fresh valid <24h", value: freshAudienceAccounts.size, tone: "success" },
+        { label: "Official API", value: officialAudienceAccounts.size, tone: "info" },
+        { label: "Collector", value: healthState("audience").replace("-", " "), tone: healthState("audience") === "ok" ? "success" : audienceUnavailable.length ? "warning" : healthState("audience") === "error" ? "danger" : "neutral" },
       ],
       related: [
         { label: "Mentions", section: "mentions" },
