@@ -156,6 +156,7 @@ export default function IndustryPage() {
         .filter(
           (story) =>
             story.evidenceType === "direct-feed" &&
+            story.dateBasis === "published" &&
             new Date(story.publishedAt).getTime() >= minTime,
         )
         .filter((story) => {
