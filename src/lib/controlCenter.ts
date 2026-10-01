@@ -12,6 +12,26 @@ import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 const LAST_RUN_KEY = "mc-cc-last-run";
 
+async function writeCollectorHealth(
+  id: string,
+  label: string,
+  status: "ok" | "stale" | "error" | "not-configured" | "syncing",
+  detail: string,
+  error?: string,
+) {
+  const now = new Date().toISOString();
+  await db.syncHealth.put({
+    id,
+    label,
+    status,
+    lastAttemptAt: now,
+    lastSuccessAt: status === "ok" ? now : undefined,
+    detail,
+    error,
+  });
+  markCloudRecordDirty("syncHealth", id);
+}
+
 export function canonicalUrl(raw: string): string {
   try {
     const u = new URL(raw);
@@ -104,7 +124,11 @@ async function aiRerank(kind: StreamKind, context?: string) {
 
 export async function runIndustryCollector(useAi = true) {
   const sources = (await db.feedSources.toArray()).filter((s) => s.enabled);
-  if (!sources.length) return { added: 0, errors: [] as string[] };
+  if (!sources.length) {
+    await writeCollectorHealth("feeds", "Trends", "not-configured", "No enabled trend sources.");
+    queueCloudPush();
+    return { added: 0, errors: [] as string[] };
+  }
   const { results } = await collectIndustry({
     data: {
       sources: sources.map((s) => ({
@@ -152,12 +176,24 @@ export async function runIndustryCollector(useAi = true) {
 
   const added = await persistItems("industry", payload);
   if (useAi && added) await aiRerank("industry");
+  await writeCollectorHealth(
+    "feeds",
+    "Trends",
+    errors.length === sources.length ? "error" : errors.length ? "stale" : "ok",
+    `${sources.length} enabled source${sources.length === 1 ? "" : "s"} checked.`,
+    errors.length ? errors.slice(0, 3).join(" · ") : undefined,
+  );
+  queueCloudPush();
   return { added, errors };
 }
 
 export async function runMentionCollector(useAi = true) {
   const terms = (await db.watchTerms.toArray()).filter((t) => t.enabled);
-  if (!terms.length) return { added: 0, errors: [] as string[] };
+  if (!terms.length) {
+    await writeCollectorHealth("mentions", "Mentions", "not-configured", "No enabled mention watch terms.");
+    queueCloudPush();
+    return { added: 0, errors: [] as string[] };
+  }
   const { results } = await collectMentions({
     data: {
       terms: terms.slice(0, 12).map((t) => ({
@@ -199,13 +235,25 @@ export async function runMentionCollector(useAi = true) {
 
   const added = await persistItems("mention", payload);
   if (useAi && added)
-    await aiRerank("mention", "These are mentions of the operator’s own name or brand.");
+    await aiRerank("mention", "These are identity-filtered mentions of the operator’s own name, brand, handle, or domain.");
+  await writeCollectorHealth(
+    "mentions",
+    "Mentions",
+    errors.length === terms.length ? "error" : errors.length ? "stale" : "ok",
+    `${terms.length} enabled watch term${terms.length === 1 ? "" : "s"} scanned with identity filters.`,
+    errors.length ? errors.slice(0, 3).join(" · ") : undefined,
+  );
+  queueCloudPush();
   return { added, errors };
 }
 
 export async function runAudienceCollector() {
   const accounts = await db.audienceAccounts.toArray();
-  if (!accounts.length) return { updated: 0 };
+  if (!accounts.length) {
+    await writeCollectorHealth("audience", "Audience", "not-configured", "No audience profiles configured.");
+    queueCloudPush();
+    return { updated: 0 };
+  }
   const { readings } = await collectAudience({
     data: accounts.map
       ? { accounts: accounts.map((a) => ({ id: a.id, platform: a.platform, url: a.url })) }
@@ -253,6 +301,15 @@ export async function runAudienceCollector() {
     markCloudRecordDirty("audienceAccounts", r.accountId);
     updated++;
   }
+  const latestStatuses = readings.map((reading) => reading.status);
+  const okCount = latestStatuses.filter((status) => status === "ok").length;
+  await writeCollectorHealth(
+    "audience",
+    "Audience",
+    okCount === readings.length ? "ok" : okCount > 0 ? "stale" : "error",
+    `${okCount}/${readings.length} profile${readings.length === 1 ? "" : "s"} returned a usable metric.`,
+    okCount === readings.length ? undefined : "Some platforms did not expose a reliable current count.",
+  );
   queueCloudPush();
   return { updated };
 }
