@@ -149,7 +149,7 @@ export default function MentionsPage() {
     <div className="space-y-5">
       <CCHeader
         title="Brand Mentions"
-        subtitle="Identity-filtered monitoring from current Google News publisher coverage. Exact domains/handles and anchored names are high-confidence; ambiguous matches are rejected."
+        subtitle="Identity-filtered monitoring across current Google News publisher coverage plus your tracked publisher feeds. Exact domains/handles and anchored names are high-confidence; ambiguous matches are rejected."
         actions={
           <button
             onClick={() => void refresh()}
@@ -190,7 +190,7 @@ export default function MentionsPage() {
             </p>
           </div>
           <span className="rounded-full border border-info/20 bg-info/8 px-2.5 py-1 text-[9px] font-bold text-info">
-            Google News coverage scope
+            Google News + tracked feeds
           </span>
         </div>
 
