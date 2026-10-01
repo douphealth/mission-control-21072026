@@ -158,7 +158,7 @@ async function readRemote(accessToken: string, currentEpoch: number) {
 }
 async function writeRemote(fileId: string | undefined, backup: RemoteBackup, accessToken: string, currentEpoch: number): Promise<string> {
   const name = `${PREFIX}${backup.writerId}.json`;
-  const metadata = fileId ? { name } : { name, parents: ['appDataFolder'] };
+  const metadata = fileId ? { name } : { name, parents: ["appDataFolder"] };
   const boundary = `mc_${crypto.randomUUID()}`;
   const body = [
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
@@ -168,7 +168,7 @@ async function writeRemote(fileId: string | undefined, backup: RemoteBackup, acc
   const saved = await driveJson<{ id: string }>(target, accessToken, currentEpoch, {
     method: fileId ? 'PATCH' : 'POST', headers: { 'Content-Type': `multipart/related; boundary=${boundary}` }, body,
   });
-  if (!saved.id) throw new Error('Drive did not acknowledge the write. Changes remain queued.');
+  if (!saved.id) throw new Error('Google Drive backup failed: Drive did not acknowledge the write. Changes remain queued.');
   remoteCache.delete(saved.id);
   return saved.id;
 }
