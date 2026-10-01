@@ -34,6 +34,7 @@ import {
   Newspaper,
   AtSign,
   Users,
+  WandSparkles,
 } from "lucide-react";
 import {
   useWebsites,
@@ -64,6 +65,13 @@ const sections = [
     icon: Home,
     emoji: "🏠",
     keywords: ["home", "overview", "main"],
+  },
+  {
+    id: "demo",
+    label: "Guided Demo",
+    icon: WandSparkles,
+    emoji: "✨",
+    keywords: ["demo", "guide", "tour", "tutorial", "workflow", "how to use"],
   },
   {
     id: "tasks",

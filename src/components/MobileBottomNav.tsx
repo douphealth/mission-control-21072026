@@ -27,6 +27,7 @@ import {
   Users,
   Home,
   AppWindow,
+  WandSparkles,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
@@ -56,6 +57,7 @@ const moreItems = [
   { id: "builds", label: "Builds", icon: Hammer },
   { id: "links", label: "Links", icon: Link2 },
   { id: "dashboard", label: "Dashboard", icon: Home },
+  { id: "demo", label: "Guided Demo", icon: WandSparkles },
   { id: "settings", label: "Settings", icon: Settings },
 ];
 

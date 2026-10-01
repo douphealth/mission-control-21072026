@@ -47,6 +47,7 @@ import {
   Leaf,
   Blocks,
   AppWindow,
+  WandSparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -60,6 +61,7 @@ const navGroups = [
       { id: "projects", label: "Projects", icon: PanelsTopLeft },
       { id: "calendar", label: "Calendar", icon: Calendar },
       { id: "notes", label: "Notes", icon: FileText },
+      { id: "demo", label: "Guided Demo", icon: WandSparkles },
     ],
   },
   {
