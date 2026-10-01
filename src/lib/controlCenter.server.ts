@@ -127,8 +127,16 @@ export async function discoverFeed(pageUrl: string): Promise<string | null> {
   return null;
 }
 
-export function googleNewsUrl(query: string): string {
-  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+export function googleNewsUrl(
+  query: string,
+  locale?: { hl: string; gl: string; ceid: string },
+): string {
+  const resolved =
+    locale ??
+    (/[Ͱ-Ͽἀ-῿]/i.test(query)
+      ? { hl: "el", gl: "GR", ceid: "GR:el" }
+      : { hl: "en-US", gl: "US", ceid: "US:en" });
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${encodeURIComponent(resolved.hl)}&gl=${encodeURIComponent(resolved.gl)}&ceid=${encodeURIComponent(resolved.ceid)}`;
 }
 
 function youtubeIdentity(url: string): { id?: string; handle?: string } {
