@@ -147,7 +147,6 @@ export default function WorkspacePulseBar() {
   const habitsDone = habits.filter((habit) => habit.completions.includes(today));
   const activeLinks = links.filter((link) => link.status === "active");
   const enabledFeeds = feeds.filter((source) => source.enabled);
-  const feedErrors = feeds.filter((source) => Boolean(source.lastError));
   const activeStories = stream.filter(
     (item) => item.kind === "industry" && item.status === "active",
   );
