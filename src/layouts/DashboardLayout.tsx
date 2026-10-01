@@ -39,7 +39,6 @@ const CredentialsPage = lazy(() => import("@/pages/CredentialsPage"));
 const SEOPage = lazy(() => import("@/pages/SEOPage"));
 const CloudflarePage = lazy(() => import("@/pages/CloudflarePage"));
 const VercelPage = lazy(() => import("@/pages/VercelPage"));
-const OpenClawPage = lazy(() => import("@/pages/OpenClawPage"));
 const HabitsPage = lazy(() => import("@/pages/HabitsPage"));
 const ReviewPage = lazy(() => import("@/pages/ReviewPage"));
 const NowTodayPage = lazy(() => import("@/pages/NowTodayPage"));
@@ -75,7 +74,6 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   seo: SEOPage,
   cloudflare: CloudflarePage,
   vercel: VercelPage,
-  openclaw: OpenClawPage,
   habits: HabitsPage,
   review: ReviewPage,
   "control-center": ControlCenterPage,
