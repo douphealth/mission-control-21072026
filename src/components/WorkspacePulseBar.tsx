@@ -162,9 +162,6 @@ export default function WorkspacePulseBar() {
       Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
   );
   const enabledTerms = terms.filter((term) => term.enabled);
-  const accountsWithReadings = new Set(
-    readings.filter((reading) => reading.followers !== null).map((reading) => reading.accountId),
-  );
   const freshAudienceAccounts = new Set(
     readings
       .filter(
@@ -423,7 +420,7 @@ export default function WorkspacePulseBar() {
       icon: Newspaper,
       stats: [
         { label: "Enabled sources", value: enabledFeeds.length, tone: "primary" },
-        { label: "Active stories", value: activeStories.length, tone: "info" },
+        { label: "Fresh 7d", value: freshStories.length, tone: "info" },
         { label: "Collector", value: healthState("feeds").replace("-", " "), tone: healthState("feeds") === "ok" ? "success" : healthState("feeds") === "error" ? "danger" : healthState("feeds") === "stale" ? "warning" : "neutral" },
       ],
       related: [
