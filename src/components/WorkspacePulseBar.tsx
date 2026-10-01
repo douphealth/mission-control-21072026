@@ -20,7 +20,6 @@ import {
   RefreshCcw,
   Rocket,
   Scale,
-  ServerCog,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -80,7 +79,6 @@ const MANAGED = new Set([
   "google-tasks",
   "cloudflare",
   "vercel",
-  "openclaw",
   "ideas",
   "habits",
   "credentials",
@@ -191,12 +189,6 @@ export default function WorkspacePulseBar() {
     (site.hostingProvider || "").toLowerCase().includes("cloudflare"),
   );
   const vercelBuilds = builds.filter((build) => build.platform === "vercel");
-  const openClawBuilds = builds.filter((build) =>
-    [build.name, build.productName, build.description].some((value) =>
-      (value || "").toLowerCase().includes("openclaw"),
-    ),
-  );
-
   const healthState = (id: string) => health.find((item) => item.id === id)?.status ?? "not-configured";
 
   const config: Record<string, PulseConfig> = {
@@ -345,22 +337,6 @@ export default function WorkspacePulseBar() {
       ],
       truth: "Project/deployment counts on the page are live only when the Vercel API responds.",
     },
-    openclaw: {
-      group: "Systems & tools",
-      label: "OpenClaw pulse",
-      subtitle: "Track OpenClaw services without assuming an endpoint is healthy before probing it.",
-      icon: ServerCog,
-      stats: [
-        { label: "Related builds", value: openClawBuilds.length, tone: "primary" },
-        { label: "Related links", value: activeLinks.filter((link) => link.title.toLowerCase().includes("openclaw") || link.url.toLowerCase().includes("openclaw")).length, tone: "info" },
-        { label: "Probe health", value: healthState("openclaw").replace("-", " "), tone: healthState("openclaw") === "ok" ? "success" : "neutral" },
-      ],
-      related: [
-        { label: "Build Projects", section: "builds" },
-        { label: "Links Hub", section: "links" },
-      ],
-      truth: "Service health remains unknown until an actual probe succeeds.",
-    },
     ideas: {
       group: "Systems & tools",
       label: "Ideas pipeline pulse",
@@ -429,7 +405,7 @@ export default function WorkspacePulseBar() {
     industry: {
       group: "Systems & tools",
       label: "Trends pulse",
-      subtitle: "Fresh subject research plus publisher feeds, ranked by real query relevance and evidence provenance.",
+      subtitle: "High-signal subject research ranked by relevance, freshness, publisher identity and independent-source corroboration.",
       icon: Newspaper,
       stats: [
         { label: "Fresh <24h", value: freshStories.length, tone: "info" },
@@ -440,12 +416,12 @@ export default function WorkspacePulseBar() {
         { label: "Captures", section: "control-center" },
         { label: "Ideas", section: "ideas" },
       ],
-      truth: "Search results are freshness-scoped, Unicode-aware, relevance-filtered and retain publisher evidence.",
+      truth: "Search-provider duplication never counts as independent verification; independent publishers and tracked feeds carry more evidence weight.",
     },
     mentions: {
       group: "Systems & tools",
       label: "Mentions pulse",
-      subtitle: "Exact identity monitoring across current news and tracked publisher feeds, with ambiguous matches rejected.",
+      subtitle: "Precision-first identity monitoring across web, news and tracked feeds, with owned pages and ambiguous matches rejected.",
       icon: AtSign,
       stats: [
         { label: "High confidence 7d", value: freshVerifiedMentions.length, tone: "violet" },
@@ -456,12 +432,12 @@ export default function WorkspacePulseBar() {
         { label: "Captures", section: "control-center" },
         { label: "Audience", section: "audience" },
       ],
-      truth: "High-confidence mentions require exact domain/handle identity or exact name/brand plus configured anchors.",
+      truth: "High-confidence mentions require exact identity evidence; provider failure and zero verified matches remain separate states.",
     },
     audience: {
       group: "Systems & tools",
       label: "Audience pulse",
-      subtitle: "Observed profile metrics with explicit method, confidence, freshness and failure states.",
+      subtitle: "Verified profile measurements with explicit provider, method, identity proof, freshness and failure diagnostics.",
       icon: Users,
       stats: [
         { label: "Fresh valid <24h", value: freshAudienceAccounts.size, tone: "success" },
@@ -472,7 +448,7 @@ export default function WorkspacePulseBar() {
         { label: "Mentions", section: "mentions" },
         { label: "Trends", section: "industry" },
       ],
-      truth: "Only official API or identity-verified public-page measurements count as valid; failures preserve prior verified data.",
+      truth: "Only official APIs or identity-bound public profile data count as valid; unavailable metrics stay blank and prior verified readings are preserved.",
     },
     focus: {
       group: "Systems & tools",
