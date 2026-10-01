@@ -74,15 +74,26 @@ export default function PaymentsPage() {
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  const totalIncome = payments
-    .filter((p) => p.type === "income" && p.status === "paid")
-    .reduce((s, p) => s + p.amount, 0);
-  const totalExpenses = payments
-    .filter((p) => (p.type === "expense" || p.type === "subscription") && p.status === "paid")
-    .reduce((s, p) => s + p.amount, 0);
-  const pendingAmount = payments
-    .filter((p) => p.status === "pending" || p.status === "overdue")
-    .reduce((s, p) => s + p.amount, 0);
+  const currencySummary = payments.reduce(
+    (acc, payment) => {
+      const currency = (payment.currency || "USD").toUpperCase();
+      const row = acc[currency] || { income: 0, expenses: 0, pending: 0 };
+      if (payment.status === "paid" && payment.type === "income") row.income += payment.amount;
+      if (
+        payment.status === "paid" &&
+        (payment.type === "expense" || payment.type === "subscription")
+      ) {
+        row.expenses += payment.amount;
+      }
+      if (payment.status === "pending" || payment.status === "overdue") {
+        row.pending += payment.amount;
+      }
+      acc[currency] = row;
+      return acc;
+    },
+    {} as Record<string, { income: number; expenses: number; pending: number }>,
+  );
+  const currencyRows = Object.entries(currencySummary).sort(([a], [b]) => a.localeCompare(b));
   const overdueCount = payments.filter((p) => p.status === "overdue").length;
 
   const openAdd = () => {
@@ -263,52 +274,58 @@ export default function PaymentsPage() {
         />
       )}
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          {
-            label: "Total Income",
-            value: fmt(totalIncome),
-            icon: ArrowUpRight,
-            color: "text-success",
-            bg: "from-success/15 to-success/5",
-          },
-          {
-            label: "Total Expenses",
-            value: fmt(totalExpenses),
-            icon: ArrowDownRight,
-            color: "text-destructive",
-            bg: "from-destructive/15 to-destructive/5",
-          },
-          {
-            label: "Net Profit",
-            value: fmt(totalIncome - totalExpenses),
-            icon: TrendingUp,
-            color: totalIncome - totalExpenses >= 0 ? "text-success" : "text-destructive",
-            bg: "from-primary/15 to-primary/5",
-          },
-          {
-            label: "Pending",
-            value: fmt(pendingAmount),
-            icon: RefreshCw,
-            color: "text-warning",
-            bg: "from-warning/15 to-warning/5",
-          },
-        ].map((s, i) => (
-          <div key={s.label} className="card-elevated p-4">
-            <div className="flex items-center gap-3">
-              <div
-                className={`w-10 h-10 rounded-xl bg-gradient-to-br ${s.bg} flex items-center justify-center`}
-              >
-                <s.icon size={18} className={s.color} />
-              </div>
-              <div>
-                <div className={`text-xl font-bold ${s.color}`}>{s.value}</div>
-                <div className="text-xs text-muted-foreground">{s.label}</div>
-              </div>
+      {/* Currency-safe summary — never add unlike currencies together. */}
+      <div className="card-elevated overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-3">
+          <div>
+            <div className="text-sm font-bold text-foreground">Finance summary</div>
+            <div className="text-[10px] text-muted-foreground">
+              Totals are grouped by currency. Mission Control never combines unlike currencies.
             </div>
           </div>
-        ))}
+          <span className="badge badge-primary">
+            {currencyRows.length || 0} {currencyRows.length === 1 ? "currency" : "currencies"}
+          </span>
+        </div>
+        {currencyRows.length === 0 ? (
+          <div className="px-4 py-5 text-sm text-muted-foreground">
+            Add real finance records to calculate totals.
+          </div>
+        ) : (
+          <div className="divide-y divide-border/35">
+            {currencyRows.map(([currency, row]) => (
+              <div
+                key={currency}
+                className="grid grid-cols-2 gap-2 px-4 py-3 sm:grid-cols-[110px_repeat(4,minmax(0,1fr))] sm:items-center"
+              >
+                <div className="col-span-2 flex items-center gap-2 sm:col-span-1">
+                  <span className="rounded-lg bg-secondary px-2 py-1 font-mono text-xs font-black text-foreground">
+                    {currency}
+                  </span>
+                </div>
+                {[
+                  { label: "Income", value: row.income, color: "text-success" },
+                  { label: "Expenses", value: row.expenses, color: "text-destructive" },
+                  {
+                    label: "Net",
+                    value: row.income - row.expenses,
+                    color: row.income - row.expenses >= 0 ? "text-success" : "text-destructive",
+                  },
+                  { label: "Pending", value: row.pending, color: "text-warning" },
+                ].map((metric) => (
+                  <div key={metric.label} className="rounded-xl bg-secondary/35 px-3 py-2">
+                    <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
+                      {metric.label}
+                    </div>
+                    <div className={`mt-0.5 text-sm font-extrabold ${metric.color}`}>
+                      {fmt(metric.value, currency)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Filters */}
