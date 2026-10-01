@@ -269,34 +269,37 @@ export async function runAudienceCollector() {
       .filter((p) => Date.now() - new Date(p.capturedAt).getTime() < 12 * 3_600_000)
       .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
 
-    if (recent) {
-      await db.audienceReadings.update(recent.id, {
-        followers: r.followers,
-        posts: r.posts,
-        capturedAt: now,
-        status: r.status,
-        method: r.method,
-        provider: r.provider,
-        confidence: r.confidence,
-        evidence: r.evidence,
-      });
-      markCloudRecordDirty("audienceReadings", recent.id);
-    } else {
-      const rec = {
-        id: genId(),
-        accountId: r.accountId,
-        capturedAt: now,
-        followers: r.followers,
-        posts: r.posts,
-        status: r.status,
-        method: r.method,
-        provider: r.provider,
-        confidence: r.confidence,
-        evidence: r.evidence,
-      };
-      await db.audienceReadings.put(rec);
-      markCloudRecordDirty("audienceReadings", rec.id);
+    if (r.status === "ok" && r.followers !== null) {
+      if (recent) {
+        await db.audienceReadings.update(recent.id, {
+          followers: r.followers,
+          posts: r.posts,
+          capturedAt: now,
+          status: r.status,
+          method: r.method,
+          provider: r.provider,
+          confidence: r.confidence,
+          evidence: r.evidence,
+        });
+        markCloudRecordDirty("audienceReadings", recent.id);
+      } else {
+        const rec = {
+          id: genId(),
+          accountId: r.accountId,
+          capturedAt: now,
+          followers: r.followers,
+          posts: r.posts,
+          status: r.status,
+          method: r.method,
+          provider: r.provider,
+          confidence: r.confidence,
+          evidence: r.evidence,
+        };
+        await db.audienceReadings.put(rec);
+        markCloudRecordDirty("audienceReadings", rec.id);
+      }
     }
+    // Failed/limited checks update account health but never overwrite the last valid metric.
     await db.audienceAccounts.update(r.accountId, { lastCheckedAt: now, lastStatus: r.status });
     markCloudRecordDirty("audienceAccounts", r.accountId);
     updated++;
