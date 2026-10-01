@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
   ExternalLink,
@@ -74,6 +74,7 @@ export default function AudiencePage() {
   const [platform, setPlatform] = useState<AudiencePlatform>("youtube");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const autoRefreshStarted = useRef(false);
 
   const byAccount = useMemo(() => {
     const map = new Map<string, AudienceReading[]>();
@@ -108,6 +109,20 @@ export default function AudiencePage() {
   const unavailable = accounts.filter(
     (account) => account.lastStatus === "limited" || account.lastStatus === "unavailable",
   ).length;
+
+  useEffect(() => {
+    if (autoRefreshStarted.current || !accounts.length) return;
+    const stale = accounts.some(
+      (account) =>
+        !account.lastCheckedAt ||
+        Date.now() - new Date(account.lastCheckedAt).getTime() > 12 * 3_600_000,
+    );
+    if (!stale) return;
+    autoRefreshStarted.current = true;
+    void runAudienceCollector().catch(() => {
+      // Account/collector status surfaces failures; auto-refresh stays quiet.
+    });
+  }, [accounts]);
 
   const addAccount = async () => {
     const clean = url.trim();
