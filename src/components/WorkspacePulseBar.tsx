@@ -151,7 +151,9 @@ export default function WorkspacePulseBar() {
     (item) => item.kind === "industry" && item.status === "active",
   );
   const freshStories = activeStories.filter(
-    (item) => Date.now() - new Date(item.publishedAt).getTime() <= 24 * 3_600_000,
+    (item) =>
+      item.dateBasis === "published" &&
+      Date.now() - new Date(item.publishedAt).getTime() <= 24 * 3_600_000,
   );
   const activeMentions = stream.filter(
     (item) => item.kind === "mention" && item.status === "active",
@@ -159,6 +161,7 @@ export default function WorkspacePulseBar() {
   const freshVerifiedMentions = activeMentions.filter(
     (item) =>
       item.confidence === "high" &&
+      item.dateBasis === "published" &&
       Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
   );
   const trackedFeedMentions = activeMentions.filter(
