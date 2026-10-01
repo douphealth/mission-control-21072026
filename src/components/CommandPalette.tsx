@@ -327,7 +327,7 @@ const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = 
         id: `payment-${p.id}`,
         type: "data" as const,
         label: p.title,
-        sub: `$${p.amount} · ${p.status}`,
+        sub: `${(p.currency || "USD").toUpperCase()} ${p.amount} · ${p.status}`,
         action: () => {
           ctx.setActiveSection("payments");
           ctx.onClose();
