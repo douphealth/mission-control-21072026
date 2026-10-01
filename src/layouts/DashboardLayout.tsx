@@ -3,6 +3,7 @@ import TopBar from "@/components/TopBar";
 import StatusBar from "@/components/StatusBar";
 import MobileBottomNav from "@/components/MobileBottomNav";
 import DailyBriefingBanner from "@/components/DailyBriefingBanner";
+import WorkspacePulseBar from "@/components/WorkspacePulseBar";
 
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DashboardProvider, useDashboardOptional } from "@/contexts/DashboardContext";
@@ -161,6 +162,8 @@ export default function DashboardLayout() {
             {(activeSection === "tasks" ||
               activeSection === "focus" ||
               activeSection === "review") && <DailyBriefingBanner />}
+
+            <WorkspacePulseBar />
 
             <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
               <Suspense fallback={<LoadingSkeleton />}>
