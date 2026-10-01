@@ -160,6 +160,7 @@ async function readYouTubeOfficial(url: string): Promise<{
   provider: string;
   confidence: "high";
   evidence: string;
+  approximate?: boolean;
 } | null> {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) return null;
@@ -299,7 +300,7 @@ export async function readAudience(
       const postsMatch = html.match(
         /"(?:videoCount|edge_owner_to_timeline_media|videoCountText)"[^\d]{0,20}(\d+)/i,
       );
-      const approximate = /[KMB]/i.test(raw);
+      const approximate = raw ? /[KMB]/i.test(raw) : false;
       return {
         followers: value,
         posts: postsMatch ? Number(postsMatch[1]) : null,
