@@ -559,8 +559,10 @@ export interface StreamItem {
   matchedTerm?: string;
   matchedAnchors?: string[];
   verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand" | "topic-search" | "feed";
+  verificationReason?: string;
   confidence?: "high" | "medium" | "low";
   corroborationCount?: number;
+  relevanceScore?: number;
   /** Where this evidence was collected. */
   evidenceType?: "direct-feed" | "tracked-feed" | "google-news" | "manual";
   read?: boolean;
@@ -612,6 +614,8 @@ export interface AudienceReading {
   evidence?: string;
   /** True when a compact public value such as 12.3K was expanded approximately. */
   approximate?: boolean;
+  /** True only when the returned public page was tied to the requested profile identity. */
+  identityVerified?: boolean;
 }
 
 export interface Reminder {
