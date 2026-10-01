@@ -283,7 +283,9 @@ export default function AudiencePage() {
                   .reverse()
                   .find(
                     (reading) =>
-                      reading.method === latest.method && reading.provider === latest.provider,
+                      reading.method === latest.method &&
+                      reading.provider === latest.provider &&
+                      Boolean(reading.approximate) === Boolean(latest.approximate),
                   )
               : undefined;
             const comparable = Boolean(latest && previousComparable);
