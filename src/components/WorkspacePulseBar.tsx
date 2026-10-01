@@ -279,7 +279,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Linked local tasks", value: linkedGoogleTasks.length, tone: "primary" },
         { label: "Open linked", value: linkedGoogleTasks.filter((task) => task.status !== "done").length, tone: "info" },
-        { label: "Connector", value: healthState("google-calendar").replace("-", " "), tone: healthState("google-calendar") === "ok" ? "success" : "neutral" },
+        { label: "Connector", value: healthState("google-tasks").replace("-", " "), tone: healthState("google-tasks") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Tasks", section: "tasks" },
@@ -295,7 +295,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Known hosted sites", value: cloudflareSites.length, tone: "info" },
         { label: "Saved credentials", value: credentials.filter((c) => (c.service + " " + c.label).toLowerCase().includes("cloudflare")).length, tone: "violet" },
-        { label: "Portfolio links", value: activeLinks.filter((link) => link.url.includes("cloudflare.com")).length, tone: "neutral" },
+        { label: "Connector", value: healthState("cloudflare").replace("-", " "), tone: healthState("cloudflare") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Websites", section: "websites" },
@@ -311,7 +311,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Local Vercel builds", value: vercelBuilds.length, tone: "primary" },
         { label: "Saved credentials", value: credentials.filter((c) => (c.service + " " + c.label).toLowerCase().includes("vercel")).length, tone: "violet" },
-        { label: "Vercel links", value: activeLinks.filter((link) => link.url.includes("vercel.com")).length, tone: "neutral" },
+        { label: "Connector", value: healthState("vercel").replace("-", " "), tone: healthState("vercel") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Build Projects", section: "builds" },
@@ -327,7 +327,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Related builds", value: openClawBuilds.length, tone: "primary" },
         { label: "Related links", value: activeLinks.filter((link) => link.title.toLowerCase().includes("openclaw") || link.url.toLowerCase().includes("openclaw")).length, tone: "info" },
-        { label: "Watch terms", value: terms.filter((term) => term.term.toLowerCase().includes("openclaw")).length, tone: "neutral" },
+        { label: "Probe health", value: healthState("openclaw").replace("-", " "), tone: healthState("openclaw") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Build Projects", section: "builds" },
