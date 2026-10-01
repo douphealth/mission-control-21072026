@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parseFeed } from "../controlCenter.server";
 import { canonicalUrl, localScore } from "../controlCenter";
+import {
+  containsExactPhrase,
+  isTrustedAudienceReading,
+  matchIdentity,
+  queryRelevance,
+  titleSimilarity,
+} from "../intelligenceQuality";
 
 describe("control-center intelligence evidence", () => {
   it("preserves publisher name and publisher URL from RSS source metadata", () => {
@@ -42,5 +49,75 @@ describe("control-center intelligence evidence", () => {
       ["Google Search", "ranking", "indexing"],
     );
     expect(fresh).toBeGreaterThan(stale);
+  });
+  it("matches exact identity phrases without substring false positives", () => {
+    expect(containsExactPhrase("Alexandra Papaioannou launched a site", "Alex")).toBe(false);
+    expect(containsExactPhrase("Alex Papaioannou launched a site", "Alex Papaioannou")).toBe(true);
+  });
+
+  it("requires identity anchors for personal-name verification", () => {
+    expect(
+      matchIdentity({
+        term: "Alex Papaioannou",
+        type: "name",
+        anchors: ["Mission Control"],
+        text: "Alex Papaioannou discussed an unrelated topic.",
+      }),
+    ).toBeNull();
+
+    expect(
+      matchIdentity({
+        term: "Alex Papaioannou",
+        type: "name",
+        anchors: ["Mission Control"],
+        text: "Alex Papaioannou shipped a Mission Control update.",
+      })?.confidence,
+    ).toBe("high");
+  });
+
+  it("requires an exact @handle rather than a bare token", () => {
+    expect(
+      matchIdentity({ term: "@gearuptofit", type: "handle", text: "gearuptofit was mentioned" }),
+    ).toBeNull();
+    expect(
+      matchIdentity({ term: "@gearuptofit", type: "handle", text: "Follow @gearuptofit for updates" })
+        ?.verification,
+    ).toBe("exact-handle");
+  });
+
+  it("scores Greek and English subject relevance with Unicode-safe tokens", () => {
+    expect(
+      queryRelevance(
+        "ενημέρωση Google αναζήτησης",
+        "Νέα ενημέρωση Google αναζήτησης αλλάζει την ευρετηρίαση",
+      ),
+    ).toBeGreaterThanOrEqual(60);
+    expect(titleSimilarity("Νέα ενημέρωση Google αναζήτησης", "Google αναζήτηση: νέα ενημέρωση")).toBeGreaterThan(0.5);
+  });
+
+  it("accepts only official or identity-verified audience readings", () => {
+    expect(
+      isTrustedAudienceReading({
+        status: "ok",
+        followers: 1200,
+        method: "public-page",
+        identityVerified: false,
+      }),
+    ).toBe(false);
+    expect(
+      isTrustedAudienceReading({
+        status: "ok",
+        followers: 1200,
+        method: "public-page",
+        identityVerified: true,
+      }),
+    ).toBe(true);
+    expect(
+      isTrustedAudienceReading({
+        status: "ok",
+        followers: 1200,
+        method: "official-api",
+      }),
+    ).toBe(true);
   });
 });
