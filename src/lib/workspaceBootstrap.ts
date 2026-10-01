@@ -444,9 +444,56 @@ export async function ensureWorkspaceBootstrap() {
       (await putIfMissing<LinkItem>(
         db.links,
         "links",
-        async () => Boolean(await db.links.filter((row) => row.url.toLowerCase() === link.url.toLowerCase()).first()),
+        async () =>
+          Boolean(
+            await db.links
+              .filter((row) => row.url.toLowerCase() === link.url.toLowerCase())
+              .first(),
+          ),
         link,
       )) || changed;
+  }
+
+  const portfolioWebsites = await db.websites.toArray();
+  for (const website of portfolioWebsites) {
+    const verifiedLinks: Array<Omit<LinkItem, "id">> = [
+      {
+        title: website.name,
+        url: website.url,
+        category: "Websites",
+        status: "active",
+        description: website.primaryGoal || website.niche || website.notes || "Portfolio website",
+        dateAdded: today(),
+        pinned: website.priority === "critical",
+        favicon: website.favicon,
+        tags: ["portfolio", "production", ...(website.tags || [])],
+      },
+      ...(website.appUrls || []).map((url) => ({
+        title: website.name + " · " + domainOf(url),
+        url,
+        category: "Apps",
+        status: "active" as const,
+        description: "Production app/funnel connected to " + website.name,
+        dateAdded: today(),
+        pinned: website.priority === "critical",
+        tags: ["portfolio", "app", "production"],
+      })),
+    ];
+
+    for (const link of verifiedLinks) {
+      changed =
+        (await putIfMissing<LinkItem>(
+          db.links,
+          "links",
+          async () =>
+            Boolean(
+              await db.links
+                .filter((row) => row.url.toLowerCase() === link.url.toLowerCase())
+                .first(),
+            ),
+          link,
+        )) || changed;
+    }
   }
 
   for (const feed of FEED_SOURCES) {
