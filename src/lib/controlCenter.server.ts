@@ -199,6 +199,7 @@ async function readYouTubeOfficial(url: string): Promise<{
         provider: "YouTube Data API",
         confidence: "high",
         evidence: "Official API returned no matching channel.",
+        approximate: false,
       };
     }
     const stats = item.statistics;
@@ -215,6 +216,7 @@ async function readYouTubeOfficial(url: string): Promise<{
       provider: "YouTube Data API",
       confidence: "high",
       evidence: "Official channels.list statistics response.",
+      approximate: false,
     };
   } catch {
     return null;
@@ -243,6 +245,7 @@ export async function readAudience(
   provider: string;
   confidence: "high" | "medium" | "low";
   evidence: string;
+  approximate?: boolean;
 }> {
   if (platform === "youtube") {
     const official = await readYouTubeOfficial(url);
@@ -261,6 +264,7 @@ export async function readAudience(
       provider: "Public profile page",
       confidence: "low",
       evidence: "Profile page could not be fetched from the server.",
+      approximate: false,
     };
   }
 
@@ -289,19 +293,24 @@ export async function readAudience(
 
   for (const re of patterns[platform] ?? []) {
     const m = html.match(re);
-    const value = m ? num(m[1]) : null;
+    const raw = m?.[1];
+    const value = raw ? num(raw) : null;
     if (value !== null && value >= 0) {
       const postsMatch = html.match(
         /"(?:videoCount|edge_owner_to_timeline_media|videoCountText)"[^\d]{0,20}(\d+)/i,
       );
+      const approximate = /[KMB]/i.test(raw);
       return {
         followers: value,
         posts: postsMatch ? Number(postsMatch[1]) : null,
         status: "ok",
         method: "public-page",
         provider: "Public profile page",
-        confidence: "medium",
-        evidence: "Count parsed from publicly returned profile HTML; platform markup can change.",
+        confidence: approximate ? "low" : "medium",
+        evidence: approximate
+          ? "Compact public count parsed from profile HTML and expanded approximately."
+          : "Count parsed from publicly returned profile HTML; platform markup can change.",
+        approximate,
       };
     }
   }
@@ -313,5 +322,6 @@ export async function readAudience(
     provider: "Public profile page",
     confidence: "low",
     evidence: "The platform did not expose a reliable public count in the returned page.",
+    approximate: false,
   };
 }
