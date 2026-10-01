@@ -356,20 +356,48 @@ export default function VoiceCapture() {
     const inferredLanguage = inferLanguageFromTranscript(cleaned);
     if (inferredLanguage) rememberLanguageHint(inferredLanguage);
 
-    const local = classifyTranscript(cleaned);
-    transcriptManuallyEditedRef.current = false;
-    setTranscript(local.transcript);
-    setAiResult({
-      ...local,
-      source: "browser",
-      provider: "browser",
-      language:
-        languageRef.current !== "auto"
-          ? languageRef.current
-          : inferredLanguage,
-    });
-    if (typeAuto) setType(local.type);
-    setPhase("ready");
+    setPhase("processing");
+    void smartCapture(
+      null,
+      cleaned,
+      languageRef.current,
+      languageRef.current === "auto" ? adaptiveLanguageHintRef.current : languageRef.current,
+    )
+      .then((result) => {
+        const safeTranscript = sanitizeVoiceTranscript(result.transcript || cleaned);
+        const finalResult = result.transcript
+          ? result
+          : {
+              ...classifyTranscript(cleaned),
+              source: "browser" as const,
+              provider: "browser" as const,
+              language:
+                languageRef.current !== "auto"
+                  ? languageRef.current
+                  : inferredLanguage,
+            };
+        transcriptManuallyEditedRef.current = false;
+        setTranscript(safeTranscript);
+        setAiResult({ ...finalResult, transcript: safeTranscript });
+        if (typeAuto) setType(finalResult.type);
+        setPhase("ready");
+      })
+      .catch(() => {
+        const local = classifyTranscript(cleaned);
+        transcriptManuallyEditedRef.current = false;
+        setTranscript(local.transcript);
+        setAiResult({
+          ...local,
+          source: "browser",
+          provider: "browser",
+          language:
+            languageRef.current !== "auto"
+              ? languageRef.current
+              : inferredLanguage,
+        });
+        if (typeAuto) setType(local.type);
+        setPhase("ready");
+      });
   }, [cleanupRecognition, rememberLanguageHint, typeAuto]);
 
   const stopRecording = useCallback(
