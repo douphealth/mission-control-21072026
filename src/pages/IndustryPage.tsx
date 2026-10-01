@@ -147,12 +147,57 @@ export default function IndustryPage() {
     setSearching(true);
     try {
       const response = await searchIndustryTopic({ data: { query: clean, days } });
-      setSearchStories(response.items);
+      const queryTokens = clean
+        .toLowerCase()
+        .split(/[^a-z0-9Ͱ-Ͽἀ-῿]+/i)
+        .filter((token) => token.length >= 3);
+      const minTime = Date.now() - days * 86_400_000;
+      const trackedMatches: SearchStory[] = stories
+        .filter(
+          (story) =>
+            story.evidenceType === "direct-feed" &&
+            new Date(story.publishedAt).getTime() >= minTime,
+        )
+        .filter((story) => {
+          const hay = `${story.title} ${story.summary ?? ""}`.toLowerCase();
+          return queryTokens.length ? queryTokens.some((token) => hay.includes(token)) : false;
+        })
+        .map((story) => ({
+          title: story.title,
+          url: story.url,
+          summary: story.summary,
+          publishedAt: story.publishedAt,
+          source: story.source,
+          sourceUrl: story.sourceUrl,
+          corroborationCount: story.corroborationCount,
+          evidenceLevel: "high",
+          evidenceReason: "Direct match from a publisher/feed source you explicitly track.",
+        }));
+
+      const merged = new Map<string, SearchStory>();
+      [...trackedMatches, ...response.items].forEach((story) => {
+        if (!merged.has(story.url)) merged.set(story.url, story);
+      });
+      const rank = (story: SearchStory) =>
+        story.evidenceLevel === "high" ? 0 : story.evidenceLevel === "medium" ? 1 : 2;
+      const combined = [...merged.values()].sort(
+        (a, b) =>
+          rank(a) - rank(b) ||
+          new Date(b.publishedAt || response.fetchedAt).getTime() -
+            new Date(a.publishedAt || response.fetchedAt).getTime(),
+      );
+
+      setSearchStories(combined);
       setSearchedAt(response.fetchedAt);
       toast.success(
-        response.items.length
-          ? `${response.items.length} current results for “${clean}”`
+        combined.length
+          ? `${combined.length} current results for “${clean}”`
           : `No recent results for “${clean}”`,
+        {
+          description: trackedMatches.length
+            ? `${trackedMatches.length} match${trackedMatches.length === 1 ? "" : "es"} from your tracked publisher feeds included.`
+            : undefined,
+        },
       );
     } catch (error: any) {
       toast.error("Live topic search failed", { description: String(error?.message ?? error) });
