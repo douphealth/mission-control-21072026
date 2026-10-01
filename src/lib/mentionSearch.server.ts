@@ -2,8 +2,11 @@ import { parseFeed, googleNewsUrl, hostOf, type RawItem } from './controlCenter.
 import { canonicalWebUrl, isRecentIso } from './intelligenceQuality';
 import { mapLimited } from './intelligenceRunQuality';
 
+export interface MentionSearchItem extends RawItem {
+  retrievalProviders: string[];
+}
 export interface MentionCoverage {
-  items: RawItem[];
+  items: MentionSearchItem[];
   providers: Array<{ name: string; ok: boolean; count: number; error?: string }>;
   fetchedAt: string;
   cached: boolean;
@@ -79,11 +82,18 @@ export async function searchExternalMentions(query: string): Promise<MentionCove
   const operation = (async () => {
     const hasOrganicApi = Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
     const sources = [
+      ...(hasOrganicApi ? [{
+        name: 'DataForSEO web search',
+        run: () => organic(query),
+      }] : []),
       {
-        name: hasOrganicApi ? 'DataForSEO web search' : 'Bing web RSS',
-        run: () => hasOrganicApi ? organic(query) : rss(`https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`),
+        name: 'Bing web RSS',
+        run: () => rss(`https://www.bing.com/search?format=rss&q=${encodeURIComponent(query)}`),
       },
-      { name: 'Google News RSS', run: () => rss(googleNewsUrl(`${query} when:30d`)) },
+      {
+        name: 'Google News RSS',
+        run: () => rss(googleNewsUrl(`${query} when:30d`)),
+      },
     ];
     const results = await mapLimited(sources, 2, async source => {
       try {
@@ -96,12 +106,24 @@ export async function searchExternalMentions(query: string): Promise<MentionCove
         } };
       }
     });
-    const dedup = new Map<string, RawItem>();
-    for (const { items } of results) {
-      for (const item of items) {
+    const dedup = new Map<string, MentionSearchItem>();
+    for (const result of results) {
+      for (const item of result.items) {
         // Undated web results are discovery evidence, never asserted to be new publications.
         if (item.publishedAt && !isRecentIso(item.publishedAt, 30)) continue;
-        dedup.set(canonicalWebUrl(item.url), item);
+        const key = canonicalWebUrl(item.url);
+        const existing = dedup.get(key);
+        if (!existing) {
+          dedup.set(key, { ...item, retrievalProviders: [result.status.name] });
+          continue;
+        }
+        if (!existing.retrievalProviders.includes(result.status.name)) {
+          existing.retrievalProviders.push(result.status.name);
+        }
+        if (!existing.summary && item.summary) existing.summary = item.summary;
+        if (!existing.publishedAt && item.publishedAt) existing.publishedAt = item.publishedAt;
+        if (!existing.source && item.source) existing.source = item.source;
+        if (!existing.sourceUrl && item.sourceUrl) existing.sourceUrl = item.sourceUrl;
       }
     }
     const value: MentionCoverage = {
