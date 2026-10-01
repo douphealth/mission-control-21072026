@@ -150,12 +150,29 @@ export default function WorkspacePulseBar() {
   const activeStories = stream.filter(
     (item) => item.kind === "industry" && item.status === "active",
   );
+  const freshStories = activeStories.filter(
+    (item) => Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
+  );
   const activeMentions = stream.filter(
     (item) => item.kind === "mention" && item.status === "active",
+  );
+  const freshVerifiedMentions = activeMentions.filter(
+    (item) =>
+      (item.confidence === "high" || item.confidence === "medium") &&
+      Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
   );
   const enabledTerms = terms.filter((term) => term.enabled);
   const accountsWithReadings = new Set(
     readings.filter((reading) => reading.followers !== null).map((reading) => reading.accountId),
+  );
+  const freshAudienceAccounts = new Set(
+    readings
+      .filter(
+        (reading) =>
+          reading.followers !== null &&
+          Date.now() - new Date(reading.capturedAt).getTime() <= 24 * 3_600_000,
+      )
+      .map((reading) => reading.accountId),
   );
   const audienceUnavailable = accounts.filter(
     (account) => account.lastStatus === "unavailable" || account.lastStatus === "limited",
@@ -211,7 +228,7 @@ export default function WorkspacePulseBar() {
       subtitle: "One intake surface for trends, verified mentions, audience observations and reminders.",
       icon: Radar,
       stats: [
-        { label: "Active stories", value: activeStories.length, tone: "info" },
+        { label: "Fresh 7d", value: freshStories.length, tone: "info" },
         { label: "Mentions", value: activeMentions.length, tone: "violet" },
         { label: "Due reminders", value: dueReminders.length, tone: dueReminders.length ? "warning" : "success" },
       ],
@@ -422,7 +439,7 @@ export default function WorkspacePulseBar() {
       icon: AtSign,
       stats: [
         { label: "Enabled terms", value: enabledTerms.length, tone: "primary" },
-        { label: "Active mentions", value: activeMentions.length, tone: "violet" },
+        { label: "Verified 7d", value: freshVerifiedMentions.length, tone: "violet" },
         { label: "Collector", value: healthState("mentions").replace("-", " "), tone: healthState("mentions") === "ok" ? "success" : "neutral" },
       ],
       related: [
@@ -438,7 +455,7 @@ export default function WorkspacePulseBar() {
       icon: Users,
       stats: [
         { label: "Profiles", value: accounts.length, tone: "primary" },
-        { label: "With readings", value: accountsWithReadings.size, tone: "success" },
+        { label: "Fresh <24h", value: freshAudienceAccounts.size, tone: "success" },
         { label: "Collector", value: healthState("audience").replace("-", " "), tone: healthState("audience") === "ok" ? "success" : audienceUnavailable.length ? "warning" : "neutral" },
       ],
       related: [
