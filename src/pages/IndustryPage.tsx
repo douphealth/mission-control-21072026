@@ -269,7 +269,7 @@ export default function IndustryPage() {
           <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted-foreground">
             Searches multiple current coverage providers for the subject you enter and merges them
             with your tracked publisher feeds. Results are deduplicated, freshness-filtered and
-            ranked by subject relevance, publisher attribution and independent corroboration.
+            ranked by subject relevance, publication freshness, publisher-domain identity and independent-publisher corroboration. Search-engine duplication is never treated as independent evidence.
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
             <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/65 px-3">
@@ -312,7 +312,7 @@ export default function IndustryPage() {
             <div>
               <div className="text-sm font-extrabold text-foreground">Live search results</div>
               <div className="mt-1 text-[10px] text-muted-foreground">
-                “{query.trim()}” · {searchStories.length} results · fetched {relTime(searchedAt)}
+                “{query.trim()}” · {searchStories.length} evidence-qualified results · fetched {relTime(searchedAt)}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {(["medium", "high", "all"] as const).map((level) => (
@@ -375,7 +375,7 @@ export default function IndustryPage() {
                         {(story.corroborationCount || 0) > 0 && (
                           <>
                             <span>·</span>
-                            <span>{story.corroborationCount} similar publisher result{story.corroborationCount === 1 ? "" : "s"}</span>
+                            <span>{story.corroborationCount + 1} independent publisher domains</span>
                           </>
                         )}
                         {story.evidenceLevel && (
@@ -420,8 +420,8 @@ export default function IndustryPage() {
               })
             ) : (
               <EmptyState
-                title="No current coverage found"
-                hint="Try a broader subject or a longer freshness window."
+                title="No current evidence-qualified coverage found"
+                hint="Try a broader subject or a longer freshness window. Missing or weak evidence is filtered rather than padded with low-quality results."
               />
             )}
           </div>
