@@ -46,6 +46,64 @@ export function canonicalUrl(raw: string): string {
 }
 
 /** Local importance model: recency + source weight + topic hits. */
+function verifyMentionAgainstText(
+  term: { term: string; type: string; anchors?: string[]; negatives?: string[] },
+  text: string,
+  sourceUrl?: string,
+) {
+  const hay = text.toLowerCase();
+  const clean = term.term.replace(/^@/, "").trim().toLowerCase();
+  const anchors = (term.anchors ?? []).map((value) => value.toLowerCase()).filter(Boolean);
+  const negatives = (term.negatives ?? []).map((value) => value.toLowerCase()).filter(Boolean);
+  if (!clean || negatives.some((negative) => hay.includes(negative))) return null;
+
+  const matchedAnchors = anchors.filter((anchor) => hay.includes(anchor));
+  const sourceHost = (() => {
+    try {
+      return sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase() : "";
+    } catch {
+      return "";
+    }
+  })();
+
+  if (term.type === "domain") {
+    const exact =
+      sourceHost === clean ||
+      sourceHost.endsWith("." + clean) ||
+      hay.includes(clean);
+    return exact
+      ? { verification: "exact-domain" as const, confidence: "high" as const, matchedAnchors }
+      : null;
+  }
+
+  if (term.type === "handle") {
+    const exact =
+      hay.includes("@" + clean) ||
+      hay.split(/[^a-z0-9_]+/).includes(clean);
+    return exact
+      ? { verification: "exact-handle" as const, confidence: "high" as const, matchedAnchors }
+      : null;
+  }
+
+  const exactPhrase = hay.includes(clean);
+  if (!exactPhrase) return null;
+
+  if (term.type === "name") {
+    if (!matchedAnchors.length) return null;
+    return {
+      verification: "anchored-name" as const,
+      confidence: "high" as const,
+      matchedAnchors,
+    };
+  }
+
+  return {
+    verification: "exact-brand" as const,
+    confidence: matchedAnchors.length ? ("high" as const) : ("medium" as const),
+    matchedAnchors,
+  };
+}
+
 export function localScore(
   item: { title: string; summary?: string; publishedAt: string },
   topics: string[] = [],
@@ -67,7 +125,7 @@ async function persistItems(
   incoming: Omit<StreamItem, "id" | "kind" | "status" | "discoveredAt">[],
 ) {
   if (!incoming.length) return 0;
-  const existing = await db.streamItems.toArray();
+  const existing = (await db.streamItems.toArray()).filter((item) => item.kind === kind);
   const seen = new Set(existing.map((i) => canonicalUrl(i.url)));
   const fresh: StreamItem[] = [];
   for (const item of incoming) {
@@ -170,6 +228,7 @@ export async function runIndustryCollector(useAi = true) {
         score: localScore({ ...item, publishedAt }, allTopics),
         verification: src ? "feed" : "topic-search",
         confidence: src ? "high" : "medium",
+        evidenceType: src ? "direct-feed" : "google-news",
       });
     }
   }
@@ -229,6 +288,48 @@ export async function runMentionCollector(useAi = true) {
         matchedAnchors: item.matchedAnchors,
         verification: item.verification,
         confidence: item.confidence,
+        evidenceType: "google-news",
+      });
+    }
+  }
+
+  // Reuse already-collected tracked-feed stories as a second, user-curated evidence source.
+  // This broadens coverage without introducing unverified web scraping.
+  const trackedStories = (await db.streamItems.where("kind").equals("industry").toArray()).filter(
+    (item) => item.status === "active",
+  );
+  for (const term of terms) {
+    for (const story of trackedStories) {
+      const verified = verifyMentionAgainstText(
+        term,
+        `${story.title} ${story.summary ?? ""}`,
+        story.sourceUrl,
+      );
+      if (!verified) continue;
+      payload.push({
+        title: story.title,
+        url: story.url,
+        source: story.source,
+        sourceUrl: story.sourceUrl,
+        sourceId: term.id,
+        summary: story.summary,
+        publishedAt: story.publishedAt,
+        score: Math.min(
+          100,
+          localScore(
+            {
+              title: story.title,
+              summary: story.summary,
+              publishedAt: story.publishedAt,
+            },
+            term.anchors ?? [],
+          ) + (verified.confidence === "high" ? 15 : 5),
+        ),
+        matchedTerm: term.term,
+        matchedAnchors: verified.matchedAnchors,
+        verification: verified.verification,
+        confidence: verified.confidence,
+        evidenceType: "tracked-feed",
       });
     }
   }
@@ -280,6 +381,7 @@ export async function runAudienceCollector() {
           provider: r.provider,
           confidence: r.confidence,
           evidence: r.evidence,
+          approximate: r.approximate,
         });
         markCloudRecordDirty("audienceReadings", recent.id);
       } else {
@@ -294,6 +396,7 @@ export async function runAudienceCollector() {
           provider: r.provider,
           confidence: r.confidence,
           evidence: r.evidence,
+          approximate: r.approximate,
         };
         await db.audienceReadings.put(rec);
         markCloudRecordDirty("audienceReadings", rec.id);
