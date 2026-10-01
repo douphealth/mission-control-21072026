@@ -1,6 +1,8 @@
 // Server-only collection helpers for the Control Center.
 // Pure fetch + string parsing — no DOM, no native deps (Worker-safe).
 
+import { containsExactPhrase, normalizeIntelText } from "./intelligenceQuality";
+
 export interface RawItem {
   title: string;
   url: string;
@@ -161,6 +163,7 @@ async function readYouTubeOfficial(url: string): Promise<{
   confidence: "high";
   evidence: string;
   approximate?: boolean;
+  identityVerified: true;
 } | null> {
   const key = process.env.YOUTUBE_API_KEY;
   if (!key) return null;
@@ -201,6 +204,7 @@ async function readYouTubeOfficial(url: string): Promise<{
         confidence: "high",
         evidence: "Official API returned no matching channel.",
         approximate: false,
+        identityVerified: true,
       };
     }
     const stats = item.statistics;
@@ -218,6 +222,7 @@ async function readYouTubeOfficial(url: string): Promise<{
       confidence: "high",
       evidence: "Official channels.list statistics response.",
       approximate: false,
+      identityVerified: true,
     };
   } catch {
     return null;
@@ -234,6 +239,53 @@ export function hostOf(url: string): string {
   }
 }
 
+function audienceIdentity(platform: string, url: string): string[] {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    const candidates = new Set<string>();
+    const last = parts.at(-1)?.replace(/^@/, "").trim();
+    if (last && !["channel", "company", "in", "pages", "profile.php"].includes(last)) {
+      candidates.add(last);
+    }
+    const at = parts.find((part) => part.startsWith("@"));
+    if (at) candidates.add(at.slice(1));
+    if (platform === "youtube") {
+      const identity = youtubeIdentity(url);
+      if (identity.handle) candidates.add(identity.handle);
+      if (identity.id) candidates.add(identity.id);
+    }
+    return [...candidates].filter((value) => value.length >= 2);
+  } catch {
+    return [];
+  }
+}
+
+function profilePageLooksBlocked(html: string): boolean {
+  const sample = normalizeIntelText(html.slice(0, 220_000));
+  return [
+    "log in to continue",
+    "login to continue",
+    "sign in to continue",
+    "challenge required",
+    "captcha",
+    "verify you are human",
+    "access denied",
+    "temporarily blocked",
+    "unusual traffic",
+  ].some((phrase) => sample.includes(phrase));
+}
+
+function profileIdentityVerified(platform: string, url: string, html: string): boolean {
+  const identities = audienceIdentity(platform, url);
+  if (!identities.length) return false;
+  const head = html.slice(0, 260_000);
+  return identities.some((identity) =>
+    containsExactPhrase(head, identity) ||
+    normalizeIntelText(head).includes("@" + normalizeIntelText(identity)),
+  );
+}
+
 /** Audience metrics. Official APIs are preferred; public-page parsing is an explicit fallback. */
 export async function readAudience(
   platform: string,
@@ -247,6 +299,7 @@ export async function readAudience(
   confidence: "high" | "medium" | "low";
   evidence: string;
   approximate?: boolean;
+  identityVerified: boolean;
 }> {
   if (platform === "youtube") {
     const official = await readYouTubeOfficial(url);
@@ -266,6 +319,7 @@ export async function readAudience(
       confidence: "low",
       evidence: "Profile page could not be fetched from the server.",
       approximate: false,
+      identityVerified: false,
     };
   }
 
@@ -312,6 +366,7 @@ export async function readAudience(
           ? "Compact public count parsed from profile HTML and expanded approximately."
           : "Count parsed from publicly returned profile HTML; platform markup can change.",
         approximate,
+        identityVerified: true,
       };
     }
   }
@@ -324,5 +379,6 @@ export async function readAudience(
     confidence: "low",
     evidence: "The platform did not expose a reliable public count in the returned page.",
     approximate: false,
+    identityVerified: true,
   };
 }
