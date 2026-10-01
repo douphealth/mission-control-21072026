@@ -277,6 +277,7 @@ export default function FocusPage() {
             strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={circumference}
+            strokeDashoffset={offset}
             transform="rotate(-90 100 100)"
             style={{ filter: "drop-shadow(0 0 8px hsl(var(--primary) / 0.3))" }}
           />
