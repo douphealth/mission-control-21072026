@@ -76,33 +76,36 @@ function extractUrl(transcript: string): string | undefined {
 }
 
 function inferType(transcript: string): VoiceCaptureResult["type"] {
-  const text = transcript.toLowerCase();
-  if (
+  const text = transcript.toLocaleLowerCase();
+
+  const linkCue =
     extractUrl(transcript) ||
-    /\b(link|url|website|web site|webpage|bookmark|article|page|domain)\b/.test(text)
-  ) {
-    return "links";
-  }
+    /\b(link|url|website|web site|webpage|bookmark|article|page|domain|lien|sitio|sito|seite|linki|ссылка)\b/i.test(text) ||
+    /(σύνδεσμος|ιστοσελίδα|σελίδα|網址|链接|リンク|링크)/u.test(text);
+  if (linkCue) return "links";
 
-  if (
-    /^(idea|brainstorm|what if|maybe we should|we could|it would be cool|concept)\b/.test(text) ||
-    /\bfeature idea\b/.test(text)
-  ) {
-    return "ideas";
-  }
+  const ideaCue =
+    /^(idea|brainstorm|what if|maybe we should|we could|concept|idée|idee|idea|ideia|идея)\b/i.test(text) ||
+    /^(ιδέα|σκέψη|μήπως|θα μπορούσαμε|想法|アイデア|아이디어)/u.test(text);
+  if (ideaCue) return "ideas";
 
-  if (/^(note|remember|note to self|journal|log)\b/.test(text) || /\bmeeting notes?\b/.test(text)) {
-    return "notes";
-  }
+  const noteCue =
+    /^(note|remember|note to self|journal|log|nota|notiz|notez|заметка)\b/i.test(text) ||
+    /^(σημείωση|θυμήσου|καταγραφή|筆記|メモ|메모)/u.test(text);
+  if (noteCue) return "notes";
 
-  if (
-    /^(task|todo|to do|remind me to|i need to|need to|don't let me forget to|follow up on|call |email |send |finish |schedule |book |buy |pay )/.test(
+  const taskCue =
+    /^(task|todo|to do|remind me to|i need to|need to|call |email |send |finish |schedule |book |buy |pay |tâche|tarea|aufgabe|compito|tarefa|задача)\b/i.test(
       text,
     ) ||
-    /\b(today|tomorrow|tonight|next week|by monday|by tuesday|asap|urgent)\b/.test(text)
-  ) {
-    return "tasks";
-  }
+    /^(εργασία|υπενθύμισέ μου|πρέπει να|θέλω να|τηλεφώνησε|στείλε|κλείσε|αγόρασε|πλήρωσε|任务|タスク|작업)/u.test(
+      text,
+    ) ||
+    /\b(today|tomorrow|tonight|next week|asap|urgent|aujourd'hui|demain|mañana|morgen|domani|amanhã|сегодня|завтра)\b/i.test(
+      text,
+    ) ||
+    /(σήμερα|αύριο|απόψε|επείγον|今日|明日|今日中|明日まで|오늘|내일)/u.test(text);
+  if (taskCue) return "tasks";
 
   return "notes";
 }
@@ -121,10 +124,16 @@ function inferDueDate(transcript: string): string | undefined {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  if (/\b(today|tonight|this morning|this afternoon|this evening)\b/.test(text)) {
+  if (
+    /\b(today|tonight|this morning|this afternoon|this evening|aujourd'hui|hoy|heute|oggi|hoje|сегодня)\b/u.test(text) ||
+    /(σήμερα|απόψε|今日|오늘)/u.test(text)
+  ) {
     return formatDate(today);
   }
-  if (/\b(tomorrow)\b/.test(text)) {
+  if (
+    /\b(tomorrow|demain|mañana|morgen|domani|amanhã|завтра)\b/u.test(text) ||
+    /(αύριο|明日|내일)/u.test(text)
+  ) {
     return formatDate(addDays(today, 1));
   }
   if (/\b(day after tomorrow)\b/.test(text)) {
