@@ -194,7 +194,7 @@ export default function AudiencePage() {
     <div className="space-y-5">
       <CCHeader
         title="Audience Intelligence"
-        subtitle="Real public audience measurements with source method, confidence and freshness. Official APIs are preferred when configured; public-page parsing is clearly labeled as a fallback."
+        subtitle="Verified audience measurements with explicit provider, identity proof, freshness and metric semantics. Official APIs are preferred; unavailable data stays blank instead of being guessed."
         actions={
           <button
             onClick={() => void refresh()}
@@ -257,10 +257,11 @@ export default function AudiencePage() {
               Measurement policy
             </div>
             <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted-foreground">
-              GitHub and Bluesky support public official API counts. YouTube uses its official API when <code>YOUTUBE_API_KEY</code> is
-              configured. Public-page fallbacks are accepted only when the returned page matches
-              the requested profile identity and is not a login/challenge page. Hidden or uncertain
-              counts stay unavailable — never zero, never guessed.
+              Official adapters are available for GitHub and Bluesky without credentials, plus YouTube, X,
+              Instagram Professional accounts, Facebook Pages, Threads, TikTok and LinkedIn organizations
+              when their authorized server credentials are configured. Public-page fallback is accepted only
+              when identity and metric occur in the same structured profile object. Hidden or uncertain counts
+              stay unavailable — never zero, never guessed.
             </p>
           </div>
           <span className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-1 text-[9px] font-bold text-muted-foreground">
@@ -317,7 +318,12 @@ export default function AudiencePage() {
                       Boolean(reading.approximate) === Boolean(latest.approximate),
                   )
               : undefined;
-            const comparable = Boolean(latest && previousComparable && !latest.approximate && !previousComparable.approximate);
+            const comparable = Boolean(
+              latest &&
+              previousComparable &&
+              latest.metricSemantics === "exact" &&
+              previousComparable.metricSemantics === "exact",
+            );
             const delta =
               latest && previousComparable && comparable
                 ? (latest.followers as number) - (previousComparable.followers as number)
@@ -398,7 +404,7 @@ export default function AudiencePage() {
                     </div>
                     <div className="mt-0.5 text-3xl font-black tabular-nums tracking-tight text-foreground">
                       {latest?.followers !== null && latest?.followers !== undefined
-                        ? `${latest.approximate ? "~" : ""}${nf.format(latest.followers)}`
+                        ? `${latest.metricSemantics === "approximate" ? "~" : ""}${nf.format(latest.followers)}`
                         : "—"}
                     </div>
                   </div>
@@ -436,6 +442,11 @@ export default function AudiencePage() {
                     <strong className="mt-0.5 block capitalize text-foreground">
                       {latest?.confidence || "unknown"}
                     </strong>
+                    {latest?.metricSemantics && (
+                      <span className="mt-0.5 block capitalize text-muted-foreground">
+                        {latest.metricSemantics} metric
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -459,7 +470,11 @@ export default function AudiencePage() {
                 {latest?.evidence && (
                   <p className="mt-2 text-[8.5px] leading-4 text-muted-foreground/75">
                     Evidence: {latest.evidence}
-                    {latest.approximate ? " Displayed with ~ because the public source exposed a compact value." : ""}
+                    {latest.metricSemantics === "rounded"
+                      ? " The platform reports this counter in rounded form, so exact growth deltas are disabled."
+                      : latest.metricSemantics === "approximate"
+                        ? " Displayed with ~ because the source exposed an approximate value."
+                        : ""}
                   </p>
                 )}
               </article>
