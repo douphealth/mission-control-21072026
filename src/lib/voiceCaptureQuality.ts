@@ -125,5 +125,5 @@ export function shouldUseServerVoiceCapture(input: {
 
 export function voiceServerBackoffMs(consecutiveFailures: number): number {
   const failures = Math.max(1, Math.floor(consecutiveFailures || 1));
-  return Math.min(5 * 60_000, 15_000 * 2 ** Math.min(4, failures - 1));
+  return Math.min(5 * 60_000, 15_000 * 2 ** Math.min(5, failures - 1));
 }
