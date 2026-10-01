@@ -26,6 +26,7 @@ import {
 import type { HabitTracker } from "@/lib/db";
 import FormModal, { FormField, FormInput, FormSelect } from "@/components/FormModal";
 import { toast } from "sonner";
+import { todayISO, addDaysLocal } from "@/lib/overdue";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
@@ -72,7 +73,7 @@ const emptyForm = {
   completions: [],
   streak: 0,
   color: "#3b82f6",
-  createdAt: new Date().toISOString().split("T")[0],
+  createdAt: todayISO(),
 };
 
 export default function HabitsPage() {
@@ -86,13 +87,9 @@ export default function HabitsPage() {
   const [form, setForm] = useState<Omit<HabitTracker, "id">>(emptyForm);
   const bulk = useBulkActions<HabitTracker>();
 
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayISO();
 
-  const last14 = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (13 - i));
-    return d.toISOString().split("T")[0];
-  });
+  const last14 = Array.from({ length: 14 }, (_, i) => addDaysLocal(today, -(13 - i)));
 
   const isCompletedToday = (h: HabitTracker) => h.completions?.includes(today);
   const completedToday = habits.filter(isCompletedToday).length;
@@ -111,12 +108,11 @@ export default function HabitsPage() {
       newCompletions = [...completions, today];
       let streak = 0;
       const all = [...newCompletions].sort().reverse();
-      const check = new Date();
+      let check = today;
       for (let i = 0; i < 365; i++) {
-        const dateStr = check.toISOString().split("T")[0];
-        if (all.includes(dateStr)) {
+        if (all.includes(check)) {
           streak++;
-          check.setDate(check.getDate() - 1);
+          check = addDaysLocal(check, -1);
         } else break;
       }
       newStreak = streak;
