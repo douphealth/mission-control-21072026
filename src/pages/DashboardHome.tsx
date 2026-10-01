@@ -237,12 +237,6 @@ export default function DashboardHome() {
         ))}
       </div>
 
-      <div className="ultra-rise-3">
-        <Suspense fallback={<div className="v10-skeleton h-72" />}>
-          <LifeBusinessControlTower />
-        </Suspense>
-      </div>
-
       {dockItem && (
         <FocusDock
           item={dockItem}
@@ -274,6 +268,12 @@ export default function DashboardHome() {
           )}
         </>
       )}
+
+      <div className="ultra-rise-3">
+        <Suspense fallback={<div className="v10-skeleton h-72" />}>
+          <LifeBusinessControlTower />
+        </Suspense>
+      </div>
 
       {/* ═══ Everything else — on demand ═══ */}
       {!ops.isEmpty && (
