@@ -259,7 +259,7 @@ export default function ReviewPage() {
 
   const finishWeekly = useCallback(() => {
     markWeeklyReview(today);
-    toast.success("Weekly review logged. Inbox is clear.");
+    toast.success("Weekly review logged.");
   }, [markWeeklyReview, today]);
 
   const tomorrowPlan = useMemo(
