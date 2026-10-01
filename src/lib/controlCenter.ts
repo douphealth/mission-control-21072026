@@ -12,6 +12,14 @@ import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 const LAST_RUN_KEY = "mc-cc-last-run";
 
+function chunksOf<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
 async function writeCollectorHealth(
   id: string,
   label: string,
@@ -187,17 +195,21 @@ export async function runIndustryCollector(useAi = true) {
     queueCloudPush();
     return { added: 0, errors: [] as string[] };
   }
-  const { results } = await collectIndustry({
-    data: {
-      sources: sources.map((s) => ({
-        id: s.id,
-        name: s.name,
-        url: s.url,
-        feedUrl: s.feedUrl,
-        topics: s.topics,
-      })),
-    },
-  });
+  const results: Awaited<ReturnType<typeof collectIndustry>>["results"] = [];
+  for (const batch of chunksOf(sources, 30)) {
+    const response = await collectIndustry({
+      data: {
+        sources: batch.map((source) => ({
+          id: source.id,
+          name: source.name,
+          url: source.url,
+          feedUrl: source.feedUrl,
+          topics: source.topics,
+        })),
+      },
+    });
+    results.push(...response.results);
+  }
 
   const allTopics = sources.flatMap((s) => s.topics ?? []);
   const errors: string[] = [];
@@ -253,17 +265,21 @@ export async function runMentionCollector(useAi = true) {
     queueCloudPush();
     return { added: 0, errors: [] as string[] };
   }
-  const { results } = await collectMentions({
-    data: {
-      terms: terms.slice(0, 12).map((t) => ({
-        id: t.id,
-        term: t.term,
-        type: t.type,
-        anchors: t.anchors,
-        negatives: t.negatives,
-      })),
-    },
-  });
+  const results: Awaited<ReturnType<typeof collectMentions>>["results"] = [];
+  for (const batch of chunksOf(terms, 12)) {
+    const response = await collectMentions({
+      data: {
+        terms: batch.map((term) => ({
+          id: term.id,
+          term: term.term,
+          type: term.type,
+          anchors: term.anchors,
+          negatives: term.negatives,
+        })),
+      },
+    });
+    results.push(...response.results);
+  }
 
   const now = new Date().toISOString();
   const errors: string[] = [];
@@ -355,11 +371,19 @@ export async function runAudienceCollector() {
     queueCloudPush();
     return { updated: 0 };
   }
-  const { readings } = await collectAudience({
-    data: accounts.map
-      ? { accounts: accounts.map((a) => ({ id: a.id, platform: a.platform, url: a.url })) }
-      : ({} as any),
-  });
+  const readings: Awaited<ReturnType<typeof collectAudience>>["readings"] = [];
+  for (const batch of chunksOf(accounts, 20)) {
+    const response = await collectAudience({
+      data: {
+        accounts: batch.map((account) => ({
+          id: account.id,
+          platform: account.platform,
+          url: account.url,
+        })),
+      },
+    });
+    readings.push(...response.readings);
+  }
 
   const now = new Date().toISOString();
   let updated = 0;
