@@ -290,7 +290,11 @@ export async function searchNewsCoverage(query: string, days: number): Promise<N
   ];
 
   const active = providers.filter((provider) => provider.configured);
-  const settled = await Promise.all(
+  const settled: Array<{
+    provider: NewsProvider;
+    items: RawItem[];
+    status: NewsProviderStatus;
+  }> = await Promise.all(
     active.map(async (provider) => {
       try {
         const items = (await provider.run()) ?? [];
