@@ -26,6 +26,8 @@ type SearchStory = {
   source?: string;
   sourceUrl?: string;
   corroborationCount?: number;
+  evidenceLevel?: "high" | "medium" | "limited";
+  evidenceReason?: string;
 };
 
 export default function IndustryPage() {
@@ -41,6 +43,7 @@ export default function IndustryPage() {
   const [searching, setSearching] = useState(false);
   const [searchedAt, setSearchedAt] = useState("");
   const [searchStories, setSearchStories] = useState<SearchStory[]>([]);
+  const [evidenceFilter, setEvidenceFilter] = useState<"all" | "medium" | "high">("medium");
   const autoRefreshStarted = useRef(false);
 
   const stories = useMemo(
@@ -186,8 +189,9 @@ export default function IndustryPage() {
             What do you need to know right now?
           </h2>
           <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted-foreground">
-            Searches current Google News RSS coverage for the exact subject you enter. Results show
-            the originating publisher when the feed provides it and never invent a credibility score.
+            Searches current Google News coverage for the exact subject you enter, automatically
+            using Greek or English locale when appropriate. Evidence strength is based on publisher
+            attribution and independent corroboration — not a fabricated “truth score”.
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
             <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/65 px-3">
@@ -232,6 +236,26 @@ export default function IndustryPage() {
               <div className="mt-1 text-[10px] text-muted-foreground">
                 “{query.trim()}” · {searchStories.length} results · fetched {relTime(searchedAt)}
               </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(["medium", "high", "all"] as const).map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => setEvidenceFilter(level)}
+                    className={`rounded-full border px-2 py-1 text-[8px] font-bold transition ${
+                      evidenceFilter === level
+                        ? "border-primary/30 bg-primary/10 text-primary"
+                        : "border-border/45 bg-background/45 text-muted-foreground"
+                    }`}
+                  >
+                    {level === "medium"
+                      ? "Credible+"
+                      : level === "high"
+                        ? "High evidence"
+                        : "All evidence"}
+                  </button>
+                ))}
+              </div>
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/8 px-2.5 py-1 text-[9px] font-bold text-success">
               <ShieldCheck size={11} />
@@ -239,8 +263,19 @@ export default function IndustryPage() {
             </span>
           </div>
           <div className="mt-3 grid gap-2">
-            {searchStories.length ? (
-              searchStories.slice(0, 30).map((story) => {
+            {searchStories.filter((story) => {
+              if (evidenceFilter === "all") return true;
+              if (evidenceFilter === "high") return story.evidenceLevel === "high";
+              return story.evidenceLevel !== "limited";
+            }).length ? (
+              searchStories
+                .filter((story) => {
+                  if (evidenceFilter === "all") return true;
+                  if (evidenceFilter === "high") return story.evidenceLevel === "high";
+                  return story.evidenceLevel !== "limited";
+                })
+                .slice(0, 30)
+                .map((story) => {
                 const publishedAt = story.publishedAt || searchedAt;
                 const score = localScore(
                   { title: story.title, summary: story.summary, publishedAt },
@@ -266,6 +301,27 @@ export default function IndustryPage() {
                           <>
                             <span>·</span>
                             <span>{story.corroborationCount} similar publisher result{story.corroborationCount === 1 ? "" : "s"}</span>
+                          </>
+                        )}
+                        {story.evidenceLevel && (
+                          <>
+                            <span>·</span>
+                            <span
+                              className={`font-bold ${
+                                story.evidenceLevel === "high"
+                                  ? "text-success"
+                                  : story.evidenceLevel === "medium"
+                                    ? "text-info"
+                                    : "text-warning"
+                              }`}
+                              title={story.evidenceReason}
+                            >
+                              {story.evidenceLevel === "high"
+                                ? "High evidence"
+                                : story.evidenceLevel === "medium"
+                                  ? "Credible"
+                                  : "Limited evidence"}
+                            </span>
                           </>
                         )}
                       </div>
