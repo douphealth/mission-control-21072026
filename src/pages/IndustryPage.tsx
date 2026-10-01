@@ -160,7 +160,10 @@ export default function IndustryPage() {
         )
         .filter((story) => {
           const hay = `${story.title} ${story.summary ?? ""}`.toLowerCase();
-          return queryTokens.length ? queryTokens.some((token) => hay.includes(token)) : false;
+          if (!queryTokens.length) return false;
+          const hits = queryTokens.filter((token) => hay.includes(token)).length;
+          const requiredHits = Math.max(1, Math.ceil(queryTokens.length * 0.6));
+          return hay.includes(clean.toLowerCase()) || hits >= requiredHits;
         })
         .map((story) => ({
           title: story.title,
