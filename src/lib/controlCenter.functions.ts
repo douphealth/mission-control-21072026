@@ -216,6 +216,8 @@ export const collectMentions = createServerFn({ method: "POST" })
               matchedAnchors?: string[];
               verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand";
               confidence?: "high" | "medium" | "low";
+              verificationReason?: string;
+              corroborationCount?: number;
             }>,
             error: "Name monitoring requires at least one identity anchor.",
           };
@@ -281,6 +283,8 @@ export const collectMentions = createServerFn({ method: "POST" })
               matchedAnchors?: string[];
               verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand";
               confidence?: "high" | "medium" | "low";
+              verificationReason?: string;
+              corroborationCount?: number;
             }>,
             error: String(e?.message ?? e).slice(0, 200),
           };
