@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   ExternalLink,
@@ -41,6 +41,7 @@ export default function IndustryPage() {
   const [searching, setSearching] = useState(false);
   const [searchedAt, setSearchedAt] = useState("");
   const [searchStories, setSearchStories] = useState<SearchStory[]>([]);
+  const autoRefreshStarted = useRef(false);
 
   const stories = useMemo(
     () =>
@@ -62,6 +63,20 @@ export default function IndustryPage() {
     .filter(Boolean)
     .sort()
     .at(-1);
+
+  useEffect(() => {
+    if (autoRefreshStarted.current || !enabled.length) return;
+    const stale = enabled.some(
+      (source) =>
+        !source.lastCheckedAt ||
+        Date.now() - new Date(source.lastCheckedAt).getTime() > 6 * 3_600_000,
+    );
+    if (!stale) return;
+    autoRefreshStarted.current = true;
+    void runIndustryCollector(false).catch(() => {
+      // Collector health records the failure; avoid noisy auto-refresh toasts.
+    });
+  }, [enabled]);
 
   const addSource = async () => {
     const clean = url.trim();
