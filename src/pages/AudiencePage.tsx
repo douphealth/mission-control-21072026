@@ -78,6 +78,7 @@ export default function AudiencePage() {
   const [platform, setPlatform] = useState<AudiencePlatform>("youtube");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState<Awaited<ReturnType<typeof runAudienceCollector>> | null>(null);
   const autoRefreshStarted = useRef(false);
 
   const byAccount = useMemo(() => {
@@ -105,10 +106,8 @@ export default function AudiencePage() {
   const officialCount = [...latestValid.values()].filter(
     (reading) => reading.method === "official-api",
   ).length;
-  const recentChecks = accounts.filter(
-    (account) =>
-      account.lastCheckedAt &&
-      Date.now() - new Date(account.lastCheckedAt).getTime() < 24 * 3_600_000,
+  const freshVerified = [...latestValid.values()].filter(
+    (reading) => Date.now() - new Date(reading.capturedAt).getTime() < 24 * 3_600_000,
   ).length;
   const unavailable = accounts.filter(
     (account) => account.lastStatus === "limited" || account.lastStatus === "unavailable",
@@ -180,6 +179,7 @@ export default function AudiencePage() {
     setBusy(true);
     try {
       const result = await runAudienceCollector();
+      setReport(result);
       if (!result.updated) toast.info("Add a profile before refreshing");
       else if (!result.succeeded) toast.error("No current audience metrics retrieved", { description: "Every attempted profile was unavailable. See the exact reason and next action on each profile card." });
       else toast[result.unavailable ? "warning" : "success"](`${result.succeeded}/${result.updated} profiles returned verified metrics`, { description: result.unavailable ? `${result.unavailable} unavailable; previous valid readings are preserved and labeled.` : "The displayed readings came from the stated source methods." });
@@ -210,7 +210,7 @@ export default function AudiencePage() {
       <section className="grid gap-2 sm:grid-cols-4">
         {[
           ["Tracked profiles", accounts.length, "primary"],
-          ["Valid readings", latestValid.size, "success"],
+          ["Fresh verified <24h", freshVerified, "success"],
           ["Official API", officialCount, "info"],
           ["Limited / unavailable", unavailable, unavailable ? "warning" : "success"],
         ].map(([label, value, tone]) => (
@@ -220,6 +220,34 @@ export default function AudiencePage() {
           </div>
         ))}
       </section>
+
+      {report?.capabilities && (
+        <Panel>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground">
+                Measurement capability
+              </div>
+              <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted-foreground">
+                Official API measurements are preferred. Restricted networks never receive guessed follower counts;
+                Mission Control stores a public-page value only when the metric is bound to the exact requested identity.
+              </p>
+            </div>
+            <span className="rounded-full border border-success/20 bg-success/8 px-2.5 py-1 text-[9px] font-bold text-success">
+              Official: {report.capabilities.officialPlatforms.join(", ") || "none configured"}
+            </span>
+          </div>
+          {!!report.capabilities.configurationRequired.length && (
+            <div className="mt-3 rounded-xl border border-warning/20 bg-warning/7 p-3 text-[10px] leading-5 text-muted-foreground">
+              <strong className="text-warning">Optional official integrations:</strong>{" "}
+              {report.capabilities.configurationRequired.join(" · ")}
+            </div>
+          )}
+          <p className="mt-2 text-[9px] leading-4 text-muted-foreground">
+            {report.capabilities.publicPage}
+          </p>
+        </Panel>
+      )}
 
       <Panel>
         <div className="flex flex-wrap items-start justify-between gap-3">
