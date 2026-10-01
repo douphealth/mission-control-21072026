@@ -22,7 +22,7 @@ import { CCHeader, EmptyState, Panel, StreamRow, relTime } from "@/components/co
 const TYPES: { id: WatchTermType; label: string; hint: string }[] = [
   { id: "brand", label: "Brand", hint: "Exact brand phrase; anchors increase precision." },
   { id: "domain", label: "Domain", hint: "Exact domain/publisher identity gets high confidence." },
-  { id: "handle", label: "Handle", hint: "Exact @handle or token match gets high confidence." },
+  { id: "handle", label: "Handle", hint: "Requires the exact @handle. Bare-name/token matches are rejected." },
   { id: "name", label: "Person name", hint: "Requires at least one identity anchor." },
 ];
 
@@ -156,7 +156,7 @@ export default function MentionsPage() {
     <div className="space-y-5">
       <CCHeader
         title="Brand Mentions"
-        subtitle="Fresh identity-filtered monitoring across publisher coverage and your tracked feeds. Exact domains/handles and anchored names are high-confidence; ambiguous matches are rejected before storage."
+        subtitle="Precision-first monitoring across web search, news coverage and tracked publisher feeds. Exact identity rules reject ambiguous matches, owned-domain pages and unsupported certainty before storage."
         actions={
           <button
             onClick={() => void refresh()}
@@ -173,7 +173,35 @@ export default function MentionsPage() {
         <div role="status" className="text-sm font-bold">{report.checked}/{report.total} terms checked · {report.matched} matches · {report.added} new</div>
         <p className="mt-1 text-xs text-muted-foreground">Identity matched in retrieved titles/snippets; not independently fact-checked. Undated web results are discovery evidence, not new publications.</p>
         <div className="mt-3 space-y-2">{report.details.map(detail => <div key={detail.term} className="rounded-xl border border-border p-3 text-xs">
-          <strong>{detail.term}</strong>: {detail.checked ? `${detail.matches} matches from ${detail.candidates} candidates; ${detail.excludedOwned} owned pages excluded` : "Not checked successfully"}{detail.cached ? " · cached lookup (up to 5 minutes)" : ""}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <strong>{detail.term}</strong>
+            <span className={detail.checked ? "text-success" : "text-warning"}>
+              {detail.checked ? "Coverage completed" : "Coverage incomplete"}
+            </span>
+          </div>
+          <p className="mt-1 text-muted-foreground">
+            {detail.checked
+              ? `${detail.matches} identity matches from ${detail.candidates} candidates; ${detail.excludedOwned} owned pages excluded`
+              : "No provider completed a trustworthy lookup for this term."}
+            {detail.cached ? " · cached lookup (up to 5 minutes)" : ""}
+          </p>
+          {!!detail.providers?.length && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {detail.providers.map(provider => (
+                <span
+                  key={provider.name}
+                  className={`rounded-full border px-2 py-0.5 text-[9px] font-bold ${
+                    provider.ok
+                      ? "border-success/20 bg-success/8 text-success"
+                      : "border-warning/20 bg-warning/7 text-warning"
+                  }`}
+                  title={provider.error || undefined}
+                >
+                  {provider.name}: {provider.ok ? `${provider.count} candidates` : "unavailable"}
+                </span>
+              ))}
+            </div>
+          )}
           {detail.error && <p className="mt-1 text-warning">{detail.error}</p>}
         </div>)}</div>
       </Panel>}
@@ -200,8 +228,8 @@ export default function MentionsPage() {
             </div>
             <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted-foreground">
               Person-name watches require anchors. Domain and handle watches use exact identity checks.
-              Brand watches are medium confidence unless an anchor also matches. This intentionally
-              favors precision over noisy volume.
+              Search snippets are treated as discovery evidence, not independent fact verification.
+              Direct tracked feeds carry stronger publisher evidence. This intentionally favors precision over noisy volume.
             </p>
           </div>
           <span className="rounded-full border border-info/20 bg-info/8 px-2.5 py-1 text-[9px] font-bold text-info">
