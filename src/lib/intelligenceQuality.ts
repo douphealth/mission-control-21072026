@@ -275,6 +275,7 @@ export function isTrustedAudienceReading(reading: {
     typeof reading.followers === "number" &&
     Number.isSafeInteger(reading.followers) &&
     reading.followers >= 0 &&
-    (reading.method === "official-api" || reading.identityVerified === true)
+    (reading.method === "official-api" ||
+      (reading.method === "public-page" && reading.identityVerified === true))
   );
 }

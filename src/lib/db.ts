@@ -623,7 +623,7 @@ export interface AudienceReading {
   followers: number | null; // null = unavailable (never a false zero)
   posts?: number | null;
   status: "ok" | "unavailable" | "limited";
-  method?: "official-api" | "public-page";
+  method?: "official-api" | "public-page" | "none";
   provider?: string;
   confidence?: "high" | "medium" | "low";
   evidence?: string;
@@ -631,6 +631,9 @@ export interface AudienceReading {
   approximate?: boolean;
   /** True only when the returned public page was tied to the requested profile identity. */
   identityVerified?: boolean;
+  verifiedHandle?: string;
+  providerAccountId?: string;
+  metricSemantics?: "exact" | "rounded" | "approximate" | "unavailable";
 }
 
 export interface Reminder {
