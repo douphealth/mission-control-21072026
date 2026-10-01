@@ -1,3 +1,4 @@
+import TaskDialogFrame from "@/components/TaskDialogFrame";
 import { useTasks, useAddItem, useUpdateItem, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useRef, useCallback, useMemo, useEffect, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -159,15 +160,17 @@ interface TaskModalProps {
   task?: Task | null;
   defaultStatus?: StatusId;
   onClose: () => void;
-  onSave: (t: Omit<Task, "id"> & { id?: string }) => void;
+  onSave: (t: Omit<Task, "id"> & { id?: string }) => Promise<void>;
   onDelete?: (id: string) => void;
 }
 
-function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: TaskModalProps) {
+export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: TaskModalProps) {
   const [form, setForm] = useState<Omit<Task, "id">>(() =>
     task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" },
   );
   const [newSub, setNewSub] = useState("");
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
   const uf = (k: keyof typeof form, v: any) => setForm((f) => ({ ...f, [k]: v }));
 
   // Reset modal state when the selected task changes.
@@ -199,62 +202,33 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
       form.subtasks.map((s: Subtask) => (s.id === id ? { ...s, ...changes } : s)),
     );
 
-  const save = () => {
-    if (!form.title.trim()) {
-      toast.error("Title required");
-      return;
-    }
-    onSave({ ...(task?.id ? { id: task.id } : {}), ...form });
-    onClose();
+  const save = async () => {
+    if (saveLock.current) return;
+    if (!form.title.trim()) { toast.error("Title required"); return; }
+    saveLock.current = true;
+    setSaving(true);
+    try {
+      const subtasks = newSub.trim() ? [...form.subtasks, { id: crypto.randomUUID(), title: newSub.trim(), done: false }] : form.subtasks;
+      await onSave({ ...form, title: form.title.trim(), subtasks, ...(task?.id ? { id: task.id } : {}) });
+      onClose();
+    } catch (error) {
+      toast.error("Task was not saved", { description: error instanceof Error ? error.message : "The editor has retained your draft." });
+    } finally { saveLock.current = false; setSaving(false); }
   };
 
   const pr = getPriority(form.priority);
   const st = getStatus(form.status);
 
   return (
-    <>
-      {open && (
-        <div
-          className="fixed inset-0 z-[200] flex items-end sm:items-start justify-center sm:p-4 sm:pt-16"
-          onClick={onClose}
-        >
-          <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-          <div
-            className="relative w-full sm:max-w-2xl bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl border border-border/50 overflow-hidden max-h-[95vh] sm:max-h-none flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Priority color strip */}
-            <div className="h-1 w-full" style={{ background: pr.color }} />
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border/40">
-              <h2 className="font-bold text-card-foreground flex items-center gap-2 text-base">
-                <Target size={16} style={{ color: pr.color }} />
-                {task ? "Edit Task" : "New Task"}
-              </h2>
-              <div className="flex items-center gap-2">
-                {task && onDelete && (
-                  <button
-                    onClick={() => {
-                      onDelete(task.id);
-                      onClose();
-                    }}
-                    className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-                <button
-                  onClick={onClose}
-                  className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
+    <TaskDialogFrame open={open} title={task ? "Edit task" : "New task"}
+      onClose={() => { if (!saveLock.current) onClose(); }} action={
+      <button type="button" onClick={() => void save()} disabled={saving || !form.title.trim()}
+        className="min-h-11 rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground disabled:opacity-50">
+        {saving ? "Saving..." : task ? "Save changes" : "Create task"}
+      </button>
+    }>
             {/* Body */}
-            <div className="p-4 sm:p-6 space-y-5 flex-1 overflow-y-auto">
+            <div className="space-y-5 pb-4">
               {/* Title */}
               <textarea
                 autoFocus
@@ -783,29 +757,11 @@ function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: Tas
               </div>
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-4 border-t border-border/40 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4">
-              <button
-                onClick={onClose}
-                className="px-4 py-2.5 sm:py-2 rounded-xl text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors touch-manipulation"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={save}
-                className="px-5 py-2.5 sm:py-2 rounded-xl text-sm font-bold text-white shadow-lg transition-opacity hover:opacity-90 touch-manipulation"
-                style={{
-                  background: `linear-gradient(135deg, ${pr.color}, ${pr.color}cc)`,
-                  boxShadow: `0 4px 15px ${pr.color}40`,
-                }}
-              >
-                {task ? "Save Changes" : "Create Task"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
+      {task && onDelete && <button type="button" disabled={saving} onClick={async () => {
+        try { await onDelete(task.id); onClose(); }
+        catch { toast.error("Task could not be moved to Trash"); }
+      }} className="mb-4 min-h-11 rounded-xl bg-destructive/10 px-4 text-sm text-destructive">Move to Trash</button>}
+    </TaskDialogFrame>
   );
 }
 

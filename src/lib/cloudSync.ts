@@ -57,6 +57,7 @@ let journalError = false;
 let verifiedToken = '';
 let tabWriter = '';
 let logicalTime = 0;
+let localSeedChecked = false;
 const remoteCache = new Map<string, { modifiedTime: string; backup: RemoteBackup }>();
 function key(collection: string, id: string) { return `${collection}::${id}`; }
 function readObject<T>(name: string, fallback: T): T {
@@ -199,7 +200,7 @@ async function syncCycle(): Promise<SyncResult> {
   try {
     await bindIdentity(token.access_token, currentEpoch);
     const remote = await readRemote(token.access_token, currentEpoch);
-    await seedMissingRecords(remote.records);
+    if (!localSeedChecked) await seedMissingRecords(remote.records);
     const captured = readDirty();
     const merged = mergeRemoteRecords(remote.records);
     for (const [recordKey, change] of Object.entries(captured)) {
@@ -239,6 +240,7 @@ async function syncCycle(): Promise<SyncResult> {
         const table = COLLECTIONS[collection];
         if (!table || !id) continue;
         const dirty = readDirty()[recordKey];
+        if (!dirty && receipts[recordKey] === revisionOf(record)) continue;
         if (dirty && !sameChange(dirty, captured[recordKey])) continue;
         if (epoch !== currentEpoch) throw new Error('Sync cancelled.');
         if (record.deleted) await table.delete(id);
@@ -256,6 +258,7 @@ async function syncCycle(): Promise<SyncResult> {
     if (journalError) throw new Error('Cloud write completed but the device queue could not be acknowledged.');
     localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
     retryAttempt = 0;
+    localSeedChecked = true;
     setStatus(Object.keys(current).length ? 'syncing' : 'synced');
     if (Object.keys(current).length) queueCloudPush(250);
     return { ok: true, restored, remoteRows: Object.keys(merged).length };
@@ -271,9 +274,12 @@ async function syncCycle(): Promise<SyncResult> {
 function synchronize(): Promise<SyncResult> {
   if (activeSync) return activeSync;
   const run = () => syncCycle();
-  activeSync = (typeof navigator !== 'undefined' && navigator.locks
-    ? navigator.locks.request('mc-cloud-sync-v2', run) : run()).finally(() => { activeSync = null; });
-  return activeSync;
+  const operation: Promise<SyncResult> = Promise.resolve().then(async () => {
+    if (typeof navigator !== 'undefined' && navigator.locks) return await navigator.locks.request('mc-cloud-sync-v2', run);
+    return await run();
+  }).finally(() => { activeSync = null; });
+  activeSync = operation;
+  return operation;
 }
 export function onDirtyRecordsChange(callback: () => void) { dirtyListeners.add(callback); return () => { dirtyListeners.delete(callback); }; }
 export function getRecordSyncState(collection: string, id: string): RecordSyncState {
@@ -328,9 +334,10 @@ export async function signInToCloud(): Promise<void> {
   try {
     setStatus('connecting');
     const token = await requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: 'select_account' });
-    epoch++; verifiedToken = ''; remoteCache.clear(); retryAttempt = 0;
+    epoch++; verifiedToken = ''; remoteCache.clear(); retryAttempt = 0; localSeedChecked = false;
     await bindIdentity(token.access_token, epoch);
     installRefreshListeners();
+    if (activeSync) await activeSync;
     const result = await flushCloudChanges();
     if (!result.ok) throw new Error(result.error || 'Sync did not complete');
   } catch (error) { setStatus('error', error instanceof Error ? error.message : 'Google connection failed'); throw error; }

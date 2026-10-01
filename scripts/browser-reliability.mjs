@@ -49,7 +49,17 @@ createRoot(document.getElementById('root')!).render(<Harness />);
 
 async function pageReady(context, mode) {
   const page = await context.newPage();
-  page.on('pageerror', error => console.log('Browser error:', error.stack || error.message));
+  page.on('pageerror', async error => {
+  console.log('Browser error:', error.stack || error.message);
+  const match = (error.stack || '').match(/\/assets\/([^:\s]+):(\d+):(\d+)/);
+  if (match) {
+    const content = await readFile(path.join(output, 'assets', match[1]), 'utf8');
+    const lines = content.split('\n');
+    const at = Number(match[2]);
+    console.log('EXACT BUNDLE FAILURE CONTEXT:\n' + lines.slice(Math.max(0, at - 16), at + 16).map((line, i) => `${Math.max(1, at - 15) + i}: ${line}`).join('\n'));
+    await writeFile('test-results/browser-failure-context.txt', lines.slice(Math.max(0, at - 80), at + 80).join('\n'));
+  }
+});
   await page.goto(`${origin}/?mode=${mode}`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => !!window.__mc);
   return page;
