@@ -41,6 +41,9 @@ import { useNavigationStore } from "@/stores/navigationStore";
 
 const InsightsPanel = lazy(() => import("@/components/dashboard/InsightsPanel"));
 const BelowFold = lazy(() => import("@/components/dashboard/BelowFold"));
+const LifeBusinessControlTower = lazy(
+  () => import("@/components/dashboard/LifeBusinessControlTower"),
+);
 
 export default function DashboardHome() {
   const ops = useDailyOps();
@@ -232,6 +235,12 @@ export default function DashboardHome() {
             <ArrowUpRight size={13} className="text-muted-foreground/45 transition group-hover:text-primary" />
           </button>
         ))}
+      </div>
+
+      <div className="ultra-rise-3">
+        <Suspense fallback={<div className="v10-skeleton h-72" />}>
+          <LifeBusinessControlTower />
+        </Suspense>
       </div>
 
       {dockItem && (
