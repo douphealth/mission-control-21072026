@@ -228,7 +228,8 @@ export async function runIndustryCollector(useAi = true) {
       if (r.error) errors.push(`${src.name}: ${r.error}`);
     }
     for (const item of r.items) {
-      const publishedAt = item.publishedAt ?? now;
+      const sourcePublishedAt = item.publishedAt;
+      const publishedAt = sourcePublishedAt ?? now;
       payload.push({
         title: item.title,
         url: item.url,
@@ -237,6 +238,7 @@ export async function runIndustryCollector(useAi = true) {
         sourceId: src?.id,
         summary: item.summary,
         publishedAt,
+        dateBasis: sourcePublishedAt ? "published" : "discovered",
         score: localScore({ ...item, publishedAt }, allTopics),
         verification: src ? "feed" : "topic-search",
         confidence: src ? "high" : "medium",
@@ -290,7 +292,8 @@ export async function runMentionCollector(useAi = true) {
     markCloudRecordDirty("watchTerms", r.termId);
     if (r.error) errors.push(`${r.term}: ${r.error}`);
     for (const item of r.items) {
-      const publishedAt = item.publishedAt ?? now;
+      const sourcePublishedAt = item.publishedAt;
+      const publishedAt = sourcePublishedAt ?? now;
       payload.push({
         title: item.title,
         url: item.url,
@@ -299,6 +302,7 @@ export async function runMentionCollector(useAi = true) {
         sourceId: r.termId,
         summary: item.summary,
         publishedAt,
+        dateBasis: sourcePublishedAt ? "published" : "discovered",
         score: Math.min(100, localScore({ ...item, publishedAt }) + (item.confidence === "high" ? 15 : 5)),
         matchedTerm: r.term,
         matchedAnchors: item.matchedAnchors,
@@ -330,6 +334,7 @@ export async function runMentionCollector(useAi = true) {
         sourceId: term.id,
         summary: story.summary,
         publishedAt: story.publishedAt,
+        dateBasis: story.dateBasis,
         score: Math.min(
           100,
           localScore(
