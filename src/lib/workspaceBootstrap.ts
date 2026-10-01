@@ -318,6 +318,12 @@ const SYNC_HEALTH_SEEDS: Array<SyncHealth> = [
     detail: "Trend/news source refresh status.",
   },
   {
+    id: "mentions",
+    label: "Brand Mentions",
+    status: "not-configured",
+    detail: "Identity-filtered brand/name/domain mention collector status.",
+  },
+  {
     id: "audience",
     label: "Audience sources",
     status: "not-configured",
