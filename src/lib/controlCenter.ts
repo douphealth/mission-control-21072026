@@ -139,10 +139,13 @@ export async function runIndustryCollector(useAi = true) {
         title: item.title,
         url: item.url,
         source: item.source ?? src?.name ?? "",
+        sourceUrl: item.sourceUrl,
         sourceId: src?.id,
         summary: item.summary,
         publishedAt,
         score: localScore({ ...item, publishedAt }, allTopics),
+        verification: src ? "feed" : "topic-search",
+        confidence: src ? "high" : "medium",
       });
     }
   }
@@ -181,11 +184,15 @@ export async function runMentionCollector(useAi = true) {
         title: item.title,
         url: item.url,
         source: item.source ?? "",
+        sourceUrl: item.sourceUrl,
         sourceId: r.termId,
         summary: item.summary,
         publishedAt,
-        score: localScore({ ...item, publishedAt }) + 5,
+        score: Math.min(100, localScore({ ...item, publishedAt }) + (item.confidence === "high" ? 15 : 5)),
         matchedTerm: r.term,
+        matchedAnchors: item.matchedAnchors,
+        verification: item.verification,
+        confidence: item.confidence,
       });
     }
   }
@@ -220,6 +227,10 @@ export async function runAudienceCollector() {
         posts: r.posts,
         capturedAt: now,
         status: r.status,
+        method: r.method,
+        provider: r.provider,
+        confidence: r.confidence,
+        evidence: r.evidence,
       });
       markCloudRecordDirty("audienceReadings", recent.id);
     } else {
@@ -230,6 +241,10 @@ export async function runAudienceCollector() {
         followers: r.followers,
         posts: r.posts,
         status: r.status,
+        method: r.method,
+        provider: r.provider,
+        confidence: r.confidence,
+        evidence: r.evidence,
       };
       await db.audienceReadings.put(rec);
       markCloudRecordDirty("audienceReadings", rec.id);
