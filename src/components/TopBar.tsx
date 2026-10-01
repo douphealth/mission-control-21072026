@@ -3,7 +3,7 @@ import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { todayISO } from "@/lib/overdue";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
-import { Search, Bell, Plus, Menu, Download, Mail, History } from "lucide-react";
+import { Search, Bell, Plus, Menu, Download, Mail, History, Moon, Sun } from "lucide-react";
 import { forwardRef, lazy, Suspense, useState, useEffect } from "react";
 
 const CommandPalette = lazy(() => import("./CommandPalette"));
@@ -38,7 +38,7 @@ const quickAddItems = [
 const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const tasks = useTasks();
   const exportAllData = useExportAllData();
-  const { userName } = useSettingsStore();
+  const { userName, resolvedTheme, toggleDayNight } = useSettingsStore();
   const {
     setSidebarOpen,
     setActiveSection,
@@ -151,6 +151,17 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
         </button>
 
         <div className="flex items-center gap-1 sm:gap-1.5 ml-auto">
+          {/* Mobile day/night — sidebar is hidden below lg, so this control must live in the top bar. */}
+          <button
+            type="button"
+            onClick={toggleDayNight}
+            className="flex h-10 w-10 items-center justify-center rounded-2xl text-muted-foreground/70 transition-all hover:bg-secondary/75 hover:text-foreground active:scale-90 touch-manipulation lg:hidden"
+            aria-label={resolvedTheme === "dark" ? "Switch to day mode" : "Switch to night mode"}
+            title={resolvedTheme === "dark" ? "Day mode" : "Night mode"}
+          >
+            {resolvedTheme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+
           {/* Action buttons — hidden on mobile for cleaner bar */}
           <button
             onClick={() => setImportModalOpen(true)}
