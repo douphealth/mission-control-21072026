@@ -3,6 +3,7 @@ import {
   genId,
   type BuildProject,
   type FeedSource,
+  type GitHubRepo,
   type Idea,
   type LinkItem,
   type SEOAction,
@@ -12,6 +13,7 @@ import {
   type Website,
 } from "@/lib/db";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
+import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 const now = () => new Date().toISOString();
@@ -36,6 +38,42 @@ async function putIfMissing<T extends { id: string }>(
   await table.put({ ...record, id });
   markCloudRecordDirty(collection, id);
   return true;
+}
+
+
+async function ensureGitHubCatalog() {
+  const existing = await db.repos.toArray();
+  const byUrl = new Map(existing.map((row) => [row.url.toLowerCase(), row]));
+  const byName = new Map(existing.map((row) => [row.name.toLowerCase(), row]));
+  let changed = false;
+
+  for (const catalog of GITHUB_REPO_CATALOG) {
+    const current =
+      byUrl.get(catalog.url.toLowerCase()) ?? byName.get(catalog.name.toLowerCase());
+
+    if (!current) {
+      const id = genId();
+      await db.repos.put({ ...catalog, id });
+      markCloudRecordDirty("repos", id);
+      changed = true;
+      continue;
+    }
+
+    const technicalPatch: Partial<GitHubRepo> = {};
+    if (current.visibility !== catalog.visibility) technicalPatch.visibility = catalog.visibility;
+    if (current.defaultBranch !== catalog.defaultBranch) {
+      technicalPatch.defaultBranch = catalog.defaultBranch;
+    }
+    if (current.repoSizeKb !== catalog.repoSizeKb) technicalPatch.repoSizeKb = catalog.repoSizeKb;
+
+    if (Object.keys(technicalPatch).length) {
+      await db.repos.update(current.id, technicalPatch);
+      markCloudRecordDirty("repos", current.id);
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 const INTERNAL_BUILDS: Array<Omit<BuildProject, "id">> = [
@@ -379,7 +417,7 @@ async function ensureSeoControlData(websites: Website[]) {
 }
 
 export async function ensureWorkspaceBootstrap() {
-  let changed = false;
+  let changed = await ensureGitHubCatalog();
 
   for (const app of APP_FUNNEL_CATALOG) {
     changed =
