@@ -107,7 +107,38 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
               <span className="text-primary font-medium">{item.matchedTerm}</span>
             </>
           )}
+          {item.verification && (
+            <>
+              <span>·</span>
+              <span className="rounded-full border border-primary/15 bg-primary/8 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+                {item.verification.replaceAll("-", " ")}
+              </span>
+            </>
+          )}
+          {item.confidence && (
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                item.confidence === "high"
+                  ? "bg-success/10 text-success"
+                  : item.confidence === "medium"
+                    ? "bg-warning/10 text-warning"
+                    : "bg-secondary text-muted-foreground"
+              }`}
+            >
+              {item.confidence} confidence
+            </span>
+          )}
+          {(item.corroborationCount || 0) > 0 && (
+            <span className="rounded-full bg-info/10 px-1.5 py-0.5 text-[9px] font-bold text-info">
+              {item.corroborationCount} similar source{item.corroborationCount === 1 ? "" : "s"}
+            </span>
+          )}
         </p>
+        {item.matchedAnchors && item.matchedAnchors.length > 0 && (
+          <p className="mt-1 text-[9px] text-muted-foreground">
+            Identity anchors: {item.matchedAnchors.join(", ")}
+          </p>
+        )}
         {(item.aiSummary || item.summary) && (
           <p className="text-xs text-muted-foreground/90 mt-1.5 line-clamp-2">
             {item.aiSummary && <Sparkles size={11} className="inline mr-1 -mt-0.5 text-primary" />}
