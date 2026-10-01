@@ -124,7 +124,10 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
           {item.verification && (
             <>
               <span>·</span>
-              <span className="rounded-full border border-primary/15 bg-primary/8 px-1.5 py-0.5 text-[9px] font-bold text-primary">
+              <span
+                className="rounded-full border border-primary/15 bg-primary/8 px-1.5 py-0.5 text-[9px] font-bold text-primary"
+                title={item.verificationReason || "Verified match"}
+              >
                 {item.verification.replaceAll("-", " ")}
               </span>
             </>
@@ -153,9 +156,10 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
             </span>
           )}
         </p>
-        {item.matchedAnchors && item.matchedAnchors.length > 0 && (
+        {(item.matchedAnchors?.length || item.verificationReason) && (
           <p className="mt-1 text-[9px] text-muted-foreground">
-            Identity anchors: {item.matchedAnchors.join(", ")}
+            {item.matchedAnchors?.length ? `Identity anchors: ${item.matchedAnchors.join(", ")}` : "Identity verified"}
+            {item.verificationReason ? ` · ${item.verificationReason}` : ""}
           </p>
         )}
         {(item.aiSummary || item.summary) && (
