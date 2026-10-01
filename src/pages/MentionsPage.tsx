@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   BadgeCheck,
@@ -34,6 +34,7 @@ export default function MentionsPage() {
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [confidence, setConfidence] = useState<"all" | "high" | "medium">("all");
+  const autoScanStarted = useRef(false);
 
   const mentions = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -66,6 +67,20 @@ export default function MentionsPage() {
     .filter(Boolean)
     .sort()
     .at(-1);
+
+  useEffect(() => {
+    if (autoScanStarted.current || !enabledTerms.length) return;
+    const stale = enabledTerms.some(
+      (watch) =>
+        !watch.lastCheckedAt ||
+        Date.now() - new Date(watch.lastCheckedAt).getTime() > 6 * 3_600_000,
+    );
+    if (!stale) return;
+    autoScanStarted.current = true;
+    void runMentionCollector(false).catch(() => {
+      // Collector health captures the failure without interrupting navigation.
+    });
+  }, [enabledTerms]);
 
   const addTerm = async () => {
     const clean = term.trim();
