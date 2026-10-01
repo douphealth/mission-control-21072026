@@ -13,6 +13,7 @@ import {
   Undo2,
   Plus,
   GripVertical,
+  Save,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
@@ -45,6 +46,7 @@ export default function TaskQuickEditor({
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [newSubtask, setNewSubtask] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setTitle(task?.title ?? "");
@@ -67,6 +69,29 @@ export default function TaskQuickEditor({
   };
 
   const archived = (task as any).archived === true;
+
+  const saveDraft = async () => {
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      toast.error("Task title is required");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const changes: Partial<Task> = {};
+      if (cleanTitle !== task.title) changes.title = cleanTitle;
+      if (description !== (task.description ?? "")) changes.description = description;
+      if (Object.keys(changes).length) await patch(changes);
+      toast.success("Task saved");
+      onClose();
+    } catch (error) {
+      console.error("Task save failed", error);
+      toast.error("Task could not be saved");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const addSubtask = async () => {
     const nextTitle = newSubtask.trim();
@@ -96,7 +121,7 @@ export default function TaskQuickEditor({
               Edit task
             </div>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Changes save instantly everywhere.
+              Changes autosave. Use Save changes to explicitly commit the current draft.
             </p>
           </div>
           <Button
@@ -354,7 +379,15 @@ export default function TaskQuickEditor({
         </div>
 
         {/* Footer actions */}
-        <div className="mt-5 flex flex-wrap items-center gap-1.5 border-t border-border/40 pt-3">
+        <div className="sticky bottom-0 -mx-4 mt-5 flex flex-wrap items-center gap-1.5 border-t border-border/50 bg-card/95 px-4 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:-mx-5 sm:px-5">
+          <button
+            type="button"
+            onClick={() => void saveDraft()}
+            disabled={saving || !title.trim()}
+            className="flex min-h-10 items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-[12px] font-bold text-primary-foreground shadow-[var(--shadow-primary)] transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 touch-manipulation"
+          >
+            <Save size={13} /> {saving ? "Saving…" : "Save changes"}
+          </button>
           <button
             onClick={async () => {
               await patch({ status: "done", completedAt: new Date().toISOString() });
