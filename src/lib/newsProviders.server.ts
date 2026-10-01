@@ -68,6 +68,15 @@ function parseTimestamp(value: unknown): string | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed.toISOString();
 }
 
+function sourceHomeFromUrl(raw: string): string | undefined {
+  try {
+    const url = new URL(raw);
+    return `${url.protocol}//${url.hostname}/`;
+  } catch {
+    return undefined;
+  }
+}
+
 function sourceUrlFromDomain(domain: unknown): string | undefined {
   if (typeof domain !== "string" || !domain.trim()) return undefined;
   const clean = domain.trim().replace(/^https?:\/\//i, "").replace(/^www\./i, "");
@@ -235,6 +244,8 @@ export function mergeNewsCoverage(
       if (!existing) {
         merged.set(key, {
           ...item,
+          source: item.source || hostOf(item.sourceUrl || item.url) || undefined,
+          sourceUrl: item.sourceUrl || sourceHomeFromUrl(item.url),
           retrievalProvider: result.provider,
           retrievalProviders: [result.provider],
         });
