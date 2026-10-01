@@ -44,6 +44,7 @@ import {
 } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { todayISO } from "@/lib/overdue";
+import { isRecentIso, isTrustedAudienceReading } from "@/lib/intelligenceQuality";
 
 type Tone = "primary" | "success" | "warning" | "danger" | "info" | "violet" | "neutral";
 
@@ -165,22 +166,22 @@ export default function WorkspacePulseBar() {
       Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
   );
   const trackedFeedMentions = activeMentions.filter(
-    (item) => item.evidenceType === "tracked-feed",
+    (item) => item.evidenceType === "tracked-feed" && isRecentIso(item.publishedAt, 30),
   );
   const enabledTerms = terms.filter((term) => term.enabled);
+  const latestTrustedAudience = new Map<string, (typeof readings)[number]>();
+  readings
+    .filter((reading) => isTrustedAudienceReading(reading))
+    .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt))
+    .forEach((reading) => latestTrustedAudience.set(reading.accountId, reading));
   const freshAudienceAccounts = new Set(
-    readings
-      .filter(
-        (reading) =>
-          reading.status === "ok" &&
-          reading.followers !== null &&
-          Date.now() - new Date(reading.capturedAt).getTime() <= 24 * 3_600_000,
-      )
+    [...latestTrustedAudience.values()]
+      .filter((reading) => isRecentIso(reading.capturedAt, 1))
       .map((reading) => reading.accountId),
   );
   const officialAudienceAccounts = new Set(
-    readings
-      .filter((reading) => reading.status === "ok" && reading.method === "official-api")
+    [...latestTrustedAudience.values()]
+      .filter((reading) => reading.method === "official-api" && isRecentIso(reading.capturedAt, 1))
       .map((reading) => reading.accountId),
   );
   const audienceUnavailable = accounts.filter(
@@ -428,7 +429,7 @@ export default function WorkspacePulseBar() {
     industry: {
       group: "Systems & tools",
       label: "Trends pulse",
-      subtitle: "Current subject research plus publisher feeds, with freshness and evidence provenance.",
+      subtitle: "Fresh subject research plus publisher feeds, ranked by real query relevance and evidence provenance.",
       icon: Newspaper,
       stats: [
         { label: "Fresh <24h", value: freshStories.length, tone: "info" },
@@ -439,12 +440,12 @@ export default function WorkspacePulseBar() {
         { label: "Captures", section: "control-center" },
         { label: "Ideas", section: "ideas" },
       ],
-      truth: "Tracked-feed items are attributable to their publishers; live subject search is separate and freshness-scoped.",
+      truth: "Search results are freshness-scoped, Unicode-aware, relevance-filtered and retain publisher evidence.",
     },
     mentions: {
       group: "Systems & tools",
       label: "Mentions pulse",
-      subtitle: "Identity-verified monitoring across current news and your tracked publisher feeds.",
+      subtitle: "Exact identity monitoring across current news and tracked publisher feeds, with ambiguous matches rejected.",
       icon: AtSign,
       stats: [
         { label: "High confidence 7d", value: freshVerifiedMentions.length, tone: "violet" },
@@ -455,7 +456,7 @@ export default function WorkspacePulseBar() {
         { label: "Captures", section: "control-center" },
         { label: "Audience", section: "audience" },
       ],
-      truth: "High-confidence mentions require exact domain/handle identity or anchored-name verification.",
+      truth: "High-confidence mentions require exact domain/handle identity or exact name/brand plus configured anchors.",
     },
     audience: {
       group: "Systems & tools",
@@ -471,7 +472,7 @@ export default function WorkspacePulseBar() {
         { label: "Mentions", section: "mentions" },
         { label: "Trends", section: "industry" },
       ],
-      truth: "Official API measurements are preferred; fallback methods are labeled and failures never overwrite valid readings.",
+      truth: "Only official API or identity-verified public-page measurements count as valid; failures preserve prior verified data.",
     },
     focus: {
       group: "Systems & tools",

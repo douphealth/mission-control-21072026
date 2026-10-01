@@ -16,6 +16,7 @@ import { useAudienceAccounts, useAudienceReadings, genId } from "@/hooks/useTabl
 import { db, type AudiencePlatform, type AudienceReading } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { runAudienceCollector } from "@/lib/controlCenter";
+import { isTrustedAudienceReading } from "@/lib/intelligenceQuality";
 import { CCHeader, EmptyState, Panel, relTime } from "@/components/controlcenter/ui";
 
 const PLATFORMS: {
@@ -92,7 +93,7 @@ export default function AudiencePage() {
     accounts.forEach((account) => {
       const latest = [...(byAccount.get(account.id) ?? [])]
         .reverse()
-        .find((reading) => reading.followers !== null && reading.status === "ok");
+        .find((reading) => isTrustedAudienceReading(reading));
       if (latest) map.set(account.id, latest);
     });
     return map;
@@ -229,9 +230,9 @@ export default function AudiencePage() {
             </div>
             <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted-foreground">
               YouTube uses the official YouTube Data API when <code>YOUTUBE_API_KEY</code> is
-              configured on the server. Other platforms currently use best-effort public profile
-              pages. If a platform hides the count, Mission Control displays unavailable — never a
-              false zero and never a guessed value.
+              configured. Public-page fallbacks are accepted only when the returned page matches
+              the requested profile identity and is not a login/challenge page. Hidden or uncertain
+              counts stay unavailable — never zero, never guessed.
             </p>
           </div>
           <span className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-1 text-[9px] font-bold text-muted-foreground">
@@ -312,8 +313,8 @@ export default function AudiencePage() {
                         </span>
                       )}
                       {latest?.method === "public-page" && (
-                        <span className="rounded-full bg-warning/10 px-1.5 py-0.5 text-[8px] font-bold text-warning">
-                          Public-page fallback
+                        <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-1.5 py-0.5 text-[8px] font-bold text-info">
+                          <ShieldCheck size={9} /> Identity-verified public page
                         </span>
                       )}
                     </div>

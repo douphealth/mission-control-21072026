@@ -10,6 +10,12 @@ import {
   type RawItem,
 } from "./controlCenter.server";
 import { anthropicComplete, isAnthropicAvailable } from "@/lib/anthropicServer";
+import {
+  canonicalWebUrl,
+  matchIdentity,
+  queryRelevance,
+  titleSimilarity,
+} from "@/lib/intelligenceQuality";
 
 function evidenceStrength(input: {
   source?: string;
@@ -99,7 +105,7 @@ export const collectIndustry = createServerFn({ method: "POST" })
     const topicResults = await Promise.all(
       topics.map(async (topic) => {
         try {
-          const xml = await httpGet(googleNewsUrl(`"${topic}"`));
+          const xml = await httpGet(googleNewsUrl(`"${topic}" when:7d`));
           return {
             sourceId: `topic:${topic}`,
             feedUrl: null,
@@ -150,46 +156,36 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
         sourceUrl: item.sourceUrl,
       }));
 
-    const words = (title: string) =>
-      new Set(
-        title
-          .toLowerCase()
-          .replace(/[^a-z0-9 ]/g, " ")
-          .split(/\s+/)
-          .filter((word) => word.length >= 4)
-          .filter((word) => !["with", "from", "that", "this", "have", "will", "into", "over"].includes(word)),
+    const enriched = items
+      .map((item, index) => {
+        const publishers = new Set<string>();
+        items.forEach((other, otherIndex) => {
+          if (otherIndex === index || titleSimilarity(item.title, other.title) < 0.5) return;
+          const publisher = other.source || hostOf(other.sourceUrl || "");
+          if (publisher && publisher !== item.source) publishers.add(publisher);
+        });
+        const corroborationCount = publishers.size;
+        const relevanceScore = queryRelevance(query, item.title, item.summary);
+        const evidence = evidenceStrength({
+          source: item.source,
+          sourceUrl: item.sourceUrl,
+          corroborationCount,
+        });
+        return {
+          ...item,
+          corroborationCount,
+          relevanceScore,
+          evidenceLevel: evidence.level,
+          evidenceReason: evidence.reason,
+        };
+      })
+      .filter((item) => item.relevanceScore >= 40)
+      .sort(
+        (a, b) =>
+          b.relevanceScore - a.relevanceScore ||
+          (b.corroborationCount ?? 0) - (a.corroborationCount ?? 0) ||
+          new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime(),
       );
-    const similarity = (a: string, b: string) => {
-      const left = words(a);
-      const right = words(b);
-      if (!left.size || !right.size) return 0;
-      let overlap = 0;
-      left.forEach((word) => {
-        if (right.has(word)) overlap += 1;
-      });
-      return overlap / Math.max(left.size, right.size);
-    };
-
-    const enriched = items.map((item, index) => {
-      const publishers = new Set<string>();
-      items.forEach((other, otherIndex) => {
-        if (otherIndex === index || similarity(item.title, other.title) < 0.5) return;
-        const publisher = other.source || hostOf(other.sourceUrl || "");
-        if (publisher) publishers.add(publisher);
-      });
-      const corroborationCount = publishers.size;
-      const evidence = evidenceStrength({
-        source: item.source,
-        sourceUrl: item.sourceUrl,
-        corroborationCount,
-      });
-      return {
-        ...item,
-        corroborationCount,
-        evidenceLevel: evidence.level,
-        evidenceReason: evidence.reason,
-      };
-    });
 
     return { query, days: data.days, fetchedAt: new Date().toISOString(), items: enriched };
   });
@@ -211,7 +207,7 @@ export const collectMentions = createServerFn({ method: "POST" })
       data.terms.map(async (t) => {
         const cleanTerm = t.term.replace(/^@/, "").trim();
         const anchors = (t.anchors ?? []).map((a) => a.trim()).filter(Boolean);
-        const negatives = (t.negatives ?? []).map((n) => n.toLowerCase()).filter(Boolean);
+        const negatives = (t.negatives ?? []).map((n) => n.trim()).filter(Boolean);
         if (t.type === "name" && !anchors.length) {
           return {
             termId: t.id,
@@ -220,6 +216,8 @@ export const collectMentions = createServerFn({ method: "POST" })
               matchedAnchors?: string[];
               verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand";
               confidence?: "high" | "medium" | "low";
+              verificationReason?: string;
+              corroborationCount?: number;
             }>,
             error: "Name monitoring requires at least one identity anchor.",
           };
@@ -232,65 +230,49 @@ export const collectMentions = createServerFn({ method: "POST" })
 
         try {
           const batches = await Promise.all(
-            queries.map(async (query) => parseFeed(await httpGet(googleNewsUrl(query))).slice(0, 30)),
+            queries.map(async (query) =>
+              parseFeed(await httpGet(googleNewsUrl(query + " when:30d"))).slice(0, 30),
+            ),
           );
           const dedup = new Map<string, RawItem>();
           batches.flat().forEach((item) => {
-            if (!dedup.has(item.url)) dedup.set(item.url, item);
+            const key = canonicalWebUrl(item.url);
+            if (!dedup.has(key)) dedup.set(key, item);
           });
-          const needle = cleanTerm.toLowerCase();
 
-          const items = [...dedup.values()]
-            .map((item) => {
-              const hay = (item.title + " " + (item.summary ?? "")).toLowerCase();
-              const matchedAnchors = anchors.filter((anchor) =>
-                hay.includes(anchor.toLowerCase()),
-              );
-              const source = item.source || hostOf(item.sourceUrl || "") || "Google News";
-              const sourceHost = hostOf(item.sourceUrl || "").toLowerCase();
-              const exactDomain =
-                t.type === "domain" &&
-                (sourceHost === needle || sourceHost.endsWith("." + needle) || hay.includes(needle));
-              const exactHandle =
-                t.type === "handle" &&
-                (hay.includes("@" + needle) || hay.split(/[^a-z0-9_]+/).includes(needle));
-              const exactPhrase = hay.includes(needle);
-              let verification:
-                | "exact-domain"
-                | "exact-handle"
-                | "anchored-name"
-                | "exact-brand"
-                | undefined;
-              let confidence: "high" | "medium" | "low" = "low";
-
-              if (exactDomain) {
-                verification = "exact-domain";
-                confidence = "high";
-              } else if (exactHandle) {
-                verification = "exact-handle";
-                confidence = "high";
-              } else if (t.type === "name" && exactPhrase && matchedAnchors.length) {
-                verification = "anchored-name";
-                confidence = "high";
-              } else if (t.type === "brand" && exactPhrase) {
-                verification = "exact-brand";
-                confidence = matchedAnchors.length ? "high" : "medium";
-              }
-
-              return {
-                ...item,
-                source,
-                sourceUrl: item.sourceUrl,
-                matchedAnchors,
-                verification,
-                confidence,
-              };
-            })
-            .filter((item) => {
-              const hay = (item.title + " " + (item.summary ?? "")).toLowerCase();
-              if (negatives.some((negative) => hay.includes(negative))) return false;
-              return Boolean(item.verification);
+          const candidates = [...dedup.values()].map((item) => {
+            const source = item.source || hostOf(item.sourceUrl || "") || "Google News";
+            const identity = matchIdentity({
+              term: t.term,
+              type: t.type,
+              anchors,
+              negatives,
+              text: item.title + " " + (item.summary ?? ""),
+              sourceUrl: item.sourceUrl,
             });
+            return identity
+              ? {
+                  ...item,
+                  source,
+                  sourceUrl: item.sourceUrl,
+                  matchedAnchors: identity.matchedAnchors,
+                  verification: identity.verification,
+                  verificationReason: identity.reason,
+                  confidence: identity.confidence,
+                }
+              : null;
+          });
+
+          const verified = candidates.filter((item): item is NonNullable<typeof item> => item !== null);
+          const items = verified.map((item, index) => {
+            const publishers = new Set<string>();
+            verified.forEach((other, otherIndex) => {
+              if (index === otherIndex || titleSimilarity(item.title, other.title) < 0.5) return;
+              const publisher = other.source || hostOf(other.sourceUrl || "");
+              if (publisher && publisher !== item.source) publishers.add(publisher);
+            });
+            return { ...item, corroborationCount: publishers.size };
+          });
 
           return { termId: t.id, term: t.term, items, error: null as string | null };
         } catch (e: any) {
@@ -301,6 +283,8 @@ export const collectMentions = createServerFn({ method: "POST" })
               matchedAnchors?: string[];
               verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand";
               confidence?: "high" | "medium" | "low";
+              verificationReason?: string;
+              corroborationCount?: number;
             }>,
             error: String(e?.message ?? e).slice(0, 200),
           };

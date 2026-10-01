@@ -15,6 +15,7 @@ import { useStreamItems, useWatchTerms, genId } from "@/hooks/useTableData";
 import { db, type WatchTermType } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { runMentionCollector } from "@/lib/controlCenter";
+import { isRecentIso } from "@/lib/intelligenceQuality";
 import { CCHeader, EmptyState, Panel, StreamRow, relTime } from "@/components/controlcenter/ui";
 
 const TYPES: { id: WatchTermType; label: string; hint: string }[] = [
@@ -58,7 +59,12 @@ export default function MentionsPage() {
   }, [items, search, confidence]);
 
   const highConfidence = items.filter(
-    (item) => item.kind === "mention" && item.status === "active" && item.confidence === "high",
+    (item) =>
+      item.kind === "mention" &&
+      item.status === "active" &&
+      item.confidence === "high" &&
+      item.dateBasis === "published" &&
+      isRecentIso(item.publishedAt, 30),
   ).length;
   const enabledTerms = terms.filter((watch) => watch.enabled);
   const neverScanned = enabledTerms.filter((watch) => !watch.lastCheckedAt).length;
@@ -149,7 +155,7 @@ export default function MentionsPage() {
     <div className="space-y-5">
       <CCHeader
         title="Brand Mentions"
-        subtitle="Identity-filtered monitoring across current Google News publisher coverage plus your tracked publisher feeds. Exact domains/handles and anchored names are high-confidence; ambiguous matches are rejected."
+        subtitle="Fresh identity-filtered monitoring across publisher coverage and your tracked feeds. Exact domains/handles and anchored names are high-confidence; ambiguous matches are rejected before storage."
         actions={
           <button
             onClick={() => void refresh()}
@@ -165,7 +171,7 @@ export default function MentionsPage() {
       <section className="grid gap-2 sm:grid-cols-4">
         {[
           ["Enabled terms", enabledTerms.length, "primary"],
-          ["High confidence", highConfidence, "success"],
+          ["High confidence 30d", highConfidence, "success"],
           ["Never scanned", neverScanned, neverScanned ? "warning" : "success"],
           ["Last scan", latestScan ? relTime(latestScan) : "—", "neutral"],
         ].map(([label, value, tone]) => (

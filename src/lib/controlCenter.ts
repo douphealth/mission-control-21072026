@@ -9,6 +9,11 @@ import {
   rankStories,
 } from "@/lib/controlCenter.functions";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
+import {
+  canonicalWebUrl,
+  isTrustedAudienceReading,
+  matchIdentity,
+} from "@/lib/intelligenceQuality";
 
 const LAST_RUN_KEY = "mc-cc-last-run";
 
@@ -41,16 +46,7 @@ async function writeCollectorHealth(
 }
 
 export function canonicalUrl(raw: string): string {
-  try {
-    const u = new URL(raw);
-    u.hash = "";
-    [...u.searchParams.keys()].forEach((k) => {
-      if (/^(utm_|fbclid|gclid|ref|source)/i.test(k)) u.searchParams.delete(k);
-    });
-    return `${u.origin}${u.pathname.replace(/\/$/, "")}${u.search}`.toLowerCase();
-  } catch {
-    return raw.trim().toLowerCase();
-  }
+  return canonicalWebUrl(raw).toLowerCase();
 }
 
 /** Local importance model: recency + source weight + topic hits. */
@@ -59,57 +55,7 @@ function verifyMentionAgainstText(
   text: string,
   sourceUrl?: string,
 ) {
-  const hay = text.toLowerCase();
-  const clean = term.term.replace(/^@/, "").trim().toLowerCase();
-  const anchors = (term.anchors ?? []).map((value) => value.toLowerCase()).filter(Boolean);
-  const negatives = (term.negatives ?? []).map((value) => value.toLowerCase()).filter(Boolean);
-  if (!clean || negatives.some((negative) => hay.includes(negative))) return null;
-
-  const matchedAnchors = anchors.filter((anchor) => hay.includes(anchor));
-  const sourceHost = (() => {
-    try {
-      return sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase() : "";
-    } catch {
-      return "";
-    }
-  })();
-
-  if (term.type === "domain") {
-    const exact =
-      sourceHost === clean ||
-      sourceHost.endsWith("." + clean) ||
-      hay.includes(clean);
-    return exact
-      ? { verification: "exact-domain" as const, confidence: "high" as const, matchedAnchors }
-      : null;
-  }
-
-  if (term.type === "handle") {
-    const exact =
-      hay.includes("@" + clean) ||
-      hay.split(/[^a-z0-9_]+/).includes(clean);
-    return exact
-      ? { verification: "exact-handle" as const, confidence: "high" as const, matchedAnchors }
-      : null;
-  }
-
-  const exactPhrase = hay.includes(clean);
-  if (!exactPhrase) return null;
-
-  if (term.type === "name") {
-    if (!matchedAnchors.length) return null;
-    return {
-      verification: "anchored-name" as const,
-      confidence: "high" as const,
-      matchedAnchors,
-    };
-  }
-
-  return {
-    verification: "exact-brand" as const,
-    confidence: matchedAnchors.length ? ("high" as const) : ("medium" as const),
-    matchedAnchors,
-  };
+  return matchIdentity({ ...term, text, sourceUrl });
 }
 
 export function localScore(
@@ -307,7 +253,9 @@ export async function runMentionCollector(useAi = true) {
         matchedTerm: r.term,
         matchedAnchors: item.matchedAnchors,
         verification: item.verification,
+        verificationReason: item.verificationReason,
         confidence: item.confidence,
+        corroborationCount: item.corroborationCount,
         evidenceType: "google-news",
       });
     }
@@ -352,6 +300,7 @@ export async function runMentionCollector(useAi = true) {
         matchedTerm: term.term,
         matchedAnchors: verified.matchedAnchors,
         verification: verified.verification,
+        verificationReason: verified.reason,
         confidence: verified.confidence,
         evidenceType: "tracked-feed",
       });
@@ -402,7 +351,8 @@ export async function runAudienceCollector() {
       .filter((p) => Date.now() - new Date(p.capturedAt).getTime() < 12 * 3_600_000)
       .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
 
-    if (r.status === "ok" && r.followers !== null) {
+    const trusted = isTrustedAudienceReading(r);
+    if (trusted) {
       if (recent) {
         await db.audienceReadings.update(recent.id, {
           followers: r.followers,
@@ -414,6 +364,7 @@ export async function runAudienceCollector() {
           confidence: r.confidence,
           evidence: r.evidence,
           approximate: r.approximate,
+          identityVerified: r.identityVerified,
         });
         markCloudRecordDirty("audienceReadings", recent.id);
       } else {
@@ -429,6 +380,7 @@ export async function runAudienceCollector() {
           confidence: r.confidence,
           evidence: r.evidence,
           approximate: r.approximate,
+          identityVerified: r.identityVerified,
         };
         await db.audienceReadings.put(rec);
         markCloudRecordDirty("audienceReadings", rec.id);
@@ -439,8 +391,7 @@ export async function runAudienceCollector() {
     markCloudRecordDirty("audienceAccounts", r.accountId);
     updated++;
   }
-  const latestStatuses = readings.map((reading) => reading.status);
-  const okCount = latestStatuses.filter((status) => status === "ok").length;
+  const okCount = readings.filter((reading) => isTrustedAudienceReading(reading)).length;
   await writeCollectorHealth(
     "audience",
     "Audience",

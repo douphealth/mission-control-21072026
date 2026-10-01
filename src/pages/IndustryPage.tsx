@@ -14,7 +14,8 @@ import { toast } from "sonner";
 import { useFeedSources, useStreamItems, genId } from "@/hooks/useTableData";
 import { db } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
-import { localScore, runIndustryCollector } from "@/lib/controlCenter";
+import { runIndustryCollector } from "@/lib/controlCenter";
+import { canonicalWebUrl, queryRelevance } from "@/lib/intelligenceQuality";
 import { searchIndustryTopic } from "@/lib/controlCenter.functions";
 import { CCHeader, EmptyState, Panel, StreamRow, relTime } from "@/components/controlcenter/ui";
 
@@ -28,6 +29,7 @@ type SearchStory = {
   corroborationCount?: number;
   evidenceLevel?: "high" | "medium" | "limited";
   evidenceReason?: string;
+  relevanceScore?: number;
 };
 
 export default function IndustryPage() {
@@ -147,10 +149,6 @@ export default function IndustryPage() {
     setSearching(true);
     try {
       const response = await searchIndustryTopic({ data: { query: clean, days } });
-      const queryTokens = clean
-        .toLowerCase()
-        .split(/[^a-z0-9Ͱ-Ͽἀ-῿]+/i)
-        .filter((token) => token.length >= 3);
       const minTime = Date.now() - days * 86_400_000;
       const trackedMatches: SearchStory[] = stories
         .filter(
@@ -159,13 +157,6 @@ export default function IndustryPage() {
             story.dateBasis === "published" &&
             new Date(story.publishedAt).getTime() >= minTime,
         )
-        .filter((story) => {
-          const hay = `${story.title} ${story.summary ?? ""}`.toLowerCase();
-          if (!queryTokens.length) return false;
-          const hits = queryTokens.filter((token) => hay.includes(token)).length;
-          const requiredHits = Math.max(1, Math.ceil(queryTokens.length * 0.6));
-          return hay.includes(clean.toLowerCase()) || hits >= requiredHits;
-        })
         .map((story) => ({
           title: story.title,
           url: story.url,
@@ -174,18 +165,25 @@ export default function IndustryPage() {
           source: story.source,
           sourceUrl: story.sourceUrl,
           corroborationCount: story.corroborationCount,
-          evidenceLevel: "high",
+          relevanceScore: queryRelevance(clean, story.title, story.summary),
+          evidenceLevel: "high" as const,
           evidenceReason: "Direct match from a publisher/feed source you explicitly track.",
-        }));
+        }))
+        .filter((story) => story.relevanceScore >= 40);
 
       const merged = new Map<string, SearchStory>();
       [...trackedMatches, ...response.items].forEach((story) => {
-        if (!merged.has(story.url)) merged.set(story.url, story);
+        const key = canonicalWebUrl(story.url);
+        const existing = merged.get(key);
+        if (!existing || (story.relevanceScore ?? 0) > (existing.relevanceScore ?? 0)) {
+          merged.set(key, story);
+        }
       });
       const rank = (story: SearchStory) =>
         story.evidenceLevel === "high" ? 0 : story.evidenceLevel === "medium" ? 1 : 2;
       const combined = [...merged.values()].sort(
         (a, b) =>
+          (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0) ||
           rank(a) - rank(b) ||
           new Date(b.publishedAt || response.fetchedAt).getTime() -
             new Date(a.publishedAt || response.fetchedAt).getTime(),
@@ -308,7 +306,7 @@ export default function IndustryPage() {
             </div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/8 px-2.5 py-1 text-[9px] font-bold text-success">
               <ShieldCheck size={11} />
-              Publisher + date evidence
+              Relevance + publisher + date evidence
             </span>
           </div>
           <div className="mt-3 grid gap-2">
@@ -326,13 +324,10 @@ export default function IndustryPage() {
                 .slice(0, 30)
                 .map((story) => {
                 const publishedAt = story.publishedAt || searchedAt;
-                const score = localScore(
-                  { title: story.title, summary: story.summary, publishedAt },
-                  query.split(/[,\s]+/).filter((part) => part.length > 3),
-                );
+                const score = story.relevanceScore ?? queryRelevance(query, story.title, story.summary);
                 return (
                   <article key={story.url} className="cc-intel-result">
-                    <div className="cc-intel-score">{score}</div>
+                    <div className="cc-intel-score" title="Subject relevance score">{score}</div>
                     <div className="min-w-0 flex-1">
                       <a
                         href={story.url}
