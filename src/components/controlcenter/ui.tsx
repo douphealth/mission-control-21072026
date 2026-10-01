@@ -98,7 +98,18 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
           {item.title}
         </a>
         <p className="text-[11px] text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2">
-          <span className="font-medium">{item.source || "Unknown source"}</span>
+          {item.sourceUrl ? (
+            <a
+              href={item.sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium hover:text-primary"
+            >
+              {item.source || "Unknown source"}
+            </a>
+          ) : (
+            <span className="font-medium">{item.source || "Unknown source"}</span>
+          )}
           <span>·</span>
           <span>{relTime(item.publishedAt)}</span>
           {item.matchedTerm && (
