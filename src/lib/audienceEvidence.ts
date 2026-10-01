@@ -66,7 +66,7 @@ export function profileJsonMetrics(platform: string, handle: string, html: strin
   };
   for (const match of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)) {
     const body = match[1].trim();
-    if (body.length > 2_000_000 || !/^[\[{]/.test(body)) continue;
+    if (body.length > 2_000_000 || (body[0] !== '[' && body[0] !== '{')) continue;
     try { walk(JSON.parse(body)); } catch { /* Scripts are not JSON; never eval. */ }
   }
   const counts = new Set(candidates.map(item => item.followers));
