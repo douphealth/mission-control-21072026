@@ -551,6 +551,8 @@ export interface StreamItem {
   summary?: string;
   aiSummary?: string;
   publishedAt: string; // ISO
+  /** Whether publishedAt came from source metadata or is only the discovery timestamp. */
+  dateBasis?: "published" | "discovered";
   discoveredAt: string; // ISO
   score: number; // 0-100 importance
   status: StreamStatus;
