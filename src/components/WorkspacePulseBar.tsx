@@ -147,16 +147,41 @@ export default function WorkspacePulseBar() {
   const habitsDone = habits.filter((habit) => habit.completions.includes(today));
   const activeLinks = links.filter((link) => link.status === "active");
   const enabledFeeds = feeds.filter((source) => source.enabled);
-  const feedErrors = feeds.filter((source) => Boolean(source.lastError));
   const activeStories = stream.filter(
     (item) => item.kind === "industry" && item.status === "active",
+  );
+  const freshStories = activeStories.filter(
+    (item) =>
+      item.dateBasis === "published" &&
+      Date.now() - new Date(item.publishedAt).getTime() <= 24 * 3_600_000,
   );
   const activeMentions = stream.filter(
     (item) => item.kind === "mention" && item.status === "active",
   );
+  const freshVerifiedMentions = activeMentions.filter(
+    (item) =>
+      item.confidence === "high" &&
+      item.dateBasis === "published" &&
+      Date.now() - new Date(item.publishedAt).getTime() <= 7 * 86_400_000,
+  );
+  const trackedFeedMentions = activeMentions.filter(
+    (item) => item.evidenceType === "tracked-feed",
+  );
   const enabledTerms = terms.filter((term) => term.enabled);
-  const accountsWithReadings = new Set(
-    readings.filter((reading) => reading.followers !== null).map((reading) => reading.accountId),
+  const freshAudienceAccounts = new Set(
+    readings
+      .filter(
+        (reading) =>
+          reading.status === "ok" &&
+          reading.followers !== null &&
+          Date.now() - new Date(reading.capturedAt).getTime() <= 24 * 3_600_000,
+      )
+      .map((reading) => reading.accountId),
+  );
+  const officialAudienceAccounts = new Set(
+    readings
+      .filter((reading) => reading.status === "ok" && reading.method === "official-api")
+      .map((reading) => reading.accountId),
   );
   const audienceUnavailable = accounts.filter(
     (account) => account.lastStatus === "unavailable" || account.lastStatus === "limited",
@@ -212,7 +237,7 @@ export default function WorkspacePulseBar() {
       subtitle: "One intake surface for trends, verified mentions, audience observations and reminders.",
       icon: Radar,
       stats: [
-        { label: "Active stories", value: activeStories.length, tone: "info" },
+        { label: "Fresh 7d", value: freshStories.length, tone: "info" },
         { label: "Mentions", value: activeMentions.length, tone: "violet" },
         { label: "Due reminders", value: dueReminders.length, tone: dueReminders.length ? "warning" : "success" },
       ],
@@ -403,50 +428,50 @@ export default function WorkspacePulseBar() {
     industry: {
       group: "Systems & tools",
       label: "Trends pulse",
-      subtitle: "Focused industry monitoring from sources you explicitly track.",
+      subtitle: "Current subject research plus publisher feeds, with freshness and evidence provenance.",
       icon: Newspaper,
       stats: [
-        { label: "Enabled sources", value: enabledFeeds.length, tone: "primary" },
-        { label: "Active stories", value: activeStories.length, tone: "info" },
-        { label: "Source errors", value: feedErrors.length, tone: feedErrors.length ? "warning" : "success" },
+        { label: "Fresh <24h", value: freshStories.length, tone: "info" },
+        { label: "Tracked sources", value: enabledFeeds.length, tone: "primary" },
+        { label: "Collector", value: healthState("feeds").replace("-", " "), tone: healthState("feeds") === "ok" ? "success" : healthState("feeds") === "error" ? "danger" : healthState("feeds") === "stale" ? "warning" : "neutral" },
       ],
       related: [
         { label: "Captures", section: "control-center" },
         { label: "Ideas", section: "ideas" },
       ],
-      truth: "Feed items appear only after collection; source errors remain visible.",
+      truth: "Tracked-feed items are attributable to their publishers; live subject search is separate and freshness-scoped.",
     },
     mentions: {
       group: "Systems & tools",
       label: "Mentions pulse",
-      subtitle: "Monitor brands and domains with anchors and negative filters to reduce noise.",
+      subtitle: "Identity-verified monitoring across current news and your tracked publisher feeds.",
       icon: AtSign,
       stats: [
-        { label: "Enabled terms", value: enabledTerms.length, tone: "primary" },
-        { label: "Active mentions", value: activeMentions.length, tone: "violet" },
-        { label: "Never scanned", value: enabledTerms.filter((term) => !term.lastCheckedAt).length, tone: "neutral" },
+        { label: "High confidence 7d", value: freshVerifiedMentions.length, tone: "violet" },
+        { label: "Tracked-feed matches", value: trackedFeedMentions.length, tone: "info" },
+        { label: "Collector", value: healthState("mentions").replace("-", " "), tone: healthState("mentions") === "ok" ? "success" : healthState("mentions") === "error" ? "danger" : "neutral" },
       ],
       related: [
         { label: "Captures", section: "control-center" },
         { label: "Audience", section: "audience" },
       ],
-      truth: "Matches are stored as observed items; no synthetic mention counts.",
+      truth: "High-confidence mentions require exact domain/handle identity or anchored-name verification.",
     },
     audience: {
       group: "Systems & tools",
       label: "Audience pulse",
-      subtitle: "Track public profiles while keeping unavailable metrics blank rather than zero.",
+      subtitle: "Observed profile metrics with explicit method, confidence, freshness and failure states.",
       icon: Users,
       stats: [
-        { label: "Profiles", value: accounts.length, tone: "primary" },
-        { label: "With readings", value: accountsWithReadings.size, tone: "success" },
-        { label: "Limited / unavailable", value: audienceUnavailable.length, tone: audienceUnavailable.length ? "warning" : "neutral" },
+        { label: "Fresh valid <24h", value: freshAudienceAccounts.size, tone: "success" },
+        { label: "Official API", value: officialAudienceAccounts.size, tone: "info" },
+        { label: "Collector", value: healthState("audience").replace("-", " "), tone: healthState("audience") === "ok" ? "success" : audienceUnavailable.length ? "warning" : healthState("audience") === "error" ? "danger" : "neutral" },
       ],
       related: [
         { label: "Mentions", section: "mentions" },
         { label: "Trends", section: "industry" },
       ],
-      truth: "Missing follower counts remain unknown; they are never converted to false zeros.",
+      truth: "Official API measurements are preferred; fallback methods are labeled and failures never overwrite valid readings.",
     },
     focus: {
       group: "Systems & tools",

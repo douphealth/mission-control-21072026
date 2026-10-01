@@ -12,6 +12,34 @@ import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 const LAST_RUN_KEY = "mc-cc-last-run";
 
+function chunksOf<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+async function writeCollectorHealth(
+  id: string,
+  label: string,
+  status: "ok" | "stale" | "error" | "not-configured" | "syncing",
+  detail: string,
+  error?: string,
+) {
+  const now = new Date().toISOString();
+  await db.syncHealth.put({
+    id,
+    label,
+    status,
+    lastAttemptAt: now,
+    lastSuccessAt: status === "ok" ? now : undefined,
+    detail,
+    error,
+  });
+  markCloudRecordDirty("syncHealth", id);
+}
+
 export function canonicalUrl(raw: string): string {
   try {
     const u = new URL(raw);
@@ -26,6 +54,64 @@ export function canonicalUrl(raw: string): string {
 }
 
 /** Local importance model: recency + source weight + topic hits. */
+function verifyMentionAgainstText(
+  term: { term: string; type: string; anchors?: string[]; negatives?: string[] },
+  text: string,
+  sourceUrl?: string,
+) {
+  const hay = text.toLowerCase();
+  const clean = term.term.replace(/^@/, "").trim().toLowerCase();
+  const anchors = (term.anchors ?? []).map((value) => value.toLowerCase()).filter(Boolean);
+  const negatives = (term.negatives ?? []).map((value) => value.toLowerCase()).filter(Boolean);
+  if (!clean || negatives.some((negative) => hay.includes(negative))) return null;
+
+  const matchedAnchors = anchors.filter((anchor) => hay.includes(anchor));
+  const sourceHost = (() => {
+    try {
+      return sourceUrl ? new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase() : "";
+    } catch {
+      return "";
+    }
+  })();
+
+  if (term.type === "domain") {
+    const exact =
+      sourceHost === clean ||
+      sourceHost.endsWith("." + clean) ||
+      hay.includes(clean);
+    return exact
+      ? { verification: "exact-domain" as const, confidence: "high" as const, matchedAnchors }
+      : null;
+  }
+
+  if (term.type === "handle") {
+    const exact =
+      hay.includes("@" + clean) ||
+      hay.split(/[^a-z0-9_]+/).includes(clean);
+    return exact
+      ? { verification: "exact-handle" as const, confidence: "high" as const, matchedAnchors }
+      : null;
+  }
+
+  const exactPhrase = hay.includes(clean);
+  if (!exactPhrase) return null;
+
+  if (term.type === "name") {
+    if (!matchedAnchors.length) return null;
+    return {
+      verification: "anchored-name" as const,
+      confidence: "high" as const,
+      matchedAnchors,
+    };
+  }
+
+  return {
+    verification: "exact-brand" as const,
+    confidence: matchedAnchors.length ? ("high" as const) : ("medium" as const),
+    matchedAnchors,
+  };
+}
+
 export function localScore(
   item: { title: string; summary?: string; publishedAt: string },
   topics: string[] = [],
@@ -47,7 +133,7 @@ async function persistItems(
   incoming: Omit<StreamItem, "id" | "kind" | "status" | "discoveredAt">[],
 ) {
   if (!incoming.length) return 0;
-  const existing = await db.streamItems.toArray();
+  const existing = (await db.streamItems.toArray()).filter((item) => item.kind === kind);
   const seen = new Set(existing.map((i) => canonicalUrl(i.url)));
   const fresh: StreamItem[] = [];
   for (const item of incoming) {
@@ -104,18 +190,26 @@ async function aiRerank(kind: StreamKind, context?: string) {
 
 export async function runIndustryCollector(useAi = true) {
   const sources = (await db.feedSources.toArray()).filter((s) => s.enabled);
-  if (!sources.length) return { added: 0, errors: [] as string[] };
-  const { results } = await collectIndustry({
-    data: {
-      sources: sources.map((s) => ({
-        id: s.id,
-        name: s.name,
-        url: s.url,
-        feedUrl: s.feedUrl,
-        topics: s.topics,
-      })),
-    },
-  });
+  if (!sources.length) {
+    await writeCollectorHealth("feeds", "Trends", "not-configured", "No enabled trend sources.");
+    queueCloudPush();
+    return { added: 0, errors: [] as string[] };
+  }
+  const results: Awaited<ReturnType<typeof collectIndustry>>["results"] = [];
+  for (const batch of chunksOf(sources, 30)) {
+    const response = await collectIndustry({
+      data: {
+        sources: batch.map((source) => ({
+          id: source.id,
+          name: source.name,
+          url: source.url,
+          feedUrl: source.feedUrl,
+          topics: source.topics,
+        })),
+      },
+    });
+    results.push(...response.results);
+  }
 
   const allTopics = sources.flatMap((s) => s.topics ?? []);
   const errors: string[] = [];
@@ -134,38 +228,60 @@ export async function runIndustryCollector(useAi = true) {
       if (r.error) errors.push(`${src.name}: ${r.error}`);
     }
     for (const item of r.items) {
-      const publishedAt = item.publishedAt ?? now;
+      const sourcePublishedAt = item.publishedAt;
+      const publishedAt = sourcePublishedAt ?? now;
       payload.push({
         title: item.title,
         url: item.url,
         source: item.source ?? src?.name ?? "",
+        sourceUrl: item.sourceUrl,
         sourceId: src?.id,
         summary: item.summary,
         publishedAt,
+        dateBasis: sourcePublishedAt ? "published" : "discovered",
         score: localScore({ ...item, publishedAt }, allTopics),
+        verification: src ? "feed" : "topic-search",
+        confidence: src ? "high" : "medium",
+        evidenceType: src ? "direct-feed" : "google-news",
       });
     }
   }
 
   const added = await persistItems("industry", payload);
   if (useAi && added) await aiRerank("industry");
+  await writeCollectorHealth(
+    "feeds",
+    "Trends",
+    errors.length === sources.length ? "error" : errors.length ? "stale" : "ok",
+    `${sources.length} enabled source${sources.length === 1 ? "" : "s"} checked.`,
+    errors.length ? errors.slice(0, 3).join(" · ") : undefined,
+  );
+  queueCloudPush();
   return { added, errors };
 }
 
 export async function runMentionCollector(useAi = true) {
   const terms = (await db.watchTerms.toArray()).filter((t) => t.enabled);
-  if (!terms.length) return { added: 0, errors: [] as string[] };
-  const { results } = await collectMentions({
-    data: {
-      terms: terms.slice(0, 12).map((t) => ({
-        id: t.id,
-        term: t.term,
-        type: t.type,
-        anchors: t.anchors,
-        negatives: t.negatives,
-      })),
-    },
-  });
+  if (!terms.length) {
+    await writeCollectorHealth("mentions", "Mentions", "not-configured", "No enabled mention watch terms.");
+    queueCloudPush();
+    return { added: 0, errors: [] as string[] };
+  }
+  const results: Awaited<ReturnType<typeof collectMentions>>["results"] = [];
+  for (const batch of chunksOf(terms, 12)) {
+    const response = await collectMentions({
+      data: {
+        terms: batch.map((term) => ({
+          id: term.id,
+          term: term.term,
+          type: term.type,
+          anchors: term.anchors,
+          negatives: term.negatives,
+        })),
+      },
+    });
+    results.push(...response.results);
+  }
 
   const now = new Date().toISOString();
   const errors: string[] = [];
@@ -176,34 +292,106 @@ export async function runMentionCollector(useAi = true) {
     markCloudRecordDirty("watchTerms", r.termId);
     if (r.error) errors.push(`${r.term}: ${r.error}`);
     for (const item of r.items) {
-      const publishedAt = item.publishedAt ?? now;
+      const sourcePublishedAt = item.publishedAt;
+      const publishedAt = sourcePublishedAt ?? now;
       payload.push({
         title: item.title,
         url: item.url,
         source: item.source ?? "",
+        sourceUrl: item.sourceUrl,
         sourceId: r.termId,
         summary: item.summary,
         publishedAt,
-        score: localScore({ ...item, publishedAt }) + 5,
+        dateBasis: sourcePublishedAt ? "published" : "discovered",
+        score: Math.min(100, localScore({ ...item, publishedAt }) + (item.confidence === "high" ? 15 : 5)),
         matchedTerm: r.term,
+        matchedAnchors: item.matchedAnchors,
+        verification: item.verification,
+        confidence: item.confidence,
+        evidenceType: "google-news",
+      });
+    }
+  }
+
+  // Reuse already-collected tracked-feed stories as a second, user-curated evidence source.
+  // This broadens coverage without introducing unverified web scraping.
+  const mentionLookback = Date.now() - 30 * 86_400_000;
+  const trackedStories = (await db.streamItems.where("kind").equals("industry").toArray()).filter(
+    (item) =>
+      item.status === "active" &&
+      new Date(item.publishedAt).getTime() >= mentionLookback,
+  );
+  for (const term of terms) {
+    for (const story of trackedStories) {
+      const verified = verifyMentionAgainstText(
+        term,
+        `${story.title} ${story.summary ?? ""}`,
+        story.sourceUrl,
+      );
+      if (!verified) continue;
+      payload.push({
+        title: story.title,
+        url: story.url,
+        source: story.source,
+        sourceUrl: story.sourceUrl,
+        sourceId: term.id,
+        summary: story.summary,
+        publishedAt: story.publishedAt,
+        dateBasis: story.dateBasis,
+        score: Math.min(
+          100,
+          localScore(
+            {
+              title: story.title,
+              summary: story.summary,
+              publishedAt: story.publishedAt,
+            },
+            term.anchors ?? [],
+          ) + (verified.confidence === "high" ? 15 : 5),
+        ),
+        matchedTerm: term.term,
+        matchedAnchors: verified.matchedAnchors,
+        verification: verified.verification,
+        confidence: verified.confidence,
+        evidenceType: "tracked-feed",
       });
     }
   }
 
   const added = await persistItems("mention", payload);
   if (useAi && added)
-    await aiRerank("mention", "These are mentions of the operator’s own name or brand.");
+    await aiRerank("mention", "These are identity-filtered mentions of the operator’s own name, brand, handle, or domain.");
+  await writeCollectorHealth(
+    "mentions",
+    "Mentions",
+    errors.length === terms.length ? "error" : errors.length ? "stale" : "ok",
+    `${terms.length} enabled watch term${terms.length === 1 ? "" : "s"} scanned with identity filters.`,
+    errors.length ? errors.slice(0, 3).join(" · ") : undefined,
+  );
+  queueCloudPush();
   return { added, errors };
 }
 
 export async function runAudienceCollector() {
   const accounts = await db.audienceAccounts.toArray();
-  if (!accounts.length) return { updated: 0 };
-  const { readings } = await collectAudience({
-    data: accounts.map
-      ? { accounts: accounts.map((a) => ({ id: a.id, platform: a.platform, url: a.url })) }
-      : ({} as any),
-  });
+  if (!accounts.length) {
+    await writeCollectorHealth("audience", "Audience", "not-configured", "No audience profiles configured.");
+    queueCloudPush();
+    return { updated: 0 };
+  }
+  const readings: Awaited<ReturnType<typeof collectAudience>>["readings"] = [];
+  for (const batch of chunksOf(accounts, 20)) {
+    const response = await collectAudience({
+      data: {
+        accounts: batch.map((account) => ({
+          id: account.id,
+          platform: account.platform,
+          url: account.url,
+        })),
+      },
+    });
+    readings.push(...response.readings);
+  }
 
   const now = new Date().toISOString();
   let updated = 0;
@@ -214,30 +402,52 @@ export async function runAudienceCollector() {
       .filter((p) => Date.now() - new Date(p.capturedAt).getTime() < 12 * 3_600_000)
       .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
 
-    if (recent) {
-      await db.audienceReadings.update(recent.id, {
-        followers: r.followers,
-        posts: r.posts,
-        capturedAt: now,
-        status: r.status,
-      });
-      markCloudRecordDirty("audienceReadings", recent.id);
-    } else {
-      const rec = {
-        id: genId(),
-        accountId: r.accountId,
-        capturedAt: now,
-        followers: r.followers,
-        posts: r.posts,
-        status: r.status,
-      };
-      await db.audienceReadings.put(rec);
-      markCloudRecordDirty("audienceReadings", rec.id);
+    if (r.status === "ok" && r.followers !== null) {
+      if (recent) {
+        await db.audienceReadings.update(recent.id, {
+          followers: r.followers,
+          posts: r.posts,
+          capturedAt: now,
+          status: r.status,
+          method: r.method,
+          provider: r.provider,
+          confidence: r.confidence,
+          evidence: r.evidence,
+          approximate: r.approximate,
+        });
+        markCloudRecordDirty("audienceReadings", recent.id);
+      } else {
+        const rec = {
+          id: genId(),
+          accountId: r.accountId,
+          capturedAt: now,
+          followers: r.followers,
+          posts: r.posts,
+          status: r.status,
+          method: r.method,
+          provider: r.provider,
+          confidence: r.confidence,
+          evidence: r.evidence,
+          approximate: r.approximate,
+        };
+        await db.audienceReadings.put(rec);
+        markCloudRecordDirty("audienceReadings", rec.id);
+      }
     }
+    // Failed/limited checks update account health but never overwrite the last valid metric.
     await db.audienceAccounts.update(r.accountId, { lastCheckedAt: now, lastStatus: r.status });
     markCloudRecordDirty("audienceAccounts", r.accountId);
     updated++;
   }
+  const latestStatuses = readings.map((reading) => reading.status);
+  const okCount = latestStatuses.filter((status) => status === "ok").length;
+  await writeCollectorHealth(
+    "audience",
+    "Audience",
+    okCount === readings.length ? "ok" : okCount > 0 ? "stale" : "error",
+    `${okCount}/${readings.length} profile${readings.length === 1 ? "" : "s"} returned a usable metric.`,
+    okCount === readings.length ? undefined : "Some platforms did not expose a reliable current count.",
+  );
   queueCloudPush();
   return { updated };
 }

@@ -7,6 +7,7 @@ export interface RawItem {
   summary?: string;
   publishedAt?: string;
   source?: string;
+  sourceUrl?: string;
 }
 
 const UA = "Mozilla/5.0 (compatible; MissionControl/1.0)";
@@ -75,11 +76,15 @@ export function parseFeed(xml: string): RawItem[] {
       tag(block, "dc:date");
     const parsed = dateRaw ? new Date(dateRaw) : null;
     const desc = tag(block, "description") ?? tag(block, "summary") ?? tag(block, "content");
+    const source = stripTags(tag(block, "source") ?? "") || undefined;
+    const sourceTag = block.match(/<source[^>]*url=["']([^"']+)["'][^>]*>/i);
     out.push({
       title,
       url,
       summary: desc ? stripTags(desc).slice(0, 400) : undefined,
       publishedAt: parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : undefined,
+      source,
+      sourceUrl: sourceTag ? decodeEntities(sourceTag[1]) : undefined,
     });
   }
   return out;
@@ -122,8 +127,103 @@ export async function discoverFeed(pageUrl: string): Promise<string | null> {
   return null;
 }
 
-export function googleNewsUrl(query: string): string {
-  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+export function googleNewsUrl(
+  query: string,
+  locale?: { hl: string; gl: string; ceid: string },
+): string {
+  const resolved =
+    locale ??
+    (/[Ͱ-Ͽἀ-῿]/i.test(query)
+      ? { hl: "el", gl: "GR", ceid: "GR:el" }
+      : { hl: "en-US", gl: "US", ceid: "US:en" });
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=${encodeURIComponent(resolved.hl)}&gl=${encodeURIComponent(resolved.gl)}&ceid=${encodeURIComponent(resolved.ceid)}`;
+}
+
+function youtubeIdentity(url: string): { id?: string; handle?: string } {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split("/").filter(Boolean);
+    if (parts[0] === "channel" && parts[1]) return { id: parts[1] };
+    const at = parts.find((part) => part.startsWith("@"));
+    if (at) return { handle: at.slice(1) };
+    return {};
+  } catch {
+    return {};
+  }
+}
+
+async function readYouTubeOfficial(url: string): Promise<{
+  followers: number | null;
+  posts: number | null;
+  status: "ok" | "unavailable" | "limited";
+  method: "official-api";
+  provider: string;
+  confidence: "high";
+  evidence: string;
+  approximate?: boolean;
+} | null> {
+  const key = process.env.YOUTUBE_API_KEY;
+  if (!key) return null;
+  const identity = youtubeIdentity(url);
+  if (!identity.id && !identity.handle) return null;
+  const params = new URLSearchParams({
+    part: "statistics,snippet",
+    key,
+  });
+  if (identity.id) params.set("id", identity.id);
+  else params.set("forHandle", identity.handle || "");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12_000);
+  try {
+    const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?${params.toString()}`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      items?: Array<{
+        id?: string;
+        statistics?: {
+          subscriberCount?: string;
+          videoCount?: string;
+          hiddenSubscriberCount?: boolean;
+        };
+      }>;
+    };
+    const item = body.items?.[0];
+    if (!item) {
+      return {
+        followers: null,
+        posts: null,
+        status: "unavailable",
+        method: "official-api",
+        provider: "YouTube Data API",
+        confidence: "high",
+        evidence: "Official API returned no matching channel.",
+        approximate: false,
+      };
+    }
+    const stats = item.statistics;
+    const followers =
+      stats?.hiddenSubscriberCount || stats?.subscriberCount === undefined
+        ? null
+        : Number(stats.subscriberCount);
+    const posts = stats?.videoCount === undefined ? null : Number(stats.videoCount);
+    return {
+      followers: Number.isFinite(followers as number) ? followers : null,
+      posts: Number.isFinite(posts as number) ? posts : null,
+      status: followers === null ? "limited" : "ok",
+      method: "official-api",
+      provider: "YouTube Data API",
+      confidence: "high",
+      evidence: "Official channels.list statistics response.",
+      approximate: false,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function hostOf(url: string): string {
@@ -134,7 +234,7 @@ export function hostOf(url: string): string {
   }
 }
 
-/** Public-page audience metrics. Best effort; never invents a zero. */
+/** Audience metrics. Official APIs are preferred; public-page parsing is an explicit fallback. */
 export async function readAudience(
   platform: string,
   url: string,
@@ -142,12 +242,31 @@ export async function readAudience(
   followers: number | null;
   posts: number | null;
   status: "ok" | "unavailable" | "limited";
+  method: "official-api" | "public-page";
+  provider: string;
+  confidence: "high" | "medium" | "low";
+  evidence: string;
+  approximate?: boolean;
 }> {
+  if (platform === "youtube") {
+    const official = await readYouTubeOfficial(url);
+    if (official) return official;
+  }
+
   let html = "";
   try {
     html = await httpGet(url, 12_000);
   } catch {
-    return { followers: null, posts: null, status: "unavailable" };
+    return {
+      followers: null,
+      posts: null,
+      status: "unavailable",
+      method: "public-page",
+      provider: "Public profile page",
+      confidence: "low",
+      evidence: "Profile page could not be fetched from the server.",
+      approximate: false,
+    };
   }
 
   const num = (raw: string): number | null => {
@@ -175,13 +294,35 @@ export async function readAudience(
 
   for (const re of patterns[platform] ?? []) {
     const m = html.match(re);
-    const v = m ? num(m[1]) : null;
-    if (v !== null && v >= 0) {
+    const raw = m?.[1];
+    const value = raw ? num(raw) : null;
+    if (value !== null && value >= 0) {
       const postsMatch = html.match(
         /"(?:videoCount|edge_owner_to_timeline_media|videoCountText)"[^\d]{0,20}(\d+)/i,
       );
-      return { followers: v, posts: postsMatch ? Number(postsMatch[1]) : null, status: "ok" };
+      const approximate = raw ? /[KMB]/i.test(raw) : false;
+      return {
+        followers: value,
+        posts: postsMatch ? Number(postsMatch[1]) : null,
+        status: "ok",
+        method: "public-page",
+        provider: "Public profile page",
+        confidence: approximate ? "low" : "medium",
+        evidence: approximate
+          ? "Compact public count parsed from profile HTML and expanded approximately."
+          : "Count parsed from publicly returned profile HTML; platform markup can change.",
+        approximate,
+      };
     }
   }
-  return { followers: null, posts: null, status: "limited" };
+  return {
+    followers: null,
+    posts: null,
+    status: "limited",
+    method: "public-page",
+    provider: "Public profile page",
+    confidence: "low",
+    evidence: "The platform did not expose a reliable public count in the returned page.",
+    approximate: false,
+  };
 }

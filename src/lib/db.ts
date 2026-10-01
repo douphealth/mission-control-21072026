@@ -545,15 +545,24 @@ export interface StreamItem {
   kind: StreamKind;
   title: string;
   url: string;
-  source: string; // source name / domain
+  source: string; // publisher/source name
+  sourceUrl?: string; // publisher/source homepage when known
   sourceId?: string; // feedSources.id or watch term id
   summary?: string;
   aiSummary?: string;
   publishedAt: string; // ISO
+  /** Whether publishedAt came from source metadata or is only the discovery timestamp. */
+  dateBasis?: "published" | "discovered";
   discoveredAt: string; // ISO
   score: number; // 0-100 importance
   status: StreamStatus;
   matchedTerm?: string;
+  matchedAnchors?: string[];
+  verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand" | "topic-search" | "feed";
+  confidence?: "high" | "medium" | "low";
+  corroborationCount?: number;
+  /** Where this evidence was collected. */
+  evidenceType?: "direct-feed" | "tracked-feed" | "google-news" | "manual";
   read?: boolean;
 }
 
@@ -597,6 +606,12 @@ export interface AudienceReading {
   followers: number | null; // null = unavailable (never a false zero)
   posts?: number | null;
   status: "ok" | "unavailable" | "limited";
+  method?: "official-api" | "public-page";
+  provider?: string;
+  confidence?: "high" | "medium" | "low";
+  evidence?: string;
+  /** True when a compact public value such as 12.3K was expanded approximately. */
+  approximate?: boolean;
 }
 
 export interface Reminder {
