@@ -101,6 +101,20 @@ const LANGUAGES: { id: string; label: string }[] = [
   { id: "hi", label: "हिन्दी" },
   { id: "zh", label: "中文" },
   { id: "ja", label: "日本語" },
+  { id: "ko", label: "한국어" },
+  { id: "tr", label: "Türkçe" },
+  { id: "pl", label: "Polski" },
+  { id: "cs", label: "Čeština" },
+  { id: "sv", label: "Svenska" },
+  { id: "da", label: "Dansk" },
+  { id: "no", label: "Norsk" },
+  { id: "fi", label: "Suomi" },
+  { id: "uk", label: "Українська" },
+  { id: "he", label: "עברית" },
+  { id: "th", label: "ไทย" },
+  { id: "id", label: "Bahasa Indonesia" },
+  { id: "ms", label: "Bahasa Melayu" },
+  { id: "vi", label: "Tiếng Việt" },
 ];
 
 type Phase = "idle" | "starting" | "listening" | "hearing" | "processing" | "ready" | "error";
