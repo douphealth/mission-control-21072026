@@ -51,7 +51,8 @@ async function get(url: string, json = true, headers: Record<string, string> = {
       if (!json) return text;
 
       const type = response.headers.get('content-type') || '';
-      if (type && !/json/i.test(type) && !/^\s*[\[{]/.test(text)) {
+      const first = text.trimStart()[0];
+      if (type && !/json/i.test(type) && first !== '[' && first !== '{') {
         throw new Error('Provider returned a non-JSON response');
       }
       return JSON.parse(text);
