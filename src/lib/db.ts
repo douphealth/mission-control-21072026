@@ -559,6 +559,8 @@ export interface StreamItem {
   verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand" | "topic-search" | "feed";
   confidence?: "high" | "medium" | "low";
   corroborationCount?: number;
+  /** Where this evidence was collected. */
+  evidenceType?: "direct-feed" | "tracked-feed" | "google-news" | "manual";
   read?: boolean;
 }
 
@@ -606,6 +608,8 @@ export interface AudienceReading {
   provider?: string;
   confidence?: "high" | "medium" | "low";
   evidence?: string;
+  /** True when a compact public value such as 12.3K was expanded approximately. */
+  approximate?: boolean;
 }
 
 export interface Reminder {
