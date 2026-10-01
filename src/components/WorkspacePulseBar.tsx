@@ -408,13 +408,13 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Enabled sources", value: enabledFeeds.length, tone: "primary" },
         { label: "Active stories", value: activeStories.length, tone: "info" },
-        { label: "Source errors", value: feedErrors.length, tone: feedErrors.length ? "warning" : "success" },
+        { label: "Collector", value: healthState("feeds").replace("-", " "), tone: healthState("feeds") === "ok" ? "success" : feedErrors.length ? "warning" : "neutral" },
       ],
       related: [
         { label: "Captures", section: "control-center" },
         { label: "Ideas", section: "ideas" },
       ],
-      truth: "Feed items appear only after collection; source errors remain visible.",
+      truth: "Tracked-feed items are attributable to their publishers; live subject search is separate and freshness-scoped.",
     },
     mentions: {
       group: "Systems & tools",
@@ -424,13 +424,13 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Enabled terms", value: enabledTerms.length, tone: "primary" },
         { label: "Active mentions", value: activeMentions.length, tone: "violet" },
-        { label: "Never scanned", value: enabledTerms.filter((term) => !term.lastCheckedAt).length, tone: "neutral" },
+        { label: "Collector", value: healthState("mentions").replace("-", " "), tone: healthState("mentions") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Captures", section: "control-center" },
         { label: "Audience", section: "audience" },
       ],
-      truth: "Matches are stored as observed items; no synthetic mention counts.",
+      truth: "High-confidence mentions require exact domain/handle identity or anchored-name verification.",
     },
     audience: {
       group: "Systems & tools",
@@ -440,13 +440,13 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Profiles", value: accounts.length, tone: "primary" },
         { label: "With readings", value: accountsWithReadings.size, tone: "success" },
-        { label: "Limited / unavailable", value: audienceUnavailable.length, tone: audienceUnavailable.length ? "warning" : "neutral" },
+        { label: "Collector", value: healthState("audience").replace("-", " "), tone: healthState("audience") === "ok" ? "success" : audienceUnavailable.length ? "warning" : "neutral" },
       ],
       related: [
         { label: "Mentions", section: "mentions" },
         { label: "Trends", section: "industry" },
       ],
-      truth: "Missing follower counts remain unknown; they are never converted to false zeros.",
+      truth: "Official API measurements are preferred; fallback methods are labeled and failures never overwrite valid readings.",
     },
     focus: {
       group: "Systems & tools",
