@@ -34,6 +34,7 @@ import {
 } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { todayISO } from "@/lib/overdue";
+import { usePlanStore, type AreaFilter } from "@/stores/planStore";
 
 const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
@@ -52,6 +53,7 @@ export default function LifeBusinessControlTower() {
   const syncHealth = useSyncHealth();
   const audienceAccounts = useAudienceAccounts();
   const setActiveSection = useNavigationStore((state) => state.setActiveSection);
+  const setArea = usePlanStore((state) => state.setArea);
   const today = todayISO();
 
   const openTasks = tasks.filter((task) => task.status !== "done");
@@ -114,6 +116,7 @@ export default function LifeBusinessControlTower() {
       suffix: "open",
       detail: workDueToday.length + " due today · " + workBlocked.length + " blocked",
       tone: "primary",
+      area: "work" as AreaFilter,
       rows: topWork.map((task) => task.title),
     },
     {
@@ -130,6 +133,7 @@ export default function LifeBusinessControlTower() {
         habits.length +
         " habits today",
       tone: "violet",
+      area: "personal" as AreaFilter,
       rows: topPersonal.map((task) => task.title),
     },
     {
@@ -270,7 +274,10 @@ export default function LifeBusinessControlTower() {
           <button
             type="button"
             key={card.title}
-            onClick={() => setActiveSection(card.id)}
+            onClick={() => {
+              if ("area" in card && card.area) setArea(card.area);
+              setActiveSection(card.id);
+            }}
             className="mc-tower-card"
             data-tone={card.tone}
           >
