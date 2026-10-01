@@ -5,6 +5,8 @@ import { toast } from "sonner";
 import { getCloudflareZones, type CloudflareZoneRow } from "@/lib/integrations.functions";
 import { TruthBadge, ConnectorEmpty, ConnectorError } from "@/components/TruthUI";
 import type { TruthMeta } from "@/lib/truth";
+import { db } from "@/lib/db";
+import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 const cfTools = [
   {
@@ -110,14 +112,44 @@ export default function CloudflarePage() {
         fetchedAt: r.fetchedAt,
         error: r.error,
       });
+      await db.syncHealth.put({
+        id: "cloudflare",
+        label: "Cloudflare",
+        status:
+          r.truthState === "live"
+            ? "ok"
+            : r.truthState === "stale" || r.truthState === "cached"
+              ? "stale"
+              : r.truthState === "error"
+                ? "error"
+                : "not-configured",
+        lastAttemptAt: r.fetchedAt || new Date().toISOString(),
+        lastSuccessAt: r.truthState === "live" ? r.fetchedAt : undefined,
+        error: r.error || undefined,
+        detail: "Cloudflare zones API truth state.",
+      });
+      markCloudRecordDirty("syncHealth", "cloudflare");
+      queueCloudPush();
     } catch (e: any) {
       setZones([]);
+      const fetchedAt = new Date().toISOString();
+      const message = String(e?.message ?? e);
       setMeta({
         truthState: "error",
         source: "Cloudflare API",
-        fetchedAt: new Date().toISOString(),
-        error: String(e?.message ?? e),
+        fetchedAt,
+        error: message,
       });
+      await db.syncHealth.put({
+        id: "cloudflare",
+        label: "Cloudflare",
+        status: "error",
+        lastAttemptAt: fetchedAt,
+        error: message,
+        detail: "Cloudflare zones API truth state.",
+      });
+      markCloudRecordDirty("syncHealth", "cloudflare");
+      queueCloudPush();
     } finally {
       setLoading(false);
     }
