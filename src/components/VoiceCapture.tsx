@@ -30,6 +30,8 @@ import {
   hasUsableVoiceCapture,
   inferLanguageFromTranscript,
   languageToLocale,
+  shouldUseServerVoiceCapture,
+  voiceServerBackoffMs,
 } from "@/lib/voiceCaptureQuality";
 import { toast } from "sonner";
 import { VOICE_CAPTURE_OPEN_EVENT } from "@/lib/captureEvents";
@@ -169,6 +171,8 @@ export default function VoiceCapture() {
   const [adaptiveLanguageHint, setAdaptiveLanguageHint] = useState<string | null>(null);
   const adaptiveLanguageHintRef = useRef<string | null>(null);
   const voiceModeRef = useRef<"server" | "browser">("server");
+  const serverFailureUntilRef = useRef(0);
+  const serverFailureCountRef = useRef(0);
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -421,6 +425,9 @@ export default function VoiceCapture() {
       )
         .then((result) => {
           if (!result.transcript) {
+            serverFailureCountRef.current += 1;
+            serverFailureUntilRef.current =
+              Date.now() + voiceServerBackoffMs(serverFailureCountRef.current);
             setServerSttAvailable(false);
             setErrorMsg(
               getSpeechRecognition()
@@ -430,6 +437,8 @@ export default function VoiceCapture() {
             setPhase("ready");
             return;
           }
+          serverFailureCountRef.current = 0;
+          serverFailureUntilRef.current = 0;
           const learnedLanguage =
             result.language?.split("-")[0]?.toLowerCase() ||
             inferLanguageFromTranscript(result.transcript);
@@ -448,6 +457,9 @@ export default function VoiceCapture() {
         })
         .catch((err: unknown) => {
           console.error("transcribe failed", err);
+          serverFailureCountRef.current += 1;
+          serverFailureUntilRef.current =
+            Date.now() + voiceServerBackoffMs(serverFailureCountRef.current);
           setServerSttAvailable(false);
           const message = getSpeechRecognition()
             ? "AI transcription failed. Tap the mic again — Mission Control will use Chrome speech recognition."
@@ -479,7 +491,12 @@ export default function VoiceCapture() {
     transcriptManuallyEditedRef.current = false;
 
     const Recognition = getSpeechRecognition();
-    const useServerAudio = await probeVoiceEngine();
+    const serverReady = await probeVoiceEngine();
+    const useServerAudio = shouldUseServerVoiceCapture({
+      serverReady,
+      browserRecognitionAvailable: Boolean(Recognition),
+      serverFailureUntil: serverFailureUntilRef.current,
+    });
     voiceModeRef.current = useServerAudio ? "server" : "browser";
 
     // Browser-only fallback: crucial on Android Chrome. Do NOT open getUserMedia
@@ -633,6 +650,7 @@ export default function VoiceCapture() {
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       const ctx = new Ctx();
+      if (ctx.state === "suspended") await ctx.resume();
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       const processor = ctx.createScriptProcessor(4096, 1, 1);
@@ -1115,8 +1133,10 @@ export default function VoiceCapture() {
                 </div>
                 {serverSttAvailable === false && (
                   <p className="mt-1.5 px-1 text-[9px] leading-relaxed text-warning">
-                    Auto is using Chrome's single-language fallback, not true multilingual AI detection.
-                    Mission Control will retry the AI engine automatically on every recording.
+                    Auto is temporarily using the browser's single-language fallback. A failed AI
+                    transcription now triggers bounded backoff instead of repeatedly trapping the
+                    recorder in a broken server path; Mission Control retries AI automatically after
+                    the cooldown.
                   </p>
                 )}
               </div>
