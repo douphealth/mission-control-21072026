@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
+import { todayISO } from "@/lib/overdue";
 
 const statusConfig: Record<string, { label: string; icon: any; class: string; bg: string }> = {
   spark: {
@@ -75,8 +76,8 @@ const emptyIdea: Omit<Idea, "id"> = {
   tags: [],
   linkedProject: "",
   votes: 0,
-  createdAt: new Date().toISOString().split("T")[0],
-  updatedAt: new Date().toISOString().split("T")[0],
+  createdAt: todayISO(),
+  updatedAt: todayISO(),
 };
 
 export default function IdeasPage() {
@@ -113,7 +114,7 @@ export default function IdeasPage() {
   };
   const saveForm = () => {
     if (!form.title.trim()) return;
-    const now = new Date().toISOString().split("T")[0];
+    const now = todayISO();
     if (editId) {
       updateData({
         ideas: ideas.map((i) => (i.id === editId ? { ...i, ...form, updatedAt: now } : i)),
@@ -164,7 +165,7 @@ export default function IdeasPage() {
 
   const bulkUpdateStatus = useCallback(
     (status: string) => {
-      const now = new Date().toISOString().split("T")[0];
+      const now = todayISO();
       updateData({
         ideas: ideas.map((i) =>
           bulk.selectedIds.has(i.id) ? { ...i, status: status as any, updatedAt: now } : i,
@@ -178,7 +179,7 @@ export default function IdeasPage() {
 
   const bulkUpdatePriority = useCallback(
     (priority: string) => {
-      const now = new Date().toISOString().split("T")[0];
+      const now = todayISO();
       updateData({
         ideas: ideas.map((i) =>
           bulk.selectedIds.has(i.id) ? { ...i, priority: priority as any, updatedAt: now } : i,
