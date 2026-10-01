@@ -139,7 +139,7 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
     const minTime = Date.now() - data.days * 86_400_000;
     const items = parseFeed(xml)
       .filter((item) => {
-        if (!item.publishedAt) return true;
+        if (!item.publishedAt) return false;
         const ts = new Date(item.publishedAt).getTime();
         return Number.isFinite(ts) && ts >= minTime;
       })
