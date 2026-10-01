@@ -279,9 +279,11 @@ export function runAudienceCollector() {
 async function collectAudienceOnce() {
   const accounts = await db.audienceAccounts.toArray();
   const readings: Awaited<ReturnType<typeof collectAudience>>["readings"] = [];
+  let capabilities: Awaited<ReturnType<typeof collectAudience>>["capabilities"] | null = null;
   for (const batch of chunksOf(accounts, 6)) {
     const response = await collectAudience({ data: { accounts: batch.map(a => ({ id: a.id, platform: a.platform, url: a.url })) } });
     readings.push(...response.readings);
+    capabilities = response.capabilities;
   }
   let succeeded = 0;
   for (const reading of readings) {
@@ -306,7 +308,7 @@ async function collectAudienceOnce() {
   await writeCollectorHealth("audience", "Audience", !accounts.length ? "not-configured" : !succeeded ? "error" : unavailable ? "stale" : "ok",
     `${succeeded}/${readings.length} profiles returned a current verified metric.`, unavailable ? details.filter(r => !isTrustedAudienceReading(r)).map(r => `${r.label}: ${r.evidence}`).join(" · ") : undefined);
   queueCloudPush();
-  return { updated: readings.length, succeeded, unavailable, details };
+  return { updated: readings.length, succeeded, unavailable, details, capabilities };
 }
 
 export async function runAllCollectors(useAi = true) {
