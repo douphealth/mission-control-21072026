@@ -33,7 +33,7 @@ export default function MentionsPage() {
   const [negatives, setNegatives] = useState("");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
-  const [confidence, setConfidence] = useState<"all" | "high" | "medium">("all");
+  const [confidence, setConfidence] = useState<"all" | "high" | "medium">("high");
   const autoScanStarted = useRef(false);
 
   const mentions = useMemo(() => {
