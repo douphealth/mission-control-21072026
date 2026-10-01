@@ -111,7 +111,10 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
             <span className="font-medium">{item.source || "Unknown source"}</span>
           )}
           <span>·</span>
-          <span>{relTime(item.publishedAt)}</span>
+          <span>
+            {item.dateBasis === "discovered" ? "discovered " : ""}
+            {relTime(item.publishedAt)}
+          </span>
           {item.matchedTerm && (
             <>
               <span>·</span>
