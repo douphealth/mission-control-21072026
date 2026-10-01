@@ -1,0 +1,64 @@
+name: Integrate cross-device repair
+on:
+  push:
+    branches: [fix/cross-device-mobile-truth-20261001]
+permissions:
+  contents: write
+concurrency:
+  group: cross-device-repair-integration
+  cancel-in-progress: true
+jobs:
+  integrate:
+    if: github.ref == 'refs/heads/fix/cross-device-mobile-truth-20261001'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/cross-device-mobile-truth-20261001
+      - uses: oven-sh/setup-bun@v2
+      - name: Integrate previously inspected source paths
+        run: |
+          python3 scripts/apply-cross-device-fixes.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/pages/TasksPage.tsx')
+          s = p.read_text()
+          assert s.count('function TaskModal(') == 1
+          s = s.replace('function TaskModal(', 'export function TaskModal(')
+          marker = '    </TaskDialogFrame>'
+          assert s.count(marker) == 1
+          s = s.replace(marker, '''      {task && onDelete && <button type="button" disabled={saving} onClick={async () => {
+                  try { await onDelete(task.id); onClose(); }
+                  catch { toast.error("Task could not be moved to Trash"); }
+                }} className="mb-4 min-h-11 rounded-xl bg-destructive/10 px-4 text-sm text-destructive">Move to Trash</button>}
+          ''' + marker)
+          p.write_text(s)
+          PY
+      - run: bun install --frozen-lockfile
+      - name: Pin browser regression dependency
+        run: bun add --dev --exact playwright
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build:cloudflare
+      - name: Install Chromium and WebKit
+        run: bunx playwright install --with-deps chromium webkit
+      - name: Browser save and cross-device tests
+        run: node scripts/browser-reliability.mjs
+      - name: Preserve test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cross-device-reliability
+          path: test-results/
+          if-no-files-found: ignore
+      - name: Commit only the tested integration and remove this one-time helper
+        run: |
+          git config user.name 'Mission Control repair'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/components/TaskQuickEditor.tsx src/pages/TasksPage.tsx src/layouts/DashboardLayout.tsx src/stores/dataStore.ts src/lib/cloudSync.ts src/lib/db.ts src/lib/controlCenter.server.ts src/lib/controlCenter.functions.ts src/lib/intelligenceQuality.ts src/lib/controlCenter.ts src/pages/MentionsPage.tsx src/pages/AudiencePage.tsx package.json bun.lock
+          git rm scripts/apply-cross-device-fixes.py .github/workflows/integrate-cross-device-once.yml
+          git diff --cached --check
+          git commit -m 'fix: integrate tested cross-device sync, reachable mobile save and evidence diagnostics'
+          git push origin HEAD:fix/cross-device-mobile-truth-20261001
