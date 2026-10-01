@@ -3,6 +3,7 @@ import { parseFeed } from "../controlCenter.server";
 import { canonicalUrl, localScore } from "../controlCenter";
 import {
   containsExactPhrase,
+  independentPublisherCorroboration,
   isTrustedAudienceReading,
   matchIdentity,
   queryRelevance,
@@ -93,6 +94,27 @@ describe("control-center intelligence evidence", () => {
       ),
     ).toBeGreaterThanOrEqual(60);
     expect(titleSimilarity("Νέα ενημέρωση Google αναζήτησης", "Google αναζήτηση: νέα ενημέρωση")).toBeGreaterThan(0.5);
+  });
+
+  it("counts independent publisher domains, not duplicate retrieval of the same publisher", () => {
+    const target = {
+      title: "Google ranking update changes search visibility",
+      url: "https://publisher-a.test/story",
+      sourceUrl: "https://publisher-a.test/",
+    };
+    const samePublisher = {
+      title: "Google ranking update changes search visibility",
+      url: "https://publisher-a.test/story-2",
+      sourceUrl: "https://publisher-a.test/",
+    };
+    const independent = {
+      title: "Search visibility changes after Google ranking update",
+      url: "https://publisher-b.test/report",
+      sourceUrl: "https://publisher-b.test/",
+    };
+
+    expect(independentPublisherCorroboration(target, [target, samePublisher]).independentPublishers).toBe(1);
+    expect(independentPublisherCorroboration(target, [target, samePublisher, independent]).independentPublishers).toBe(2);
   });
 
   it("accepts only official or identity-verified audience readings", () => {

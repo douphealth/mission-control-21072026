@@ -13,7 +13,7 @@ import {
   canonicalWebUrl,
   queryRelevance,
   isRecentIso,
-  titleSimilarity,
+  independentPublisherCorroboration,
 } from "@/lib/intelligenceQuality";
 import {
   searchNewsCoverage,
@@ -34,10 +34,10 @@ function evidenceStrength(input: {
       reason: "Direct publisher/feed source selected by the user.",
     };
   }
-  if (corroboration >= 2) {
+  if (corroboration >= 1) {
     return {
       level: "high" as const,
-      reason: `Similar headlines appear across ${corroboration + 1} publishers. This is not a factual verification.`,
+      reason: `A materially similar story appears across ${corroboration + 1} independent publisher domains. This corroborates coverage, not every factual claim in the story.`,
     };
   }
   if (input.source || input.sourceUrl) {
@@ -167,14 +167,9 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
 
     const enriched = items
       .map((item, index) => {
-        const publishers = new Set<string>();
-        items.forEach((other, otherIndex) => {
-          if (otherIndex === index || titleSimilarity(item.title, other.title) < 0.5) return;
-          const publisher = other.source || hostOf(other.sourceUrl || "");
-          if (publisher && publisher !== item.source) publishers.add(publisher);
-        });
+        const corroboration = independentPublisherCorroboration(item, items);
         // Search-engine duplication is not independent reporting or fact verification.
-        const corroborationCount = publishers.size;
+        const corroborationCount = Math.max(0, corroboration.independentPublishers - 1);
         const relevanceScore = queryRelevance(query, item.title, item.summary);
         const evidence = evidenceStrength({
           source: item.source,
@@ -186,10 +181,15 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
           corroborationCount,
           relevanceScore,
           evidenceLevel: evidence.level,
-          evidenceReason:
+          evidenceReason: [
+            evidence.reason,
+            corroboration.publisherHosts.length
+              ? `Publisher domains: ${corroboration.publisherHosts.join(", ")}.`
+              : "Publisher domain could not be verified.",
             item.retrievalProviders.length > 1
-              ? `${evidence.reason} Also indexed by ${item.retrievalProviders.length} search providers.`
-              : evidence.reason,
+              ? `Indexed by ${item.retrievalProviders.length} retrieval providers; this does not increase publisher corroboration.`
+              : undefined,
+          ].filter(Boolean).join(" "),
         };
       })
       .filter((item) => item.relevanceScore >= 40)

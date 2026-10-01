@@ -265,7 +265,7 @@ export function mergeNewsCoverage(
   return [...merged.values()];
 }
 
-export async function searchNewsCoverage(query: string, days: number): Promise<NewsCoverageResult> {
+async function searchNewsCoverageUncached(query: string, days: number): Promise<NewsCoverageResult> {
   const configuredDataForSeo = Boolean(dataForSeoCredentials());
   const providers: Array<{
     provider: NewsProvider;
@@ -346,6 +346,32 @@ export async function searchNewsCoverage(query: string, days: number): Promise<N
     degraded: settled.some((entry) => entry.status.configured && !entry.status.ok),
     allFailed: active.length > 0 && successful.length === 0,
   };
+}
+
+
+const coverageCache = new Map<string, { expires: number; value: NewsCoverageResult }>();
+const coveragePending = new Map<string, Promise<NewsCoverageResult>>();
+
+export async function searchNewsCoverage(query: string, days: number): Promise<NewsCoverageResult> {
+  const key = `${query.trim().toLocaleLowerCase()}::${days}`;
+  const cached = coverageCache.get(key);
+  if (cached && cached.expires > Date.now()) return cached.value;
+
+  const inflight = coveragePending.get(key);
+  if (inflight) return inflight;
+
+  const operation = searchNewsCoverageUncached(query, days)
+    .then((value) => {
+      if (!value.allFailed) {
+        if (coverageCache.size >= 80) coverageCache.delete(coverageCache.keys().next().value!);
+        coverageCache.set(key, { expires: Date.now() + 2 * 60_000, value });
+      }
+      return value;
+    })
+    .finally(() => coveragePending.delete(key));
+
+  coveragePending.set(key, operation);
+  return operation;
 }
 
 export function summarizeProviderFailures(result: NewsCoverageResult): string[] {

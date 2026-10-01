@@ -209,6 +209,38 @@ export function titleSimilarity(left: string, right: string): number {
   return Math.max(containment * 0.7 + jaccard * 0.3, 0);
 }
 
+
+export function publisherHost(item: { sourceUrl?: string; url?: string }): string {
+  const preferred = item.sourceUrl || item.url || "";
+  try {
+    return new URL(preferred).hostname.replace(/^www\./, "").toLocaleLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+export function independentPublisherCorroboration(
+  target: { title: string; sourceUrl?: string; url?: string },
+  items: Array<{ title: string; sourceUrl?: string; url?: string }>,
+  similarityThreshold = 0.56,
+): { independentPublishers: number; publisherHosts: string[] } {
+  const targetHost = publisherHost(target);
+  const hosts = new Set<string>();
+  if (targetHost) hosts.add(targetHost);
+
+  for (const item of items) {
+    if (item === target) continue;
+    if (titleSimilarity(target.title, item.title) < similarityThreshold) continue;
+    const host = publisherHost(item);
+    if (host) hosts.add(host);
+  }
+
+  return {
+    independentPublishers: hosts.size,
+    publisherHosts: [...hosts].sort(),
+  };
+}
+
 export function canonicalWebUrl(raw: string): string {
   try {
     const url = new URL(raw);

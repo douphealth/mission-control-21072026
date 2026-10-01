@@ -234,7 +234,6 @@ const sections = [
     emoji: "🚀",
     keywords: ["deploy", "hosting", "nextjs"],
   },
-  { id: "openclaw", label: "OpenClaw", icon: Github, emoji: "🐙", keywords: ["tool", "platform"] },
   {
     id: "industry",
     label: "Trends",

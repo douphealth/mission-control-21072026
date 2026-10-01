@@ -24,9 +24,28 @@ export async function collectMentionCoverage(terms: MentionTerm[]) {
         if (isOwnedDomainCoverage(term, item)) { excludedOwned++; continue; }
         const identity = matchIdentity({ ...term, text: `${item.title} ${item.summary || ''}`, sourceUrl: item.sourceUrl });
         if (!identity) { rejected++; continue; }
-        items.push({ ...item, matchedAnchors: identity.matchedAnchors, verification: identity.verification,
-          confidence: identity.confidence, verificationReason: `${identity.reason} Matched in retrieved title/snippet; the full article has not been fact-checked.`,
-          corroborationCount: 0, retrievalProvider: 'multi-news' });
+
+        // Search-index evidence proves discoverability, not every claim in the source article.
+        // Exact domain/handle identities remain high confidence; brand/name matches remain
+        // medium until a trusted tracked feed supplies direct publisher evidence.
+        const confidence =
+          identity.verification === 'exact-domain' || identity.verification === 'exact-handle'
+            ? 'high'
+            : 'medium';
+        const providers = item.retrievalProviders?.length || 1;
+        items.push({
+          ...item,
+          matchedAnchors: identity.matchedAnchors,
+          verification: identity.verification,
+          confidence,
+          verificationReason: [
+            identity.reason,
+            `Identity matched in retrieved title/snippet from ${providers} retrieval provider${providers === 1 ? '' : 's'}.`,
+            'Search-provider agreement confirms discoverability only; it is not independent factual verification of the article.',
+          ].join(' '),
+          corroborationCount: 0,
+          retrievalProvider: 'multi-news',
+        });
       }
       return { ...empty, checked, items, candidates: coverage.items.length, excludedOwned, rejected, partial: failed.length > 0,
         providers: coverage.providers, fetchedAt: coverage.fetchedAt, cached: coverage.cached,

@@ -18,20 +18,78 @@ function observed(url: string, provider: string, followers: unknown, posts: unkn
     capturedAt: new Date().toISOString(), sourceUrl: url, action: count === null ? 'This platform did not disclose the follower count.' : undefined };
 }
 async function get(url: string, json = true, headers: Record<string, string> = {}): Promise<any> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 12_000);
-  try {
-    const response = await fetch(url, { headers: { Accept: json ? 'application/json' : 'text/html',
-      'User-Agent': 'MissionControl/2.0 public-profile-monitor', ...headers }, signal: controller.signal, redirect: 'error' });
-    if (!response.ok) throw new Error(`Provider HTTP ${response.status}`);
-    const text = await response.text();
-    if (text.length > 4_000_000) throw new Error('Provider response too large');
-    return json ? JSON.parse(text) : text;
-  } finally { clearTimeout(timer); }
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 12_000);
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Accept: json ? 'application/json' : 'text/html',
+          'User-Agent': 'MissionControl/2.0 public-profile-monitor',
+          ...headers,
+        },
+        signal: controller.signal,
+        redirect: 'error',
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const retryable = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+        const retryAfter = Number(response.headers.get('retry-after') || '');
+        lastError = new Error(`Provider HTTP ${response.status}`);
+        if (!retryable || attempt === 2) throw lastError;
+        const wait = Number.isFinite(retryAfter)
+          ? Math.min(4_000, Math.max(300, retryAfter * 1_000))
+          : 350 * 2 ** attempt;
+        await new Promise(resolve => setTimeout(resolve, wait));
+        continue;
+      }
+
+      const text = await response.text();
+      if (text.length > 4_000_000) throw new Error('Provider response too large');
+      if (!json) return text;
+
+      const type = response.headers.get('content-type') || '';
+      const first = text.trimStart()[0];
+      if (type && !/json/i.test(type) && first !== '[' && first !== '{') {
+        throw new Error('Provider returned a non-JSON response');
+      }
+      return JSON.parse(text);
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      const retryable =
+        error instanceof DOMException && error.name === 'AbortError' ||
+        /Provider HTTP (408|425|429|500|502|503|504)\b/.test(message);
+      if (!retryable || attempt === 2) throw error;
+      await new Promise(resolve => setTimeout(resolve, 350 * 2 ** attempt));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Provider request failed');
 }
 export function audienceCapabilities() {
-  return { youtube: Boolean(process.env.YOUTUBE_API_KEY), x: Boolean(process.env.X_BEARER_TOKEN),
-    github: true, bluesky: true, publicPage: 'Only counts bound to the requested profile object are accepted.' };
+  const youtube = Boolean(process.env.YOUTUBE_API_KEY);
+  const x = Boolean(process.env.X_BEARER_TOKEN);
+  return {
+    youtube,
+    x,
+    github: true,
+    bluesky: true,
+    officialPlatforms: [
+      ...(youtube ? ['youtube'] : []),
+      ...(x ? ['x'] : []),
+      'github',
+      'bluesky',
+    ],
+    configurationRequired: [
+      ...(!youtube ? ['YouTube: configure YOUTUBE_API_KEY'] : []),
+      ...(!x ? ['X: configure X_BEARER_TOKEN'] : []),
+    ],
+    publicPage: 'Instagram, Facebook, LinkedIn, Threads and TikTok are accepted only when the returned public page contains an identity-bound metric object. Otherwise the metric stays unavailable.',
+  };
 }
 export async function readAudience(platform: string, url: string): Promise<AudienceObservation> {
   let profile: ReturnType<typeof audienceProfile>;

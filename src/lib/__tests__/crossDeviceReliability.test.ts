@@ -63,7 +63,18 @@ describe('truthful audience evidence', () => {
     const result = await readAudience('youtube', 'https://youtube.com/@target');
     expect(result.errorCode).toBe('api-not-configured'); expect(result.followers).toBeNull();
   });
-  it('never changes an HTTP 503 into a successful measurement', async () => {
+  it('recovers from a transient official-provider 503 without inventing data', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response('busy', { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ login: 'target', followers: 77 })));
+    vi.stubGlobal('fetch', fetchMock);
+    const result = await readAudience('github', 'https://github.com/target');
+    expect(result.status).toBe('ok');
+    expect(result.followers).toBe(77);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('never changes a persistent HTTP 503 into a successful measurement', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('busy', { status: 503 })));
     const result = await readAudience('github', 'https://github.com/target');
     expect(result.status).toBe('unavailable'); expect(result.evidence).toContain('503');
