@@ -27,6 +27,13 @@ import {
   Star,
   TrendingUp,
   AppWindow,
+  RefreshCcw,
+  Scale,
+  Radar,
+  Bell,
+  Newspaper,
+  AtSign,
+  Users,
 } from "lucide-react";
 import {
   useWebsites,
@@ -66,6 +73,41 @@ const sections = [
     keywords: ["todo", "checklist", "work"],
   },
   {
+    id: "review",
+    label: "Review",
+    icon: RefreshCcw,
+    emoji: "🔄",
+    keywords: ["weekly", "review", "reset", "control"],
+  },
+  {
+    id: "decisions",
+    label: "Findings",
+    icon: Scale,
+    emoji: "⚖️",
+    keywords: ["findings", "decisions", "issues", "recommendations"],
+  },
+  {
+    id: "control-center",
+    label: "Captures",
+    icon: Radar,
+    emoji: "🎯",
+    keywords: ["capture", "inbox", "control", "intake"],
+  },
+  {
+    id: "reminders",
+    label: "Reminders",
+    icon: Bell,
+    emoji: "⏰",
+    keywords: ["remind", "alerts", "recurring"],
+  },
+  {
+    id: "google-tasks",
+    label: "Google Tasks",
+    icon: CheckSquare,
+    emoji: "☑️",
+    keywords: ["google", "tasks", "sync"],
+  },
+  {
     id: "calendar",
     label: "Calendar",
     icon: Calendar,
@@ -99,6 +141,13 @@ const sections = [
     icon: Globe,
     emoji: "🌐",
     keywords: ["sites", "domains", "hosting"],
+  },
+  {
+    id: "wp-manage",
+    label: "WordPress Management",
+    icon: Zap,
+    emoji: "🟦",
+    keywords: ["wordpress", "plugins", "themes", "security", "site health"],
   },
   {
     id: "apps-funnels",
@@ -179,6 +228,27 @@ const sections = [
   },
   { id: "openclaw", label: "OpenClaw", icon: Github, emoji: "🐙", keywords: ["tool", "platform"] },
   {
+    id: "industry",
+    label: "Trends",
+    icon: Newspaper,
+    emoji: "📰",
+    keywords: ["trends", "news", "industry", "feeds"],
+  },
+  {
+    id: "mentions",
+    label: "Mentions",
+    icon: AtSign,
+    emoji: "📣",
+    keywords: ["mentions", "brand", "watch", "monitor"],
+  },
+  {
+    id: "audience",
+    label: "Audience",
+    icon: Users,
+    emoji: "👥",
+    keywords: ["audience", "followers", "social", "growth"],
+  },
+  {
     id: "settings",
     label: "Settings",
     icon: Settings,
@@ -257,7 +327,7 @@ const nlPatterns: { pattern: RegExp; handler: (ctx: any) => CommandItem[] }[] = 
         id: `payment-${p.id}`,
         type: "data" as const,
         label: p.title,
-        sub: `$${p.amount} · ${p.status}`,
+        sub: `${(p.currency || "USD").toUpperCase()} ${p.amount} · ${p.status}`,
         action: () => {
           ctx.setActiveSection("payments");
           ctx.onClose();

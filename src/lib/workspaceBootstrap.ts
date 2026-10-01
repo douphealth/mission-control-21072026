@@ -3,15 +3,18 @@ import {
   genId,
   type BuildProject,
   type FeedSource,
+  type GitHubRepo,
   type Idea,
   type LinkItem,
   type SEOAction,
   type SEOIssue,
   type SEOProfile,
+  type SyncHealth,
   type WatchTerm,
   type Website,
 } from "@/lib/db";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
+import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 const now = () => new Date().toISOString();
@@ -36,6 +39,42 @@ async function putIfMissing<T extends { id: string }>(
   await table.put({ ...record, id });
   markCloudRecordDirty(collection, id);
   return true;
+}
+
+
+async function ensureGitHubCatalog() {
+  const existing = await db.repos.toArray();
+  const byUrl = new Map(existing.map((row) => [row.url.toLowerCase(), row]));
+  const byName = new Map(existing.map((row) => [row.name.toLowerCase(), row]));
+  let changed = false;
+
+  for (const catalog of GITHUB_REPO_CATALOG) {
+    const current =
+      byUrl.get(catalog.url.toLowerCase()) ?? byName.get(catalog.name.toLowerCase());
+
+    if (!current) {
+      const id = genId();
+      await db.repos.put({ ...catalog, id });
+      markCloudRecordDirty("repos", id);
+      changed = true;
+      continue;
+    }
+
+    const technicalPatch: Partial<GitHubRepo> = {};
+    if (current.visibility !== catalog.visibility) technicalPatch.visibility = catalog.visibility;
+    if (current.defaultBranch !== catalog.defaultBranch) {
+      technicalPatch.defaultBranch = catalog.defaultBranch;
+    }
+    if (current.repoSizeKb !== catalog.repoSizeKb) technicalPatch.repoSizeKb = catalog.repoSizeKb;
+
+    if (Object.keys(technicalPatch).length) {
+      await db.repos.update(current.id, technicalPatch);
+      markCloudRecordDirty("repos", current.id);
+      changed = true;
+    }
+  }
+
+  return changed;
 }
 
 const INTERNAL_BUILDS: Array<Omit<BuildProject, "id">> = [
@@ -235,6 +274,57 @@ const IDEAS: Array<Omit<Idea, "id">> = [
   },
 ];
 
+const SYNC_HEALTH_SEEDS: Array<SyncHealth> = [
+  {
+    id: "cloud",
+    label: "Cloud backup",
+    status: "not-configured",
+    detail: "Private Mission Control cloud backup/sync status.",
+  },
+  {
+    id: "google-calendar",
+    label: "Google Calendar",
+    status: "not-configured",
+    detail: "Calendar and Google Tasks connection status.",
+  },
+  {
+    id: "wordpress",
+    label: "WordPress",
+    status: "not-configured",
+    detail: "Authenticated WordPress REST management status.",
+  },
+  {
+    id: "gsc",
+    label: "Google Search Console",
+    status: "not-configured",
+    detail: "First-party Google search/indexation evidence.",
+  },
+  {
+    id: "ga4",
+    label: "Google Analytics",
+    status: "not-configured",
+    detail: "First-party traffic and conversion evidence.",
+  },
+  {
+    id: "bing",
+    label: "Bing Webmaster Tools",
+    status: "not-configured",
+    detail: "Bing crawl, indexation and search evidence.",
+  },
+  {
+    id: "feeds",
+    label: "Industry feeds",
+    status: "not-configured",
+    detail: "Trend/news source refresh status.",
+  },
+  {
+    id: "audience",
+    label: "Audience sources",
+    status: "not-configured",
+    detail: "Social audience observation status.",
+  },
+];
+
 const WATCH_DOMAINS = [
   "gearuptofit.com",
   "affiliatemarketingforsuccess.com",
@@ -379,7 +469,7 @@ async function ensureSeoControlData(websites: Website[]) {
 }
 
 export async function ensureWorkspaceBootstrap() {
-  let changed = false;
+  let changed = await ensureGitHubCatalog();
 
   for (const app of APP_FUNNEL_CATALOG) {
     changed =
@@ -406,9 +496,56 @@ export async function ensureWorkspaceBootstrap() {
       (await putIfMissing<LinkItem>(
         db.links,
         "links",
-        async () => Boolean(await db.links.filter((row) => row.url.toLowerCase() === link.url.toLowerCase()).first()),
+        async () =>
+          Boolean(
+            await db.links
+              .filter((row) => row.url.toLowerCase() === link.url.toLowerCase())
+              .first(),
+          ),
         link,
       )) || changed;
+  }
+
+  const portfolioWebsites = await db.websites.toArray();
+  for (const website of portfolioWebsites) {
+    const verifiedLinks: Array<Omit<LinkItem, "id">> = [
+      {
+        title: website.name,
+        url: website.url,
+        category: "Websites",
+        status: "active",
+        description: website.primaryGoal || website.niche || website.notes || "Portfolio website",
+        dateAdded: today(),
+        pinned: website.priority === "critical",
+        favicon: website.favicon,
+        tags: ["portfolio", "production", ...(website.tags || [])],
+      },
+      ...(website.appUrls || []).map((url) => ({
+        title: website.name + " · " + domainOf(url),
+        url,
+        category: "Apps",
+        status: "active" as const,
+        description: "Production app/funnel connected to " + website.name,
+        dateAdded: today(),
+        pinned: website.priority === "critical",
+        tags: ["portfolio", "app", "production"],
+      })),
+    ];
+
+    for (const link of verifiedLinks) {
+      changed =
+        (await putIfMissing<LinkItem>(
+          db.links,
+          "links",
+          async () =>
+            Boolean(
+              await db.links
+                .filter((row) => row.url.toLowerCase() === link.url.toLowerCase())
+                .first(),
+            ),
+          link,
+        )) || changed;
+    }
   }
 
   for (const feed of FEED_SOURCES) {
@@ -419,6 +556,15 @@ export async function ensureWorkspaceBootstrap() {
         async () => Boolean(await db.feedSources.filter((row) => row.url.toLowerCase() === feed.url.toLowerCase()).first()),
         feed,
       )) || changed;
+  }
+
+  for (const health of SYNC_HEALTH_SEEDS) {
+    const existing = await db.syncHealth.get(health.id);
+    if (!existing) {
+      await db.syncHealth.put(health);
+      markCloudRecordDirty("syncHealth", health.id);
+      changed = true;
+    }
   }
 
   for (const term of WATCH_DOMAINS) {

@@ -24,12 +24,14 @@ function DeferredOverlayFallback() {
 
 const quickAddItems = [
   { id: "tasks", label: "Task", emoji: "✅" },
+  { id: "reminders", label: "Reminder", emoji: "⏰" },
+  { id: "habits", label: "Habit", emoji: "🔥" },
   { id: "notes", label: "Note", emoji: "📝" },
+  { id: "ideas", label: "Idea", emoji: "💡" },
   { id: "projects", label: "Project", emoji: "📋" },
   { id: "websites", label: "Website", emoji: "🌐" },
-  { id: "ideas", label: "Idea", emoji: "💡" },
   { id: "links", label: "Link", emoji: "🔗" },
-  { id: "payments", label: "Payment", emoji: "💰" },
+  { id: "payments", label: "Finance", emoji: "💰" },
   { id: "builds", label: "Build", emoji: "🛠️" },
 ];
 
