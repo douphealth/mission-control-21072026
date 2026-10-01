@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mergeRemoteRecords, parseBackup, type RemoteRecord } from '../cloudSyncProtocol';
 import { audienceProfile, measuredCount, profileJsonMetrics } from '../audienceEvidence';
 import { coverageOutcome, isOwnedDomainCoverage, mapLimited, mentionQuery } from '../intelligenceRunQuality';
-import { readAudience } from '../audienceProviders.server';
+import { audienceCapabilities, readAudience } from '../audienceProviders.server';
 import { isTrustedAudienceReading } from '../intelligenceQuality';
 const record = (title: string, seconds: number, revision = title): RemoteRecord => ({ data: { id: title, title }, deleted: false, updatedAt: new Date(seconds * 1000).toISOString(), revision });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
@@ -58,6 +58,68 @@ describe('truthful audience evidence', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ login: 'other', followers: 42 }))));
     expect((await readAudience('github', 'https://github.com/target')).followers).toBeNull();
   });
+
+  it('labels YouTube official subscriber counts as rounded platform metrics', async () => {
+    vi.stubEnv('YOUTUBE_API_KEY', 'test-key');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      items: [{
+        id: 'UC1234567890123456789012',
+        snippet: { customUrl: '@target' },
+        statistics: { subscriberCount: '12300', videoCount: '88', hiddenSubscriberCount: false },
+      }],
+    }), { headers: { 'content-type': 'application/json' } })));
+    const result = await readAudience('youtube', 'https://youtube.com/@target');
+    expect(result.status).toBe('ok');
+    expect(result.followers).toBe(12300);
+    expect(result.posts).toBe(88);
+    expect(result.method).toBe('official-api');
+    expect(result.metricSemantics).toBe('rounded');
+    expect(result.identityVerified).toBe(true);
+  });
+
+  it('accepts TikTok official follower stats only for the exact authorized username', async () => {
+    vi.stubEnv('TIKTOK_ACCESS_TOKEN', 'token');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      data: { user: { open_id: 'oid', username: 'target', follower_count: 321, video_count: 44 } },
+    }), { headers: { 'content-type': 'application/json' } })));
+    const result = await readAudience('tiktok', 'https://tiktok.com/@target');
+    expect(result.status).toBe('ok');
+    expect(result.followers).toBe(321);
+    expect(result.posts).toBe(44);
+    expect(result.provider).toContain('TikTok');
+    expect(result.metricSemantics).toBe('exact');
+  });
+
+  it('uses Instagram Business Discovery only when the exact target username is returned', async () => {
+    vi.stubEnv('META_ACCESS_TOKEN', 'token');
+    vi.stubEnv('INSTAGRAM_BUSINESS_ACCOUNT_ID', '111');
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      business_discovery: {
+        id: '222',
+        username: 'target',
+        followers_count: 4567,
+        media_count: 123,
+      },
+    }), { headers: { 'content-type': 'application/json' } })));
+    const result = await readAudience('instagram', 'https://instagram.com/target');
+    expect(result.status).toBe('ok');
+    expect(result.followers).toBe(4567);
+    expect(result.posts).toBe(123);
+    expect(result.provider).toContain('Business Discovery');
+    expect(result.verifiedHandle).toBe('target');
+  });
+
+  it('reports official platform capabilities only when their server credentials exist', () => {
+    vi.stubEnv('YOUTUBE_API_KEY', 'key');
+    vi.stubEnv('X_BEARER_TOKEN', '');
+    vi.stubEnv('TIKTOK_ACCESS_TOKEN', 'token');
+    const capabilities = audienceCapabilities();
+    expect(capabilities.officialPlatforms).toContain('youtube');
+    expect(capabilities.officialPlatforms).toContain('tiktok');
+    expect(capabilities.officialPlatforms).not.toContain('x');
+    expect(capabilities.configurationRequired.some(item => item.startsWith('X:'))).toBe(true);
+  });
+
   it('makes missing YouTube configuration an explicit unavailable state', async () => {
     vi.stubEnv('YOUTUBE_API_KEY', '');
     const result = await readAudience('youtube', 'https://youtube.com/@target');
