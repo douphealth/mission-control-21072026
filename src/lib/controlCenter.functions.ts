@@ -11,6 +11,37 @@ import {
 } from "./controlCenter.server";
 import { anthropicComplete, isAnthropicAvailable } from "@/lib/anthropicServer";
 
+function evidenceStrength(input: {
+  source?: string;
+  sourceUrl?: string;
+  corroborationCount?: number;
+  directFeed?: boolean;
+}) {
+  const corroboration = input.corroborationCount ?? 0;
+  if (input.directFeed) {
+    return {
+      level: "high" as const,
+      reason: "Direct publisher/feed source selected by the user.",
+    };
+  }
+  if (corroboration >= 2) {
+    return {
+      level: "high" as const,
+      reason: `Similar coverage appears across ${corroboration + 1} publisher results.`,
+    };
+  }
+  if (input.source || input.sourceUrl) {
+    return {
+      level: "medium" as const,
+      reason: "Publisher attribution is present, but this result is not independently corroborated here.",
+    };
+  }
+  return {
+    level: "limited" as const,
+    reason: "Publisher attribution is incomplete.",
+  };
+}
+
 // ─── Industry / feed collection ───────────────────────────────────────────────
 
 const SourceSchema = z.object({
@@ -146,7 +177,18 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
         const publisher = other.source || hostOf(other.sourceUrl || "");
         if (publisher) publishers.add(publisher);
       });
-      return { ...item, corroborationCount: publishers.size };
+      const corroborationCount = publishers.size;
+      const evidence = evidenceStrength({
+        source: item.source,
+        sourceUrl: item.sourceUrl,
+        corroborationCount,
+      });
+      return {
+        ...item,
+        corroborationCount,
+        evidenceLevel: evidence.level,
+        evidenceReason: evidence.reason,
+      };
     });
 
     return { query, days: data.days, fetchedAt: new Date().toISOString(), items: enriched };
