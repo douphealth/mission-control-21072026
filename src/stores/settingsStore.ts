@@ -42,6 +42,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setTheme: (t) => {
     const resolvedTheme = applyTheme(t);
     set({ theme: t, resolvedTheme });
+    if (typeof localStorage !== "undefined") localStorage.setItem("mc-theme", t);
     void db.settings.update("default", { theme: t });
   },
 
@@ -82,7 +83,9 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   loadSettings: async () => {
     const settings = await db.settings.get("default");
     if (settings) {
-      const theme = (settings.theme || "sage") as ThemeName;
+      const persistedTheme =
+        typeof localStorage !== "undefined" ? localStorage.getItem("mc-theme") : null;
+      const theme = (settings.theme || persistedTheme || "sage") as ThemeName;
       const resolvedTheme = applyTheme(theme);
       set({
         userName: settings.userName || "Alex",
@@ -93,8 +96,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         isLoading: false,
       });
     } else {
-      const resolvedTheme = applyTheme("sage");
-      set({ isLoading: false, theme: "sage", resolvedTheme });
+      const persistedTheme =
+        typeof localStorage !== "undefined" ? localStorage.getItem("mc-theme") : null;
+      const theme = (persistedTheme || "sage") as ThemeName;
+      const resolvedTheme = applyTheme(theme);
+      set({ isLoading: false, theme, resolvedTheme });
     }
   },
 }));
