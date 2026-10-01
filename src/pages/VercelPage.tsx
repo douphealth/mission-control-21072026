@@ -105,11 +105,9 @@ export default function VercelPage() {
         status:
           r.truthState === "live"
             ? "ok"
-            : r.truthState === "stale" || r.truthState === "cached"
-              ? "stale"
-              : r.truthState === "error"
-                ? "error"
-                : "not-configured",
+            : r.truthState === "error"
+              ? "error"
+              : "not-configured",
         lastAttemptAt: r.fetchedAt || new Date().toISOString(),
         lastSuccessAt: r.truthState === "live" ? r.fetchedAt : undefined,
         error: r.error || undefined,
