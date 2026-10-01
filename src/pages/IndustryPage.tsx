@@ -375,7 +375,7 @@ export default function IndustryPage() {
                         {(story.corroborationCount || 0) > 0 && (
                           <>
                             <span>·</span>
-                            <span>{story.corroborationCount + 1} independent publisher domains</span>
+                            <span>{(story.corroborationCount ?? 0) + 1} independent publisher domains</span>
                           </>
                         )}
                         {story.evidenceLevel && (
