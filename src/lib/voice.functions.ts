@@ -98,7 +98,7 @@ function inferType(transcript: string): VoiceCaptureResult["type"] {
     /^(task|todo|to do|remind me to|i need to|need to|call |email |send |finish |schedule |book |buy |pay |tâche|tarea|aufgabe|compito|tarefa|задача)\b/i.test(
       text,
     ) ||
-    /^(εργασία|υπενθύμισέ μου|πρέπει να|θέλω να|τηλεφώνησε|στείλε|κλείσε|αγόρασε|πλήρωσε|任务|タスク|작업)/u.test(
+    /^(εργασία|υπενθύμισέ μου|πρέπει να|θέλω να|τηλεφώνησε|στείλε|κλείσε|αγόρασε|πλήρωσε|задача|任务|タスク|작업)/u.test(
       text,
     ) ||
     /\b(today|tomorrow|tonight|next week|asap|urgent|aujourd'hui|demain|mañana|morgen|domani|amanhã|сегодня|завтра)\b/i.test(
