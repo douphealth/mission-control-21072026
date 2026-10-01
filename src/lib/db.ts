@@ -564,7 +564,14 @@ export interface StreamItem {
   corroborationCount?: number;
   relevanceScore?: number;
   /** Where this evidence was collected. */
-  evidenceType?: "direct-feed" | "tracked-feed" | "google-news" | "manual";
+  evidenceType?:
+    | "direct-feed"
+    | "tracked-feed"
+    | "google-news"
+    | "bing-news"
+    | "dataforseo"
+    | "multi-news"
+    | "manual";
   read?: boolean;
 }
 

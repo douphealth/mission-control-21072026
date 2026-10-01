@@ -196,7 +196,7 @@ export default function MentionsPage() {
             </p>
           </div>
           <span className="rounded-full border border-info/20 bg-info/8 px-2.5 py-1 text-[9px] font-bold text-info">
-            Google News + tracked feeds
+            Multi-provider live coverage + tracked feeds
           </span>
         </div>
 
@@ -331,7 +331,7 @@ export default function MentionsPage() {
           title={terms.length ? "No verified mentions match these filters" : "Add a term to watch"}
           hint={
             terms.length
-              ? "A zero here means the identity filters rejected ambiguous coverage or no current Google News result matched."
+              ? "A zero here means the identity filters rejected ambiguous coverage or no current live/tracked source produced a verified match."
               : "Start with your brand/domain. For personal names, add identity anchors before scanning."
           }
         />

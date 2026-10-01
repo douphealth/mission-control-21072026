@@ -188,7 +188,15 @@ export async function runIndustryCollector(useAi = true) {
         score: localScore({ ...item, publishedAt }, allTopics),
         verification: src ? "feed" : "topic-search",
         confidence: src ? "high" : "medium",
-        evidenceType: src ? "direct-feed" : "google-news",
+        evidenceType: src
+          ? "direct-feed"
+          : Array.isArray((item as any).retrievalProviders) && (item as any).retrievalProviders.length > 1
+            ? "multi-news"
+            : (item as any).retrievalProvider === "bing-news"
+              ? "bing-news"
+              : (item as any).retrievalProvider === "dataforseo"
+                ? "dataforseo"
+                : "google-news",
       });
     }
   }
@@ -256,7 +264,14 @@ export async function runMentionCollector(useAi = true) {
         verificationReason: item.verificationReason,
         confidence: item.confidence,
         corroborationCount: item.corroborationCount,
-        evidenceType: "google-news",
+        evidenceType:
+          Array.isArray((item as any).retrievalProviders) && (item as any).retrievalProviders.length > 1
+            ? "multi-news"
+            : (item as any).retrievalProvider === "bing-news"
+              ? "bing-news"
+              : (item as any).retrievalProvider === "dataforseo"
+                ? "dataforseo"
+                : "google-news",
       });
     }
   }

@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import {
   discoverFeed,
-  googleNewsUrl,
   hostOf,
   httpGet,
   parseFeed,
@@ -16,6 +15,11 @@ import {
   queryRelevance,
   titleSimilarity,
 } from "@/lib/intelligenceQuality";
+import {
+  searchNewsCoverage,
+  summarizeProviderFailures,
+  type NewsCoverageItem,
+} from "@/lib/newsProviders.server";
 
 function evidenceStrength(input: {
   source?: string;
@@ -93,7 +97,7 @@ export const collectIndustry = createServerFn({ method: "POST" })
       }),
     );
 
-    // Optional topic-phrase discovery via Google News.
+    // Optional topic-phrase discovery uses multiple live providers.
     const topics = [
       ...new Set(
         data.sources
@@ -104,28 +108,19 @@ export const collectIndustry = createServerFn({ method: "POST" })
     ].slice(0, 8);
     const topicResults = await Promise.all(
       topics.map(async (topic) => {
-        try {
-          const xml = await httpGet(googleNewsUrl(`"${topic}" when:7d`));
-          return {
-            sourceId: `topic:${topic}`,
-            feedUrl: null,
-            error: null as string | null,
-            items: parseFeed(xml)
-              .slice(0, 12)
-              .map((i) => ({
-                ...i,
-                source: i.source || hostOf(i.sourceUrl || "") || "Google News",
-                sourceUrl: i.sourceUrl,
-              })),
-          };
-        } catch {
-          return {
-            sourceId: `topic:${topic}`,
-            feedUrl: null,
-            items: [] as RawItem[],
-            error: null as string | null,
-          };
-        }
+        const coverage = await searchNewsCoverage(`"${topic}"`, 7);
+        return {
+          sourceId: `topic:${topic}`,
+          feedUrl: null,
+          error: coverage.allFailed
+            ? summarizeProviderFailures(coverage).join(" · ") || "All news providers failed"
+            : null,
+          items: coverage.items.slice(0, 18).map((item) => ({
+            ...item,
+            source: item.source || hostOf(item.sourceUrl || "") || "News coverage",
+            sourceUrl: item.sourceUrl,
+          })),
+        };
       }),
     );
 
@@ -141,20 +136,34 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const query = data.query.trim();
-    const xml = await httpGet(googleNewsUrl(query + " when:" + data.days + "d"));
-    const minTime = Date.now() - data.days * 86_400_000;
-    const items = parseFeed(xml)
-      .filter((item) => {
-        if (!item.publishedAt) return false;
-        const ts = new Date(item.publishedAt).getTime();
-        return Number.isFinite(ts) && ts >= minTime;
-      })
-      .slice(0, 60)
-      .map((item) => ({
-        ...item,
-        source: item.source || hostOf(item.sourceUrl || "") || "Google News",
-        sourceUrl: item.sourceUrl,
-      }));
+    const coverage = await searchNewsCoverage(query, data.days);
+
+    if (coverage.allFailed) {
+      return {
+        query,
+        days: data.days,
+        fetchedAt: new Date().toISOString(),
+        items: [] as Array<
+          NewsCoverageItem & {
+            corroborationCount: number;
+            relevanceScore: number;
+            evidenceLevel: "high" | "medium" | "limited";
+            evidenceReason: string;
+          }
+        >,
+        providers: coverage.providers,
+        degraded: true,
+        error:
+          summarizeProviderFailures(coverage).join(" · ") ||
+          "All live news providers are temporarily unavailable.",
+      };
+    }
+
+    const items = coverage.items.slice(0, 90).map((item) => ({
+      ...item,
+      source: item.source || hostOf(item.sourceUrl || "") || "News coverage",
+      sourceUrl: item.sourceUrl,
+    }));
 
     const enriched = items
       .map((item, index) => {
@@ -164,7 +173,8 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
           const publisher = other.source || hostOf(other.sourceUrl || "");
           if (publisher && publisher !== item.source) publishers.add(publisher);
         });
-        const corroborationCount = publishers.size;
+        const retrievalCorroboration = Math.max(0, item.retrievalProviders.length - 1);
+        const corroborationCount = Math.max(publishers.size, retrievalCorroboration);
         const relevanceScore = queryRelevance(query, item.title, item.summary);
         const evidence = evidenceStrength({
           source: item.source,
@@ -176,7 +186,10 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
           corroborationCount,
           relevanceScore,
           evidenceLevel: evidence.level,
-          evidenceReason: evidence.reason,
+          evidenceReason:
+            item.retrievalProviders.length > 1
+              ? `${evidence.reason} Independently retrieved via ${item.retrievalProviders.length} search providers.`
+              : evidence.reason,
         };
       })
       .filter((item) => item.relevanceScore >= 40)
@@ -187,7 +200,15 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
           new Date(b.publishedAt || 0).getTime() - new Date(a.publishedAt || 0).getTime(),
       );
 
-    return { query, days: data.days, fetchedAt: new Date().toISOString(), items: enriched };
+    return {
+      query,
+      days: data.days,
+      fetchedAt: new Date().toISOString(),
+      items: enriched,
+      providers: coverage.providers,
+      degraded: coverage.degraded,
+      error: null as string | null,
+    };
   });
 
 // ─── Brand mentions ───────────────────────────────────────────────────────────
@@ -229,11 +250,17 @@ export const collectMentions = createServerFn({ method: "POST" })
             : ['"' + (t.type === "handle" ? "@" : "") + cleanTerm + '"'];
 
         try {
-          const batches = await Promise.all(
-            queries.map(async (query) =>
-              parseFeed(await httpGet(googleNewsUrl(query + " when:30d"))).slice(0, 30),
-            ),
+          const coverages = await Promise.all(
+            queries.map((query) => searchNewsCoverage(query, 30)),
           );
+          const successfulCoverage = coverages.filter((coverage) => !coverage.allFailed);
+          if (!successfulCoverage.length) {
+            const failures = coverages.flatMap((coverage) => summarizeProviderFailures(coverage));
+            throw new Error(
+              failures.join(" · ") || "All live news providers are temporarily unavailable",
+            );
+          }
+          const batches = successfulCoverage.map((coverage) => coverage.items.slice(0, 45));
           const dedup = new Map<string, RawItem>();
           batches.flat().forEach((item) => {
             const key = canonicalWebUrl(item.url);
@@ -241,7 +268,7 @@ export const collectMentions = createServerFn({ method: "POST" })
           });
 
           const candidates = [...dedup.values()].map((item) => {
-            const source = item.source || hostOf(item.sourceUrl || "") || "Google News";
+            const source = item.source || hostOf(item.sourceUrl || "") || "News coverage";
             const identity = matchIdentity({
               term: t.term,
               type: t.type,

@@ -14,20 +14,59 @@ export interface RawItem {
 
 const UA = "Mozilla/5.0 (compatible; MissionControl/1.0)";
 
-export async function httpGet(url: string, timeoutMs = 12_000): Promise<string> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": UA, Accept: "*/*", "Accept-Language": "en,el;q=0.8" },
-      signal: ctrl.signal,
-      redirect: "follow",
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.text();
-  } finally {
-    clearTimeout(t);
+export async function httpGet(
+  url: string,
+  timeoutMs = 12_000,
+  retries = 1,
+): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": UA,
+          Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.5",
+          "Accept-Language": "en-US,en;q=0.9,el;q=0.8",
+          "Cache-Control": "no-cache",
+        },
+        signal: ctrl.signal,
+        redirect: "follow",
+      });
+
+      if (res.ok) return await res.text();
+
+      const retryable = [408, 425, 429, 500, 502, 503, 504].includes(res.status);
+      const retryAfterRaw = res.headers.get("retry-after");
+      const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : NaN;
+      lastError = new Error(`HTTP ${res.status}`);
+
+      if (!retryable || attempt >= retries) throw lastError;
+
+      const delayMs = Number.isFinite(retryAfterSeconds)
+        ? Math.min(5_000, Math.max(250, retryAfterSeconds * 1_000))
+        : Math.min(2_500, 300 * 2 ** attempt);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    } catch (error) {
+      lastError = error;
+      const name = error instanceof Error ? error.name : "";
+      const message = error instanceof Error ? error.message : String(error);
+      const retryable =
+        name === "AbortError" ||
+        /HTTP (408|425|429|500|502|503|504)\b/.test(message);
+
+      if (!retryable || attempt >= retries) throw error;
+      await new Promise((resolve) =>
+        setTimeout(resolve, Math.min(2_500, 300 * 2 ** attempt)),
+      );
+    } finally {
+      clearTimeout(timeout);
+    }
   }
+
+  throw lastError instanceof Error ? lastError : new Error("Request failed");
 }
 
 function decodeEntities(s: string): string {

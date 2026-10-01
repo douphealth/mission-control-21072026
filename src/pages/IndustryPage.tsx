@@ -30,6 +30,8 @@ type SearchStory = {
   evidenceLevel?: "high" | "medium" | "limited";
   evidenceReason?: string;
   relevanceScore?: number;
+  retrievalProvider?: "dataforseo" | "google-news" | "bing-news";
+  retrievalProviders?: Array<"dataforseo" | "google-news" | "bing-news">;
 };
 
 export default function IndustryPage() {
@@ -191,16 +193,45 @@ export default function IndustryPage() {
 
       setSearchStories(combined);
       setSearchedAt(response.fetchedAt);
-      toast.success(
-        combined.length
-          ? `${combined.length} current results for “${clean}”`
-          : `No recent results for “${clean}”`,
-        {
-          description: trackedMatches.length
-            ? `${trackedMatches.length} match${trackedMatches.length === 1 ? "" : "es"} from your tracked publisher feeds included.`
-            : undefined,
-        },
-      );
+
+      const providerSummary = (response.providers ?? [])
+        .filter((provider) => provider.configured && provider.ok)
+        .map((provider) => {
+          const label =
+            provider.provider === "dataforseo"
+              ? "DataForSEO"
+              : provider.provider === "bing-news"
+                ? "Bing News"
+                : "Google News";
+          return `${label} ${provider.itemCount}`;
+        })
+        .join(" · ");
+
+      if (response.error && !combined.length) {
+        toast.warning("Live providers are temporarily unavailable", {
+          description:
+            trackedMatches.length
+              ? `Tracked feeds were still checked. ${response.error}`
+              : "No live provider returned usable coverage. Try again shortly; tracked feeds remain available.",
+        });
+      } else {
+        toast[response.degraded ? "warning" : "success"](
+          combined.length
+            ? `${combined.length} current results for “${clean}”`
+            : `No recent verified results for “${clean}”`,
+          {
+            description: [
+              providerSummary || undefined,
+              trackedMatches.length
+                ? `${trackedMatches.length} tracked-feed match${trackedMatches.length === 1 ? "" : "es"} included`
+                : undefined,
+              response.degraded ? "One live provider was unavailable; results were served by the remaining sources." : undefined,
+            ]
+              .filter(Boolean)
+              .join(" · ") || undefined,
+          },
+        );
+      }
     } catch (error: any) {
       toast.error("Live topic search failed", { description: String(error?.message ?? error) });
     } finally {
@@ -236,9 +267,9 @@ export default function IndustryPage() {
             What do you need to know right now?
           </h2>
           <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted-foreground">
-            Searches current Google News coverage for the exact subject you enter, automatically
-            using Greek or English locale when appropriate. Evidence strength is based on publisher
-            attribution and independent corroboration — not a fabricated “truth score”.
+            Searches multiple current coverage providers for the subject you enter and merges them
+            with your tracked publisher feeds. Results are deduplicated, freshness-filtered and
+            ranked by subject relevance, publisher attribution and independent corroboration.
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
             <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/65 px-3">
