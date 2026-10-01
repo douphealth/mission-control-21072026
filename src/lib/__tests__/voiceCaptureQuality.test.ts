@@ -5,6 +5,8 @@ import {
   hasUsableVoiceCapture,
   inferLanguageFromTranscript,
   normalizeRequestedLanguage,
+  shouldUseServerVoiceCapture,
+  voiceServerBackoffMs,
 } from "@/lib/voiceCaptureQuality";
 
 describe("voice capture quality guards", () => {
@@ -53,5 +55,37 @@ describe("voice capture quality guards", () => {
     expect(normalizeRequestedLanguage("el-GR")).toBe("el-GR");
     expect(normalizeRequestedLanguage("auto")).toBeUndefined();
     expect(normalizeRequestedLanguage("not a language")).toBeUndefined();
+  });
+  it("infers several non-Latin script families locally", () => {
+    expect(inferLanguageFromTranscript("Привет как дела")).toBe("ru");
+    expect(inferLanguageFromTranscript("مرحبا كيف حالك")).toBe("ar");
+    expect(inferLanguageFromTranscript("こんにちは世界")).toBe("ja");
+    expect(inferLanguageFromTranscript("안녕하세요 세계")).toBe("ko");
+  });
+
+  it("backs off the server after a transcription failure instead of looping forever", () => {
+    const now = 1_000_000;
+    expect(
+      shouldUseServerVoiceCapture({
+        serverReady: true,
+        browserRecognitionAvailable: true,
+        serverFailureUntil: now + 30_000,
+        now,
+      }),
+    ).toBe(false);
+    expect(
+      shouldUseServerVoiceCapture({
+        serverReady: true,
+        browserRecognitionAvailable: true,
+        serverFailureUntil: now - 1,
+        now,
+      }),
+    ).toBe(true);
+  });
+
+  it("uses bounded exponential server backoff", () => {
+    expect(voiceServerBackoffMs(1)).toBe(15_000);
+    expect(voiceServerBackoffMs(2)).toBe(30_000);
+    expect(voiceServerBackoffMs(10)).toBe(300_000);
   });
 });
