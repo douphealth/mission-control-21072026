@@ -362,7 +362,7 @@ export default function AudiencePage() {
                     </div>
                     <div className="mt-0.5 text-3xl font-black tabular-nums tracking-tight text-foreground">
                       {latest?.followers !== null && latest?.followers !== undefined
-                        ? nf.format(latest.followers)
+                        ? `${latest.approximate ? "~" : ""}${nf.format(latest.followers)}`
                         : "—"}
                     </div>
                   </div>
@@ -423,6 +423,7 @@ export default function AudiencePage() {
                 {latest?.evidence && (
                   <p className="mt-2 text-[8.5px] leading-4 text-muted-foreground/75">
                     Evidence: {latest.evidence}
+                    {latest.approximate ? " Displayed with ~ because the public source exposed a compact value." : ""}
                   </p>
                 )}
               </article>
