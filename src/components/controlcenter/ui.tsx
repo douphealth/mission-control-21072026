@@ -144,6 +144,11 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
               {item.corroborationCount} similar source{item.corroborationCount === 1 ? "" : "s"}
             </span>
           )}
+          {item.evidenceType && (
+            <span className="rounded-full border border-border/45 bg-background/45 px-1.5 py-0.5 text-[9px] font-semibold text-muted-foreground">
+              {item.evidenceType.replaceAll("-", " ")}
+            </span>
+          )}
         </p>
         {item.matchedAnchors && item.matchedAnchors.length > 0 && (
           <p className="mt-1 text-[9px] text-muted-foreground">
