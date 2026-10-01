@@ -5,6 +5,11 @@ import { createRequire } from 'node:module';
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwind from '@tailwindcss/vite';
+// Node 24 exposes incomplete Web Storage without a backing file. The harness
+// has no server session; actual browser contexts below keep native storage.
+for (const name of ['localStorage', 'sessionStorage']) {
+  Object.defineProperty(globalThis, name, { configurable: true, value: undefined });
+}
 const require = createRequire(process.env.PLAYWRIGHT_PACKAGE || path.join(process.cwd(), 'package.json'));
 const { chromium, webkit } = require('playwright');
 const root = process.cwd();
@@ -38,35 +43,46 @@ function Harness() {
 }
 createRoot(document.getElementById('root')!).render(<Harness />);
 `);
-const server = await createServer({ configFile: false, root, plugins: [react(), tailwind()],
-  resolve: { alias: { '@': path.join(root, 'src') } }, server: { host: '127.0.0.1', port: 4179, strictPort: true } });
+const server = await createServer({ configFile: false, appType: 'spa', root,
+  cacheDir: path.join(temporary, 'vite-cache'), plugins: [react(), tailwind()],
+  resolve: { alias: { '@': path.join(root, 'src') } },
+  server: { host: '127.0.0.1', port: 4179, strictPort: true } });
 await server.listen();
 const base = 'http://127.0.0.1:4179/__mc_reliability_test__/index.html';
 const passed = [];
+const browsers = [];
 function pass(name) { passed.push(name); console.log('PASS', name); }
 async function setupPage(browser, mode = 'quick', width = 390, height = 844) {
   const context = await browser.newContext({ viewport: { width, height } });
   await context.route('**/*', route => route.request().url().startsWith('http://127.0.0.1:4179/') ? route.continue() : route.abort());
   const page = await context.newPage();
-  page.on('pageerror', error => console.log('Browser error:', error.message));
+  page.on('pageerror', error => console.log('Browser error:', error.stack || error.message));
   await page.goto(`${base}?mode=${mode}`, { waitUntil: 'networkidle' });
   return { context, page };
 }
 try {
   for (const [engine, browserType] of [['chromium', chromium], ['webkit', webkit]]) {
-    const browser = await browserType.launch();
+    const browser = await browserType.launch(); browsers.push(browser);
     try {
       for (const mode of ['quick', 'full']) {
         const { context, page } = await setupPage(browser, mode);
         const save = page.locator('[data-task-dialog-frame] header button').filter({ hasText: 'Save changes' });
-        await save.waitFor({ state: 'visible' });
+        await save.waitFor({ state: 'visible' }).catch(async error => {
+          await page.screenshot({ path: `test-results/${engine}-${mode}-failure.png` });
+          console.log('Harness page:', (await page.locator('body').innerText()).slice(0, 2000));
+          throw error;
+        });
         for (const [width, height] of [[390, 844], [360, 640], [812, 375], [360, 320]]) {
           await page.setViewportSize({ width, height });
           await page.waitForTimeout(150);
           await page.locator('[data-task-dialog-body]').evaluate(el => { el.scrollTop = el.scrollHeight; });
           const box = await save.boundingBox();
-          assert(box && box.y >= 0 && box.y + box.height <= height && box.x >= 0 && box.x + box.width <= width, `${engine}/${mode} save outside ${width}x${height}: ${JSON.stringify(box)}`);
-          const hit = await save.evaluate(el => { const b = el.getBoundingClientRect(); const at = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2); return !!at && el.contains(at); });
+          assert(box && box.y >= 0 && box.y + box.height <= height && box.x >= 0 && box.x + box.width <= width,
+            `${engine}/${mode} save outside ${width}x${height}: ${JSON.stringify(box)}`);
+          const hit = await save.evaluate(el => {
+            const b = el.getBoundingClientRect(); const at = document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2);
+            return !!at && el.contains(at);
+          });
           assert(hit, 'Save is covered by another layer');
         }
         await page.setViewportSize({ width: 390, height: 844 });
@@ -74,8 +90,7 @@ try {
         await title.fill(`Saved ${mode} ${engine}`);
         if (mode === 'full') {
           await page.evaluate(() => { window.__failSave = true; });
-          await save.click();
-          await page.waitForTimeout(150);
+          await save.click(); await page.waitForTimeout(150);
           assert(await save.isVisible(), 'Failed save closed the editor');
           assert.equal(await title.inputValue(), `Saved ${mode} ${engine}`);
           await page.evaluate(() => { window.__failSave = false; });
@@ -91,14 +106,10 @@ try {
       }
     } finally { await browser.close(); }
   }
-
-  const browser = await chromium.launch();
-  const files = new Map();
-  let sequence = 0;
-  let failReadBack = false;
-  let uploads = 0;
+  const browser = await chromium.launch(); browsers.push(browser);
+  const files = new Map(); let sequence = 0; let failReadBack = false; let uploads = 0;
   const remoteRecord = id => ({ data: { id, title: id, description: '', status: 'todo', priority: 'medium', dueDate: '', category: '', linkedProject: '', subtasks: [], createdAt: '2026-10-01' }, deleted: false, updatedAt: '2026-10-01T01:00:00Z' });
-  for (const id of ['legacy-a', 'legacy-b']) files.set(id, { id, name: 'mission-control-sync-v1.json', modifiedTime: `2026-10-01T01:00:00.000Z`, backup: { version: 1, updatedAt: '', records: { [`tasks::${id}`]: remoteRecord(id) } } });
+  for (const id of ['legacy-a', 'legacy-b']) files.set(id, { id, name: 'mission-control-sync-v1.json', modifiedTime: '2026-10-01T01:00:00.000Z', backup: { version: 1, updatedAt: '', records: { [`tasks::${id}`]: remoteRecord(id) } } });
   async function device(name) {
     const context = await browser.newContext();
     await context.route('**/*', async route => {
@@ -133,20 +144,16 @@ try {
   }
   const phone = await device('phone'), desktop = await device('desktop');
   const seed = (page, id, dirty) => page.evaluate(async ({ id, dirty }) => {
-    const { db } = await import('/src/lib/db.ts');
-    const { markCloudRecordDirty } = await import('/src/lib/cloudSync.ts');
+    const { db } = await import('/src/lib/db.ts'); const { markCloudRecordDirty } = await import('/src/lib/cloudSync.ts');
     await db.tasks.put({ id, title: id, description: '', status: 'todo', priority: 'medium', dueDate: '', category: '', linkedProject: '', subtasks: [], createdAt: '2026-10-01' });
     if (dirty) markCloudRecordDirty('tasks', id);
   }, { id, dirty });
   const sync = page => page.evaluate(async () => (await import('/src/lib/cloudSync.ts')).forceCloudSync());
   const titles = page => page.evaluate(async () => (await (await import('/src/lib/db.ts')).db.tasks.toArray()).map(t => t.title).sort());
-  await seed(phone.page, 'phone-clean', false);
-  await seed(phone.page, 'phone-dirty', true);
-  await seed(desktop.page, 'desktop-dirty', true);
+  await seed(phone.page, 'phone-clean', false); await seed(phone.page, 'phone-dirty', true); await seed(desktop.page, 'desktop-dirty', true);
   const initial = await Promise.all([sync(phone.page), sync(desktop.page)]);
   initial.forEach(result => assert(result.ok, result.error));
-  assert((await sync(phone.page)).ok);
-  assert((await sync(desktop.page)).ok);
+  assert((await sync(phone.page)).ok); assert((await sync(desktop.page)).ok);
   assert.deepEqual(await titles(phone.page), await titles(desktop.page));
   assert.deepEqual(await titles(phone.page), ['desktop-dirty', 'legacy-a', 'legacy-b', 'phone-clean', 'phone-dirty']);
   pass('Two isolated device stores converge; unjournaled local tasks and all paginated legacy backups survive');
@@ -160,24 +167,20 @@ try {
   const beforeUploads = uploads;
   await phone.page.evaluate(() => { const t = JSON.parse(localStorage.getItem('mc_google_access_token_v1')); t.access_token = 'different'; localStorage.setItem('mc_google_access_token_v1', JSON.stringify(t)); });
   const mismatch = await sync(phone.page);
-  assert(!mismatch.ok && mismatch.error.includes('Account mixing'), mismatch.error);
-  assert.equal(uploads, beforeUploads);
+  assert(!mismatch.ok && mismatch.error.includes('Account mixing'), mismatch.error); assert.equal(uploads, beforeUploads);
   pass('Account mismatch is blocked before uploading local records');
   await desktop.page.evaluate(() => { const t = JSON.parse(localStorage.getItem('mc_google_access_token_v1')); t.expires_at = 0; localStorage.setItem('mc_google_access_token_v1', JSON.stringify(t)); });
-  const expired = await sync(desktop.page);
-  assert(!expired.ok);
-  pass('Expired credentials do not report synchronized');
+  assert(!(await sync(desktop.page)).ok); pass('Expired credentials do not report synchronized');
   await desktop.page.evaluate(() => { const t = JSON.parse(localStorage.getItem('mc_google_access_token_v1')); t.expires_at = Date.now() + 3600000; localStorage.setItem('mc_google_access_token_v1', JSON.stringify(t)); });
-  await seed(desktop.page, 'failure-kept', true);
-  failReadBack = true;
-  const failure = await sync(desktop.page);
-  assert(!failure.ok);
+  await seed(desktop.page, 'failure-kept', true); failReadBack = true;
+  assert(!(await sync(desktop.page)).ok);
   const pendingCount = await desktop.page.evaluate(async () => (await import('/src/lib/cloudSync.ts')).getPendingCloudCount());
   assert(pendingCount > 0); assert((await titles(desktop.page)).includes('failure-kept'));
   pass('Provider failure retains local data and pending changes instead of false success');
   await phone.context.close(); await desktop.context.close(); await browser.close();
-  await writeFile('test-results/browser-reliability.json', JSON.stringify({ passed, note: 'Real Chromium/WebKit and IndexedDB; Google Drive transport and identities are test doubles, not authenticated production accounts.' }, null, 2));
 } finally {
-  await server.close();
-  await rm(temporary, { recursive: true, force: true });
+  await writeFile('test-results/browser-reliability.json', JSON.stringify({ passed,
+    note: 'Real Chromium/WebKit and IndexedDB; Google Drive transport and identities are test doubles, not authenticated production accounts.' }, null, 2));
+  await Promise.all(browsers.map(browser => browser.close().catch(() => {})));
+  await server.close(); await rm(temporary, { recursive: true, force: true });
 }
