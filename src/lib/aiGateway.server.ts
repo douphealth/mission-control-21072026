@@ -122,6 +122,117 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
+async function uploadGeminiAudio(
+  file: File,
+  key: string,
+  signal: AbortSignal,
+): Promise<{ uri: string; name?: string; mimeType: string } | null> {
+  const mimeType = (file.type || "audio/wav").split(";")[0] || "audio/wav";
+  const bytes = await file.arrayBuffer();
+
+  const start = await fetch("https://generativelanguage.googleapis.com/upload/v1beta/files", {
+    method: "POST",
+    headers: {
+      "x-goog-api-key": key,
+      "X-Goog-Upload-Protocol": "resumable",
+      "X-Goog-Upload-Command": "start",
+      "X-Goog-Upload-Header-Content-Length": String(bytes.byteLength),
+      "X-Goog-Upload-Header-Content-Type": mimeType,
+      "Content-Type": "application/json",
+    },
+    signal,
+    body: JSON.stringify({ file: { display_name: "mission-control-voice" } }),
+  });
+  if (!start.ok) return null;
+
+  const uploadUrl = start.headers.get("x-goog-upload-url");
+  if (!uploadUrl) return null;
+
+  const finish = await fetch(uploadUrl, {
+    method: "POST",
+    headers: {
+      "Content-Length": String(bytes.byteLength),
+      "X-Goog-Upload-Offset": "0",
+      "X-Goog-Upload-Command": "upload, finalize",
+      "Content-Type": mimeType,
+    },
+    signal,
+    body: bytes,
+  });
+  if (!finish.ok) return null;
+
+  const body = (await finish.json().catch(() => null)) as
+    | { file?: { uri?: string; name?: string; mimeType?: string; mime_type?: string } }
+    | null;
+  const uri = body?.file?.uri;
+  if (!uri) return null;
+  return {
+    uri,
+    name: body?.file?.name,
+    mimeType: body?.file?.mimeType || body?.file?.mime_type || mimeType,
+  };
+}
+
+async function deleteGeminiFile(name: string | undefined, key: string) {
+  if (!name) return;
+  try {
+    await fetch(`https://generativelanguage.googleapis.com/v1beta/${name}`, {
+      method: "DELETE",
+      headers: { "x-goog-api-key": key },
+    });
+  } catch {
+    /* best-effort cleanup */
+  }
+}
+
+async function genericGeminiAudioFallback(
+  file: File,
+  key: string,
+  language?: string,
+): Promise<{ text: string; provider: "gemini" } | null> {
+  const requestedLanguage = normalizeRequestedLanguage(language ?? "auto");
+  const mimeType = (file.type || "audio/wav").split(";")[0] || "audio/wav";
+  const data = arrayBufferToBase64(await file.arrayBuffer());
+  const languageRule = requestedLanguage
+    ? `The spoken language is ${requestedLanguage}. Preserve that language exactly.`
+    : "Detect the spoken language automatically and preserve it exactly.";
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          role: "user",
+          parts: [
+            {
+              text: [
+                "Transcribe this audio verbatim.",
+                languageRule,
+                "Do not summarize, translate, paraphrase, or omit words.",
+                "Preserve proper nouns, domains, acronyms, numbers, and product names.",
+                "Return only the transcript text.",
+              ].join(" "),
+            },
+            { inlineData: { mimeType, data } },
+          ],
+        }],
+        generationConfig: { temperature: 0, maxOutputTokens: 8192 },
+      }),
+    },
+  );
+  if (!res.ok) return null;
+  const json = (await res.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  const text = json.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || "")
+    .join("")
+    .trim();
+  return text ? { text, provider: "gemini" } : null;
+}
+
 async function transcribeAudioWithGemini(
   file: File,
   language?: string,
@@ -130,58 +241,57 @@ async function transcribeAudioWithGemini(
   if (!key) return null;
 
   const requestedLanguage = normalizeRequestedLanguage(language ?? "auto");
-  const mimeType = (file.type || "audio/wav").split(";")[0] || "audio/wav";
-  const data = arrayBufferToBase64(await file.arrayBuffer());
-  const languageRule = requestedLanguage
-    ? `The spoken language is ${requestedLanguage}. Preserve that language exactly.`
-    : "Detect the spoken language automatically and preserve it exactly.";
-
-  const prompt = [
-    "Transcribe this audio verbatim.",
-    languageRule,
-    "Do not summarize, translate, paraphrase, or omit words.",
-    "Preserve proper nouns, domains, acronyms, numbers, and product names.",
-    "Add only punctuation/casing needed for readability.",
-    "Return only the transcript text and nothing else.",
-  ].join(" ");
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
+  let uploaded: { uri: string; name?: string; mimeType: string } | null = null;
+
   try {
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { text: prompt },
-                { inlineData: { mimeType, data } },
-              ],
+    uploaded = await uploadGeminiAudio(file, key, controller.signal);
+    if (uploaded) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-transcribe:generateContent?key=${encodeURIComponent(key)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          signal: controller.signal,
+          body: JSON.stringify({
+            contents: [{
+              parts: [{
+                fileData: {
+                  fileUri: uploaded.uri,
+                  mimeType: uploaded.mimeType,
+                },
+              }],
+            }],
+            generationConfig: {
+              audioTranscriptionConfig: {
+                languageCodes: requestedLanguage ? [requestedLanguage] : [],
+                mode: "VERBATIM",
+              },
             },
-          ],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 8192,
-          },
-        }),
-      },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    };
-    const text = json.candidates?.[0]?.content?.parts
-      ?.map((part) => part.text || "")
-      .join("")
-      .trim();
-    return text ? { text, provider: "gemini" } : null;
+          }),
+        },
+      );
+
+      if (res.ok) {
+        const json = (await res.json()) as {
+          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+        };
+        const text = json.candidates?.[0]?.content?.parts
+          ?.map((part) => part.text || "")
+          .join("")
+          .trim();
+        if (text) return { text, provider: "gemini" };
+      }
+    }
+
+    // Compatibility fallback for transient dedicated-model/API failures.
+    return await genericGeminiAudioFallback(file, key, language);
+  } catch {
+    return await genericGeminiAudioFallback(file, key, language).catch(() => null);
   } finally {
     clearTimeout(timeout);
+    await deleteGeminiFile(uploaded?.name, key);
   }
 }
 
