@@ -315,8 +315,11 @@ export async function runMentionCollector(useAi = true) {
 
   // Reuse already-collected tracked-feed stories as a second, user-curated evidence source.
   // This broadens coverage without introducing unverified web scraping.
+  const mentionLookback = Date.now() - 30 * 86_400_000;
   const trackedStories = (await db.streamItems.where("kind").equals("industry").toArray()).filter(
-    (item) => item.status === "active",
+    (item) =>
+      item.status === "active" &&
+      new Date(item.publishedAt).getTime() >= mentionLookback,
   );
   for (const term of terms) {
     for (const story of trackedStories) {
