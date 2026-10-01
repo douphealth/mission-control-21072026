@@ -49,6 +49,7 @@ const MentionsPage = lazy(() => import("@/pages/MentionsPage"));
 const AudiencePage = lazy(() => import("@/pages/AudiencePage"));
 const RemindersPage = lazy(() => import("@/pages/RemindersPage"));
 const CustomModulePage = lazy(() => import("@/pages/CustomModulePage"));
+const DemoPage = lazy(() => import("@/pages/DemoPage"));
 
 const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComponent<any>> = {
   dashboard: DashboardHome,
@@ -81,6 +82,7 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   mentions: MentionsPage,
   audience: AudiencePage,
   reminders: RemindersPage,
+  demo: DemoPage,
 };
 
 function LoadingSkeleton() {
