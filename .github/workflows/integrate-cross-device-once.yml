@@ -62,12 +62,22 @@ jobs:
         run: bun add --dev --exact playwright@1.63.0
       - run: bun run typecheck
       - name: Lint
-        run: bun run lint > /tmp/mc-lint.log 2>&1 || { tail -n 100 /tmp/mc-lint.log; exit 1; }
-      - run: bun run test
-      - run: bun run build:cloudflare
+        id: lint
+        continue-on-error: true
+        run: bunx eslint . --quiet
+      - name: Unit and integration regressions
+        id: unit
+        continue-on-error: true
+        run: bun run test
+      - name: Cloudflare-target production build
+        id: build
+        continue-on-error: true
+        run: bun run build:cloudflare
       - name: Install Chromium and WebKit
         run: bunx playwright install --with-deps chromium webkit
       - name: Browser save and cross-device tests
+        id: browser
+        continue-on-error: true
         run: node scripts/browser-reliability.mjs
       - name: Preserve test evidence
         if: always()
@@ -76,6 +86,18 @@ jobs:
           name: cross-device-reliability
           path: test-results/
           if-no-files-found: ignore
+      - name: Require every validation gate
+        if: always()
+        env:
+          LINT: ${{ steps.lint.outcome }}
+          UNIT: ${{ steps.unit.outcome }}
+          BUILD: ${{ steps.build.outcome }}
+          BROWSER: ${{ steps.browser.outcome }}
+        run: |
+          test "$LINT" = success
+          test "$UNIT" = success
+          test "$BUILD" = success
+          test "$BROWSER" = success
       - name: Commit only the tested integration and remove this one-time helper
         run: |
           git config user.name 'Mission Control repair'
