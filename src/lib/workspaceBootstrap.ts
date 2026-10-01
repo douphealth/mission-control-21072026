@@ -9,6 +9,7 @@ import {
   type SEOAction,
   type SEOIssue,
   type SEOProfile,
+  type SyncHealth,
   type WatchTerm,
   type Website,
 } from "@/lib/db";
@@ -273,6 +274,57 @@ const IDEAS: Array<Omit<Idea, "id">> = [
   },
 ];
 
+const SYNC_HEALTH_SEEDS: Array<SyncHealth> = [
+  {
+    id: "cloud",
+    label: "Cloud backup",
+    status: "not-configured",
+    detail: "Private Mission Control cloud backup/sync status.",
+  },
+  {
+    id: "google-calendar",
+    label: "Google Calendar",
+    status: "not-configured",
+    detail: "Calendar and Google Tasks connection status.",
+  },
+  {
+    id: "wordpress",
+    label: "WordPress",
+    status: "not-configured",
+    detail: "Authenticated WordPress REST management status.",
+  },
+  {
+    id: "gsc",
+    label: "Google Search Console",
+    status: "not-configured",
+    detail: "First-party Google search/indexation evidence.",
+  },
+  {
+    id: "ga4",
+    label: "Google Analytics",
+    status: "not-configured",
+    detail: "First-party traffic and conversion evidence.",
+  },
+  {
+    id: "bing",
+    label: "Bing Webmaster Tools",
+    status: "not-configured",
+    detail: "Bing crawl, indexation and search evidence.",
+  },
+  {
+    id: "feeds",
+    label: "Industry feeds",
+    status: "not-configured",
+    detail: "Trend/news source refresh status.",
+  },
+  {
+    id: "audience",
+    label: "Audience sources",
+    status: "not-configured",
+    detail: "Social audience observation status.",
+  },
+];
+
 const WATCH_DOMAINS = [
   "gearuptofit.com",
   "affiliatemarketingforsuccess.com",
@@ -504,6 +556,15 @@ export async function ensureWorkspaceBootstrap() {
         async () => Boolean(await db.feedSources.filter((row) => row.url.toLowerCase() === feed.url.toLowerCase()).first()),
         feed,
       )) || changed;
+  }
+
+  for (const health of SYNC_HEALTH_SEEDS) {
+    const existing = await db.syncHealth.get(health.id);
+    if (!existing) {
+      await db.syncHealth.put(health);
+      markCloudRecordDirty("syncHealth", health.id);
+      changed = true;
+    }
   }
 
   for (const term of WATCH_DOMAINS) {
