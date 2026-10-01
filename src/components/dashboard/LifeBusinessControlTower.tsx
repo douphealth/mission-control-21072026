@@ -57,8 +57,8 @@ export default function LifeBusinessControlTower() {
   const openTasks = tasks.filter((task) => task.status !== "done");
   const workTasks = openTasks.filter((task) => (task.area ?? "work") === "work");
   const personalTasks = openTasks.filter((task) => task.area === "personal");
-  const blockedTasks = openTasks.filter((task) => task.status === "blocked");
-  const dueToday = openTasks.filter((task) => task.dueDate === today);
+  const workBlocked = workTasks.filter((task) => task.status === "blocked");
+  const workDueToday = workTasks.filter((task) => task.dueDate === today);
   const activeWebsites = websites.filter((site) => site.status === "active");
   const criticalSites = activeWebsites.filter((site) => site.priority === "critical");
   const deployedBuilds = builds.filter((build) => build.status === "deployed");
@@ -112,7 +112,7 @@ export default function LifeBusinessControlTower() {
       icon: BriefcaseBusiness,
       value: workTasks.length,
       suffix: "open",
-      detail: dueToday.length + " due today · " + blockedTasks.length + " blocked",
+      detail: workDueToday.length + " due today · " + workBlocked.length + " blocked",
       tone: "primary",
       rows: topWork.map((task) => task.title),
     },
