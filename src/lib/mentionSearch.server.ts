@@ -97,10 +97,12 @@ export async function searchExternalMentions(query: string): Promise<MentionCove
       }
     });
     const dedup = new Map<string, RawItem>();
-    for (const { items } of results) for (const item of items) {
-      // Undated web results are discovery evidence, never asserted to be new publications.
-      if (item.publishedAt && !isRecentIso(item.publishedAt, 30)) continue;
-      dedup.set(canonicalWebUrl(item.url), item);
+    for (const { items } of results) {
+      for (const item of items) {
+        // Undated web results are discovery evidence, never asserted to be new publications.
+        if (item.publishedAt && !isRecentIso(item.publishedAt, 30)) continue;
+        dedup.set(canonicalWebUrl(item.url), item);
+      }
     }
     const value: MentionCoverage = {
       items: [...dedup.values()], providers: results.map(r => r.status),
