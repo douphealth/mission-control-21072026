@@ -545,7 +545,8 @@ export interface StreamItem {
   kind: StreamKind;
   title: string;
   url: string;
-  source: string; // source name / domain
+  source: string; // publisher/source name
+  sourceUrl?: string; // publisher/source homepage when known
   sourceId?: string; // feedSources.id or watch term id
   summary?: string;
   aiSummary?: string;
@@ -554,6 +555,10 @@ export interface StreamItem {
   score: number; // 0-100 importance
   status: StreamStatus;
   matchedTerm?: string;
+  matchedAnchors?: string[];
+  verification?: "exact-domain" | "exact-handle" | "anchored-name" | "exact-brand" | "topic-search" | "feed";
+  confidence?: "high" | "medium" | "low";
+  corroborationCount?: number;
   read?: boolean;
 }
 
@@ -597,6 +602,10 @@ export interface AudienceReading {
   followers: number | null; // null = unavailable (never a false zero)
   posts?: number | null;
   status: "ok" | "unavailable" | "limited";
+  method?: "official-api" | "public-page";
+  provider?: string;
+  confidence?: "high" | "medium" | "low";
+  evidence?: string;
 }
 
 export interface Reminder {
