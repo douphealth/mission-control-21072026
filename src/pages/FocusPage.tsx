@@ -20,6 +20,22 @@ import { daysOverdue } from "@/lib/overdue";
 import { scoreItem } from "@/lib/priorityEngine";
 import { useNavigationStore } from "@/stores/navigationStore";
 
+function readSessionsToday() {
+  try {
+    return Number(localStorage.getItem(`mc-focus-sessions:${todayISO()}`) || "0") || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeSessionsToday(value: number) {
+  try {
+    localStorage.setItem(`mc-focus-sessions:${todayISO()}`, String(value));
+  } catch {
+    // Private/local persistence can be unavailable; focus still works in memory.
+  }
+}
+
 const PRESETS = [
   { label: "Focus", minutes: 25, icon: Zap, emoji: "🍅", gradient: "from-primary to-accent" },
   {
@@ -45,7 +61,7 @@ export default function FocusPage() {
   const [totalSec, setTotalSec] = useState(PRESETS[0].minutes * 60);
   const [remaining, setRemaining] = useState(PRESETS[0].minutes * 60);
   const [running, setRunning] = useState(false);
-  const [sessions, setSessions] = useState(0);
+  const [sessions, setSessions] = useState(readSessionsToday);
   const [lockedId, setLockedId] = useState<string | null>(handoffId);
   const intervalRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -111,7 +127,11 @@ export default function FocusPage() {
       clearInterval(intervalRef.current);
       if (remaining === 0 && running) {
         setRunning(false);
-        if (preset === 0) setSessions((s) => s + 1);
+        if (preset === 0) setSessions((current) => {
+          const next = current + 1;
+          writeSessionsToday(next);
+          return next;
+        });
         // Auto-advance to break after focus
         if (preset === 0) {
           const nextPreset = sessions > 0 && (sessions + 1) % 4 === 0 ? 2 : 1;
@@ -137,7 +157,11 @@ export default function FocusPage() {
   };
   const skip = () => {
     setRunning(false);
-    if (preset === 0) setSessions((s) => s + 1);
+    if (preset === 0) setSessions((current) => {
+          const next = current + 1;
+          writeSessionsToday(next);
+          return next;
+        });
     const next = preset === 0 ? 1 : 0;
     selectPreset(next);
   };
@@ -277,6 +301,7 @@ export default function FocusPage() {
             strokeWidth="7"
             strokeLinecap="round"
             strokeDasharray={circumference}
+            strokeDashoffset={offset}
             transform="rotate(-90 100 100)"
             style={{ filter: "drop-shadow(0 0 8px hsl(var(--primary) / 0.3))" }}
           />

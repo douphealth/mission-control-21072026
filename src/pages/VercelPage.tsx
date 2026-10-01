@@ -16,6 +16,8 @@ import {
 import { getVercelProjects, type VercelProjectRow } from "@/lib/integrations.functions";
 import { TruthBadge, ConnectorEmpty, ConnectorError } from "@/components/TruthUI";
 import { freshness, type TruthMeta } from "@/lib/truth";
+import { db } from "@/lib/db";
+import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 const vercelTools = [
   {
@@ -97,14 +99,42 @@ export default function VercelPage() {
         fetchedAt: r.fetchedAt,
         error: r.error,
       });
+      await db.syncHealth.put({
+        id: "vercel",
+        label: "Vercel",
+        status:
+          r.truthState === "live"
+            ? "ok"
+            : r.truthState === "error"
+              ? "error"
+              : "not-configured",
+        lastAttemptAt: r.fetchedAt || new Date().toISOString(),
+        lastSuccessAt: r.truthState === "live" ? r.fetchedAt : undefined,
+        error: r.error || undefined,
+        detail: "Vercel projects API truth state.",
+      });
+      markCloudRecordDirty("syncHealth", "vercel");
+      queueCloudPush();
     } catch (e: any) {
       setProjects([]);
+      const fetchedAt = new Date().toISOString();
+      const message = String(e?.message ?? e);
       setMeta({
         truthState: "error",
         source: "Vercel API",
-        fetchedAt: new Date().toISOString(),
-        error: String(e?.message ?? e),
+        fetchedAt,
+        error: message,
       });
+      await db.syncHealth.put({
+        id: "vercel",
+        label: "Vercel",
+        status: "error",
+        lastAttemptAt: fetchedAt,
+        error: message,
+        detail: "Vercel projects API truth state.",
+      });
+      markCloudRecordDirty("syncHealth", "vercel");
+      queueCloudPush();
     } finally {
       setLoading(false);
     }

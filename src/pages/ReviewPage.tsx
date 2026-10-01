@@ -99,10 +99,10 @@ function TaskRow({
         </button>
         <button
           onClick={() => onPush(task, 7)}
-          title="Push a week"
+          title="Plan a week from now without changing the real deadline"
           className="flex items-center gap-1 rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground"
         >
-          <CalendarClock size={12} /> +7d
+          <CalendarClock size={12} /> Plan +7d
         </button>
         <button
           onClick={() => onArchive(task)}
@@ -178,16 +178,29 @@ export default function ReviewPage() {
 
   const onToday = useCallback(
     async (t: Task) => {
-      await updateItem<Task>("tasks", t.id, { dueDate: today, status: "in-progress" });
-      toast.success("Moved to today");
+      await updateItem<Task>("tasks", t.id, {
+        status: "in-progress",
+        committedOn: today,
+        scheduledAt: today,
+        notBefore: undefined,
+        touchedAt: today,
+      });
+      toast.success("Committed to today — deadline unchanged");
     },
     [updateItem, today],
   );
 
   const onPush = useCallback(
     async (t: Task, d: number) => {
-      await updateItem<Task>("tasks", t.id, { dueDate: addDaysISO(d, today) });
-      toast.success(`Rescheduled +${d}d`);
+      const planned = addDaysISO(d, today);
+      await updateItem<Task>("tasks", t.id, {
+        notBefore: planned,
+        scheduledAt: planned,
+        reviewAt: planned,
+        committedOn: undefined,
+        touchedAt: today,
+      });
+      toast.success(`Planned +${d}d — deadline unchanged`);
     },
     [updateItem, today],
   );
@@ -202,8 +215,14 @@ export default function ReviewPage() {
 
   const onRestore = useCallback(
     async (t: Task) => {
-      await updateItem<Task>("tasks", t.id, { archived: false, dueDate: today });
-      toast.success("Restored to today");
+      await updateItem<Task>("tasks", t.id, {
+        archived: false,
+        archivedAt: undefined,
+        scheduledAt: today,
+        reviewAt: today,
+        touchedAt: today,
+      });
+      toast.success("Restored and planned for today — deadline unchanged");
     },
     [updateItem, today],
   );
@@ -240,7 +259,7 @@ export default function ReviewPage() {
 
   const finishWeekly = useCallback(() => {
     markWeeklyReview(today);
-    toast.success("Weekly review logged. Inbox is clear.");
+    toast.success("Weekly review logged.");
   }, [markWeeklyReview, today]);
 
   const tomorrowPlan = useMemo(

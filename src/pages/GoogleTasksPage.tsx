@@ -14,6 +14,8 @@ import {
   Settings,
 } from "lucide-react";
 import { toast } from "sonner";
+import { db } from "@/lib/db";
+import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import {
@@ -30,6 +32,24 @@ import {
   type GTaskList,
   type GTask,
 } from "@/lib/googleTasks";
+
+async function writeGoogleTasksHealth(
+  status: "ok" | "stale" | "error" | "not-configured" | "syncing",
+  error?: string,
+) {
+  const now = new Date().toISOString();
+  await db.syncHealth.put({
+    id: "google-tasks",
+    label: "Google Tasks",
+    status,
+    lastAttemptAt: now,
+    lastSuccessAt: status === "ok" ? now : undefined,
+    error,
+    detail: "Google Tasks API connection and synchronization state.",
+  });
+  markCloudRecordDirty("syncHealth", "google-tasks");
+  queueCloudPush();
+}
 
 export default function GoogleTasksPage() {
   const [signed, setSigned] = useState(isSignedIn());
@@ -55,10 +75,13 @@ export default function GoogleTasksPage() {
     try {
       const ls = await listTaskLists();
       setLists(ls);
+      await writeGoogleTasksHealth("ok");
       if (ls.length && !activeList) setActiveList(ls[0].id);
     } catch (e: any) {
       toast.error(e.message);
-      if (/session expired|Not signed in/i.test(e.message)) setSigned(false);
+      const authLost = /session expired|Not signed in/i.test(e.message);
+      if (authLost) setSigned(false);
+      await writeGoogleTasksHealth(authLost ? "not-configured" : "error", e.message);
     } finally {
       setLoading(false);
     }
@@ -69,9 +92,12 @@ export default function GoogleTasksPage() {
     setLoading(true);
     try {
       setTasks(await listTasks(activeList, showCompleted));
+      await writeGoogleTasksHealth("ok");
     } catch (e: any) {
       toast.error(e.message);
-      if (/session expired|Not signed in/i.test(e.message)) setSigned(false);
+      const authLost = /session expired|Not signed in/i.test(e.message);
+      if (authLost) setSigned(false);
+      await writeGoogleTasksHealth(authLost ? "not-configured" : "error", e.message);
     } finally {
       setLoading(false);
     }
@@ -90,10 +116,12 @@ export default function GoogleTasksPage() {
       await signIn();
       const connected = await refreshSignInState();
       setSigned(connected || isSignedIn());
+      await writeGoogleTasksHealth(connected || isSignedIn() ? "ok" : "not-configured");
       toast.success("Connected to Google Tasks");
     } catch (e: any) {
       const message = e?.message || "Google sign-in failed";
       setAuthError(message);
+      await writeGoogleTasksHealth("error", message);
       toast.error(message);
       throw e;
     }
@@ -114,6 +142,7 @@ export default function GoogleTasksPage() {
     setLists([]);
     setTasks([]);
     setActiveList(null);
+    void writeGoogleTasksHealth("not-configured");
     toast.success("Disconnected");
   };
 

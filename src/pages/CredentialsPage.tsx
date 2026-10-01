@@ -30,6 +30,7 @@ import { encrypt, decryptOrNull } from "@/lib/encryption";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { todayISO } from "@/lib/overdue";
 
 const CATEGORIES = [
   "General",
@@ -53,7 +54,7 @@ const emptyForm: Omit<CredentialVault, "id"> = {
   apiKey: "",
   notes: "",
   category: "General",
-  createdAt: new Date().toISOString().split("T")[0],
+  createdAt: todayISO(),
 };
 
 const categoryColors: Record<string, string> = {
@@ -201,7 +202,7 @@ export default function CredentialsPage() {
 
   const openAdd = () => {
     setEditId(null);
-    setForm({ ...emptyForm, createdAt: new Date().toISOString().split("T")[0] });
+    setForm({ ...emptyForm, createdAt: todayISO() });
     setModalOpen(true);
   };
   const openEdit = async (c: CredentialVault) => {

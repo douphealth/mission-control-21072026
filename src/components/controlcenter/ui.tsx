@@ -12,12 +12,15 @@ export function CCHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+    <div className="relative overflow-hidden rounded-[26px] border border-border/50 bg-card/65 p-4 shadow-[var(--shadow-sm)] backdrop-blur-xl sm:p-5 mb-6">
+      <div className="pointer-events-none absolute -right-12 -top-16 h-36 w-36 rounded-full bg-primary/8 blur-3xl" />
+      <div className="relative flex flex-wrap items-end justify-between gap-3">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
         {subtitle && <p className="text-sm text-muted-foreground mt-1">{subtitle}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+      </div>
     </div>
   );
 }
@@ -31,7 +34,7 @@ export function Panel({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-border/60 bg-card/70 backdrop-blur-xl p-4 sm:p-5 shadow-sm ${className}`}
+      className={`rounded-[22px] border border-border/50 bg-card/68 backdrop-blur-xl p-4 sm:p-5 shadow-[var(--shadow-sm)] ${className}`}
     >
       {children}
     </div>
@@ -112,7 +115,7 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
           </p>
         )}
       </div>
-      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex flex-col gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
         <a
           href={item.url}
           target="_blank"
@@ -136,9 +139,10 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="text-center py-12 rounded-2xl border border-dashed border-border/70">
+    <div className="relative overflow-hidden text-center py-12 rounded-[22px] border border-dashed border-border/65 bg-card/35">
+      <div className="pointer-events-none absolute inset-x-1/3 top-0 h-24 rounded-full bg-primary/5 blur-3xl" />
       <p className="text-sm font-semibold text-foreground">{title}</p>
-      {hint && <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">{hint}</p>}
+      {hint && <p className="relative text-xs text-muted-foreground mt-1 max-w-md mx-auto">{hint}</p>}
     </div>
   );
 }

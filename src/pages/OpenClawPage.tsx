@@ -19,6 +19,9 @@ import FormModal, { FormField, FormInput, FormSelect, FormTextarea } from "@/com
 import { toast } from "sonner";
 import { probeEndpoint } from "@/lib/integrations.functions";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
+import { todayISO } from "@/lib/overdue";
+import { db } from "@/lib/db";
+import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 
 // OpenClaw = generic service/API tracker — user can track any service
 interface ServiceEntry {
@@ -48,7 +51,7 @@ const emptyForm: Omit<ServiceEntry, "id"> = {
   status: "unknown",
   category: "API",
   notes: "",
-  lastChecked: new Date().toISOString().split("T")[0],
+  lastChecked: todayISO(),
 };
 
 function StatusBadge({ status }: { status: ServiceEntry["status"] }) {
@@ -98,9 +101,26 @@ export default function OpenClawPage() {
             : hit.r.status >= 500 || hit.r.status === 0
               ? "outage"
               : "degraded";
-          return { ...svc, status, lastChecked: new Date().toISOString().split("T")[0] };
+          return { ...svc, status, lastChecked: todayISO() };
         }),
       );
+      const statuses = results.map(({ r }) =>
+        r.ok ? "operational" : r.status >= 500 || r.status === 0 ? "outage" : "degraded",
+      );
+      const hasOutage = statuses.includes("outage");
+      const hasDegraded = statuses.includes("degraded");
+      const checkedAt = new Date().toISOString();
+      await db.syncHealth.put({
+        id: "openclaw",
+        label: "OpenClaw",
+        status: hasOutage ? "error" : hasDegraded ? "stale" : "ok",
+        lastAttemptAt: checkedAt,
+        lastSuccessAt: hasOutage ? undefined : checkedAt,
+        error: hasOutage ? "One or more tracked services failed the HTTP probe." : undefined,
+        detail: `${results.length} tracked endpoint${results.length === 1 ? "" : "s"} probed.`,
+      });
+      markCloudRecordDirty("syncHealth", "openclaw");
+      queueCloudPush();
       toast.success(`Checked ${results.length} service${results.length === 1 ? "" : "s"}`);
     } catch (e: any) {
       toast.error(String(e?.message ?? e));
@@ -124,7 +144,7 @@ export default function OpenClawPage() {
 
   const openAdd = () => {
     setEditId(null);
-    setForm({ ...emptyForm, lastChecked: new Date().toISOString().split("T")[0] });
+    setForm({ ...emptyForm, lastChecked: todayISO() });
     setModalOpen(true);
   };
 

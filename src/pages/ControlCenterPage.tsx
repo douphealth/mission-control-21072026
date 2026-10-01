@@ -61,15 +61,19 @@ export default function ControlCenterPage() {
         .slice(0, 5),
     [reminders],
   );
-  const totalFollowers = useMemo(() => {
-    let sum = 0;
+  const audienceTotals = useMemo(() => {
+    let followers = 0;
+    let observedAccounts = 0;
     accounts.forEach((a) => {
       const latest = readings
         .filter((r) => r.accountId === a.id && r.followers !== null)
         .sort((x, y) => y.capturedAt.localeCompare(x.capturedAt))[0];
-      if (latest?.followers) sum += latest.followers;
+      if (latest && latest.followers !== null) {
+        followers += latest.followers;
+        observedAccounts += 1;
+      }
     });
-    return sum;
+    return { followers, observedAccounts };
   }, [accounts, readings]);
 
   const refreshAll = async () => {
@@ -122,8 +126,8 @@ export default function ControlCenterPage() {
         />
         <StatTile
           label="Followers"
-          value={totalFollowers ? nf.format(totalFollowers) : "—"}
-          hint={`${accounts.length} profiles`}
+          value={audienceTotals.observedAccounts ? nf.format(audienceTotals.followers) : "—"}
+          hint={`${audienceTotals.observedAccounts}/${accounts.length} profiles observed`}
         />
         <StatTile label="Reminders due" value={dueReminders.length} hint="next 24 hours" />
       </div>
@@ -221,10 +225,10 @@ export default function ControlCenterPage() {
                 </button>
               </div>
               <p className="text-2xl font-bold text-foreground mt-2 tabular-nums">
-                {totalFollowers ? nf.format(totalFollowers) : "—"}
+                {audienceTotals.observedAccounts ? nf.format(audienceTotals.followers) : "—"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                total followers across {accounts.length} tracked profiles
+                total observed followers across {audienceTotals.observedAccounts}/{accounts.length} tracked profiles
               </p>
             </Panel>
           </div>

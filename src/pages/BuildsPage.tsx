@@ -13,11 +13,14 @@ import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
+import { todayISO } from "@/lib/overdue";
 
 const platformStyle: Record<string, { badge: string; emoji: string; label: string }> = {
   bolt: { badge: "bg-blue-500/10 text-blue-500", emoji: "⚡", label: "Bolt" },
   lovable: { badge: "bg-purple-500/10 text-purple-500", emoji: "💜", label: "Lovable" },
   replit: { badge: "bg-green-500/10 text-green-500", emoji: "🟢", label: "Replit" },
+  vercel: { badge: "bg-foreground/10 text-foreground", emoji: "▲", label: "Vercel" },
+  other: { badge: "bg-cyan-500/10 text-cyan-500", emoji: "◆", label: "Other" },
 };
 const statusOrder: Record<string, number> = { ideation: 0, building: 1, testing: 2, deployed: 3 };
 
@@ -29,8 +32,8 @@ const emptyBuild: Omit<BuildProject, "id"> = {
   description: "",
   techStack: [],
   status: "ideation",
-  startedDate: new Date().toISOString().split("T")[0],
-  lastWorkedOn: new Date().toISOString().split("T")[0],
+  startedDate: todayISO(),
+  lastWorkedOn: todayISO(),
   nextSteps: "",
   githubRepo: "",
   portfolioGroup: "experiment",
@@ -42,6 +45,7 @@ export default function BuildsPage() {
   const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterPlatform, setFilterPlatform] = useState("all");
+  const [filterScope, setFilterScope] = useState<"all" | "production" | "internal">("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyBuild);
@@ -49,9 +53,21 @@ export default function BuildsPage() {
   const cd = useConfirmDialog();
 
   const filtered = buildProjects
-    .filter((b: any) => !b.portfolioGroup || b.portfolioGroup === "experiment" || b.portfolioGroup === "internal")
+    .filter((b: any) => {
+      if (filterScope === "all") return true;
+      if (filterScope === "production") {
+        return b.portfolioGroup === "growth-app" || b.portfolioGroup === "tool";
+      }
+      return !b.portfolioGroup || b.portfolioGroup === "experiment" || b.portfolioGroup === "internal";
+    })
     .filter((b: any) => filterPlatform === "all" || b.platform === filterPlatform)
-    .filter((b: any) => b.name.toLowerCase().includes(search.toLowerCase()));
+    .filter((b: any) =>
+      [b.name, b.productName, b.description, b.parentWebsite, b.githubRepo]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(search.toLowerCase()),
+    );
 
   const openAdd = () => {
     setEditId(null);
@@ -66,7 +82,7 @@ export default function BuildsPage() {
   };
   const saveForm = () => {
     if (!form.name.trim()) return;
-    const now = new Date().toISOString().split("T")[0];
+    const now = todayISO();
     if (editId) {
       updateData({
         buildProjects: buildProjects.map((b: any) =>
@@ -121,7 +137,7 @@ export default function BuildsPage() {
 
   const bulkUpdateStatus = useCallback(
     (status: string) => {
-      const now = new Date().toISOString().split("T")[0];
+      const now = todayISO();
       updateData({
         buildProjects: buildProjects.map((b: any) =>
           bulk.selectedIds.has(b.id) ? { ...b, status, lastWorkedOn: now } : b,
@@ -139,7 +155,7 @@ export default function BuildsPage() {
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-foreground">Build Projects</h1>
           <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {buildProjects.filter((b: any) => !b.portfolioGroup || b.portfolioGroup === "experiment" || b.portfolioGroup === "internal").length} experiments & internal builds
+            {buildProjects.length} tracked builds · {buildProjects.filter((b: any) => b.status === "deployed").length} deployed
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -191,7 +207,18 @@ export default function BuildsPage() {
           />
         </div>
         <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 overflow-x-auto hide-scrollbar">
-          {["all", "bolt", "lovable", "replit"].map((p) => (
+          {(["all", "production", "internal"] as const).map((scope) => (
+            <button
+              key={scope}
+              onClick={() => setFilterScope(scope)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all whitespace-nowrap ${filterScope === scope ? "bg-card text-card-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              {scope === "all" ? "All builds" : scope === "production" ? "Production" : "Internal & experiments"}
+            </button>
+          ))}
+        </div>
+        <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 overflow-x-auto hide-scrollbar">
+          {["all", "bolt", "lovable", "replit", "vercel", "other"].map((p) => (
             <button
               key={p}
               onClick={() => setFilterPlatform(p)}
@@ -205,7 +232,7 @@ export default function BuildsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
         {filtered.map((bp: any, i: number) => {
-          const ps = platformStyle[bp.platform] || platformStyle.bolt;
+          const ps = platformStyle[bp.platform] || platformStyle.other;
           return (
             <div
               key={bp.id}
