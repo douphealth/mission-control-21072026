@@ -27,14 +27,50 @@ export default function CrossDeviceSyncBar() {
     finally { setBusy(false); setSync(snapshot()); }
   };
   const label = sync.status === 'synced' && !sync.pending ? 'Cloud confirmed' : sync.status === 'signed-out' ? 'This device only' : sync.status === 'error' ? 'Sync needs attention' : sync.status === 'offline' ? 'Offline - saved locally' : 'Synchronizing';
-  return <section aria-label="Cross-device synchronization" className="shrink-0 border-b border-border/50 bg-card px-3 py-2 sm:px-6">
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <div className="flex min-w-0 flex-1 items-start gap-2"><Cloud size={16} className="mt-0.5 shrink-0 text-primary" /><div className="min-w-0">
-        <div className="text-xs font-semibold" role="status">{label} <span className="font-normal text-muted-foreground"> · {tasks.length} tasks on this device · {sync.pending} pending</span></div>
-        <div className="break-all text-[11px] text-muted-foreground">{sync.email || 'Connect the same Google account on mobile and desktop.'}{sync.at ? ` · Last confirmed ${new Date(sync.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}</div>
-      </div></div>
-      <button type="button" onClick={() => void act()} disabled={busy || sync.status === 'connecting'} className="flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-primary px-3 text-xs font-bold text-primary-foreground disabled:opacity-50"><RefreshCw size={14} className={busy || sync.status === 'syncing' ? 'animate-spin' : ''} />{busy ? 'Syncing...' : connect ? 'Connect Google' : 'Sync now'}</button>
-    </div>
-    {sync.error && <p role="alert" className="mt-1 break-words text-[11px] text-warning">{sync.error}</p>}
-  </section>;
+  return (
+    <section
+      aria-label="Cross-device synchronization"
+      className="mc20-syncbar"
+      data-state={sync.status}
+      data-connect={connect ? "true" : "false"}
+    >
+      <div className="mc20-syncbar-inner">
+        <div className="mc20-sync-status">
+          <span className="mc20-sync-dot" aria-hidden />
+          <Cloud size={14} className="mc20-sync-icon" />
+          <div className="mc20-sync-copy">
+            <div className="mc20-sync-title" role="status">
+              {label}
+              <span> · {tasks.length} tasks · {sync.pending} pending</span>
+            </div>
+            <div className="mc20-sync-meta">
+              {sync.email || "Connect the same Google account on mobile and desktop."}
+              {sync.at
+                ? ` · Last confirmed ${new Date(sync.at).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}`
+                : ""}
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => void act()}
+          disabled={busy || sync.status === "connecting"}
+          className="mc20-sync-action"
+        >
+          <RefreshCw size={13} className={busy || sync.status === "syncing" ? "animate-spin" : ""} />
+          {busy ? "Syncing..." : connect ? "Connect Google" : "Sync now"}
+        </button>
+      </div>
+
+      {sync.error && (
+        <p role="alert" className="mc20-sync-error">
+          {sync.error}
+        </p>
+      )}
+    </section>
+  );
 }

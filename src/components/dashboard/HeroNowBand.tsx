@@ -8,10 +8,14 @@ import {
   Sparkles,
   Timer,
   Zap,
+  ListChecks,
+  Plus,
 } from "lucide-react";
 import type { WorkItem } from "@/lib/workQueue";
 import { estimateOf, fmtMinutes } from "@/lib/planning";
 import type { Task } from "@/lib/db";
+import { useNavigationStore } from "@/stores/navigationStore";
+import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -86,6 +90,7 @@ export default function HeroNowBand({
   onComplete: (item: WorkItem) => void;
 }) {
   const now = useClock();
+  const setActiveSection = useNavigationStore((state) => state.setActiveSection);
   const hour = now.getHours();
   const greeting =
     hour < 5
@@ -167,8 +172,29 @@ export default function HeroNowBand({
             <>
               <h1 className="mc13-now-title">Clear deck. Choose the next meaningful move.</h1>
               <p className="mc13-now-subtitle">
-                Capture what matters or open Tasks to commit the next outcome.
+                Capture what matters or choose one outcome to anchor the day.
               </p>
+              <div className="mc13-actions">
+                <button
+                  type="button"
+                  onClick={() => setActiveSection("tasks")}
+                  className="mc13-primary-action"
+                >
+                  <ListChecks size={17} />
+                  Choose next action
+                  <ArrowRight size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT))
+                  }
+                  className="mc13-secondary-action"
+                >
+                  <Plus size={16} />
+                  Capture
+                </button>
+              </div>
             </>
           )}
         </div>
