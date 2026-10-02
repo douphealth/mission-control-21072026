@@ -1060,3 +1060,517 @@ body {
     display: none !important;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mission Control UI/UX — v15 "Prismatic Executive"
+   Second visual pass: hierarchy, tonal identity, refined motion and mobile.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --mc15-mint: 160 84% 48%;
+  --mc15-sky: 198 94% 58%;
+  --mc15-violet: 263 86% 67%;
+  --mc15-amber: 39 96% 57%;
+  --mc15-rose: 342 84% 61%;
+  --mc15-indigo: 226 88% 66%;
+  --mc15-line: hsl(var(--border) / 0.46);
+  --mc15-line-hot: hsl(var(--primary) / 0.3);
+  --mc15-glow-soft: 0 24px 74px -50px hsl(var(--foreground) / 0.42);
+}
+
+.dark {
+  --mc15-line: hsl(0 0% 100% / 0.09);
+  --mc15-line-hot: hsl(var(--primary) / 0.32);
+  --mc15-glow-soft: 0 28px 84px -50px hsl(220 90% 1% / 0.96);
+}
+
+/* The app frame now reads as one continuous premium surface. */
+.mc13-main {
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 0.12), transparent 140px),
+    linear-gradient(90deg, transparent, hsl(var(--primary) / 0.012) 42%, transparent 78%);
+}
+
+.mc13-page::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 12px;
+  left: 8%;
+  right: 8%;
+  height: 220px;
+  border-radius: 999px;
+  pointer-events: none;
+  background: radial-gradient(closest-side, hsl(var(--primary) / 0.045), transparent);
+  filter: blur(44px);
+}
+
+/* Executive sidebar: crisp active state, less generic, more tactile. */
+.mc13-sidebar nav {
+  padding-top: 1.1rem !important;
+}
+
+.mc13-sidebar nav section + section {
+  margin-top: 1.28rem;
+}
+
+.mc13-nav-item svg {
+  transition:
+    transform 180ms var(--mc14-ease),
+    filter 180ms ease;
+}
+
+.mc13-nav-item:hover svg {
+  transform: scale(1.06);
+}
+
+.mc13-nav-item.bg-sidebar-primary svg {
+  filter: drop-shadow(0 4px 10px hsl(var(--sidebar-primary-foreground) / 0.18));
+}
+
+.mc13-sidebar button[title="Collapse navigation"],
+.mc13-sidebar button[title="Expand navigation"] {
+  border-color: var(--mc15-line) !important;
+  background:
+    linear-gradient(180deg, hsl(var(--sidebar) / 0.98), hsl(var(--sidebar-accent) / 0.82)) !important;
+  box-shadow:
+    0 10px 30px -20px hsl(var(--foreground) / 0.55),
+    inset 0 1px 0 hsl(0 0% 100% / 0.08) !important;
+}
+
+/* Top command bar: flatter geometry, stronger control grouping. */
+.mc13-topbar {
+  gap: 0.7rem !important;
+}
+
+.mc13-topbar > button,
+.mc13-topbar > div > button {
+  transition:
+    transform 160ms var(--mc14-ease),
+    color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease !important;
+}
+
+.mc13-topbar > button:hover,
+.mc13-topbar > div > button:hover {
+  transform: translateY(-1px);
+}
+
+.mc13-topbar > button:active,
+.mc13-topbar > div > button:active {
+  transform: scale(0.95);
+}
+
+.mc13-global-search kbd {
+  border: 1px solid var(--mc15-line) !important;
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 0.85), hsl(var(--secondary) / 0.58)) !important;
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.06),
+    0 5px 14px -11px hsl(var(--foreground) / 0.5);
+}
+
+/* Hero rim: high-end material, not neon-for-neon's-sake. */
+.mc13-hero {
+  outline: 1px solid hsl(0 0% 100% / 0.018);
+  outline-offset: -3px;
+}
+
+.mc13-hero > * {
+  position: relative;
+}
+
+.mc13-hero-top::after {
+  content: "";
+  position: absolute;
+  left: 1.35rem;
+  right: 1.35rem;
+  bottom: -0.62rem;
+  height: 1px;
+  background:
+    linear-gradient(90deg, hsl(0 0% 100% / 0.02), hsl(0 0% 100% / 0.1) 28%, hsl(0 0% 100% / 0.035) 72%, transparent);
+}
+
+.mc13-now-panel {
+  isolation: isolate;
+}
+
+.mc13-now-panel::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: 260px;
+  height: 260px;
+  left: -120px;
+  top: -150px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(114 245 197 / 0.08), transparent 68%);
+  filter: blur(22px);
+}
+
+.mc13-day-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.mc13-day-panel::before {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+  background:
+    linear-gradient(135deg, transparent 42%, rgb(114 215 249 / 0.032), transparent 72%);
+}
+
+.mc13-ring-fill {
+  filter:
+    drop-shadow(0 0 5px rgb(114 245 197 / 0.52))
+    drop-shadow(0 0 12px rgb(114 215 249 / 0.24)) !important;
+}
+
+/* Cleaner focus affordance across actionable surfaces. */
+.mc13-primary-action:focus-visible,
+.mc13-secondary-action:focus-visible,
+.mc13-new-button:focus-visible,
+.mc13-global-search:focus-visible,
+.mc-home-toolbar-action:focus-visible,
+.mc-kpi-card:focus-visible,
+.mc-launch-card:focus-visible,
+.mc14-mobile-tab:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px hsl(var(--background)),
+    0 0 0 5px hsl(var(--primary) / 0.42) !important;
+}
+
+/* KPI bento gets semantic color without becoming noisy. */
+.mc-kpi-card[data-tone="bad"]::before {
+  background: hsl(var(--destructive) / 0.09) !important;
+}
+
+.mc-kpi-card[data-tone="good"]::before {
+  background: hsl(var(--success) / 0.09) !important;
+}
+
+.mc-kpi-card[data-tone="info"]::before {
+  background: hsl(var(--info) / 0.09) !important;
+}
+
+.mc-kpi-card[data-tone="violet"]::before {
+  background: hsl(var(--violet) / 0.09) !important;
+}
+
+.mc-kpi-card[data-tone="bad"]:hover {
+  border-color: hsl(var(--destructive) / 0.22) !important;
+}
+
+.mc-kpi-card[data-tone="good"]:hover {
+  border-color: hsl(var(--success) / 0.22) !important;
+}
+
+.mc-kpi-card[data-tone="info"]:hover {
+  border-color: hsl(var(--info) / 0.22) !important;
+}
+
+.mc-kpi-card[data-tone="violet"]:hover {
+  border-color: hsl(var(--violet) / 0.22) !important;
+}
+
+/* Workspace launcher: each core workspace gets its own subtle identity. */
+.mc-launch-card {
+  --mc15-tone: var(--primary);
+  --mc15-tone-hsl: var(--primary);
+  isolation: isolate;
+}
+
+.mc-launch-card[data-tone="mint"] {
+  --mc15-tone-hsl: var(--mc15-mint);
+}
+
+.mc-launch-card[data-tone="violet"] {
+  --mc15-tone-hsl: var(--mc15-violet);
+}
+
+.mc-launch-card[data-tone="sky"] {
+  --mc15-tone-hsl: var(--mc15-sky);
+}
+
+.mc-launch-card[data-tone="amber"] {
+  --mc15-tone-hsl: var(--mc15-amber);
+}
+
+.mc-launch-card[data-tone="rose"] {
+  --mc15-tone-hsl: var(--mc15-rose);
+}
+
+.mc-launch-card[data-tone="indigo"] {
+  --mc15-tone-hsl: var(--mc15-indigo);
+}
+
+.mc-launch-card::before {
+  background: hsl(var(--mc15-tone-hsl) / 0.105) !important;
+}
+
+.mc-launch-card::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  opacity: 0.48;
+  background: linear-gradient(90deg, transparent, hsl(var(--mc15-tone-hsl) / 0.72), transparent);
+  transform: scaleX(0.36);
+  transform-origin: center;
+  transition:
+    transform 260ms var(--mc14-ease),
+    opacity 220ms ease;
+}
+
+.mc-launch-card:hover {
+  border-color: hsl(var(--mc15-tone-hsl) / 0.26) !important;
+}
+
+.mc-launch-card:hover::after {
+  opacity: 0.9;
+  transform: scaleX(0.82);
+}
+
+.mc-launch-card:hover .mc-launch-icon {
+  transform: translateY(-1px) scale(1.04);
+  color: hsl(var(--mc15-tone-hsl));
+  border-color: hsl(var(--mc15-tone-hsl) / 0.2);
+  background:
+    linear-gradient(145deg, hsl(var(--mc15-tone-hsl) / 0.17), hsl(var(--mc15-tone-hsl) / 0.065)) !important;
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--mc15-tone-hsl) / 0.11),
+    0 14px 32px -24px hsl(var(--mc15-tone-hsl) / 0.8) !important;
+}
+
+.mc-launch-icon {
+  color: hsl(var(--mc15-tone-hsl));
+  border: 1px solid hsl(var(--mc15-tone-hsl) / 0.1);
+  transition:
+    transform 200ms var(--mc14-ease),
+    color 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.mc-launch-title {
+  letter-spacing: -0.018em;
+  transition: color 180ms ease;
+}
+
+.mc-launch-card:hover .mc-launch-title {
+  color: hsl(var(--mc15-tone-hsl)) !important;
+}
+
+.mc-launch-detail {
+  margin-top: 0.08rem;
+  letter-spacing: 0.015em;
+}
+
+/* Expandable intelligence cards gain a calm editorial hover state. */
+#main-content .se-card:hover,
+#main-content .se-card-acc:hover {
+  border-color: hsl(var(--primary) / 0.2);
+  box-shadow:
+    var(--mc14-shadow-raised),
+    inset 0 1px 0 hsl(0 0% 100% / 0.035);
+}
+
+/* Forms and command surfaces: consistent premium tactile system. */
+#main-content button,
+#main-content a,
+.mc13-topbar button,
+.mc13-sidebar button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+#main-content button:active {
+  transition-duration: 90ms !important;
+}
+
+#main-content input::placeholder,
+#main-content textarea::placeholder {
+  color: hsl(var(--muted-foreground) / 0.54);
+}
+
+/* Workspace pulse: clearer stats and stronger information density. */
+.mc-workspace-pulse-main {
+  align-items: center !important;
+}
+
+.mc-workspace-pulse-eyebrow {
+  opacity: 0.86;
+}
+
+.mc-workspace-pulse-stat {
+  min-height: 61px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mc-workspace-pulse-stat:hover {
+  border-color: hsl(var(--primary) / 0.2) !important;
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 0.62), hsl(var(--primary) / 0.025)) !important;
+}
+
+.mc-workspace-pulse-related button {
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.025);
+}
+
+/* Mobile dock: active tabs become floating glass pills rather than plain icons. */
+.mc14-mobile-tab {
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+  border: 1px solid transparent;
+  transition:
+    transform 160ms var(--mc14-ease),
+    color 160ms ease,
+    background 180ms ease,
+    border-color 180ms ease !important;
+}
+
+.mc14-mobile-tab.text-primary {
+  border-color: hsl(var(--primary) / 0.12);
+  background:
+    linear-gradient(180deg, hsl(var(--primary) / 0.085), hsl(var(--primary) / 0.035));
+}
+
+.mc14-mobile-tab.text-primary::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: hsl(var(--primary));
+  box-shadow: 0 0 12px hsl(var(--primary) / 0.65);
+}
+
+.mc14-mobile-tab:not(.text-primary):hover {
+  background: hsl(var(--secondary) / 0.48);
+}
+
+.mc13-mobile-capture {
+  isolation: isolate;
+  transition:
+    transform 180ms var(--mc14-ease),
+    box-shadow 200ms ease,
+    filter 180ms ease !important;
+}
+
+.mc13-mobile-capture:hover {
+  transform: translateY(-2px) scale(1.035);
+  filter: saturate(1.08) brightness(1.035);
+}
+
+.mc13-mobile-capture:active {
+  transform: scale(0.92) !important;
+}
+
+.mc13-mobile-workspace-scroll button {
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.025),
+    0 12px 30px -28px hsl(var(--foreground) / 0.46);
+}
+
+.mc13-mobile-workspace-scroll button:hover {
+  transform: translateY(-1px);
+}
+
+/* Mobile composition stays premium without sacrificing density. */
+@media (max-width: 767px) {
+  .mc13-page {
+    padding-inline: 0.72rem !important;
+  }
+
+  .mc13-hero {
+    box-shadow:
+      0 38px 82px -52px rgb(1 10 24 / 0.9),
+      0 18px 46px -34px rgb(45 196 180 / 0.18),
+      inset 0 1px 0 hsl(0 0% 100% / 0.1) !important;
+  }
+
+  .mc13-now-title {
+    text-wrap: pretty;
+  }
+
+  .mc13-capture {
+    border-radius: 19px !important;
+  }
+
+  .mc-launch-card {
+    align-items: flex-start !important;
+  }
+
+  .mc-launch-icon {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .mc13-bottom-bar {
+    padding-inline: 0.4rem !important;
+  }
+
+  .mc14-mobile-tab {
+    min-height: 50px !important;
+    border-radius: 16px !important;
+  }
+}
+
+@media (max-width: 390px) {
+  .mc-home-toolbar {
+    padding-left: 0.56rem !important;
+  }
+
+  .mc-home-toolbar-label {
+    display: none;
+  }
+
+  .mc-launch-card {
+    min-height: 70px !important;
+  }
+
+  .mc-launch-copy {
+    min-width: 0;
+  }
+
+  .mc-launch-title {
+    font-size: 11.5px !important;
+  }
+
+  .mc-launch-detail {
+    font-size: 9px !important;
+  }
+}
+
+@media (hover: none) {
+  .mc13-nav-item:hover,
+  .mc13-global-search:hover,
+  .mc-kpi-card:hover,
+  .mc-launch-card:hover,
+  .mc13-mobile-workspace-scroll button:hover {
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc13-hero-glow,
+  .mc-launch-card::after,
+  .mc-launch-icon,
+  .mc14-mobile-tab,
+  .mc13-mobile-capture {
+    animation: none !important;
+    transition: none !important;
+  }
+}

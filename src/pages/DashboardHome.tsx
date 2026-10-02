@@ -212,25 +212,27 @@ export default function DashboardHome() {
 
       <div className="mc-launch-grid ultra-rise-2" aria-label="Primary workspaces">
         {[
-          { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare },
-          { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft },
-          { id: "websites", label: "Websites", detail: "Growth", icon: Globe },
-          { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search },
-          { id: "apps-funnels", label: "Apps", detail: "Funnels", icon: AppWindow },
-          { id: "github", label: "GitHub", detail: "Build", icon: Github },
+          { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare, tone: "mint" },
+          { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft, tone: "violet" },
+          { id: "websites", label: "Websites", detail: "Growth", icon: Globe, tone: "sky" },
+          { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search, tone: "amber" },
+          { id: "apps-funnels", label: "Apps", detail: "Funnels", icon: AppWindow, tone: "rose" },
+          { id: "github", label: "GitHub", detail: "Build", icon: Github, tone: "indigo" },
         ].map((item) => (
           <button
             key={item.id}
             type="button"
             onClick={() => setActiveSection(item.id)}
             className="mc-launch-card group"
+            data-tone={item.tone}
+            aria-label={`${item.label}: ${item.detail}`}
           >
             <span className="mc-launch-icon">
               <item.icon size={16} />
             </span>
-            <span className="min-w-0 flex-1 text-left">
-              <span className="block truncate text-[12px] font-extrabold text-foreground">{item.label}</span>
-              <span className="block text-[9.5px] font-medium text-muted-foreground">{item.detail}</span>
+            <span className="mc-launch-copy min-w-0 flex-1 text-left">
+              <span className="mc-launch-title block truncate text-[12px] font-extrabold text-foreground">{item.label}</span>
+              <span className="mc-launch-detail block text-[9.5px] font-medium text-muted-foreground">{item.detail}</span>
             </span>
             <ArrowUpRight size={13} className="text-muted-foreground/45 transition group-hover:text-primary" />
           </button>

@@ -108,7 +108,7 @@ export default function MobileBottomNav() {
   }, [query]);
 
   const tabCls = (active: boolean) =>
-    `relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl transition-colors touch-manipulation active:scale-[0.94] ${
+    `mc14-mobile-tab relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl transition-colors touch-manipulation active:scale-[0.94] ${
       active ? "text-primary" : "text-muted-foreground/70"
     }`;
 
