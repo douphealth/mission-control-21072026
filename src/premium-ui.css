@@ -1574,3 +1574,539 @@ body {
     transition: none !important;
   }
 }
+
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Mission Control UI/UX — v16 "Executive Cockpit"
+   Screenshot-driven repair: compact hero, coherent first viewport, real hierarchy.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* Critical regression fix:
+   v15 made every direct hero child position:relative, which pulled the 400px
+   decorative glow layers into document flow and created the huge empty navy block. */
+.mc13-hero > .mc13-hero-mesh,
+.mc13-hero > .mc13-hero-glow {
+  position: absolute !important;
+}
+
+.mc13-hero > .mc13-hero-top,
+.mc13-hero > .mc13-hero-grid {
+  position: relative !important;
+  z-index: 2 !important;
+}
+
+/* Use available desktop width more intelligently on wide displays. */
+.mc13-page {
+  width: 100% !important;
+  max-width: 1860px !important;
+}
+
+/* First viewport rhythm: tighter, stronger, immediately useful. */
+.mc16-dashboard {
+  --mc16-gap: clamp(0.8rem, 1vw, 1.05rem);
+  gap: var(--mc16-gap) !important;
+}
+
+/* Compact premium hero instead of a giant decorative billboard. */
+.mc13-hero {
+  min-height: 0 !important;
+  height: auto !important;
+  aspect-ratio: auto !important;
+  isolation: isolate;
+  border-radius: 30px !important;
+  background:
+    radial-gradient(620px 300px at 84% -5%, rgb(87 187 255 / 0.17), transparent 66%),
+    radial-gradient(560px 300px at 12% 112%, rgb(84 236 184 / 0.14), transparent 68%),
+    linear-gradient(132deg, #050b15 0%, #091622 36%, #0a1b25 66%, #071b1c 100%) !important;
+  box-shadow:
+    0 42px 96px -58px rgb(2 10 24 / 0.95),
+    0 20px 48px -38px rgb(48 202 184 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.09) !important;
+}
+
+.mc13-hero::before {
+  position: absolute !important;
+  inset: 0 !important;
+  background:
+    linear-gradient(104deg, transparent 3%, rgb(255 255 255 / 0.045) 17%, transparent 33%),
+    radial-gradient(460px 150px at 44% -6%, rgb(255 255 255 / 0.06), transparent 75%) !important;
+}
+
+.mc13-hero::after {
+  position: absolute !important;
+  inset: 0 !important;
+  background:
+    linear-gradient(180deg, rgb(255 255 255 / 0.04), transparent 17%),
+    linear-gradient(90deg, transparent 44%, rgb(105 183 255 / 0.03), transparent 78%) !important;
+}
+
+.mc13-hero-mesh {
+  inset: 0 !important;
+  opacity: 0.09 !important;
+  background-size: 28px 28px !important;
+  mask-image: radial-gradient(ellipse at 38% 24%, black 0%, transparent 70%) !important;
+}
+
+.mc13-hero-glow {
+  pointer-events: none;
+  opacity: 0.72 !important;
+  filter: blur(76px) !important;
+}
+
+.mc13-hero-glow-a {
+  width: 300px !important;
+  height: 300px !important;
+  right: -80px !important;
+  top: -120px !important;
+}
+
+.mc13-hero-glow-b {
+  width: 280px !important;
+  height: 280px !important;
+  left: 12% !important;
+  bottom: -190px !important;
+}
+
+.mc13-hero-top {
+  min-height: 48px;
+  padding: 0.85rem 1.05rem 0 !important;
+}
+
+.mc13-hero-top::after {
+  left: 1.05rem !important;
+  right: 1.05rem !important;
+  bottom: -0.48rem !important;
+  opacity: 0.72;
+}
+
+.mc13-live-pill {
+  padding: 0.34rem 0.62rem !important;
+  font-size: 8.25px !important;
+  letter-spacing: 0.15em !important;
+}
+
+.mc13-date {
+  font-size: 9.5px !important;
+}
+
+.mc13-date strong {
+  font-size: 11px !important;
+}
+
+.mc13-hero-grid {
+  grid-template-columns: minmax(0, 1.58fr) minmax(285px, 0.72fr) !important;
+  align-items: stretch !important;
+  gap: 0.72rem !important;
+  padding: 0.78rem 1.05rem 1.05rem !important;
+}
+
+.mc13-now-panel,
+.mc13-day-panel {
+  min-height: 205px !important;
+  border-radius: 23px !important;
+  border-color: rgb(255 255 255 / 0.085) !important;
+  background:
+    linear-gradient(154deg, rgb(255 255 255 / 0.065), rgb(255 255 255 / 0.026)) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.055),
+    0 20px 50px -44px rgb(0 0 0 / 0.8) !important;
+  backdrop-filter: blur(22px) saturate(1.18) !important;
+}
+
+.mc13-now-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(1.15rem, 1.8vw, 1.65rem) !important;
+}
+
+.mc13-day-panel {
+  padding: 0.95rem !important;
+}
+
+.mc13-eyebrow {
+  font-size: 8.75px !important;
+  letter-spacing: 0.135em !important;
+}
+
+.mc13-now-title {
+  max-width: 900px;
+  margin-top: 0.58rem !important;
+  font-size: clamp(1.78rem, 2.55vw, 2.85rem) !important;
+  line-height: 1.01 !important;
+  letter-spacing: -0.047em !important;
+  text-wrap: balance;
+}
+
+.mc13-now-subtitle {
+  max-width: 620px;
+  margin-top: 0.55rem !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+  color: rgb(255 255 255 / 0.52) !important;
+}
+
+.mc13-meta-row {
+  margin-top: 0.82rem !important;
+}
+
+.mc13-actions {
+  margin-top: 1rem !important;
+}
+
+.mc13-primary-action,
+.mc13-secondary-action {
+  min-height: 42px !important;
+  border-radius: 13px !important;
+  font-size: 11.5px !important;
+}
+
+.mc13-day-head {
+  align-items: center !important;
+}
+
+.mc13-ring {
+  width: 74px !important;
+  height: 74px !important;
+  transform: scale(0.9);
+  transform-origin: center;
+}
+
+.mc13-mini-grid {
+  gap: 0.45rem !important;
+  margin-top: 0.64rem !important;
+}
+
+.mc13-mini-card {
+  min-height: 57px;
+  border-radius: 14px !important;
+  padding: 0.56rem 0.62rem !important;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.047), rgb(255 255 255 / 0.018)) !important;
+}
+
+.mc16-mini-label {
+  display: flex;
+  align-items: center;
+  gap: 0.32rem;
+  color: rgb(255 255 255 / 0.34);
+}
+
+.mc16-mini-label svg {
+  color: rgb(125 237 210 / 0.72);
+}
+
+.mc16-mini-label span {
+  margin: 0 !important;
+  font-size: 7.5px !important;
+  letter-spacing: 0.09em !important;
+}
+
+.mc13-mini-card strong {
+  margin-top: 0.28rem !important;
+  font-size: 14px !important;
+}
+
+.mc13-progress-line {
+  height: 4px !important;
+  margin-top: 0.56rem !important;
+}
+
+/* One cohesive control deck replaces the disconnected capture/stats/card stack. */
+.mc16-control-deck {
+  position: relative;
+  display: grid;
+  gap: 0.72rem;
+  overflow: hidden;
+  border: 1px solid var(--mc15-line);
+  border-radius: 27px;
+  padding: 0.82rem;
+  background:
+    radial-gradient(520px 180px at 0% 0%, hsl(var(--primary) / 0.055), transparent 72%),
+    radial-gradient(520px 180px at 100% 0%, hsl(var(--info) / 0.04), transparent 72%),
+    linear-gradient(155deg, hsl(var(--card) / 0.8), hsl(var(--card) / 0.58));
+  box-shadow:
+    0 1px 0 hsl(0 0% 100% / 0.04) inset,
+    0 24px 70px -50px hsl(var(--foreground) / 0.42);
+  backdrop-filter: blur(26px) saturate(1.2);
+}
+
+.mc16-control-deck::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 4%;
+  right: 4%;
+  height: 1px;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent, hsl(var(--primary) / 0.25), hsl(var(--info) / 0.16), transparent);
+}
+
+.mc16-control-deck-head {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.05rem 0.2rem 0;
+}
+
+.mc16-control-deck-head > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 0.65rem;
+}
+
+.mc16-control-kicker {
+  flex: 0 0 auto;
+  font-size: 8.5px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: hsl(var(--primary));
+}
+
+.mc16-control-title {
+  overflow: hidden;
+  color: hsl(var(--foreground));
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc16-control-hint {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.4rem;
+  color: hsl(var(--muted-foreground) / 0.72);
+  font-size: 8.5px;
+  font-weight: 650;
+}
+
+.mc16-control-hint kbd {
+  border: 1px solid hsl(var(--border) / 0.52);
+  border-radius: 6px;
+  background: hsl(var(--background) / 0.62);
+  padding: 0.12rem 0.34rem;
+  color: hsl(var(--foreground) / 0.7);
+  font-family: var(--font-mono);
+  font-size: 7.5px;
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05);
+}
+
+.mc16-control-deck .mc13-capture {
+  border-radius: 17px !important;
+  border-color: hsl(var(--border) / 0.46) !important;
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 0.72), hsl(var(--background) / 0.5)) !important;
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.035),
+    0 14px 34px -30px hsl(var(--foreground) / 0.4) !important;
+}
+
+.mc16-control-deck .mc13-capture:focus-within {
+  box-shadow:
+    0 0 0 3px hsl(var(--primary) / 0.055),
+    0 18px 44px -30px hsl(var(--primary) / 0.34),
+    inset 0 1px 0 hsl(0 0% 100% / 0.04) !important;
+}
+
+/* Stats now fill the row instead of looking like tiny detached pills. */
+@media (min-width: 900px) {
+  .mc16-control-deck .mc-kpi-grid {
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+  }
+}
+
+.mc16-control-deck .mc-kpi-card {
+  min-height: 68px !important;
+  border-radius: 17px !important;
+  padding: 0.72rem 0.78rem !important;
+  background:
+    linear-gradient(155deg, hsl(var(--card) / 0.72), hsl(var(--card) / 0.48)) !important;
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.032),
+    0 12px 30px -28px hsl(var(--foreground) / 0.4) !important;
+}
+
+.mc16-control-deck .mc-kpi-card:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* Workspace cards read like intentional app launchers. */
+.mc16-control-deck .mc-launch-grid {
+  padding-top: 0.08rem;
+}
+
+.mc16-control-deck .mc-launch-card {
+  min-height: 70px !important;
+  border-radius: 17px !important;
+  background:
+    linear-gradient(155deg, hsl(var(--card) / 0.68), hsl(var(--card) / 0.44)) !important;
+  box-shadow:
+    inset 0 1px 0 hsl(0 0% 100% / 0.032),
+    0 12px 30px -28px hsl(var(--foreground) / 0.38) !important;
+}
+
+.mc16-control-deck .mc-launch-card:hover {
+  transform: translateY(-2px) !important;
+}
+
+/* Top chrome is now less sterile in light mode. */
+.mc13-topbar {
+  background:
+    linear-gradient(180deg, hsl(var(--background) / 0.95), hsl(var(--background) / 0.8)) !important;
+}
+
+.mc13-topbar .gradient-primary {
+  border: 1px solid hsl(0 0% 100% / 0.18);
+  box-shadow:
+    0 14px 30px -18px hsl(var(--primary) / 0.74),
+    inset 0 1px 0 hsl(0 0% 100% / 0.2) !important;
+}
+
+/* Desktop hover remains elegant and restrained. */
+@media (hover: hover) {
+  .mc16-control-deck {
+    transition:
+      border-color 220ms ease,
+      box-shadow 260ms ease;
+  }
+
+  .mc16-control-deck:hover {
+    border-color: hsl(var(--primary) / 0.18);
+    box-shadow:
+      0 1px 0 hsl(0 0% 100% / 0.045) inset,
+      0 30px 78px -50px hsl(var(--foreground) / 0.46);
+  }
+}
+
+/* Tablet and mobile stay compact, readable and touch-first. */
+@media (max-width: 1023px) {
+  .mc13-hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mc13-now-panel,
+  .mc13-day-panel {
+    min-height: 0 !important;
+  }
+
+  .mc13-day-panel {
+    display: grid !important;
+    grid-template-columns: minmax(0, 0.52fr) minmax(0, 1fr) !important;
+    gap: 0.65rem !important;
+    align-items: center !important;
+  }
+
+  .mc13-mini-grid {
+    margin-top: 0 !important;
+  }
+
+  .mc13-progress-line {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .mc13-page {
+    max-width: none !important;
+  }
+
+  .mc13-hero {
+    border-radius: 22px !important;
+  }
+
+  .mc13-hero-top {
+    min-height: 42px;
+    padding: 0.72rem 0.78rem 0 !important;
+  }
+
+  .mc13-hero-grid {
+    gap: 0.55rem !important;
+    padding: 0.62rem 0.78rem 0.78rem !important;
+  }
+
+  .mc13-now-panel,
+  .mc13-day-panel {
+    border-radius: 18px !important;
+  }
+
+  .mc13-now-panel {
+    padding: 0.95rem !important;
+  }
+
+  .mc13-now-title {
+    margin-top: 0.45rem !important;
+    font-size: clamp(1.48rem, 7.6vw, 2.05rem) !important;
+  }
+
+  .mc13-day-panel {
+    display: block !important;
+    padding: 0.78rem !important;
+  }
+
+  .mc13-ring {
+    transform: scale(0.82);
+  }
+
+  .mc16-control-deck {
+    gap: 0.58rem;
+    border-radius: 21px;
+    padding: 0.58rem;
+  }
+
+  .mc16-control-deck-head {
+    min-height: 27px;
+    padding-inline: 0.08rem;
+  }
+
+  .mc16-control-title {
+    font-size: 11px;
+  }
+
+  .mc16-control-hint {
+    display: none;
+  }
+
+  .mc16-control-deck .mc13-capture {
+    border-radius: 15px !important;
+  }
+
+  .mc16-control-deck .mc-kpi-grid {
+    gap: 0.5rem !important;
+  }
+
+  .mc16-control-deck .mc-launch-grid {
+    gap: 0.5rem !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .mc16-control-deck-head > div {
+    gap: 0.42rem;
+  }
+
+  .mc16-control-kicker {
+    font-size: 7.5px;
+  }
+
+  .mc16-control-title {
+    font-size: 10.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc16-control-deck,
+  .mc16-control-deck .mc-kpi-card,
+  .mc16-control-deck .mc-launch-card {
+    transition: none !important;
+    transform: none !important;
+  }
+}

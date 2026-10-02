@@ -109,7 +109,7 @@ export default function DashboardHome() {
   );
 
   return (
-    <div className="flex flex-col gap-4 pb-8 sm:gap-5">
+    <div className="mc16-dashboard flex flex-col gap-4 pb-8 sm:gap-5">
       <div className="mc-home-toolbar ultra-fade">
         <div className="flex min-w-0 items-center gap-2">
           <span className="mc-home-toolbar-label">Today</span>
@@ -150,9 +150,19 @@ export default function DashboardHome() {
         />
       </div>
 
-      <div className="ultra-rise-1">
+      <section className="mc16-control-deck ultra-rise-1" aria-label="Command controls">
+        <div className="mc16-control-deck-head">
+          <div className="min-w-0">
+            <span className="mc16-control-kicker">Command center</span>
+            <strong className="mc16-control-title">Capture. Decide. Move.</strong>
+          </div>
+          <span className="mc16-control-hint">
+            <kbd>N</kbd> capture
+            <span aria-hidden>·</span>
+            <kbd>Ctrl K</kbd> search
+          </span>
+        </div>
         <QuickCaptureBar />
-      </div>
 
       {!ops.isEmpty && (
         <div className="mc-kpi-grid ultra-rise-2" role="navigation" aria-label="Today at a glance">
@@ -238,6 +248,7 @@ export default function DashboardHome() {
           </button>
         ))}
       </div>
+      </section>
 
       {dockItem && (
         <FocusDock

@@ -184,19 +184,19 @@ export default function HeroNowBand({
 
           <div className="mc13-mini-grid">
             <div className="mc13-mini-card">
-              <span>Outcomes</span>
+              <div className="mc16-mini-label"><CheckCircle2 size={12} /><span>Outcomes</span></div>
               <strong>{commitmentsDone}<em>/ {commitmentsTotal}</em></strong>
             </div>
             <div className="mc13-mini-card">
-              <span>Planned</span>
+              <div className="mc16-mini-label"><Timer size={12} /><span>Planned</span></div>
               <strong>{fmtMinutes(plannedMin)}</strong>
             </div>
             <div className="mc13-mini-card">
-              <span>Free</span>
+              <div className="mc16-mini-label"><Gauge size={12} /><span>Free</span></div>
               <strong>{fmtMinutes(Math.max(0, availableMin))}</strong>
             </div>
             <div className="mc13-mini-card mc13-mini-card-accent">
-              <span>Mode</span>
+              <div className="mc16-mini-label"><Zap size={12} /><span>Mode</span></div>
               <strong>{nextAction ? "Execute" : "Choose"}</strong>
             </div>
           </div>
