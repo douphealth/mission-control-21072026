@@ -1784,7 +1784,7 @@ export default function TasksPage() {
     });
   }, [filtered, preset]);
 
-  const tasksByStatus = useMemo(() => {  const tasksByStatus = useMemo(() => {
+  const tasksByStatus = useMemo(() => {
     const map: Record<string, Task[]> = { todo: [], "in-progress": [], blocked: [], done: [] };
     filtered.forEach((t) => {
       (map[t.status] = map[t.status] || []).push(t);
@@ -2025,7 +2025,7 @@ export default function TasksPage() {
       .filter((group) => group.count > 0);
   }, [listTasks, collapsedGroups]);
 
-  const allCategories = useMemo(() => {  const allCategories = useMemo(() => {
+  const allCategories = useMemo(() => {
     const cats = new Set(tasks.map((t) => t.category).filter(Boolean));
     return Array.from(cats);
   }, [tasks]);

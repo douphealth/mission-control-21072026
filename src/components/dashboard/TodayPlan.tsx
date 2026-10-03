@@ -137,7 +137,7 @@ export default function TodayPlan({
         ) : null}
       </div>
 
-      {/* ── Capacity ── */}      {/* ── Capacity ── */}
+      {/* ── Capacity ── */}
       <div
         className="mc21-capacity mt-4 rounded-2xl border border-border/40 bg-background/40 p-3.5"
         role="status"
