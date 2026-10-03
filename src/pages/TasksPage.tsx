@@ -1423,7 +1423,7 @@ const ListRow = memo(function ListRow({
             </div>
           )}
 
-          {/* Actions — always visible on mobile */}          {/* Actions — always visible on mobile */}
+          {/* Actions — always visible on mobile */}
           <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
             {task.status !== "done" && !plannedToday && (
               <button
@@ -2212,7 +2212,7 @@ export default function TasksPage() {
         </section>
       )}
 
-      {/* ── Kanban Board ── */}      {/* ── Kanban Board ── */}
+      {/* ── Kanban Board ── */}
       {view === "kanban" && (
         <div
           className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
@@ -2374,7 +2374,7 @@ export default function TasksPage() {
             </div>
           )}
 
-          {(() => {          {(() => {
+          {(() => {
             const listHandlers = {
               bulkMode,
               selectedIds,
