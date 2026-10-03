@@ -150,104 +150,15 @@ export default function DashboardHome() {
         />
       </div>
 
-      <section className="mc16-control-deck ultra-rise-1" aria-label="Command controls">
-        <div className="mc16-control-deck-head">
-          <div className="min-w-0">
-            <span className="mc16-control-kicker">Command center</span>
-            <strong className="mc16-control-title">Capture. Decide. Move.</strong>
+      <section className="mc21-capture-deck ultra-rise-1" aria-label="Quick capture">
+        <div className="mc21-capture-deck-head">
+          <div>
+            <span>Capture</span>
+            <strong>Get it out of your head in seconds.</strong>
           </div>
-          <span className="mc16-control-hint">
-            <kbd>N</kbd> capture
-            <span aria-hidden>·</span>
-            <kbd>Ctrl K</kbd> search
-          </span>
+          <small>N · natural language · Inbox by default</small>
         </div>
         <QuickCaptureBar />
-
-      {!ops.isEmpty && (
-        <div className="mc-kpi-grid ultra-rise-2" role="navigation" aria-label="Today at a glance">
-          {attentionCount > 0 && (
-            <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="bad">
-              <span className="mc-kpi-icon"><AlertTriangle size={15} /></span>
-              <span className="mc-kpi-value">{attentionCount}</span>
-              <span className="mc-kpi-copy">
-                <strong>Needs attention</strong>
-                <small>Open tasks that need a decision</small>
-              </span>
-              <ArrowUpRight size={13} className="mc-kpi-arrow" />
-            </button>
-          )}
-          <button type="button" onClick={() => setActiveSection("calendar")} className="mc-kpi-card" data-tone="info">
-            <span className="mc-kpi-icon"><CalendarClock size={15} /></span>
-            <span className="mc-kpi-value">{timedCount}</span>
-            <span className="mc-kpi-copy">
-              <strong>Timed today</strong>
-              <small>Calendar and scheduled work</small>
-            </span>
-            <ArrowUpRight size={13} className="mc-kpi-arrow" />
-          </button>
-          <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card">
-            <span className="mc-kpi-icon"><Zap size={15} /></span>
-            <span className="mc-kpi-value">{queuedCount}</span>
-            <span className="mc-kpi-copy">
-              <strong>Queued</strong>
-              <small>Ready to plan or execute</small>
-            </span>
-            <ArrowUpRight size={13} className="mc-kpi-arrow" />
-          </button>
-          {commitmentsTotal > 0 && (
-            <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="good">
-              <span className="mc-kpi-icon"><CheckCircle2 size={15} /></span>
-              <span className="mc-kpi-value">{commitmentsDone}/{commitmentsTotal}</span>
-              <span className="mc-kpi-copy">
-                <strong>Outcomes done</strong>
-                <small>Today's committed results</small>
-              </span>
-              <ArrowUpRight size={13} className="mc-kpi-arrow" />
-            </button>
-          )}
-          {ops.inboxTasks.length > 0 && (
-            <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="violet">
-              <span className="mc-kpi-icon"><Inbox size={15} /></span>
-              <span className="mc-kpi-value">{ops.inboxTasks.length}</span>
-              <span className="mc-kpi-copy">
-                <strong>Inbox</strong>
-                <small>Captured, not yet planned</small>
-              </span>
-              <ArrowUpRight size={13} className="mc-kpi-arrow" />
-            </button>
-          )}
-        </div>
-      )}
-
-      <div className="mc-launch-grid ultra-rise-2" aria-label="Primary workspaces">
-        {[
-          { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare, tone: "mint" },
-          { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft, tone: "violet" },
-          { id: "websites", label: "Websites", detail: "Growth", icon: Globe, tone: "sky" },
-          { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search, tone: "amber" },
-          { id: "apps-funnels", label: "Apps", detail: "Funnels", icon: AppWindow, tone: "rose" },
-          { id: "github", label: "GitHub", detail: "Build", icon: Github, tone: "indigo" },
-        ].map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => setActiveSection(item.id)}
-            className="mc-launch-card group"
-            data-tone={item.tone}
-            aria-label={`${item.label}: ${item.detail}`}
-          >
-            <span className="mc-launch-icon">
-              <item.icon size={16} />
-            </span>
-            <span className="mc-launch-copy min-w-0 flex-1 text-left">
-              <span className="mc-launch-title block truncate text-[12px] font-extrabold text-foreground">{item.label}</span>
-              <span className="mc-launch-detail block text-[9.5px] font-medium text-muted-foreground">{item.detail}</span>
-            </span>
-            <ArrowUpRight size={13} className="text-muted-foreground/45 transition group-hover:text-primary" />
-          </button>
-        ))}
-      </div>
       </section>
 
       {dockItem && (
@@ -263,14 +174,14 @@ export default function DashboardHome() {
       ) : (
         <>
           {isMobile ? (
-            <div className="ultra-rise-3 flex flex-col gap-4">
+            <div className="mc21-today-stack ultra-rise-3 flex flex-col gap-4">
               {plan}
               {evening && <DayClose tasks={ops.allTasks} compact />}
               <InboxStrip tasks={ops.inboxTasks} today={ops.today} />
               {timeline}
             </div>
           ) : (
-            <div className="ultra-rise-3 grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="mc21-day-grid ultra-rise-3 grid grid-cols-1 gap-4 lg:grid-cols-12">
               <div className="flex flex-col gap-4 lg:col-span-7">
                 {plan}
                 {evening && <DayClose tasks={ops.allTasks} />}
@@ -281,6 +192,84 @@ export default function DashboardHome() {
           )}
         </>
       )}
+
+      <section className="mc21-utility-deck ultra-rise-3" aria-label="Today signals and workspaces">
+        <div className="mc21-utility-head">
+          <div>
+            <span>Move faster</span>
+            <strong>Signals &amp; workspaces</strong>
+          </div>
+          <small>Secondary controls stay below the daily plan.</small>
+        </div>
+
+        {!ops.isEmpty && (
+          <div className="mc-kpi-grid" role="navigation" aria-label="Today at a glance">
+            {attentionCount > 0 && (
+              <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="bad">
+                <span className="mc-kpi-icon"><AlertTriangle size={15} /></span>
+                <span className="mc-kpi-value">{attentionCount}</span>
+                <span className="mc-kpi-copy"><strong>Needs attention</strong><small>Open tasks that need a decision</small></span>
+                <ArrowUpRight size={13} className="mc-kpi-arrow" />
+              </button>
+            )}
+            <button type="button" onClick={() => setActiveSection("calendar")} className="mc-kpi-card" data-tone="info">
+              <span className="mc-kpi-icon"><CalendarClock size={15} /></span>
+              <span className="mc-kpi-value">{timedCount}</span>
+              <span className="mc-kpi-copy"><strong>Timed today</strong><small>Calendar and scheduled work</small></span>
+              <ArrowUpRight size={13} className="mc-kpi-arrow" />
+            </button>
+            <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card">
+              <span className="mc-kpi-icon"><Zap size={15} /></span>
+              <span className="mc-kpi-value">{queuedCount}</span>
+              <span className="mc-kpi-copy"><strong>Queued</strong><small>Ready to plan or execute</small></span>
+              <ArrowUpRight size={13} className="mc-kpi-arrow" />
+            </button>
+            {commitmentsTotal > 0 && (
+              <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="good">
+                <span className="mc-kpi-icon"><CheckCircle2 size={15} /></span>
+                <span className="mc-kpi-value">{commitmentsDone}/{commitmentsTotal}</span>
+                <span className="mc-kpi-copy"><strong>Outcomes done</strong><small>Today's committed results</small></span>
+                <ArrowUpRight size={13} className="mc-kpi-arrow" />
+              </button>
+            )}
+            {ops.inboxTasks.length > 0 && (
+              <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="violet">
+                <span className="mc-kpi-icon"><Inbox size={15} /></span>
+                <span className="mc-kpi-value">{ops.inboxTasks.length}</span>
+                <span className="mc-kpi-copy"><strong>Inbox</strong><small>Captured, not yet planned</small></span>
+                <ArrowUpRight size={13} className="mc-kpi-arrow" />
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="mc-launch-grid" aria-label="Primary workspaces">
+          {[
+            { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare, tone: "mint" },
+            { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft, tone: "violet" },
+            { id: "websites", label: "Websites", detail: "Growth", icon: Globe, tone: "sky" },
+            { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search, tone: "amber" },
+            { id: "apps-funnels", label: "Apps", detail: "Funnels", icon: AppWindow, tone: "rose" },
+            { id: "github", label: "GitHub", detail: "Build", icon: Github, tone: "indigo" },
+          ].map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveSection(item.id)}
+              className="mc-launch-card group"
+              data-tone={item.tone}
+              aria-label={`${item.label}: ${item.detail}`}
+            >
+              <span className="mc-launch-icon"><item.icon size={16} /></span>
+              <span className="mc-launch-copy min-w-0 flex-1 text-left">
+                <span className="mc-launch-title block truncate text-[12px] font-extrabold text-foreground">{item.label}</span>
+                <span className="mc-launch-detail block text-[9.5px] font-medium text-muted-foreground">{item.detail}</span>
+              </span>
+              <ArrowUpRight size={13} className="text-muted-foreground/45 transition group-hover:text-primary" />
+            </button>
+          ))}
+        </div>
+      </section>
 
       <div className="ultra-rise-3">
         <Suspense fallback={<div className="v10-skeleton h-72" />}>

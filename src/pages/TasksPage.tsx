@@ -1,4 +1,5 @@
 import TaskDialogFrame from "@/components/TaskDialogFrame";
+import TaskCommandBar from "@/components/tasks/TaskCommandBar";
 import { useTasks, useAddItem, useUpdateItem, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useRef, useCallback, useMemo, useEffect, memo } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -33,6 +34,9 @@ import {
   Bell,
   Repeat,
   CalendarRange,
+  Inbox,
+  Play,
+  SlidersHorizontal,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task, Subtask } from "@/lib/db";
@@ -44,6 +48,8 @@ import {
 } from "@/lib/notifications";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { softDeleteTasks } from "@/lib/taskActions";
+import { estimateOf, fmtMinutes, isPlannedToday } from "@/lib/planning";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -941,7 +947,7 @@ const KanbanCard = memo(function KanbanCard({
           className={`flex items-center gap-1 text-[10px] font-semibold ${overdue ? "text-red-400" : todayTask ? "text-amber-400" : "text-muted-foreground"}`}
         >
           <Calendar size={9} />
-          {task.dueDate ? daysUntil(task.dueDate) : "No date"}
+          {task.dueDate ? `Deadline · ${daysUntil(task.dueDate)}` : "No deadline"}
           {task.allDay === false && task.startTime && (
             <span className="ml-1 text-primary/70 font-medium">
               <Clock size={8} className="inline -mt-0.5 mr-0.5" />
@@ -1127,6 +1133,9 @@ export interface RowActions {
   onSetDue: (date: string) => void;
   onSetPriority: (p: Task["priority"]) => void;
   onSetStatus: (s: StatusId) => void;
+  onPlanToday: () => void;
+  onSchedule: (days: number) => void;
+  onFocus: () => void;
 }
 
 function shiftISO(base: string, days: number) {
@@ -1146,6 +1155,9 @@ const ListRow = memo(function ListRow({
   onSetDue,
   onSetPriority,
   onSetStatus,
+  onPlanToday,
+  onSchedule,
+  onFocus,
   index,
   bulkMode,
   selected,
@@ -1165,6 +1177,8 @@ const ListRow = memo(function ListRow({
   const [draft, setDraft] = useState(task.title);
   const [menu, setMenu] = useState<null | "priority" | "status" | "due">(null);
   const doneSubs = task.subtasks.filter((s) => s.done).length;
+  const plannedToday = isPlannedToday(task, today);
+  const estimate = estimateOf(task);
 
   const commit = () => {
     setEditing(false);
@@ -1184,7 +1198,7 @@ const ListRow = memo(function ListRow({
     <div>
       <div
         className={`
-        rounded-2xl border group transition-all
+        mc21-task-row rounded-2xl border group transition-all
         hover:border-primary/20 hover:bg-secondary/20 hover:shadow-md
         ${task.status === "done" ? "opacity-55" : ""}
         ${overdue ? "border-destructive/30 bg-destructive/5" : "border-border/30 bg-card/60"}
@@ -1274,6 +1288,22 @@ const ListRow = memo(function ListRow({
                 <Calendar size={9} />
                 {task.dueDate ? daysUntil(task.dueDate) : "No date"}
               </button>
+              {plannedToday ? (
+                <span className="mc21-row-plan-chip" data-tone="today">
+                  <Calendar size={9} /> Planned today
+                </span>
+              ) : task.scheduledAt ? (
+                <span className="mc21-row-plan-chip">
+                  <Calendar size={9} /> Plan {task.scheduledAt.slice(5)}
+                </span>
+              ) : task.inbox || (!task.dueDate && !task.scheduledAt) ? (
+                <span className="mc21-row-plan-chip" data-tone="inbox">
+                  <Inbox size={9} /> Inbox
+                </span>
+              ) : null}
+              <span className="mc21-row-estimate">
+                <Clock size={9} /> {fmtMinutes(estimate)}
+              </span>
               {task.category && (
                 <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">
                   · {task.category}
@@ -1361,27 +1391,32 @@ const ListRow = memo(function ListRow({
             </button>
           )}
 
-          {/* Snooze shortcuts — desktop */}
+          {/* Planning shortcuts — moving a plan never rewrites the deadline */}
           {task.status !== "done" && (
             <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+              {!plannedToday && (
+                <button
+                  type="button"
+                  onClick={onPlanToday}
+                  className="mc21-row-action"
+                  title="Plan for today"
+                >
+                  Today
+                </button>
+              )}
               <button
-                onClick={() => onSetDue(today)}
-                title="Due today"
-                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold"
+                type="button"
+                onClick={() => onSchedule(1)}
+                className="mc21-row-action"
+                title="Plan for tomorrow — deadline unchanged"
               >
-                Today
+                Tomorrow
               </button>
               <button
-                onClick={() => onSetDue(shiftISO(task.dueDate || today, 1))}
-                title="Push 1 day"
-                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold"
-              >
-                +1d
-              </button>
-              <button
-                onClick={() => onSetDue(shiftISO(task.dueDate || today, 7))}
-                title="Push 1 week"
-                className="text-[10px] px-2 py-1 rounded-lg bg-secondary text-muted-foreground hover:text-primary hover:bg-primary/10 font-semibold"
+                type="button"
+                onClick={() => onSchedule(7)}
+                className="mc21-row-action"
+                title="Plan for next week — deadline unchanged"
               >
                 +1w
               </button>
@@ -1390,6 +1425,26 @@ const ListRow = memo(function ListRow({
 
           {/* Actions — always visible on mobile */}
           <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+            {task.status !== "done" && !plannedToday && (
+              <button
+                type="button"
+                onClick={onPlanToday}
+                className="mc21-row-icon-action"
+                title="Plan today"
+              >
+                <Calendar size={13} />
+              </button>
+            )}
+            {task.status !== "done" && task.status !== "blocked" && (
+              <button
+                type="button"
+                onClick={onFocus}
+                className="mc21-row-icon-action"
+                title="Start focus"
+              >
+                <Play size={13} />
+              </button>
+            )}
             <button
               onClick={onDuplicate}
               className="p-2 sm:p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation"
@@ -1462,6 +1517,9 @@ export interface TaskListHandlers {
   onSetDue: (id: string, date: string) => void;
   onSetPriority: (id: string, p: Task["priority"]) => void;
   onSetStatus: (id: string, s: StatusId) => void;
+  onPlanToday: (id: string) => void;
+  onSchedule: (id: string, days: number) => void;
+  onFocus: (id: string) => void;
 }
 
 function VirtualizedList({
@@ -1478,6 +1536,9 @@ function VirtualizedList({
   onSetDue,
   onSetPriority,
   onSetStatus,
+  onPlanToday,
+  onSchedule,
+  onFocus,
 }: TaskListHandlers & {
   tasks: Task[];
   bulkMode: boolean;
@@ -1505,6 +1566,9 @@ function VirtualizedList({
     onSetDue: (date: string) => onSetDue(task.id, date),
     onSetPriority: (p: Task["priority"]) => onSetPriority(task.id, p),
     onSetStatus: (s: StatusId) => onSetStatus(task.id, s),
+    onPlanToday: () => onPlanToday(task.id),
+    onSchedule: (days: number) => onSchedule(task.id, days),
+    onFocus: () => onFocus(task.id),
     bulkMode,
     selected: selectedIds.has(task.id),
     onToggleSelect: () => onToggleSelect(task.id),
@@ -1562,6 +1626,8 @@ export default function TasksPage() {
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const duplicateItem = useDuplicateItem();
+  const setActiveSection = useNavigationStore((state) => state.setActiveSection);
+  const setFocusTaskId = useNavigationStore((state) => state.setFocusTaskId);
 
   const [view, setView] = useState<"kanban" | "list">("list");
   const [search, setSearch] = useState("");
@@ -1573,14 +1639,14 @@ export default function TasksPage() {
     task?: Task | null;
     defaultStatus?: StatusId;
   }>({ open: false });
-  const [quickAdd, setQuickAdd] = useState("");
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<"priority" | "dueDate" | "created">("priority");
+  const [sortBy, setSortBy] = useState<"smart" | "priority" | "dueDate" | "created">("smart");
   const [grouped, setGrouped] = useState(true);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set(["done"]));
-  const [preset, setPreset] = useState<"open" | "all" | "overdue" | "today" | "week" | "critical">(
-    "open",
-  );
+  const [preset, setPreset] = useState<
+    "inbox" | "today" | "upcoming" | "important" | "all" | "done"
+  >("today");
+  const [showFilters, setShowFilters] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const toggleSelect = useCallback((id: string) => {
@@ -1600,66 +1666,120 @@ export default function TasksPage() {
   // Priority/category changes must be explicit user actions.
 
   // ── Stats ────────────────────────────────────────────────────────────────────
-  const stats = useMemo(
-    () => ({
+  const stats = useMemo(() => {
+    const active = tasks.filter((task) => task.status !== "done" && !task.archived);
+    const inbox = active.filter(
+      (task) =>
+        task.inbox ||
+        (!task.dueDate &&
+          !task.scheduledAt &&
+          !task.committedOn &&
+          !(task.blocks && task.blocks.some((block) => !block.done))),
+    ).length;
+    const todayTask = active.filter(
+      (task) => isOverdue(task) || task.dueDate === today || isPlannedToday(task, today),
+    ).length;
+    const upcoming = active.filter((task) => {
+      const next = task.scheduledAt || task.dueDate;
+      return !!next && next > today;
+    }).length;
+    const important = active.filter(
+      (task) => task.priority === "critical" || task.priority === "high",
+    ).length;
+    const doneToday = tasks.filter(
+      (task) => task.status === "done" && (task.completedAt || "").slice(0, 10) === today,
+    ).length;
+
+    return {
       total: tasks.length,
-      open: tasks.filter((t) => t.status !== "done").length,
-      done: tasks.filter((t) => t.status === "done").length,
-      overdue: tasks.filter(isOverdue).length,
-      todayTask: tasks.filter(isToday).length,
-      critical: tasks.filter((t) => t.priority === "critical" && t.status !== "done").length,
-      blocked: tasks.filter((t) => t.status === "blocked").length,
-      pct: tasks.length
-        ? Math.round((tasks.filter((t) => t.status === "done").length / tasks.length) * 100)
-        : 0,
-    }),
-    [tasks],
-  );
+      open: active.length,
+      done: tasks.filter((task) => task.status === "done").length,
+      overdue: active.filter(isOverdue).length,
+      todayTask,
+      inbox,
+      upcoming,
+      important,
+      doneToday,
+      critical: active.filter((task) => task.priority === "critical").length,
+      blocked: active.filter((task) => task.status === "blocked").length,
+    };
+  }, [tasks]);
 
   // ── Filtered + sorted ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const PORD: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    const smartRank = (task: Task) => {
+      if (task.status === "done") return 100;
+      if (isOverdue(task)) return 0;
+      if (isPlannedToday(task, today)) return 1;
+      if (task.dueDate === today) return 2;
+      if (task.priority === "critical") return 3;
+      if (task.priority === "high") return 4;
+      if (task.status === "blocked") return 7;
+      return 5;
+    };
+
     return tasks
-      .filter((t) => t.archived !== true) // archived lives in Review, not here
-      .filter((t) => filterStatus === "all" || t.status === filterStatus)
-      .filter((t) => filterPriority === "all" || t.priority === filterPriority)
-      .filter((t) => filterCategory === "all" || t.category === filterCategory)
+      .filter((task) => task.archived !== true)
+      .filter((task) => filterStatus === "all" || task.status === filterStatus)
+      .filter((task) => filterPriority === "all" || task.priority === filterPriority)
+      .filter((task) => filterCategory === "all" || task.category === filterCategory)
       .filter(
-        (t) =>
+        (task) =>
           !search ||
-          t.title.toLowerCase().includes(search.toLowerCase()) ||
-          t.description?.toLowerCase().includes(search.toLowerCase()),
+          task.title.toLowerCase().includes(search.toLowerCase()) ||
+          task.description?.toLowerCase().includes(search.toLowerCase()) ||
+          task.linkedProject?.toLowerCase().includes(search.toLowerCase()),
       )
       .sort((a, b) => {
+        if (sortBy === "smart") {
+          const rank = smartRank(a) - smartRank(b);
+          if (rank) return rank;
+          const priority = (PORD[a.priority] ?? 3) - (PORD[b.priority] ?? 3);
+          if (priority) return priority;
+          return (a.dueDate || "9999").localeCompare(b.dueDate || "9999");
+        }
         if (sortBy === "priority") {
           if (a.status === "done" && b.status !== "done") return 1;
           if (a.status !== "done" && b.status === "done") return -1;
           return (PORD[a.priority] ?? 3) - (PORD[b.priority] ?? 3);
         }
-        if (sortBy === "dueDate") return (a.dueDate || "9999").localeCompare(b.dueDate || "9999");
+        if (sortBy === "dueDate") {
+          return (a.dueDate || "9999").localeCompare(b.dueDate || "9999");
+        }
         return b.createdAt.localeCompare(a.createdAt);
       });
   }, [tasks, filterStatus, filterPriority, filterCategory, search, sortBy]);
 
-  // Quick presets only shape the list view (kanban keeps all columns)
+  // Smart views shape the list without changing task data.
   const listTasks = useMemo(() => {
-    const weekEnd = shiftISO(today, 7);
-    return filtered.filter((t) => {
+    return filtered.filter((task) => {
+      const open = task.status !== "done";
+      const inbox =
+        task.inbox ||
+        (!task.dueDate &&
+          !task.scheduledAt &&
+          !task.committedOn &&
+          !(task.blocks && task.blocks.some((block) => !block.done)));
+      const plannedToday = isPlannedToday(task, today);
+      const overdue = isOverdue(task);
+      const next = task.scheduledAt || task.dueDate;
+
       switch (preset) {
-        case "all":
-          return true;
-        case "open":
-          return t.status !== "done";
-        case "overdue":
-          return t.status !== "done" && !!t.dueDate && t.dueDate < today;
+        case "inbox":
+          return open && inbox;
         case "today":
-          return t.status !== "done" && (t.dueDate === today || (!!t.dueDate && t.dueDate < today));
-        case "week":
-          return t.status !== "done" && !!t.dueDate && t.dueDate <= weekEnd;
-        case "critical":
-          return t.status !== "done" && (t.priority === "critical" || t.priority === "high");
+          return open && (overdue || task.dueDate === today || plannedToday);
+        case "upcoming":
+          return open && !!next && next > today;
+        case "important":
+          return open && (task.priority === "critical" || task.priority === "high");
+        case "all":
+          return open;
+        case "done":
+          return task.status === "done";
         default:
-          return true;
+          return open;
       }
     });
   }, [filtered, preset]);
@@ -1748,18 +1868,6 @@ export default function TasksPage() {
     [tasks, updateItem],
   );
 
-  const quickAddTask = useCallback(async () => {
-    if (!quickAdd.trim()) return;
-    const newId = await addItem<Task>("tasks", {
-      ...EMPTY,
-      title: quickAdd.trim(),
-      createdAt: today,
-    });
-    setQuickAdd("");
-    if (newId) toast.success("Task added ✓");
-    else toast.error("Duplicate task — already exists");
-  }, [quickAdd, addItem]);
-
   // ── Inline single-task edits (no modal needed) ────────────────────────────
   const handleRename = useCallback(
     async (id: string, title: string) => {
@@ -1793,6 +1901,59 @@ export default function TasksPage() {
     [updateItem],
   );
 
+  const handlePlanToday = useCallback(
+    async (id: string) => {
+      await updateItem<Task>("tasks", id, {
+        scheduledAt: today,
+        committedOn: today,
+        notBefore: undefined,
+        reviewAt: today,
+        inbox: false,
+        touchedAt: today,
+      });
+      toast.success("Planned for today — deadline unchanged");
+    },
+    [updateItem],
+  );
+
+  const handleSchedule = useCallback(
+    async (id: string, days: number) => {
+      const date = shiftISO(today, days);
+      await updateItem<Task>("tasks", id, {
+        scheduledAt: date,
+        notBefore: date,
+        reviewAt: date,
+        committedOn: undefined,
+        inbox: false,
+        touchedAt: today,
+      });
+      toast.success(`Planned for ${date} — deadline unchanged`);
+    },
+    [updateItem],
+  );
+
+  const handleFocus = useCallback(
+    async (id: string) => {
+      const task = tasks.find((item) => item.id === id);
+      if (!task) return;
+      if (task.status === "blocked") {
+        toast.warning("Resolve the blocker before starting focus");
+        return;
+      }
+      await updateItem<Task>("tasks", id, {
+        status: "in-progress",
+        scheduledAt: today,
+        committedOn: today,
+        notBefore: undefined,
+        inbox: false,
+        touchedAt: today,
+      });
+      setFocusTaskId(id);
+      setActiveSection("focus");
+    },
+    [tasks, updateItem, setFocusTaskId, setActiveSection],
+  );
+
   // ── Bulk quick edits ───────────────────────────────────────────────────────
   const bulkApply = useCallback(
     async (changes: Partial<Task>, label: string) => {
@@ -1822,50 +1983,46 @@ export default function TasksPage() {
     });
   }, []);
 
-  // ── Due-date buckets ──────────────────────────────────────────────────────
+  // ── Decision buckets — every task appears in exactly one group ──────────────
   const groups = useMemo(() => {
     const weekEnd = shiftISO(today, 7);
-    const defs: { id: string; label: string; tone: string; match: (t: Task) => boolean }[] = [
-      {
-        id: "overdue",
-        label: "Overdue",
-        tone: "text-destructive",
-        match: (t) => t.status !== "done" && !!t.dueDate && t.dueDate < today,
-      },
-      {
-        id: "today",
-        label: "Today",
-        tone: "text-amber-400",
-        match: (t) => t.status !== "done" && t.dueDate === today,
-      },
-      {
-        id: "week",
-        label: "Next 7 days",
-        tone: "text-primary",
-        match: (t) =>
-          t.status !== "done" && !!t.dueDate && t.dueDate > today && t.dueDate <= weekEnd,
-      },
-      {
-        id: "later",
-        label: "Later",
-        tone: "text-muted-foreground",
-        match: (t) => t.status !== "done" && !!t.dueDate && t.dueDate > weekEnd,
-      },
-      {
-        id: "nodate",
-        label: "No due date",
-        tone: "text-muted-foreground",
-        match: (t) => t.status !== "done" && !t.dueDate,
-      },
-      { id: "done", label: "Done", tone: "text-emerald-400", match: (t) => t.status === "done" },
+    const bucket = (task: Task) => {
+      if (task.status === "done") return "done";
+      if (isOverdue(task)) return "overdue";
+      if (isPlannedToday(task, today)) return "planned";
+      if (task.dueDate === today) return "due";
+      const next = task.scheduledAt || task.dueDate;
+      if (next && next > today && next <= weekEnd) return "week";
+      const inbox =
+        task.inbox ||
+        (!task.dueDate &&
+          !task.scheduledAt &&
+          !task.committedOn &&
+          !(task.blocks && task.blocks.some((block) => !block.done)));
+      if (inbox) return "inbox";
+      return "later";
+    };
+
+    const defs: Array<{ id: string; label: string; tone: string }> = [
+      { id: "overdue", label: "Overdue · decide now", tone: "text-destructive" },
+      { id: "planned", label: "Planned today", tone: "text-primary" },
+      { id: "due", label: "Deadline today", tone: "text-amber-500" },
+      { id: "inbox", label: "Inbox · needs a decision", tone: "text-violet-500" },
+      { id: "week", label: "Next 7 days", tone: "text-info" },
+      { id: "later", label: "Later", tone: "text-muted-foreground" },
+      { id: "done", label: "Completed", tone: "text-emerald-500" },
     ];
+
     return defs
-      .map((d) => ({
-        ...d,
-        tasks: collapsedGroups.has(d.id) ? [] : listTasks.filter(d.match),
-        count: listTasks.filter(d.match).length,
-      }))
-      .filter((g) => g.count > 0);
+      .map((definition) => {
+        const matching = listTasks.filter((task) => bucket(task) === definition.id);
+        return {
+          ...definition,
+          tasks: collapsedGroups.has(definition.id) ? [] : matching,
+          count: matching.length,
+        };
+      })
+      .filter((group) => group.count > 0);
   }, [listTasks, collapsedGroups]);
 
   const allCategories = useMemo(() => {
@@ -1876,193 +2033,184 @@ export default function TasksPage() {
   // ─────────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="space-y-5">
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-foreground flex items-center gap-2 sm:text-3xl">
-            <Target size={24} className="text-primary" style={{ WebkitTextFillColor: "initial" }} />
-            Task Manager
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {stats.open} open · {stats.done} done
-            {stats.overdue > 0 && (
-              <span className="text-red-400 font-semibold"> · ⚠ {stats.overdue} overdue</span>
-            )}
-            {stats.todayTask > 0 && (
-              <span className="text-amber-400 font-semibold">
-                {" "}
-                · 🔥 {stats.todayTask} due today
-              </span>
-            )}
-          </p>
+    <div className="mc21-tasks-page space-y-4">
+      {/* ── Focused task command center ── */}
+      <header className="mc21-tasks-head">
+        <div className="min-w-0">
+          <div className="mc21-tasks-eyebrow">
+            <Target size={13} />
+            Execution system
+          </div>
+          <h1>Tasks</h1>
+          <p>Capture once. Decide deliberately. Plan realistically. Execute without hunting.</p>
         </div>
         <button
           onClick={() => setModal({ open: true, task: null })}
-          className="btn-primary flex items-center gap-1.5 text-sm shadow-lg shadow-primary/25"
+          className="mc21-new-task"
         >
-          <Plus size={15} /> New Task
+          <Plus size={15} />
+          New task
         </button>
-      </div>
+      </header>
 
-      {/* ── Stats bar — horizontally scrollable on mobile ── */}
-      <div className="flex gap-2.5 overflow-x-auto pb-1 hide-scrollbar sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:overflow-visible">
-        {[
-          {
-            label: "Total",
-            value: stats.total,
-            accent: "hsl(var(--foreground))",
-          },
-          { label: "Open", value: stats.open, accent: "hsl(245 80% 65%)" },
-          {
-            label: "In Progress",
-            value: tasksByStatus["in-progress"].length,
-            accent: "hsl(36 94% 58%)",
-          },
-          { label: "Blocked", value: stats.blocked, accent: "hsl(0 74% 55%)" },
-          { label: "Done", value: stats.done, accent: "hsl(152 68% 46%)" },
-          { label: "Overdue", value: stats.overdue, accent: "hsl(0 74% 55%)" },
-          { label: "Critical", value: stats.critical, accent: "hsl(24 90% 55%)" },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="stat-tile min-w-[88px] flex-shrink-0 sm:flex-shrink sm:min-w-0"
-            style={{ ["--tile-accent" as string]: s.accent }}
-          >
-            <div className="stat-num" style={{ color: s.accent }}>
-              {s.value}
-            </div>
-            <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
-              {s.label}
-            </div>
-          </div>
-        ))}
-      </div>
+      <TaskCommandBar />
 
-      {/* ── Progress bar ── */}
-      <div className="flex items-center gap-3">
-        <div className="progress-luxe flex-1">
-          <div className="progress-luxe-fill" style={{ width: `${stats.pct}%` }} />
-        </div>
-        <span className="text-xs font-bold text-muted-foreground shrink-0 tabular-nums">
-          {stats.pct}% complete
-        </span>
-      </div>
-
-      {/* ── Quick add ── */}
-      <div className="card-elevated p-3 flex items-center gap-3 hover:shadow-lg transition-shadow">
-        <Plus size={18} className="text-muted-foreground shrink-0" />
-        <input
-          value={quickAdd}
-          onChange={(e) => setQuickAdd(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && quickAddTask()}
-          placeholder="Quick add task... press Enter ↵"
-          className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
-        />
-        {quickAdd && (
+      <nav className="mc21-task-smartviews" aria-label="Task views">
+        {(
+          [
+            { id: "inbox", label: "Inbox", count: stats.inbox, icon: Inbox, tone: "violet" },
+            { id: "today", label: "Today", count: stats.todayTask, icon: Calendar, tone: "mint" },
+            {
+              id: "upcoming",
+              label: "Upcoming",
+              count: stats.upcoming,
+              icon: CalendarRange,
+              tone: "sky",
+            },
+            {
+              id: "important",
+              label: "Important",
+              count: stats.important,
+              icon: Flag,
+              tone: "amber",
+            },
+            { id: "all", label: "All open", count: stats.open, icon: Layers, tone: "neutral" },
+            {
+              id: "done",
+              label: "Done today",
+              count: stats.doneToday,
+              icon: CheckCircle2,
+              tone: "success",
+            },
+          ] as const
+        ).map((item) => (
           <button
-            onClick={quickAddTask}
-            className="px-3 py-1 rounded-lg bg-primary/15 text-primary text-xs font-semibold hover:bg-primary/25 transition-colors"
+            key={item.id}
+            type="button"
+            onClick={() => setPreset(item.id)}
+            className="mc21-smartview"
+            data-active={preset === item.id ? "true" : "false"}
+            data-tone={item.tone}
           >
-            Add
-          </button>
-        )}
-      </div>
-
-      {/* ── Toolbar — scrollable on mobile ── */}
-      <div className="space-y-2">
-        {/* Search + view toggle row */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 bg-secondary rounded-xl px-3 py-2 flex-1 min-w-0">
-            <Search size={13} className="text-muted-foreground shrink-0" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search tasks..."
-              className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground/60 outline-none flex-1 min-w-0"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="text-muted-foreground hover:text-foreground touch-manipulation"
-              >
-                <X size={12} />
-              </button>
+            <span className="mc21-smartview-icon">
+              <item.icon size={15} />
+            </span>
+            <span className="mc21-smartview-copy">
+              <strong>{item.label}</strong>
+              <small>
+                {item.id === "done"
+                  ? `${item.count} completed`
+                  : `${item.count} ${item.count === 1 ? "task" : "tasks"}`}
+              </small>
+            </span>
+            {item.id === "today" && stats.overdue > 0 && (
+              <span className="mc21-smartview-alert">{stats.overdue} overdue</span>
             )}
-          </div>
-          <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 shrink-0">
-            <button
-              onClick={() => setView("kanban")}
-              className={`p-1.5 rounded-lg transition-all touch-manipulation ${view === "kanban" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              title="Kanban Board"
-            >
-              <LayoutGrid size={14} />
-            </button>
-            <button
-              onClick={() => setView("list")}
-              className={`p-1.5 rounded-lg transition-all touch-manipulation ${view === "list" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-              title="List View"
-            >
-              <List size={14} />
-            </button>
-          </div>
-        </div>
+          </button>
+        ))}
+      </nav>
 
-        {/* Filters row — horizontally scrollable on mobile */}
-        <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
-          {/* Status filter */}
-          <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 shrink-0">
-            {["all", ...STATUSES.map((s) => s.id)].map((s) => (
+      {/* ── Search + progressive filters ── */}
+      <section className="mc21-task-toolbar">
+        <label className="mc21-task-search">
+          <Search size={14} />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search title, notes, project…"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} aria-label="Clear search">
+              <X size={12} />
+            </button>
+          )}
+        </label>
+
+        <button
+          type="button"
+          onClick={() => setShowFilters((value) => !value)}
+          className="mc21-toolbar-button"
+          data-active={showFilters ? "true" : "false"}
+        >
+          <SlidersHorizontal size={13} />
+          Filters
+        </button>
+
+        <div className="mc21-view-toggle" aria-label="Task layout">
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            data-active={view === "list" ? "true" : "false"}
+            title="List"
+          >
+            <List size={14} />
+            <span>List</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("kanban")}
+            data-active={view === "kanban" ? "true" : "false"}
+            title="Board"
+          >
+            <LayoutGrid size={14} />
+            <span>Board</span>
+          </button>
+        </div>
+      </section>
+
+      {showFilters && (
+        <section className="mc21-task-filters" aria-label="Advanced task filters">
+          <div className="mc21-filter-status">
+            {["all", ...STATUSES.map((status) => status.id)].map((status) => (
               <button
-                key={s}
-                onClick={() => setFilterStatus(s)}
-                className={`px-2 sm:px-2.5 py-1.5 rounded-lg text-[11px] font-semibold capitalize transition-all whitespace-nowrap touch-manipulation ${filterStatus === s ? "bg-card shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                key={status}
+                type="button"
+                onClick={() => setFilterStatus(status)}
+                data-active={filterStatus === status ? "true" : "false"}
               >
-                {s === "all" ? `All` : getStatus(s).label}
+                {status === "all" ? "Any status" : getStatus(status).label}
               </button>
             ))}
           </div>
 
-          {/* Priority filter */}
           <select
             value={filterPriority}
-            onChange={(e) => setFilterPriority(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation"
+            onChange={(event) => setFilterPriority(event.target.value)}
+            aria-label="Priority"
           >
-            <option value="all">Priority</option>
-            {PRIORITIES.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.label}
+            <option value="all">Any priority</option>
+            {PRIORITIES.map((priority) => (
+              <option key={priority.id} value={priority.id}>
+                {priority.label}
               </option>
             ))}
           </select>
 
-          {/* Category filter */}
           <select
             value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation"
+            onChange={(event) => setFilterCategory(event.target.value)}
+            aria-label="Category"
           >
-            <option value="all">Category</option>
-            {allCategories.map((c) => (
-              <option key={c} value={c}>
-                {c}
+            <option value="all">Any category</option>
+            {allCategories.map((category) => (
+              <option key={category} value={category}>
+                {category}
               </option>
             ))}
           </select>
 
-          {/* Sort */}
           <select
             value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as any)}
-            className="px-3 py-1.5 rounded-xl bg-secondary text-foreground text-xs font-semibold outline-none appearance-none cursor-pointer shrink-0 touch-manipulation"
+            onChange={(event) => setSortBy(event.target.value as typeof sortBy)}
+            aria-label="Sort tasks"
           >
+            <option value="smart">Smart order</option>
             <option value="priority">Priority</option>
-            <option value="dueDate">Due Date</option>
-            <option value="created">Created</option>
+            <option value="dueDate">Deadline</option>
+            <option value="created">Newest</option>
           </select>
-        </div>
-      </div>
+        </section>
+      )}
 
       {/* ── Kanban Board ── */}
       {view === "kanban" && (
@@ -2093,113 +2241,138 @@ export default function TasksPage() {
       {/* ── List View ── */}
       {view === "list" && (
         <div className="space-y-1.5">
-          {/* Quick presets + grouping */}
-          <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1 items-center">
-            {(
-              [
-                { id: "open", label: "Open", count: stats.open },
-                { id: "overdue", label: "Overdue", count: stats.overdue },
-                { id: "today", label: "Due today", count: stats.todayTask },
-                { id: "week", label: "This week", count: null },
-                { id: "critical", label: "Important", count: stats.critical },
-                { id: "all", label: "Everything", count: stats.total },
-              ] as const
-            ).map((p) => (
+          {/* List controls */}
+          <div className="mc21-list-head">
+            <div className="mc21-list-summary">
+              <strong>{listTasks.length}</strong>
+              <span>
+                {
+                  (
+                    {
+                      inbox: "Inbox",
+                      today: "Today",
+                      upcoming: "Upcoming",
+                      important: "Important",
+                      all: "All open",
+                      done: "Completed",
+                    } as const
+                  )[preset]
+                }
+              </span>
+            </div>
+            <div className="mc21-list-actions">
               <button
-                key={p.id}
-                onClick={() => setPreset(p.id)}
-                className={`shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${preset === p.id ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
+                type="button"
+                onClick={() => setGrouped((value) => !value)}
+                data-active={grouped ? "true" : "false"}
               >
-                {p.label}
-                {p.count != null && p.count > 0 ? ` · ${p.count}` : ""}
+                <Layers size={12} />
+                Group
               </button>
-            ))}
-            <button
-              onClick={() => setGrouped((g) => !g)}
-              className={`shrink-0 ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${grouped ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
-              title="Group by due date"
-            >
-              <Layers size={13} /> Group by date
-            </button>
+              <button
+                type="button"
+                onClick={() => (bulkMode ? exitBulk() : setBulkMode(true))}
+                data-active={bulkMode ? "true" : "false"}
+              >
+                <CheckSquare size={12} />
+                {bulkMode ? "Cancel select" : "Select"}
+              </button>
+            </div>
           </div>
 
           {/* Bulk action toolbar */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => (bulkMode ? exitBulk() : setBulkMode(true))}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all touch-manipulation ${bulkMode ? "bg-primary/15 text-primary ring-1 ring-primary/30" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
-            >
-              <CheckSquare size={13} />
-              {bulkMode ? "Cancel" : "Select"}
-            </button>
-            {bulkMode && (
-              <>
-                <button
-                  onClick={() => {
-                    if (selectedIds.size === listTasks.length) setSelectedIds(new Set());
-                    else setSelectedIds(new Set(listTasks.map((t) => t.id)));
-                  }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-secondary/80 transition-all touch-manipulation"
-                >
-                  {selectedIds.size === listTasks.length && listTasks.length > 0
-                    ? "Deselect all"
-                    : "Select all"}
-                </button>
-                <span className="text-xs text-muted-foreground font-medium">
-                  {selectedIds.size} selected
-                </span>
-                <button
-                  onClick={() => bulkApply({ status: "done", completedAt: today }, "Completed")}
-                  disabled={selectedIds.size === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-all disabled:opacity-40 touch-manipulation"
-                >
-                  <CheckCircle2 size={12} /> Done
-                </button>
-                <button
-                  onClick={() => bulkApply({ dueDate: today }, "Due today")}
-                  disabled={selectedIds.size === 0}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation"
-                >
-                  Due today
-                </button>
-                <button
-                  onClick={() => bulkApply({ dueDate: shiftISO(today, 7) }, "Pushed 1 week")}
-                  disabled={selectedIds.size === 0}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground hover:bg-primary/10 hover:text-primary transition-all disabled:opacity-40 touch-manipulation"
-                >
-                  Push +1w
-                </button>
-                <select
-                  value=""
-                  onChange={(e) => {
-                    if (e.target.value)
-                      bulkApply(
-                        { priority: e.target.value as Task["priority"] },
-                        "Priority updated",
-                      );
-                  }}
-                  disabled={selectedIds.size === 0}
-                  className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-secondary text-foreground outline-none disabled:opacity-40 touch-manipulation"
-                >
-                  <option value="">Priority…</option>
-                  {PRIORITIES.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.label}
-                    </option>
-                  ))}
-                </select>
-
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={selectedIds.size === 0}
-                  className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
-                >
-                  <Trash2 size={12} />
-                  Delete{selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
-                </button>
-              </>
-            )}
-          </div>
+          {bulkMode && (
+            <div className="mc21-bulkbar">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedIds.size === listTasks.length) setSelectedIds(new Set());
+                  else setSelectedIds(new Set(listTasks.map((task) => task.id)));
+                }}
+              >
+                {selectedIds.size === listTasks.length && listTasks.length > 0
+                  ? "Deselect all"
+                  : "Select all"}
+              </button>
+              <span>{selectedIds.size} selected</span>
+              <button
+                type="button"
+                disabled={selectedIds.size === 0}
+                onClick={() =>
+                  bulkApply(
+                    {
+                      scheduledAt: today,
+                      committedOn: today,
+                      notBefore: undefined,
+                      reviewAt: today,
+                      inbox: false,
+                      touchedAt: today,
+                    },
+                    "Planned today",
+                  )
+                }
+              >
+                <Calendar size={12} />
+                Plan today
+              </button>
+              <button
+                type="button"
+                disabled={selectedIds.size === 0}
+                onClick={() => {
+                  const nextWeek = shiftISO(today, 7);
+                  void bulkApply(
+                    {
+                      scheduledAt: nextWeek,
+                      notBefore: nextWeek,
+                      reviewAt: nextWeek,
+                      committedOn: undefined,
+                      inbox: false,
+                      touchedAt: today,
+                    },
+                    "Planned next week",
+                  );
+                }}
+              >
+                +1 week
+              </button>
+              <button
+                type="button"
+                disabled={selectedIds.size === 0}
+                onClick={() => bulkApply({ status: "done", completedAt: today }, "Completed")}
+              >
+                <CheckCircle2 size={12} />
+                Done
+              </button>
+              <select
+                value=""
+                onChange={(event) => {
+                  if (event.target.value) {
+                    void bulkApply(
+                      { priority: event.target.value as Task["priority"] },
+                      "Priority updated",
+                    );
+                  }
+                }}
+                disabled={selectedIds.size === 0}
+              >
+                <option value="">Priority…</option>
+                {PRIORITIES.map((priority) => (
+                  <option key={priority.id} value={priority.id}>
+                    {priority.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                disabled={selectedIds.size === 0}
+                className="mc21-bulk-delete"
+              >
+                <Trash2 size={12} />
+                Trash
+              </button>
+            </div>
+          )}
 
           {(() => {
             const listHandlers = {
@@ -2215,6 +2388,9 @@ export default function TasksPage() {
               onSetDue: handleSetDue,
               onSetPriority: handleSetPriority,
               onSetStatus: handleSetStatus,
+              onPlanToday: handlePlanToday,
+              onSchedule: handleSchedule,
+              onFocus: handleFocus,
             };
             if (!grouped) return <VirtualizedList tasks={listTasks} {...listHandlers} />;
             return (
@@ -2233,7 +2409,7 @@ export default function TasksPage() {
                         {g.label}
                       </span>
                       <span className="text-[11px] font-semibold text-muted-foreground bg-secondary rounded-full px-2 py-0.5">
-                        {g.tasks.length}
+                        {g.count}
                       </span>
                       {bulkMode && g.tasks.length > 0 && (
                         <span

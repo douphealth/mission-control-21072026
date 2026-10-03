@@ -108,61 +108,38 @@ export default function TodayPlan({
   };
 
   return (
-    <section className="se-card ultra-rise-3 p-4 sm:p-6" aria-labelledby="today-heading">
-      {/* ── Next action ── */}
-      <div className="flex items-start justify-between gap-3">
+    <section className="mc21-plan-card se-card ultra-rise-3 p-4 sm:p-5" aria-labelledby="today-heading">
+      {/* ── Guided plan header ── */}
+      <div className="mc21-plan-head">
         <div className="min-w-0">
-          <p className="se-label">Do next</p>
-          {next ? (
-            <>
-              <h1
-                id="today-heading"
-                className="title-grad mt-1.5 font-display text-[22px] font-extrabold leading-tight tracking-tight text-foreground sm:text-[28px]"
-              >
-                {next.title}
-              </h1>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-muted-foreground">
-                {next.kind === "task" && (
-                  <span className="inline-flex items-center gap-1">
-                    <Timer size={11} aria-hidden /> {fmtMinutes(estimateOf(next.raw as Task))}
-                  </span>
-                )}
-                <DueBadge due={next.due} today={today} />
-                {next.context && <span className="truncate">{next.context}</span>}
-                {next.kind === "task" && <SyncDot id={next.refId} />}
-              </div>
-            </>
-          ) : (
-            <h1
-              id="today-heading"
-              className="mt-1.5 font-display text-[22px] font-extrabold tracking-tight text-foreground"
-            >
-              Nothing chosen yet
-            </h1>
-          )}
+          <p className="se-label">{outcomesAreChosen ? "Daily plan" : "Guided planning"}</p>
+          <h2 id="today-heading">
+            {outcomesAreChosen ? "Three outcomes. One clear day." : "Build a realistic day."}
+          </h2>
+          <p>
+            {outcomesAreChosen
+              ? next
+                ? `Next: ${next.title}`
+                : "Your priorities are chosen. Work the plan, then close the day."
+              : "Choose only what fits. Deadlines stay separate from when you plan to work."}
+          </p>
         </div>
-        {next && (
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-            <button
-              onClick={() => onFocus(next)}
-              className="se-btn se-btn-primary h-10 px-4 text-[12.5px]"
-            >
-              Start <ChevronRight size={14} />
-            </button>
-            <button
-              onClick={() => onComplete(next)}
-              aria-label="Mark done"
-              className="se-btn se-btn-ghost h-10 px-3 text-[12.5px]"
-            >
-              <CheckCircle2 size={14} /> Done
-            </button>
-          </div>
-        )}
+
+        {!outcomesAreChosen && suggestedPlan.length > 0 ? (
+          <button onClick={applySuggestion} className="mc21-plan-primary">
+            <Sparkles size={13} />
+            Plan top {suggestedPlan.length}
+          </button>
+        ) : next ? (
+          <button onClick={() => onFocus(next)} className="mc21-plan-primary">
+            Start next <ChevronRight size={13} />
+          </button>
+        ) : null}
       </div>
 
       {/* ── Capacity ── */}
       <div
-        className="mt-5 rounded-2xl border border-border/40 bg-background/40 p-3.5"
+        className="mc21-capacity mt-4 rounded-2xl border border-border/40 bg-background/40 p-3.5"
         role="status"
       >
         <div className="flex items-center justify-between gap-3 text-[11.5px]">
@@ -200,15 +177,15 @@ export default function TodayPlan({
 
       {/* ── Outcomes ── */}
       <div className="mt-5">
-        <div className="flex items-center justify-between">
-          <h2 className="se-label">
-            {outcomesAreChosen ? "Today's outcomes" : "Suggested for today"}
-          </h2>
-          {!outcomesAreChosen && suggestedPlan.length > 0 && (
-            <button onClick={applySuggestion} className="se-btn se-btn-ghost h-8 px-3 text-[11px]">
-              <Sparkles size={11} /> Commit {suggestedPlan.length}
-            </button>
-          )}
+        <div className="mc21-outcomes-head">
+          <h3 className="se-label">
+            {outcomesAreChosen ? "Today's focused outcomes" : "Recommended next"}
+          </h3>
+          <span>
+            {outcomesAreChosen
+              ? `${commitments.length}/3 selected`
+              : `${suggestedPlan.length} fit your remaining capacity`}
+          </span>
         </div>
 
         <ul className="mt-3 space-y-2">

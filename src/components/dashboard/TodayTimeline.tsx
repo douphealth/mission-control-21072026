@@ -156,13 +156,13 @@ export default function TodayTimeline({
   const { entries, nowIndex, counts } = timeline;
 
   return (
-    <section className="se-card-acc ultra-rise-3 p-5 sm:p-6">
+    <section className="mc21-timeline-card se-card-acc ultra-rise-3 p-4 sm:p-5">
       <div className="zen-glow-spot -top-16 -right-10" aria-hidden />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <div className="se-label">Today</div>
+          <div className="se-label">Day timeline</div>
           <h3 className="title-grad mt-1 font-display text-[20px] font-extrabold tracking-tight sm:text-[24px]">
-            One timeline
+            Meetings + planned work
           </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
             {counts.flags > 0 ? `${counts.flags} needing attention · ` : ""}

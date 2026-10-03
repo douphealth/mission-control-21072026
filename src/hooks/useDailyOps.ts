@@ -116,7 +116,7 @@ export function useDailyOps() {
     [dayItems, today],
   );
   const commitments = useMemo(
-    () => (chosenOutcomes.length ? chosenOutcomes.slice(0, 5) : queues.today.slice(0, 3)),
+    () => (chosenOutcomes.length ? chosenOutcomes.slice(0, 3) : queues.today.slice(0, 3)),
     [chosenOutcomes, queues.today],
   );
   const outcomesAreChosen = chosenOutcomes.length > 0;
