@@ -39,7 +39,10 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { hhmmNow } from "@/lib/timeline";
 import { usePlanStore } from "@/stores/planStore";
 import { useNavigationStore } from "@/stores/navigationStore";
-import { syncDailyDigestSnapshot } from "@/lib/dailyDigestSync";
+import {
+  isGmailDeliverySetupError,
+  syncDailyDigestSnapshot,
+} from "@/lib/dailyDigestSync";
 import { toast } from "sonner";
 
 const InsightsPanel = lazy(() => import("@/components/dashboard/InsightsPanel"));
@@ -72,9 +75,19 @@ export default function DashboardHome() {
         description: result.email ? `Delivered to ${result.email}` : "Email delivered.",
       });
     } catch (error) {
-      toast.error("Executive email was not sent", {
-        description: error instanceof Error ? error.message : String(error),
-      });
+      if (isGmailDeliverySetupError(error)) {
+        toast.error("Gmail needs one Google-side permission", {
+          description: error.message,
+          action: {
+            label: "Enable Gmail API",
+            onClick: () => window.open(error.setupUrl, "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        toast.error("Executive email was not sent", {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
     } finally {
       setSendingBriefing(false);
     }
