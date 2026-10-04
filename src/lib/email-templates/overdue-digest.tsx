@@ -47,7 +47,7 @@ interface OverdueDigestProps {
   issues?: DigestIssue[];
 }
 
-const APP_URL = ".";
+const APP_URL = "https://mission-control-21072026.pages.dev";
 
 const INK = "#0b1220";
 const MUTED = "#6b7c93";
