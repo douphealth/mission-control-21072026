@@ -233,6 +233,53 @@ async function genericGeminiAudioFallback(
   return text ? { text, provider: "gemini" } : null;
 }
 
+export function buildGeminiTranscriptionRequest(input: {
+  uri: string;
+  mimeType: string;
+  language?: string;
+}) {
+  const requestedLanguage = normalizeRequestedLanguage(input.language ?? "auto");
+  return {
+    model: "gemini-3.5-transcribe",
+    input: [
+      {
+        type: "audio",
+        uri: input.uri,
+        mime_type: input.mimeType,
+      },
+    ],
+    generation_config: {
+      transcription_config: {
+        language_codes: requestedLanguage ? [requestedLanguage] : [],
+        mode: { type: "verbatim" },
+      },
+    },
+  };
+}
+
+export function extractGeminiInteractionTranscript(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "";
+  const data = payload as {
+    output_text?: unknown;
+    steps?: Array<{
+      type?: string;
+      content?: Array<{ type?: string; text?: unknown }>;
+    }>;
+  };
+
+  if (typeof data.output_text === "string" && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  return (data.steps ?? [])
+    .filter((step) => step?.type === "model_output")
+    .flatMap((step) => step.content ?? [])
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => String(part.text))
+    .join("")
+    .trim();
+}
+
 async function transcribeAudioWithGemini(
   file: File,
   language?: string,
@@ -240,7 +287,6 @@ async function transcribeAudioWithGemini(
   const key = geminiKey();
   if (!key) return null;
 
-  const requestedLanguage = normalizeRequestedLanguage(language ?? "auto");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
   let uploaded: { uri: string; name?: string; mimeType: string } | null = null;
@@ -248,39 +294,24 @@ async function transcribeAudioWithGemini(
   try {
     uploaded = await uploadGeminiAudio(file, key, controller.signal);
     if (uploaded) {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-transcribe:generateContent?key=${encodeURIComponent(key)}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          signal: controller.signal,
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                fileData: {
-                  fileUri: uploaded.uri,
-                  mimeType: uploaded.mimeType,
-                },
-              }],
-            }],
-            generationConfig: {
-              audioTranscriptionConfig: {
-                languageCodes: requestedLanguage ? [requestedLanguage] : [],
-                mode: "VERBATIM",
-              },
-            },
-          }),
+      const res = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": key,
         },
-      );
+        signal: controller.signal,
+        body: JSON.stringify(
+          buildGeminiTranscriptionRequest({
+            uri: uploaded.uri,
+            mimeType: uploaded.mimeType,
+            language,
+          }),
+        ),
+      });
 
       if (res.ok) {
-        const json = (await res.json()) as {
-          candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-        };
-        const text = json.candidates?.[0]?.content?.parts
-          ?.map((part) => part.text || "")
-          .join("")
-          .trim();
+        const text = extractGeminiInteractionTranscript(await res.json().catch(() => null));
         if (text) return { text, provider: "gemini" };
       }
     }

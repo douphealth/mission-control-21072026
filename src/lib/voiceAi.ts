@@ -5,8 +5,23 @@
 import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";
 import { todayISO } from "@/lib/overdue";
 
+export type VoiceFailureKind = "no_speech" | "provider_unavailable" | "bad_request";
+
+export class VoiceCaptureRequestError extends Error {
+  kind: VoiceFailureKind;
+  retryable: boolean;
+
+  constructor(message: string, kind: VoiceFailureKind, retryable = false) {
+    super(message);
+    this.name = "VoiceCaptureRequestError";
+    this.kind = kind;
+    this.retryable = retryable;
+  }
+}
+
 export interface SmartCaptureResult extends VoiceCaptureResult {
   source: "ai" | "browser" | "local";
+  failureKind?: VoiceFailureKind;
   provider?: "lovable" | "gemini" | "browser";
   agreement?: number | null;
   rawTranscript?: string;
@@ -40,6 +55,8 @@ interface ServerResponse {
   } | null;
   error?: string;
   allowTextFallback?: boolean;
+  failureKind?: VoiceFailureKind;
+  retryable?: boolean;
 }
 
 const VALID_TYPES = new Set(["tasks", "notes", "ideas", "links"]);
@@ -72,23 +89,29 @@ export async function smartCapture(
     const data = (await res.json().catch(() => ({}))) as ServerResponse;
 
     if (!res.ok || !data.transcript) {
-      if (data.allowTextFallback && browserTranscript.trim()) {
-        return { ...classifyTranscript(browserTranscript), source: "local" };
-      }
       if (browserTranscript.trim()) {
         return { ...classifyTranscript(browserTranscript), source: "local" };
       }
-      // No transcript at all — return a special result so the UI can show
-      // a text-input fallback instead of crashing.
-      if (data.allowTextFallback) {
+
+      const kind: VoiceFailureKind =
+        data.failureKind ??
+        (res.status >= 500 ? "provider_unavailable" : data.allowTextFallback ? "no_speech" : "bad_request");
+
+      if (kind === "no_speech" && data.allowTextFallback) {
         return {
           transcript: "",
           type: "notes" as const,
           title: "",
           source: "local" as const,
+          failureKind: kind,
         };
       }
-      throw new Error(data.error || "Could not transcribe the recording.");
+
+      throw new VoiceCaptureRequestError(
+        data.error || "Could not transcribe the recording.",
+        kind,
+        data.retryable ?? res.status >= 500,
+      );
     }
 
     const s = data.structured;
@@ -132,6 +155,9 @@ export async function smartCapture(
     if (browserTranscript.trim()) {
       return { ...classifyTranscript(browserTranscript), source: "local" };
     }
-    throw err instanceof Error ? err : new Error("Transcription failed");
+    if (err instanceof VoiceCaptureRequestError) throw err;
+    throw err instanceof Error
+      ? new VoiceCaptureRequestError(err.message, "provider_unavailable", true)
+      : new VoiceCaptureRequestError("Transcription failed", "provider_unavailable", true);
   }
 }

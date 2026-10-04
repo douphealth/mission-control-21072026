@@ -123,6 +123,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         let transcript = "";
         let source: "ai" | "browser" = "browser";
         let provider: "lovable" | "gemini" | "browser" = "browser";
+        let transcriptionError: unknown = null;
 
         if (hasAudio) {
           try {
@@ -135,6 +136,7 @@ export const Route = createFileRoute("/api/voice/transcribe")({
               provider = result.provider;
             }
           } catch (err) {
+            transcriptionError = err;
             console.error("[voice] transcription failed", err);
           }
         }
@@ -143,12 +145,25 @@ export const Route = createFileRoute("/api/voice/transcribe")({
         if (!transcript) transcript = browserTranscript;
 
         if (!transcript) {
+          if (hasAudio && transcriptionError) {
+            return json(
+              {
+                error: "Multilingual AI transcription is temporarily unavailable.",
+                failureKind: "provider_unavailable",
+                retryable: true,
+              },
+              503,
+            );
+          }
+
           return json(
             {
               error: hasAudio
-                ? "I could not make out any speech in that recording. Try again, or type it below."
+                ? "I could not make out any speech in that recording. Try again."
                 : "No audio or transcript received.",
-              allowTextFallback: true,
+              failureKind: hasAudio ? "no_speech" : "bad_request",
+              retryable: false,
+              allowTextFallback: hasAudio,
             },
             hasAudio ? 200 : 400,
           );

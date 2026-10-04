@@ -14,7 +14,11 @@ import {
 } from "lucide-react";
 import { useAddItem } from "@/hooks/useTableData";
 import type { Task, Note, Idea, LinkItem } from "@/lib/db";
-import { smartCapture, type SmartCaptureResult } from "@/lib/voiceAi";
+import {
+  smartCapture,
+  VoiceCaptureRequestError,
+  type SmartCaptureResult,
+} from "@/lib/voiceAi";
 import { classifyTranscript, type VoiceCaptureResult } from "@/lib/voice.functions";
 import {
   buildRecognitionSnapshot,
@@ -187,6 +191,7 @@ export default function VoiceCapture() {
   const voiceModeRef = useRef<"server" | "browser">("server");
   const serverFailureUntilRef = useRef(0);
   const serverFailureCountRef = useRef(0);
+  const [serverBackoffUntil, setServerBackoffUntil] = useState(0);
 
   useEffect(() => {
     if (typeof localStorage === "undefined") return;
@@ -285,6 +290,17 @@ export default function VoiceCapture() {
   useEffect(() => {
     void probeVoiceEngine();
   }, [probeVoiceEngine]);
+
+  useEffect(() => {
+    if (serverBackoffUntil <= Date.now()) return;
+    const wait = Math.max(250, serverBackoffUntil - Date.now() + 100);
+    const timer = window.setTimeout(() => {
+      serverFailureUntilRef.current = 0;
+      setServerBackoffUntil(0);
+      void probeVoiceEngine();
+    }, wait);
+    return () => window.clearTimeout(timer);
+  }, [serverBackoffUntil, probeVoiceEngine]);
 
   const cleanupRecognition = useCallback(() => {
     const recognition = recognitionRef.current;
@@ -467,20 +483,18 @@ export default function VoiceCapture() {
       )
         .then((result) => {
           if (!result.transcript) {
-            serverFailureCountRef.current += 1;
-            serverFailureUntilRef.current =
-              Date.now() + voiceServerBackoffMs(serverFailureCountRef.current);
-            setServerSttAvailable(false);
-            setErrorMsg(
-              getSpeechRecognition()
-                ? "AI transcription is unavailable right now. Tap the mic again — Mission Control will switch to Chrome speech recognition."
-                : "AI transcription is unavailable and this browser has no speech-recognition fallback.",
-            );
-            setPhase("ready");
+            if (result.failureKind === "no_speech") {
+              setErrorMsg("I couldn't make out enough speech. Tap the mic and try again.");
+              setPhase("idle");
+              return;
+            }
+            setErrorMsg("No transcript was produced. Tap the mic and try again.");
+            setPhase("idle");
             return;
           }
           serverFailureCountRef.current = 0;
           serverFailureUntilRef.current = 0;
+          setServerBackoffUntil(0);
           const learnedLanguage =
             result.language?.split("-")[0]?.toLowerCase() ||
             inferLanguageFromTranscript(result.transcript);
@@ -499,16 +513,27 @@ export default function VoiceCapture() {
         })
         .catch((err: unknown) => {
           console.error("transcribe failed", err);
-          serverFailureCountRef.current += 1;
-          serverFailureUntilRef.current =
-            Date.now() + voiceServerBackoffMs(serverFailureCountRef.current);
-          setServerSttAvailable(false);
-          const message = getSpeechRecognition()
-            ? "AI transcription failed. Tap the mic again — Mission Control will use Chrome speech recognition."
-            : err instanceof Error
-              ? err.message
-              : "Transcription failed";
-          setErrorMsg(message);
+          const providerFailure =
+            err instanceof VoiceCaptureRequestError
+              ? err.kind === "provider_unavailable" && err.retryable
+              : true;
+
+          if (providerFailure) {
+            serverFailureCountRef.current += 1;
+            const until = Date.now() + voiceServerBackoffMs(serverFailureCountRef.current);
+            serverFailureUntilRef.current = until;
+            setServerBackoffUntil(until);
+          }
+
+          if (providerFailure && getSpeechRecognition()) {
+            setErrorMsg(
+              "AI transcription is recovering. Tap the mic again and the browser fallback will work immediately; AI retries automatically.",
+            );
+            setPhase("idle");
+            return;
+          }
+
+          setErrorMsg(err instanceof Error ? err.message : "Transcription failed");
           setPhase("error");
         });
     },
@@ -534,6 +559,10 @@ export default function VoiceCapture() {
 
     const Recognition = getSpeechRecognition();
     const serverReady = await probeVoiceEngine();
+    if (serverFailureUntilRef.current <= Date.now() && serverFailureUntilRef.current !== 0) {
+      serverFailureUntilRef.current = 0;
+      setServerBackoffUntil(0);
+    }
     const useServerAudio = shouldUseServerVoiceCapture({
       serverReady,
       browserRecognitionAvailable: Boolean(Recognition),
@@ -1141,44 +1170,67 @@ export default function VoiceCapture() {
                 <div className="flex items-center justify-between rounded-2xl border border-border/30 bg-secondary/25 px-3 py-2 text-[10px]">
                   <span className="font-semibold text-muted-foreground">VOICE ENGINE</span>
                   <span className="font-bold text-foreground">
-                    {serverSttAvailable === true
+                    {serverBackoffUntil > Date.now()
                       ? language === "auto"
-                        ? `AI multilingual auto · ${
-                            voiceProviders.lovable
-                              ? "Lovable STT"
-                              : voiceProviders.gemini
-                                ? "Gemini STT"
-                                : "server STT"
-                          }`
-                        : `AI · ${languageToLocale(language)} · ${
-                            voiceProviders.lovable
-                              ? "Lovable STT"
-                              : voiceProviders.gemini
-                                ? "Gemini STT"
-                                : "server STT"
-                          }`
-                      : serverSttAvailable === false
+                        ? `Browser fallback · ${languageToLocale(
+                            adaptiveLanguageHint ||
+                              browserEnvironmentLanguageHint(
+                                typeof navigator !== "undefined" ? navigator.languages || [] : [],
+                                typeof navigator !== "undefined"
+                                  ? navigator.language || "en-US"
+                                  : "en-US",
+                                typeof Intl !== "undefined"
+                                  ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                                  : undefined,
+                              ) ||
+                              "en",
+                          )} · AI recovering`
+                        : `Browser fallback · ${languageToLocale(language)} · AI recovering`
+                      : serverSttAvailable === true
                         ? language === "auto"
-                          ? `Chrome adaptive fallback · ${languageToLocale(
-                              adaptiveLanguageHint ||
-                                browserEnvironmentLanguageHint(
-                                  typeof navigator !== "undefined" ? navigator.languages || [] : [],
-                                  typeof navigator !== "undefined" ? navigator.language || "en-US" : "en-US",
-                                  typeof Intl !== "undefined"
-                                    ? Intl.DateTimeFormat().resolvedOptions().timeZone
-                                    : undefined,
-                                ) || "en",
-                            )}`
-                          : `Chrome fallback · ${languageToLocale(language)}`
-                        : "Checking multilingual engine…"}
+                          ? `AI multilingual auto · ${
+                              voiceProviders.lovable
+                                ? "Lovable STT"
+                                : voiceProviders.gemini
+                                  ? "Gemini STT"
+                                  : "server STT"
+                            }`
+                          : `AI · ${languageToLocale(language)} · ${
+                              voiceProviders.lovable
+                                ? "Lovable STT"
+                                : voiceProviders.gemini
+                                  ? "Gemini STT"
+                                  : "server STT"
+                            }`
+                        : serverSttAvailable === false
+                          ? language === "auto"
+                            ? `Browser fallback · ${languageToLocale(
+                                adaptiveLanguageHint ||
+                                  browserEnvironmentLanguageHint(
+                                    typeof navigator !== "undefined" ? navigator.languages || [] : [],
+                                    typeof navigator !== "undefined"
+                                      ? navigator.language || "en-US"
+                                      : "en-US",
+                                    typeof Intl !== "undefined"
+                                      ? Intl.DateTimeFormat().resolvedOptions().timeZone
+                                      : undefined,
+                                  ) ||
+                                  "en",
+                              )}`
+                            : `Browser fallback · ${languageToLocale(language)}`
+                          : "Checking multilingual engine…"}
                   </span>
                 </div>
-                {serverSttAvailable === false && (
+                {serverBackoffUntil > Date.now() && (
+                  <p className="mt-1.5 px-1 text-[9px] leading-relaxed text-muted-foreground">
+                    Browser recognition is active for the recovery window. AI transcription will
+                    retry automatically without changing your language setting.
+                  </p>
+                )}
+                {serverSttAvailable === false && serverBackoffUntil <= Date.now() && (
                   <p className="mt-1.5 px-1 text-[9px] leading-relaxed text-warning">
-                    Auto is temporarily using the browser's single-language fallback. A failed AI
-                    transcription now triggers bounded backoff instead of repeatedly trapping the
-                    recorder in a broken server path; Mission Control retries AI automatically after
-                    the cooldown.
+                    Multilingual server transcription is not configured. Browser speech recognition
+                    remains available where supported.
                   </p>
                 )}
               </div>
