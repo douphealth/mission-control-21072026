@@ -14,7 +14,13 @@ export type RecordSyncState = 'saved' | 'pending' | 'failed' | 'local-only';
 type DirtyOperation = 'put' | 'delete';
 type DirtyRecord = { operation: DirtyOperation; changedAt: string; revision?: string };
 type DirtyRecordMap = Record<string, DirtyRecord>;
-type SyncResult = { ok: boolean; restored: number; remoteRows: number; error?: string };
+type SyncResult = {
+  ok: boolean;
+  restored: number;
+  remoteRows: number;
+  repairedQueueEntries?: number;
+  error?: string;
+};
 type DriveFile = { id: string; name: string; modifiedTime: string };
 const LEGACY_NAME = 'mission-control-sync-v1.json';
 const PREFIX = 'mission-control-sync-v2-';
@@ -203,15 +209,29 @@ async function syncCycle(): Promise<SyncResult> {
     if (!localSeedChecked) await seedMissingRecords(remote.records);
     const captured = readDirty();
     const merged = mergeRemoteRecords(remote.records);
+    const repairedQueueEntries = new Set<string>();
+
     for (const [recordKey, change] of Object.entries(captured)) {
       const [collection, id] = recordKey.split('::');
       const table = COLLECTIONS[collection];
       if (!table || !id) continue;
       const data = change.operation === 'delete' ? null : await table.get(id);
       if (!sameChange(readDirty()[recordKey], change)) continue;
-      // A missing local row is not silently converted to a destructive delete.
-      if (!data && change.operation !== 'delete') throw new Error(`A pending ${collection} record is missing locally. The sync queue was retained for recovery.`);
-      const candidate = { data: data || null, deleted: change.operation === 'delete', updatedAt: change.changedAt, revision: change.revision };
+      // A stale pending "put" must never block the whole queue. This can happen
+      // after an older app version deleted/replaced a row without rewriting the
+      // journal. Preserve remote data if it exists; otherwise discard only the
+      // stale journal entry. Never reinterpret this as a destructive delete.
+      if (!data && change.operation !== 'delete') {
+        repairedQueueEntries.add(recordKey);
+        continue;
+      }
+
+      const candidate = {
+        data: data || null,
+        deleted: change.operation === 'delete',
+        updatedAt: change.changedAt,
+        revision: change.revision,
+      };
       if (!merged[recordKey] || compareRemote(candidate, merged[recordKey]) > 0) merged[recordKey] = candidate;
       else if (data && JSON.stringify(data) !== JSON.stringify(merged[recordKey].data)) {
         const conflictId = `sync-conflict-${change.revision || `${collection}-${id}-${change.changedAt}`}`;
@@ -221,14 +241,24 @@ async function syncCycle(): Promise<SyncResult> {
         merged[key('auditLog', conflictId)] = { data: conflict, deleted: false, updatedAt: change.changedAt, revision: conflictId };
       }
     }
-    if (Object.keys(captured).length) {
+    const outboundKeys = Object.keys(captured).filter(
+      recordKey => !repairedQueueEntries.has(recordKey),
+    );
+
+    if (outboundKeys.length) {
       const writer = writerId();
       const file = remote.files.filter(f => f.name === `${PREFIX}${writer}.json`).sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime) || a.id.localeCompare(b.id))[0];
       const backup: RemoteBackup = { version: 2, writerId: writer, updatedAt: new Date().toISOString(), records: merged };
       const fileId = await writeRemote(file?.id, backup, token.access_token, currentEpoch);
       const verified = parseBackup(await driveJson<unknown>(`${DRIVE_FILES}/${encodeURIComponent(fileId)}?alt=media`, token.access_token, currentEpoch));
-      for (const recordKey of Object.keys(captured)) {
-        if (merged[recordKey] && (!verified.records[recordKey] || revisionOf(verified.records[recordKey]) !== revisionOf(merged[recordKey]))) throw new Error('Cloud read-back did not match the write. Changes remain queued.');
+      for (const recordKey of outboundKeys) {
+        if (
+          merged[recordKey] &&
+          (!verified.records[recordKey] ||
+            revisionOf(verified.records[recordKey]) !== revisionOf(merged[recordKey]))
+        ) {
+          throw new Error('Cloud read-back did not match the write. Changes remain queued.');
+        }
       }
     }
     if (epoch !== currentEpoch || readGoogleToken()?.access_token !== token.access_token) throw new Error('Account changed before applying sync.');
@@ -252,7 +282,14 @@ async function syncCycle(): Promise<SyncResult> {
       }
     });
     const current = readDirty();
-    for (const [recordKey, change] of Object.entries(captured)) if (sameChange(current[recordKey], change) && merged[recordKey]) delete current[recordKey];
+    for (const [recordKey, change] of Object.entries(captured)) {
+      if (
+        sameChange(current[recordKey], change) &&
+        (merged[recordKey] || repairedQueueEntries.has(recordKey))
+      ) {
+        delete current[recordKey];
+      }
+    }
     localStorage.setItem(RECEIPTS_KEY, JSON.stringify(receipts));
     writeDirty(current);
     if (journalError) throw new Error('Cloud write completed but the device queue could not be acknowledged.');
@@ -266,7 +303,12 @@ async function syncCycle(): Promise<SyncResult> {
         .then(({ syncDailyDigestSnapshot }) => syncDailyDigestSnapshot({ silent: true }))
         .catch(() => undefined);
     }
-    return { ok: true, restored, remoteRows: Object.keys(merged).length };
+    return {
+      ok: true,
+      restored,
+      remoteRows: Object.keys(merged).length,
+      repairedQueueEntries: repairedQueueEntries.size,
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Synchronization failed';
     if (epoch === currentEpoch) {
