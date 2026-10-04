@@ -311,7 +311,7 @@ export const OverdueDigestEmail = ({
   const topOutcome = plan[0];
   const timedCount = [...overdue, ...dueToday, ...plannedToday].filter((task) => task.startTime).length;
   const priorityRisk = criticalOpen + highOpen;
-  const focusLabel =
+  const focusLoadLabel =
     focusMinutes > 0
       ? formatMinutes(focusMinutes)
       : [overdue, dueToday, plannedToday].flat().some((task) => task.estimateMin)
@@ -417,7 +417,7 @@ export const OverdueDigestEmail = ({
                     <tbody>
                       <tr>
                         <td style={pulseCell}>
-                          <Text style={pulseValue}>{focusLabel}</Text>
+                          <Text style={pulseValue}>{focusLoadLabel}</Text>
                           <Text style={pulseLabel}>Estimated focus load</Text>
                         </td>
                         <td style={pulseCell}>
@@ -450,7 +450,7 @@ export const OverdueDigestEmail = ({
               <StatTile value={overdue.length} label="Overdue" color="#b42318" bg="#fff5f5" />
               <StatTile value={dueToday.length} label="Due today" color="#026aa2" bg="#f0f9ff" />
               <StatTile value={dueTomorrow.length} label="Tomorrow" color="#b54708" bg="#fffaf0" />
-              <StatTile value={focusLabel} label="Focus load" color="#5925dc" bg="#f6f4ff" />
+              <StatTile value={focusLoadLabel} label="Focus load" color="#5925dc" bg="#f6f4ff" />
             </Row>
             <Row>
               <StatTile value={completedToday} label="Done today" color="#067a5c" bg="#f2fdf8" />
@@ -501,7 +501,7 @@ export const OverdueDigestEmail = ({
               <tbody>
                 <tr>
                   <td style={focusBox}>
-                    <Text style={focusLabel}>DO THESE, IN THIS ORDER</Text>
+                    <Text style={focusLoadLabel}>DO THESE, IN THIS ORDER</Text>
                     {plan.map((t, i) => (
                       <table
                         key={`plan-${i}`}
