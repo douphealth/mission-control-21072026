@@ -21,8 +21,19 @@ export default function CrossDeviceSyncBar() {
     setBusy(true);
     try {
       if (connect) await signInToCloud();
-      else { const result = await forceCloudSync(); if (!result.ok) throw new Error(result.error); }
-      toast.success('Cloud synchronization confirmed', { description: 'Use this same Google account and app on your other device.' });
+      else {
+        const result = await forceCloudSync();
+        if (!result.ok) throw new Error(result.error);
+        toast.success('Cloud synchronization confirmed', {
+          description: result.repairedQueueEntries
+            ? `Repaired ${result.repairedQueueEntries} stale queue entr${result.repairedQueueEntries === 1 ? 'y' : 'ies'} and continued syncing normally.`
+            : 'Use this same Google account and app on your other device.',
+        });
+        return;
+      }
+      toast.success('Cloud synchronization confirmed', {
+        description: 'Use this same Google account and app on your other device.',
+      });
     } catch (error) { toast.error('Synchronization needs attention', { description: error instanceof Error ? error.message : 'Your local tasks have been preserved.' }); }
     finally { setBusy(false); setSync(snapshot()); }
   };
