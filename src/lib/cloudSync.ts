@@ -261,6 +261,11 @@ async function syncCycle(): Promise<SyncResult> {
     localSeedChecked = true;
     setStatus(Object.keys(current).length ? 'syncing' : 'synced');
     if (Object.keys(current).length) queueCloudPush(250);
+    if (typeof window !== 'undefined') {
+      void import('@/lib/dailyDigestSync')
+        .then(({ syncDailyDigestSnapshot }) => syncDailyDigestSnapshot({ silent: true }))
+        .catch(() => undefined);
+    }
     return { ok: true, restored, remoteRows: Object.keys(merged).length };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Synchronization failed';
