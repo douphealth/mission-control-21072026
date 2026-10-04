@@ -37,6 +37,13 @@ export interface ExecutiveDigestSnapshot {
     upcoming: number;
     backlog: number;
     issues: number;
+    highRiskIssues: number;
+    criticalOpen: number;
+    highOpen: number;
+    overdueMinutes: number;
+    dueTodayMinutes: number;
+    plannedTodayMinutes: number;
+    focusMinutes: number;
   };
   overdue: ExecutiveDigestTask[];
   dueToday: ExecutiveDigestTask[];
@@ -381,6 +388,17 @@ export async function buildExecutiveDigestSnapshot(): Promise<ExecutiveDigestSna
       (task.completedAt || "").slice(0, 10) === today,
   ).length;
 
+  const sumMinutes = (items: Task[]) =>
+    items.reduce((total, task) => total + Math.max(0, task.estimateMin || 0), 0);
+
+  const overdueMinutes = sumMinutes(overdueRaw);
+  const dueTodayMinutes = sumMinutes(dueTodayRaw);
+  const plannedTodayMinutes = sumMinutes(plannedTodayRaw);
+  const focusMinutes = overdueMinutes + dueTodayMinutes + plannedTodayMinutes;
+  const criticalOpen = openTasks.filter((task) => task.priority === "critical").length;
+  const highOpen = openTasks.filter((task) => task.priority === "high").length;
+  const highRiskIssues = issues.filter((issue) => issue.severity === "high").length;
+
   return {
     generatedAt: now.toISOString(),
     date: today,
@@ -399,6 +417,13 @@ export async function buildExecutiveDigestSnapshot(): Promise<ExecutiveDigestSna
       upcoming: upcomingRaw.length,
       backlog: backlogRaw.length,
       issues: issues.length,
+      highRiskIssues,
+      criticalOpen,
+      highOpen,
+      overdueMinutes,
+      dueTodayMinutes,
+      plannedTodayMinutes,
+      focusMinutes,
     },
     overdue: overdueRaw.map((task) => taskView(task, today)),
     dueToday: dueTodayRaw.map((task) => taskView(task, today)),
