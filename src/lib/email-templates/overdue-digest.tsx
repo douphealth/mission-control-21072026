@@ -24,12 +24,14 @@ export interface DigestTask {
   dueDate?: string;
   startTime?: string;
   daysOverdue?: number;
+  estimateMin?: number;
 }
 
 export interface DigestIssue {
   label: string;
   detail?: string;
   severity?: "high" | "medium" | "low";
+  source?: string;
 }
 
 interface OverdueDigestProps {
@@ -45,6 +47,13 @@ interface OverdueDigestProps {
   completedWeek?: number;
   totalOpen?: number;
   inProgress?: number;
+  highRiskIssues?: number;
+  criticalOpen?: number;
+  highOpen?: number;
+  overdueMinutes?: number;
+  dueTodayMinutes?: number;
+  plannedTodayMinutes?: number;
+  focusMinutes?: number;
   issues?: DigestIssue[];
 }
 
@@ -74,6 +83,37 @@ const shortDate = (iso?: string) => {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
+};
+
+const formatMinutes = (minutes?: number) => {
+  const value = Math.max(0, Math.round(minutes || 0));
+  if (!value) return "—";
+  if (value < 60) return `${value}m`;
+  const hours = Math.floor(value / 60);
+  const rest = value % 60;
+  return rest ? `${hours}h ${rest}m` : `${hours}h`;
+};
+
+const issueDestination = (source?: string) => {
+  switch (source) {
+    case "seo":
+      return "seo";
+    case "finance":
+      return "finance";
+    case "reminders":
+      return "reminders";
+    case "websites":
+      return "websites";
+    case "github":
+      return "github";
+    case "projects":
+      return "projects";
+    case "sync":
+    case "validation":
+      return "review";
+    default:
+      return "review";
+  }
 };
 
 /** Table-based bar — renders in every client, no CSS tricks. */
@@ -170,6 +210,9 @@ const TaskCard = ({
                           {task.startTime ? ` · ${task.startTime}` : ""}
                         </span>
                       )}
+                      {task.estimateMin && task.estimateMin > 0 && (
+                        <span style={estimatePill}>{formatMinutes(task.estimateMin)}</span>
+                      )}
                       {showOverdue && days > 0 && (
                         <span style={overduePill}>
                           {days} day{days === 1 ? "" : "s"} late
@@ -243,6 +286,13 @@ export const OverdueDigestEmail = ({
   completedWeek = 0,
   totalOpen = 0,
   inProgress = 0,
+  highRiskIssues = 0,
+  criticalOpen = 0,
+  highOpen = 0,
+  overdueMinutes = 0,
+  dueTodayMinutes = 0,
+  plannedTodayMinutes = 0,
+  focusMinutes = 0,
   issues = [],
 }: OverdueDigestProps) => {
   const allClear = overdue.length === 0 && dueToday.length === 0 && plannedToday.length === 0;
@@ -258,6 +308,15 @@ export const OverdueDigestEmail = ({
 
   const escalations = issues.filter((issue) => issue.severity === "high").slice(0, 3);
   const visibleIssues = issues.slice(0, 8);
+  const topOutcome = plan[0];
+  const timedCount = [...overdue, ...dueToday, ...plannedToday].filter((task) => task.startTime).length;
+  const priorityRisk = criticalOpen + highOpen;
+  const focusLabel =
+    focusMinutes > 0
+      ? formatMinutes(focusMinutes)
+      : [overdue, dueToday, plannedToday].flat().some((task) => task.estimateMin)
+        ? "0m"
+        : "Unestimated";
 
   const scheduled = [...overdue, ...dueToday, ...plannedToday]
     .filter((t) => !!t.startTime)
@@ -340,18 +399,63 @@ export const OverdueDigestEmail = ({
             </tbody>
           </table>
 
+          {/* ── Executive pulse ─────────────────────────────────────────── */}
+          <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ margin: "0 0 20px" }}>
+            <tbody>
+              <tr>
+                <td style={directiveBox}>
+                  <Text style={directiveKicker}>YOUR 10-SECOND OPERATING BRIEF</Text>
+                  <Text style={directiveTitle}>
+                    {topOutcome ? topOutcome.title : "Protect the clear space for high-value work"}
+                  </Text>
+                  <Text style={directiveText}>
+                    {topOutcome
+                      ? `Start here. Then clear the next two items before opening lower-priority work.`
+                      : "No urgent task is competing for attention. Choose one meaningful outcome and protect a focused block for it."}
+                  </Text>
+                  <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ marginTop: "16px" }}>
+                    <tbody>
+                      <tr>
+                        <td style={pulseCell}>
+                          <Text style={pulseValue}>{focusLabel}</Text>
+                          <Text style={pulseLabel}>Estimated focus load</Text>
+                        </td>
+                        <td style={pulseCell}>
+                          <Text style={{ ...pulseValue, color: highRiskIssues ? "#b42318" : "#067a5c" }}>
+                            {highRiskIssues}
+                          </Text>
+                          <Text style={pulseLabel}>High-risk blockers</Text>
+                        </td>
+                        <td style={pulseCell}>
+                          <Text style={{ ...pulseValue, color: priorityRisk ? "#b54708" : INK }}>
+                            {priorityRisk}
+                          </Text>
+                          <Text style={pulseLabel}>Critical / high open</Text>
+                        </td>
+                        <td style={pulseCell}>
+                          <Text style={pulseValue}>{timedCount}</Text>
+                          <Text style={pulseLabel}>Timed commitments</Text>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
           {/* ── Scoreboard ───────────────────────────────────────────────── */}
           <Section style={statsWrap}>
             <Row>
               <StatTile value={overdue.length} label="Overdue" color="#b42318" bg="#fff5f5" />
               <StatTile value={dueToday.length} label="Due today" color="#026aa2" bg="#f0f9ff" />
               <StatTile value={dueTomorrow.length} label="Tomorrow" color="#b54708" bg="#fffaf0" />
-              <StatTile value={inProgress} label="In progress" color="#5925dc" bg="#f6f4ff" />
+              <StatTile value={focusLabel} label="Focus load" color="#5925dc" bg="#f6f4ff" />
             </Row>
             <Row>
               <StatTile value={completedToday} label="Done today" color="#067a5c" bg="#f2fdf8" />
               <StatTile value={completedWeek} label="Done / 7d" color="#067a5c" bg="#f2fdf8" />
-              <StatTile value={upcoming.length} label="This week" color="#334155" bg="#f7f9fc" />
+              <StatTile value={highRiskIssues} label="Blockers" color="#b42318" bg="#fff5f5" />
               <StatTile value={openLoad} label="Open total" color="#334155" bg="#f7f9fc" />
             </Row>
           </Section>
@@ -421,6 +525,7 @@ export const OverdueDigestEmail = ({
                                 {t.dueDate ? ` · due ${shortDate(t.dueDate)}` : ""}
                                 {t.startTime ? ` · ${t.startTime}` : ""}
                                 {(t.daysOverdue ?? 0) > 0 ? ` · ${t.daysOverdue} days late` : ""}
+                                {t.estimateMin ? ` · ${formatMinutes(t.estimateMin)}` : ""}
                               </Text>
                             </td>
                           </tr>
@@ -460,6 +565,33 @@ export const OverdueDigestEmail = ({
             </table>
           )}
 
+          {(overdueMinutes > 0 || dueTodayMinutes > 0 || plannedTodayMinutes > 0) && (
+            <Section style={group}>
+              <Text style={{ ...groupTitle, color: INK }}>
+                <span style={groupEmoji}>🎯</span>FOCUS LOAD
+              </Text>
+              <Text style={groupHint}>Estimated work competing for your focused attention today.</Text>
+              <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={loadBox}>
+                <tbody>
+                  <tr>
+                    <td style={loadCell}>
+                      <Text style={loadValue}>{formatMinutes(overdueMinutes)}</Text>
+                      <Text style={loadLabel}>Overdue</Text>
+                    </td>
+                    <td style={loadCell}>
+                      <Text style={loadValue}>{formatMinutes(dueTodayMinutes)}</Text>
+                      <Text style={loadLabel}>Due today</Text>
+                    </td>
+                    <td style={loadCell}>
+                      <Text style={loadValue}>{formatMinutes(plannedTodayMinutes)}</Text>
+                      <Text style={loadLabel}>Planned today</Text>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </Section>
+          )}
+
           {/* ── Today's timeline ─────────────────────────────────────────── */}
           {scheduled.length > 0 && (
             <Section style={group}>
@@ -497,7 +629,7 @@ export const OverdueDigestEmail = ({
               <Text style={{ ...groupTitle, color: INK }}>
                 <span style={groupEmoji}>🚩</span>NEEDS A DECISION
               </Text>
-              <Text style={groupHint}>Signals picked up across tasks and bills.</Text>
+              <Text style={groupHint}>Only the signals that can change today’s plan, revenue, or system reliability.</Text>
               {visibleIssues.map((it, i) => {
                 const sev =
                   it.severity === "high"
@@ -518,6 +650,12 @@ export const OverdueDigestEmail = ({
                       <tr>
                         <td style={{ ...cardBody, color: sev.fg }}>
                           <Text style={{ ...issueLabel, color: sev.fg }}>{it.label}</Text>
+                          <Text style={issueMeta}>
+                            {(it.source || "review").toUpperCase()} ·{" "}
+                            <Link href={`${APP_URL}/?section=${issueDestination(it.source)}`} style={{ ...footerLink, color: sev.fg }}>
+                              open workspace →
+                            </Link>
+                          </Text>
                           {it.detail && (
                             <Text style={{ ...issueDetail, color: sev.fg }}>{it.detail}</Text>
                           )}
@@ -581,7 +719,7 @@ export const OverdueDigestEmail = ({
           <Group
             emoji="🗃️"
             title="NO DATE YET"
-            hint="Undated work never gets scheduled. Give the top ones a day."
+            hint="Do not let this become hidden inventory. Schedule, delegate, or delete the top item."
             color="#334155"
             tasks={backlog}
             limit={5}
@@ -718,12 +856,20 @@ export const template = {
     completedWeek: 11,
     totalOpen: 14,
     inProgress: 2,
+    highRiskIssues: 1,
+    criticalOpen: 1,
+    highOpen: 4,
+    overdueMinutes: 75,
+    dueTodayMinutes: 90,
+    plannedTodayMinutes: 120,
+    focusMinutes: 285,
     issues: [
-      { label: "1 critical task overdue", detail: "Renew SSL certificate", severity: "high" },
+      { label: "1 critical task overdue", detail: "Renew SSL certificate", severity: "high", source: "websites" },
       {
         label: "2 bills due this week",
         detail: "Electricity €84.20 · Κοινόχρηστα €45.00",
         severity: "medium",
+        source: "finance",
       },
     ],
     completed: [{ title: "Ship dashboard redesign" }, { title: "Reply to hosting support" }],
@@ -735,14 +881,15 @@ export const template = {
         priority: "critical",
         dueDate: "2026-08-17",
         daysOverdue: 13,
+        estimateMin: 30,
       },
-      { title: "Send invoice to client", priority: "high", dueDate: "2026-08-28", daysOverdue: 2 },
+      { title: "Send invoice to client", priority: "high", dueDate: "2026-08-28", daysOverdue: 2, estimateMin: 15 },
     ],
     dueToday: [
-      { title: "Publish blog post", priority: "medium", dueDate: "2026-08-30", startTime: "15:00" },
+      { title: "Publish blog post", priority: "medium", dueDate: "2026-08-30", startTime: "15:00", estimateMin: 60 },
       { title: "Team stand-up", priority: "low", dueDate: "2026-08-30", startTime: "09:30" },
     ],
-    plannedToday: [{ title: "Improve Mission Control email flow", priority: "high", dueDate: "2026-09-03", startTime: "11:00" }],
+    plannedToday: [{ title: "Improve Mission Control email flow", priority: "high", dueDate: "2026-09-03", startTime: "11:00", estimateMin: 120 }],
     dueTomorrow: [{ title: "Weekly review", priority: "low", dueDate: "2026-08-31" }],
   },
 } satisfies TemplateEntry;
@@ -798,6 +945,56 @@ const meterOuter = {
   backgroundColor: "rgba(255,255,255,0.14)",
   borderRadius: "999px",
   height: "8px",
+};
+
+const directiveBox = {
+  backgroundColor: "#f8fbff",
+  backgroundImage: "linear-gradient(135deg, #f8fbff 0%, #f2fbf7 100%)",
+  border: "1px solid #dce8e4",
+  borderRadius: "18px",
+  padding: "20px 20px 18px",
+};
+const directiveKicker = {
+  fontSize: "9px",
+  letterSpacing: "1.8px",
+  fontWeight: "bold" as const,
+  color: EMERALD,
+  margin: "0 0 7px",
+};
+const directiveTitle = {
+  fontSize: "20px",
+  lineHeight: "27px",
+  color: INK,
+  fontWeight: "bold" as const,
+  letterSpacing: "-0.25px",
+  margin: "0 0 6px",
+};
+const directiveText = {
+  fontSize: "12px",
+  lineHeight: "19px",
+  color: MUTED,
+  margin: "0",
+};
+const pulseCell = {
+  width: "25%",
+  borderTop: `1px solid ${LINE}`,
+  padding: "13px 8px 0 0",
+  verticalAlign: "top" as const,
+};
+const pulseValue = {
+  fontSize: "18px",
+  lineHeight: "22px",
+  color: INK,
+  fontWeight: "bold" as const,
+  margin: "0 0 2px",
+};
+const pulseLabel = {
+  fontSize: "9px",
+  lineHeight: "13px",
+  color: MUTED,
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.55px",
+  margin: "0",
 };
 
 const statsWrap = { margin: "0 0 22px" };
@@ -973,6 +1170,16 @@ const pill = {
   padding: "3px 8px",
   marginRight: "8px",
 };
+const estimatePill = {
+  display: "inline-block",
+  backgroundColor: "#eef2ff",
+  color: "#4338ca",
+  fontSize: "9px",
+  fontWeight: "bold" as const,
+  borderRadius: "999px",
+  padding: "3px 8px",
+  marginRight: "8px",
+};
 const overduePill = {
   display: "inline-block",
   backgroundColor: "#e0342a",
@@ -1023,7 +1230,42 @@ const mixLabelCell = {
 };
 
 const issueLabel = { fontSize: "14px", fontWeight: "bold" as const, margin: "0 0 4px" };
+const issueMeta = {
+  fontSize: "9px",
+  lineHeight: "14px",
+  letterSpacing: "0.55px",
+  fontWeight: "bold" as const,
+  margin: "0 0 5px",
+  opacity: 0.8,
+};
 const issueDetail = { fontSize: "12px", lineHeight: "18px", margin: "0", opacity: 0.85 };
+
+const loadBox = {
+  backgroundColor: "#f7f9fc",
+  border: `1px solid ${LINE}`,
+  borderRadius: "14px",
+};
+const loadCell = {
+  width: "33.33%",
+  padding: "14px 12px",
+  textAlign: "center" as const,
+  verticalAlign: "top" as const,
+};
+const loadValue = {
+  fontSize: "20px",
+  lineHeight: "24px",
+  fontWeight: "bold" as const,
+  color: INK,
+  margin: "0 0 2px",
+};
+const loadLabel = {
+  fontSize: "9px",
+  lineHeight: "13px",
+  textTransform: "uppercase" as const,
+  letterSpacing: "0.7px",
+  color: MUTED,
+  margin: "0",
+};
 
 const doneBox = {
   backgroundColor: "#f2fdf8",
