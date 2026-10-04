@@ -20,24 +20,47 @@ async function saveSnapshot(email:string,s:ExecutiveDigestSnapshot){const serial
 async function getSnapshot(email:string):Promise<StoredDigest|null>{const r=await supabase(`mission_control_digest_snapshots?user_email=eq.${encodeURIComponent(email)}&select=*&limit=1`);const rows=await r.json() as StoredDigest[];return rows[0]||null;}
 async function getEnabledSnapshots():Promise<StoredDigest[]>{const r=await supabase("mission_control_digest_snapshots?enabled=eq.true&select=*&order=updated_at.desc");return await r.json() as StoredDigest[];}
 function localClock(tz:string,date=new Date()){const f=new Intl.DateTimeFormat("en-CA",{timeZone:tz,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",hourCycle:"h23"});const p=Object.fromEntries(f.formatToParts(date).map(x=>[x.type,x.value]));return{date:`${p.year}-${p.month}-${p.day}`,hour:Number(p.hour)};}
-function subject(s:ExecutiveDigestSnapshot){const action=s.counts.overdue+s.counts.dueToday+s.counts.issues;if(s.counts.overdue)return`Mission Control · ${s.counts.overdue} overdue · ${s.counts.issues} issues`;if(action)return`Mission Control · ${action} items need attention today`;return"Mission Control · clear board today";}
+function subject(s:ExecutiveDigestSnapshot){
+  const focus=[...s.overdue,...s.dueToday,...(s.plannedToday||[])][0];
+  const risk=s.counts.highRiskIssues||0;
+  if(s.counts.overdue)return `Mission Control · ${s.counts.overdue} overdue · start with ${focus?.title||"the top task"}`;
+  if(risk)return `Mission Control · ${risk} blocker${risk===1?"":"s"} · ${s.counts.dueToday} due today`;
+  if(s.counts.dueToday)return `Mission Control · ${s.counts.dueToday} due today · ${s.counts.focusMinutes?Math.round(s.counts.focusMinutes/60*10)/10+"h focus": "execute the plan"}`;
+  if((s.counts.plannedToday||0)>0)return `Mission Control · ${s.counts.plannedToday} planned today · start with ${focus?.title||"the top task"}`;
+  return `Mission Control · clear board · ${s.counts.completedWeek} closed in 7d`;
+}
+function fmtMinutes(value:number|undefined){
+  const minutes=Math.max(0,Math.round(value||0));
+  if(!minutes)return "—";
+  if(minutes<60)return `${minutes}m`;
+  const h=Math.floor(minutes/60),m=minutes%60;
+  return m?`${h}h ${m}m`:`${h}h`;
+}
 function plainText(s:ExecutiveDigestSnapshot){
   const lines=[
     "MISSION CONTROL · DAILY EXECUTIVE BRIEFING",
     s.date,
     "",
-    `${s.counts.overdue} overdue · ${s.counts.dueToday} due today · ${s.counts.issues} issues · ${s.counts.completedWeek} done in 7d`,
+    "EXECUTIVE PULSE",
+    `Focus load: ${fmtMinutes(s.counts.focusMinutes)} · High-risk blockers: ${s.counts.highRiskIssues||0} · Critical/high open: ${(s.counts.criticalOpen||0)+(s.counts.highOpen||0)}`,
+    `Overdue: ${s.counts.overdue} · Due today: ${s.counts.dueToday} · Planned today: ${s.counts.plannedToday||0} · Done in 7d: ${s.counts.completedWeek}`,
     ""
   ];
   const focus=[...s.overdue,...s.dueToday,...(s.plannedToday||[])].slice(0,3);
   if(focus.length){
     lines.push("DO THESE FIRST");
-    focus.forEach((t,i)=>lines.push(`${i+1}. ${t.title}${t.dueDate?` · due ${t.dueDate}`:""}`));
+    focus.forEach((t,i)=>lines.push(`${i+1}. ${t.title}${t.dueDate?` · due ${t.dueDate}`:""}${t.startTime?` · ${t.startTime}`:""}${t.estimateMin?` · ${fmtMinutes(t.estimateMin)}`:""}`));
+    lines.push("");
+  }
+  const blockers=s.issues.filter(x=>x.severity==="high").slice(0,3);
+  if(blockers.length){
+    lines.push("CLEAR THESE BLOCKERS");
+    blockers.forEach((x,i)=>lines.push(`${i+1}. ${x.label}${x.detail?` — ${x.detail}`:""}`));
     lines.push("");
   }
   if(s.issues.length){
-    lines.push("NEEDS A DECISION");
-    s.issues.slice(0,8).forEach((x,i)=>lines.push(`${i+1}. ${x.label}${x.detail?` — ${x.detail}`:""}`));
+    lines.push("DECISIONS & RISKS");
+    s.issues.slice(0,8).forEach((x,i)=>lines.push(`${i+1}. [${(x.source||"review").toUpperCase()}] ${x.label}${x.detail?` — ${x.detail}`:""}`));
     lines.push("");
   }
   lines.push("Open Mission Control: https://mission-control-21072026.pages.dev/");
@@ -45,7 +68,7 @@ function plainText(s:ExecutiveDigestSnapshot){
 }
 async function sendEmail(email:string,s:ExecutiveDigestSnapshot,localDate:string){
   if(!emailConfigured())throw new Error("Email delivery is not configured.");
-  const html=await render(React.createElement(OverdueDigestEmail,{date:s.date,overdue:s.overdue,dueToday:s.dueToday,plannedToday:s.plannedToday||[],dueTomorrow:s.dueTomorrow,upcoming:s.upcoming,backlog:s.backlog,completed:s.completed,completedToday:s.counts.completedToday,completedWeek:s.counts.completedWeek,totalOpen:s.counts.totalOpen,inProgress:s.counts.inProgress,issues:s.issues}));
+  const html=await render(React.createElement(OverdueDigestEmail,{date:s.date,overdue:s.overdue,dueToday:s.dueToday,plannedToday:s.plannedToday||[],dueTomorrow:s.dueTomorrow,upcoming:s.upcoming,backlog:s.backlog,completed:s.completed,completedToday:s.counts.completedToday,completedWeek:s.counts.completedWeek,totalOpen:s.counts.totalOpen,inProgress:s.counts.inProgress,highRiskIssues:s.counts.highRiskIssues||0,criticalOpen:s.counts.criticalOpen||0,highOpen:s.counts.highOpen||0,overdueMinutes:s.counts.overdueMinutes||0,dueTodayMinutes:s.counts.dueTodayMinutes||0,plannedTodayMinutes:s.counts.plannedTodayMinutes||0,focusMinutes:s.counts.focusMinutes||0,issues:s.issues}));
   const text=plainText(s);
 
   // Mailflare is the preferred transport: it keeps delivery, provider choice,
@@ -82,5 +105,5 @@ async function sendStored(row:StoredDigest,force=false){const c=localClock(row.t
 async function runCron(request:Request){const secret=env("DIGEST_CRON_SECRET");if(!secret)return json({ok:false,error:"Scheduler secret is not configured."},503);if(request.headers.get("x-mission-control-cron")!==secret)return json({ok:false,error:"Unauthorized."},401);if(!storageConfigured()||!emailConfigured())return json({ok:false,error:"Daily email backend is incomplete."},503);const rows=await getEnabledSnapshots(),results:any[]=[];for(const row of rows){try{results.push({email:row.user_email,...await sendStored(row,false)})}catch(e){results.push({email:row.user_email,sent:false,error:e instanceof Error?e.message:String(e)})}}return json({ok:true,checked:rows.length,sent:results.filter(r=>r.sent).length,results});}
 export const Route=createFileRoute("/api/public/digest")({server:{handlers:{
  GET:async()=>json({ok:true,storageConfigured:storageConfigured(),emailConfigured:emailConfigured(),mailflareConfigured:mailflareConfigured(),resendConfigured:resendConfigured(),schedulerReady:schedulerReady()}),
- POST:async({request})=>{try{const body=await request.json().catch(()=>({})) as {action?:string;snapshot?:unknown};if(body.action==="cron")return await runCron(request);const email=await verifiedGoogleEmail(request);if(body.action==="snapshot"||body.action==="send-now"||body.action==="render"){if(!validSnapshot(body.snapshot))return json({ok:false,error:"Invalid daily briefing snapshot."},400);const snapshot=body.snapshot as ExecutiveDigestSnapshot;if(body.action==="render"){const html=await render(React.createElement(OverdueDigestEmail,{date:snapshot.date,overdue:snapshot.overdue,dueToday:snapshot.dueToday,plannedToday:snapshot.plannedToday||[],dueTomorrow:snapshot.dueTomorrow,upcoming:snapshot.upcoming,backlog:snapshot.backlog,completed:snapshot.completed,completedToday:snapshot.counts.completedToday,completedWeek:snapshot.counts.completedWeek,totalOpen:snapshot.counts.totalOpen,inProgress:snapshot.counts.inProgress,issues:snapshot.issues}));return json({ok:true,email,subject:subject(snapshot),text:plainText(snapshot),html});}if(body.action==="send-now"){if(!emailConfigured())return json({ok:false,configured:false,error:"Email delivery is not configured yet."},503);const clock=localClock(snapshot.timezone||"UTC");await sendEmail(email,snapshot,clock.date);if(storageConfigured()){await saveSnapshot(email,snapshot).catch(()=>undefined);await markSent(email,clock.date).catch(()=>undefined);}return json({ok:true,sent:true,email});}await saveSnapshot(email,snapshot);return json({ok:true,sent:false,email});}return json({ok:false,error:"Unknown digest action."},400)}catch(e){const m=e instanceof Error?e.message:String(e);const status=/authorization|identity verification|verified email/i.test(m)?401:/not configured|incomplete/i.test(m)?503:500;return json({ok:false,error:m},status)}}
+ POST:async({request})=>{try{const body=await request.json().catch(()=>({})) as {action?:string;snapshot?:unknown};if(body.action==="cron")return await runCron(request);const email=await verifiedGoogleEmail(request);if(body.action==="snapshot"||body.action==="send-now"||body.action==="render"){if(!validSnapshot(body.snapshot))return json({ok:false,error:"Invalid daily briefing snapshot."},400);const snapshot=body.snapshot as ExecutiveDigestSnapshot;if(body.action==="render"){const html=await render(React.createElement(OverdueDigestEmail,{date:snapshot.date,overdue:snapshot.overdue,dueToday:snapshot.dueToday,plannedToday:snapshot.plannedToday||[],dueTomorrow:snapshot.dueTomorrow,upcoming:snapshot.upcoming,backlog:snapshot.backlog,completed:snapshot.completed,completedToday:snapshot.counts.completedToday,completedWeek:snapshot.counts.completedWeek,totalOpen:snapshot.counts.totalOpen,inProgress:snapshot.counts.inProgress,highRiskIssues:snapshot.counts.highRiskIssues||0,criticalOpen:snapshot.counts.criticalOpen||0,highOpen:snapshot.counts.highOpen||0,overdueMinutes:snapshot.counts.overdueMinutes||0,dueTodayMinutes:snapshot.counts.dueTodayMinutes||0,plannedTodayMinutes:snapshot.counts.plannedTodayMinutes||0,focusMinutes:snapshot.counts.focusMinutes||0,issues:snapshot.issues}));return json({ok:true,email,subject:subject(snapshot),text:plainText(snapshot),html});}if(body.action==="send-now"){if(!emailConfigured())return json({ok:false,configured:false,error:"Email delivery is not configured yet."},503);const clock=localClock(snapshot.timezone||"UTC");await sendEmail(email,snapshot,clock.date);if(storageConfigured()){await saveSnapshot(email,snapshot).catch(()=>undefined);await markSent(email,clock.date).catch(()=>undefined);}return json({ok:true,sent:true,email});}await saveSnapshot(email,snapshot);return json({ok:true,sent:false,email});}return json({ok:false,error:"Unknown digest action."},400)}catch(e){const m=e instanceof Error?e.message:String(e);const status=/authorization|identity verification|verified email/i.test(m)?401:/not configured|incomplete/i.test(m)?503:500;return json({ok:false,error:m},status)}}
 }}});
