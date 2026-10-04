@@ -12,12 +12,30 @@ export interface ExecutiveDigestSnapshot {
 const sevRank={high:0,medium:1,low:2} as const;
 const taskSort=(a:Task,b:Task)=>(PRIORITY_RANK[a.priority]??9)-(PRIORITY_RANK[b.priority]??9)||(a.dueDate||"9999").localeCompare(b.dueDate||"9999");
 const view=(t:Task,today:string):ExecutiveDigestTask=>({title:t.title,priority:t.priority,dueDate:t.dueDate||undefined,startTime:t.startTime,daysOverdue:daysOverdue(t,today)});
-const hour=(v:unknown)=>Math.max(0,Math.min(23,Number.isFinite(Number(v))?Math.round(Number(v)):8));
+const DEFAULT_DIGEST_HOUR = 9;
+const DIGEST_SCHEDULE_VERSION = 2;
+const hour=(v:unknown)=>Math.max(0,Math.min(23,Number.isFinite(Number(v))?Math.round(Number(v)):DEFAULT_DIGEST_HOUR));
 export async function buildExecutiveDigestSnapshot():Promise<ExecutiveDigestSnapshot>{
   const [tasks,payments,reminders,seoIssues,seoActions,decisions,syncHealth,validations,websites,repos,buildProjects,settings]=await Promise.all([
     db.tasks.filter(t=>!t.deletedAt).toArray(),db.payments.toArray(),db.reminders.toArray(),db.seoIssues.toArray(),db.seoActions.toArray(),db.decisions.toArray(),db.syncHealth.toArray(),db.validations.toArray(),db.websites.toArray(),db.repos.toArray(),db.buildProjects.toArray(),db.settings.get("default")
   ]);
   const now=new Date(),today=todayISO(),tomorrow=addDaysLocal(today,1),weekEnd=addDaysLocal(today,7),weekAgo=addDaysLocal(today,-6);
+  const sendHour =
+    settings?.digestEmailScheduleVersion === DIGEST_SCHEDULE_VERSION
+      ? hour(settings?.digestEmailHour)
+      : DEFAULT_DIGEST_HOUR;
+  const timezone =
+    settings?.digestEmailTimezone ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone ||
+    "UTC";
+  if (settings && settings.digestEmailScheduleVersion !== DIGEST_SCHEDULE_VERSION) {
+    await db.settings.update("default", {
+      digestEmailEnabled: true,
+      digestEmailHour: DEFAULT_DIGEST_HOUR,
+      digestEmailTimezone: timezone,
+      digestEmailScheduleVersion: DIGEST_SCHEDULE_VERSION,
+    });
+  }
   const open=tasks.filter(t=>t.status!=="done"&&!t.archived), overdue=open.filter(t=>!!t.dueDate&&t.dueDate<today).sort(taskSort), dueToday=open.filter(t=>t.dueDate===today).sort(taskSort), dueTomorrow=open.filter(t=>t.dueDate===tomorrow).sort(taskSort), upcoming=open.filter(t=>!!t.dueDate&&t.dueDate>tomorrow&&t.dueDate<=weekEnd).sort(taskSort), backlog=open.filter(t=>!t.dueDate).sort(taskSort);
   const completed=tasks.filter(t=>t.status==="done"&&!!t.completedAt&&t.completedAt.slice(0,10)>=weekAgo).sort((a,b)=>(b.completedAt||"").localeCompare(a.completedAt||""));
   const issues:ExecutiveDigestIssue[]=[]; const add=(x:ExecutiveDigestIssue)=>issues.push(x);
@@ -32,5 +50,5 @@ export async function buildExecutiveDigestSnapshot():Promise<ExecutiveDigestSnap
   repos.filter(r=>!!r.pendingSummary&&r.status!=="archived").forEach(r=>add({label:`Repo · ${r.name}`,detail:r.pendingSummary!.slice(0,360),severity:r.priority==="critical"||r.priority==="high"?"medium":"low",source:"github"}));
   buildProjects.filter(p=>p.status!=="deployed"&&!!p.nextSteps?.trim()).forEach(p=>add({label:`Build · ${p.productName||p.name}`,detail:p.nextSteps.slice(0,360),severity:p.priority==="critical"||p.priority==="high"?"medium":"low",source:"projects"}));
   issues.sort((a,b)=>(sevRank[a.severity||"low"]??9)-(sevRank[b.severity||"low"]??9));
-  return {generatedAt:now.toISOString(),date:today,timezone:settings?.digestEmailTimezone||Intl.DateTimeFormat().resolvedOptions().timeZone||"UTC",enabled:settings?.digestEmailEnabled!==false,sendHour:hour(settings?.digestEmailHour),counts:{totalOpen:open.length,inProgress:open.filter(t=>t.status==="in-progress").length,completedToday:tasks.filter(t=>t.status==="done"&&(t.completedAt||"").slice(0,10)===today).length,completedWeek:completed.length,overdue:overdue.length,dueToday:dueToday.length,dueTomorrow:dueTomorrow.length,upcoming:upcoming.length,backlog:backlog.length,issues:issues.length},overdue:overdue.map(t=>view(t,today)),dueToday:dueToday.map(t=>view(t,today)),dueTomorrow:dueTomorrow.map(t=>view(t,today)),upcoming:upcoming.map(t=>view(t,today)),backlog:backlog.map(t=>view(t,today)),completed:completed.slice(0,8).map(t=>view(t,today)),issues};
+  return {generatedAt:now.toISOString(),date:today,timezone,enabled:settings?.digestEmailEnabled!==false,sendHour,counts:{totalOpen:open.length,inProgress:open.filter(t=>t.status==="in-progress").length,completedToday:tasks.filter(t=>t.status==="done"&&(t.completedAt||"").slice(0,10)===today).length,completedWeek:completed.length,overdue:overdue.length,dueToday:dueToday.length,dueTomorrow:dueTomorrow.length,upcoming:upcoming.length,backlog:backlog.length,issues:issues.length},overdue:overdue.map(t=>view(t,today)),dueToday:dueToday.map(t=>view(t,today)),dueTomorrow:dueTomorrow.map(t=>view(t,today)),upcoming:upcoming.map(t=>view(t,today)),backlog:backlog.map(t=>view(t,today)),completed:completed.slice(0,8).map(t=>view(t,today)),issues};
 }

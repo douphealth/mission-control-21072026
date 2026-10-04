@@ -497,6 +497,8 @@ export interface UserSettings {
   digestEmailTimezone?: string;
   digestEmailLastSnapshotAt?: string;
   digestEmailLastSentAt?: string;
+  /** One-time migration marker for the 09:00 executive briefing schedule. */
+  digestEmailScheduleVersion?: number;
 }
 
 export interface CustomModule {
