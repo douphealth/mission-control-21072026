@@ -492,6 +492,11 @@ export interface UserSettings {
   supabaseAnonKey?: string;
   encryptionKey?: string;
   lastSync?: string;
+  digestEmailEnabled?: boolean;
+  digestEmailHour?: number;
+  digestEmailTimezone?: string;
+  digestEmailLastSnapshotAt?: string;
+  digestEmailLastSentAt?: string;
 }
 
 export interface CustomModule {
