@@ -5,6 +5,7 @@ import {
   googleTokenHasScopes,
   readGoogleToken,
   requestGoogleToken,
+  getGmailApiSetupUrl,
 } from "@/lib/googleDirectAuth";
 import { buildExecutiveDigestSnapshot } from "@/lib/dailyDigestSnapshot";
 
@@ -14,6 +15,25 @@ export interface DigestSyncResult {
   email?: string;
   error?: string;
   configured?: boolean;
+}
+
+export class GmailDeliverySetupError extends Error {
+  setupUrl: string;
+  code: "gmail_scope_missing" | "gmail_api_disabled" | "gmail_forbidden";
+
+  constructor(
+    message: string,
+    code: "gmail_scope_missing" | "gmail_api_disabled" | "gmail_forbidden",
+  ) {
+    super(message);
+    this.name = "GmailDeliverySetupError";
+    this.code = code;
+    this.setupUrl = getGmailApiSetupUrl();
+  }
+}
+
+export function isGmailDeliverySetupError(error: unknown): error is GmailDeliverySetupError {
+  return error instanceof GmailDeliverySetupError;
 }
 
 export interface DigestHealth {
@@ -53,8 +73,15 @@ async function sendDigestThroughGmail(snapshot: Awaited<ReturnType<typeof buildE
   if (!token || !googleTokenHasScopes(token, [GMAIL_SEND_SCOPE])) {
     token = await requestGoogleToken({
       scope: GOOGLE_EMAIL_SEND_SCOPES,
-      prompt: "",
+      prompt: "consent",
     });
+  }
+
+  if (!googleTokenHasScopes(token, [GMAIL_SEND_SCOPE])) {
+    throw new GmailDeliverySetupError(
+      "Google did not grant Gmail send permission. Approve the Gmail permission on the consent screen and try again.",
+      "gmail_scope_missing",
+    );
   }
 
   const renderedResponse = await fetch("/api/public/digest", {
@@ -104,11 +131,55 @@ async function sendDigestThroughGmail(snapshot: Awaited<ReturnType<typeof buildE
   });
 
   if (!sendResponse.ok) {
-    const detail = (await sendResponse.text().catch(() => "")).slice(0, 500);
+    const raw = await sendResponse.text().catch(() => "");
+    const detail = raw.slice(0, 700);
+    let reason = "";
+    let message = "";
+    try {
+      const parsed = JSON.parse(raw) as {
+        error?: {
+          message?: string;
+          status?: string;
+          errors?: Array<{ reason?: string; message?: string }>;
+          details?: Array<{ reason?: string; metadata?: Record<string, string> }>;
+        };
+      };
+      message = parsed.error?.message || "";
+      reason =
+        parsed.error?.errors?.[0]?.reason ||
+        parsed.error?.details?.[0]?.reason ||
+        parsed.error?.status ||
+        "";
+    } catch {
+      /* keep raw fallback */
+    }
+
+    const normalized = `${reason} ${message} ${detail}`.toLowerCase();
+
+    if (
+      sendResponse.status === 403 &&
+      /accessnotconfigured|service_disabled|service disabled|api has not been used|gmail api.*disabled|disabled for the project/.test(
+        normalized,
+      )
+    ) {
+      throw new GmailDeliverySetupError(
+        "Gmail API is disabled for this Google OAuth project. Enable Gmail API once, then press Send executive email now again.",
+        "gmail_api_disabled",
+      );
+    }
+
+    if (
+      sendResponse.status === 403 &&
+      /insufficient|permission|scope|forbidden/.test(normalized)
+    ) {
+      throw new GmailDeliverySetupError(
+        "Google has not granted this OAuth app Gmail send access. Re-authorize the Gmail send permission and try again.",
+        "gmail_forbidden",
+      );
+    }
+
     throw new Error(
-      sendResponse.status === 403
-        ? "Google Gmail send permission is not enabled for this OAuth app yet."
-        : `Gmail delivery failed (${sendResponse.status})${detail ? `: ${detail}` : ""}`,
+      `Gmail delivery failed (${sendResponse.status})${detail ? `: ${detail}` : ""}`,
     );
   }
 
