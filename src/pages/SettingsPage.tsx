@@ -38,6 +38,7 @@ import {
   KeyRound,
   Eye,
   EyeOff,
+  Mail,
 } from "lucide-react";
 import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
@@ -47,6 +48,7 @@ import { setGCalConfig } from "@/lib/googleCalendar";
 import AccessibilityPanel from "@/components/AccessibilityPanel";
 import PlanningSettings from "@/components/PlanningSettings";
 import ConnectionsPanel from "@/components/ConnectionsPanel";
+import DailyEmailSettings from "@/components/DailyEmailSettings";
 
 import { toast } from "sonner";
 
@@ -55,6 +57,7 @@ const tabs = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "accessibility", label: "Accessibility", icon: Accessibility },
   { id: "connections", label: "Connections", icon: Plug },
+  { id: "daily-email", label: "Daily email", icon: Mail },
   { id: "google-calendar", label: "Google Calendar", icon: Calendar },
   { id: "security", label: "Security", icon: Shield },
   { id: "data", label: "Data", icon: Database },
@@ -362,6 +365,12 @@ export default function SettingsPage() {
             {activeTab === "connections" && (
               <div key="connections" {...fadeIn}>
                 <ConnectionsPanel />
+              </div>
+            )}
+
+            {activeTab === "daily-email" && (
+              <div key="daily-email" {...fadeIn}>
+                <DailyEmailSettings />
               </div>
             )}
 
