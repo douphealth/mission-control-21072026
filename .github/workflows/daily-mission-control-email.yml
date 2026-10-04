@@ -1,0 +1,23 @@
+name: Daily Mission Control Email
+on:
+  schedule:
+    - cron: "12 * * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trigger-digest:
+    runs-on: ubuntu-latest
+    env:
+      DIGEST_CRON_SECRET: ${{ secrets.MISSION_CONTROL_DIGEST_CRON_SECRET }}
+    steps:
+      - name: Trigger due daily briefings
+        if: env.DIGEST_CRON_SECRET != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --retry 2 --retry-delay 3 \
+            -X POST 'https://mission-control-21072026.pages.dev/api/public/digest' \
+            -H 'Content-Type: application/json' \
+            -H "X-Mission-Control-Cron: ${DIGEST_CRON_SECRET}" \
+            --data '{"action":"cron"}'

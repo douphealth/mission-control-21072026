@@ -11,6 +11,7 @@ import {
 import { useTasks, useUpdateItem } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { getCloudUserId } from "@/lib/cloudSync";
 import {
   addDaysLocal,
   buildBriefing,
@@ -104,7 +105,8 @@ export default function DailyBriefingBanner() {
   const digestEmail =
     (typeof settings.digestEmail === "string" && settings.digestEmail) ||
     (typeof settings.email === "string" && settings.email) ||
-    "papalexios@gmail.com";
+    getCloudUserId() ||
+    "";
 
   const copyDigest = async () => {
     await navigator.clipboard.writeText(buildDigestText(briefing, today));
