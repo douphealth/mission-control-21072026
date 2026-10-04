@@ -21,6 +21,7 @@ import {
   ArrowUpRight,
   AppWindow,
   Command,
+  Mail,
 } from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
@@ -38,6 +39,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { hhmmNow } from "@/lib/timeline";
 import { usePlanStore } from "@/stores/planStore";
 import { useNavigationStore } from "@/stores/navigationStore";
+import { syncDailyDigestSnapshot } from "@/lib/dailyDigestSync";
+import { toast } from "sonner";
 
 const InsightsPanel = lazy(() => import("@/components/dashboard/InsightsPanel"));
 const BelowFold = lazy(() => import("@/components/dashboard/BelowFold"));
@@ -52,11 +55,30 @@ export default function DashboardHome() {
   const [showMore, setShowMore] = useState(false);
   const [showClose, setShowClose] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [sendingBriefing, setSendingBriefing] = useState(false);
   const [dockItem, setDockItem] = useState<WorkItem | null>(null);
   const workdayEnd = usePlanStore((s) => s.workdayEnd);
   const setActiveSection = useNavigationStore((s) => s.setActiveSection);
   const setCommandPaletteOpen = useNavigationStore((s) => s.setCommandPaletteOpen);
   const evening = hhmmNow() >= workdayEnd || showClose;
+
+  const sendExecutiveEmail = async () => {
+    if (sendingBriefing) return;
+    setSendingBriefing(true);
+    try {
+      const result = await syncDailyDigestSnapshot({ sendNow: true });
+      if (!result.ok) throw new Error(result.error || "Could not send the executive briefing.");
+      toast.success("Executive briefing sent", {
+        description: result.email ? `Delivered to ${result.email}` : "Email delivered.",
+      });
+    } catch (error) {
+      toast.error("Executive email was not sent", {
+        description: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      setSendingBriefing(false);
+    }
+  };
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -116,6 +138,17 @@ export default function DashboardHome() {
           <AreaSwitch />
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void sendExecutiveEmail()}
+            disabled={sendingBriefing}
+            className="mc-home-toolbar-action"
+            aria-label="Send executive briefing email now"
+            title="Generate a fresh Mission Control briefing and email it now"
+          >
+            <Mail size={13} />
+            <span className="hidden sm:inline">{sendingBriefing ? "Sending…" : "Email brief"}</span>
+          </button>
           <button
             type="button"
             onClick={() => setCommandPaletteOpen(true)}

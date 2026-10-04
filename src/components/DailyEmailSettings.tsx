@@ -113,7 +113,8 @@ export default function DailyEmailSettings() {
     }
   };
 
-  const ready =
+  const liveSendReady = health?.emailConfigured === true && !!recipient;
+  const automationReady =
     health?.storageConfigured &&
     health?.emailConfigured &&
     health?.schedulerReady;
@@ -231,6 +232,13 @@ export default function DailyEmailSettings() {
           ))}
         </div>
 
+        {!automationReady && (
+          <div className="px-4 pt-1 sm:px-5">
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+              Manual send can work as soon as email delivery is configured. The 09:00 automation additionally needs snapshot storage and the scheduler.
+            </div>
+          </div>
+        )}
         <div className="px-4 pb-4 sm:px-5 sm:pb-5">
           <div className="rounded-2xl border border-border/40 bg-background/45 p-3 text-[10px] leading-relaxed text-muted-foreground">
             {health?.mailflareConfigured
@@ -252,11 +260,11 @@ export default function DailyEmailSettings() {
           </button>
           <button
             onClick={() => void syncNow(true)}
-            disabled={busy !== null || !ready}
+            disabled={busy !== null || !liveSendReady}
             className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/15 disabled:opacity-40"
           >
             <Send size={13} />
-            Send live test
+            Send executive email now
           </button>
           <button
             onClick={() => void refreshHealth()}

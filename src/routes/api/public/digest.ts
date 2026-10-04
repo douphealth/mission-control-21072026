@@ -29,7 +29,7 @@ function plainText(s:ExecutiveDigestSnapshot){
     `${s.counts.overdue} overdue · ${s.counts.dueToday} due today · ${s.counts.issues} issues · ${s.counts.completedWeek} done in 7d`,
     ""
   ];
-  const focus=[...s.overdue,...s.dueToday].slice(0,3);
+  const focus=[...s.overdue,...s.dueToday,...(s.plannedToday||[])].slice(0,3);
   if(focus.length){
     lines.push("DO THESE FIRST");
     focus.forEach((t,i)=>lines.push(`${i+1}. ${t.title}${t.dueDate?` · due ${t.dueDate}`:""}`));
@@ -45,7 +45,7 @@ function plainText(s:ExecutiveDigestSnapshot){
 }
 async function sendEmail(email:string,s:ExecutiveDigestSnapshot,localDate:string){
   if(!emailConfigured())throw new Error("Email delivery is not configured.");
-  const html=await render(React.createElement(OverdueDigestEmail,{date:s.date,overdue:s.overdue,dueToday:s.dueToday,dueTomorrow:s.dueTomorrow,upcoming:s.upcoming,backlog:s.backlog,completed:s.completed,completedToday:s.counts.completedToday,completedWeek:s.counts.completedWeek,totalOpen:s.counts.totalOpen,inProgress:s.counts.inProgress,issues:s.issues}));
+  const html=await render(React.createElement(OverdueDigestEmail,{date:s.date,overdue:s.overdue,dueToday:s.dueToday,plannedToday:s.plannedToday||[],dueTomorrow:s.dueTomorrow,upcoming:s.upcoming,backlog:s.backlog,completed:s.completed,completedToday:s.counts.completedToday,completedWeek:s.counts.completedWeek,totalOpen:s.counts.totalOpen,inProgress:s.counts.inProgress,issues:s.issues}));
   const text=plainText(s);
 
   // Mailflare is the preferred transport: it keeps delivery, provider choice,
@@ -82,5 +82,5 @@ async function sendStored(row:StoredDigest,force=false){const c=localClock(row.t
 async function runCron(request:Request){const secret=env("DIGEST_CRON_SECRET");if(!secret)return json({ok:false,error:"Scheduler secret is not configured."},503);if(request.headers.get("x-mission-control-cron")!==secret)return json({ok:false,error:"Unauthorized."},401);if(!storageConfigured()||!emailConfigured())return json({ok:false,error:"Daily email backend is incomplete."},503);const rows=await getEnabledSnapshots(),results:any[]=[];for(const row of rows){try{results.push({email:row.user_email,...await sendStored(row,false)})}catch(e){results.push({email:row.user_email,sent:false,error:e instanceof Error?e.message:String(e)})}}return json({ok:true,checked:rows.length,sent:results.filter(r=>r.sent).length,results});}
 export const Route=createFileRoute("/api/public/digest")({server:{handlers:{
  GET:async()=>json({ok:true,storageConfigured:storageConfigured(),emailConfigured:emailConfigured(),mailflareConfigured:mailflareConfigured(),resendConfigured:resendConfigured(),schedulerReady:schedulerReady()}),
- POST:async({request})=>{try{const body=await request.json().catch(()=>({})) as {action?:string;snapshot?:unknown};if(body.action==="cron")return await runCron(request);const email=await verifiedGoogleEmail(request);if(body.action==="snapshot"||body.action==="send-now"){if(!validSnapshot(body.snapshot))return json({ok:false,error:"Invalid daily briefing snapshot."},400);await saveSnapshot(email,body.snapshot);if(body.action==="send-now"){if(!emailConfigured())return json({ok:false,configured:false,error:"Email delivery is not configured yet."},503);const row=await getSnapshot(email);if(!row)return json({ok:false,error:"Snapshot was not persisted."},500);await sendStored(row,true);return json({ok:true,sent:true,email});}return json({ok:true,sent:false,email});}return json({ok:false,error:"Unknown digest action."},400)}catch(e){const m=e instanceof Error?e.message:String(e);const status=/authorization|identity verification|verified email/i.test(m)?401:/not configured|incomplete/i.test(m)?503:500;return json({ok:false,error:m},status)}}
+ POST:async({request})=>{try{const body=await request.json().catch(()=>({})) as {action?:string;snapshot?:unknown};if(body.action==="cron")return await runCron(request);const email=await verifiedGoogleEmail(request);if(body.action==="snapshot"||body.action==="send-now"){if(!validSnapshot(body.snapshot))return json({ok:false,error:"Invalid daily briefing snapshot."},400);const snapshot=body.snapshot as ExecutiveDigestSnapshot;if(body.action==="send-now"){if(!emailConfigured())return json({ok:false,configured:false,error:"Email delivery is not configured yet."},503);const clock=localClock(snapshot.timezone||"UTC");await sendEmail(email,snapshot,clock.date);if(storageConfigured()){await saveSnapshot(email,snapshot).catch(()=>undefined);await markSent(email,clock.date).catch(()=>undefined);}return json({ok:true,sent:true,email});}await saveSnapshot(email,snapshot);return json({ok:true,sent:false,email});}return json({ok:false,error:"Unknown digest action."},400)}catch(e){const m=e instanceof Error?e.message:String(e);const status=/authorization|identity verification|verified email/i.test(m)?401:/not configured|incomplete/i.test(m)?503:500;return json({ok:false,error:m},status)}}
 }}});

@@ -36,6 +36,7 @@ interface OverdueDigestProps {
   date?: string;
   overdue?: DigestTask[];
   dueToday?: DigestTask[];
+  plannedToday?: DigestTask[];
   dueTomorrow?: DigestTask[];
   upcoming?: DigestTask[];
   backlog?: DigestTask[];
@@ -233,6 +234,7 @@ export const OverdueDigestEmail = ({
   date,
   overdue = [],
   dueToday = [],
+  plannedToday = [],
   dueTomorrow = [],
   upcoming = [],
   backlog = [],
@@ -243,10 +245,10 @@ export const OverdueDigestEmail = ({
   inProgress = 0,
   issues = [],
 }: OverdueDigestProps) => {
-  const allClear = overdue.length === 0 && dueToday.length === 0;
+  const allClear = overdue.length === 0 && dueToday.length === 0 && plannedToday.length === 0;
 
   // Today's real workload, ranked: oldest overdue and highest priority first.
-  const plan = [...overdue, ...dueToday]
+  const plan = [...overdue, ...dueToday, ...plannedToday]
     .sort((a, b) => {
       const p = tone(a.priority).rank - tone(b.priority).rank;
       if (p !== 0) return p;
@@ -257,18 +259,19 @@ export const OverdueDigestEmail = ({
   const escalations = issues.filter((issue) => issue.severity === "high").slice(0, 3);
   const visibleIssues = issues.slice(0, 8);
 
-  const scheduled = [...overdue, ...dueToday]
+  const scheduled = [...overdue, ...dueToday, ...plannedToday]
     .filter((t) => !!t.startTime)
     .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""))
     .slice(0, 6);
 
   const openLoad =
-    totalOpen || overdue.length + dueToday.length + dueTomorrow.length + upcoming.length;
+    totalOpen ||
+    overdue.length + dueToday.length + plannedToday.length + dueTomorrow.length + upcoming.length;
   const closedRatio =
     completedWeek + openLoad > 0 ? (completedWeek / (completedWeek + openLoad)) * 100 : 0;
 
   const mix = { critical: 0, high: 0, medium: 0, low: 0 } as Record<string, number>;
-  [...overdue, ...dueToday, ...dueTomorrow, ...upcoming, ...backlog].forEach((t) => {
+  [...overdue, ...dueToday, ...plannedToday, ...dueTomorrow, ...upcoming, ...backlog].forEach((t) => {
     const key = (t.priority || "low").toLowerCase();
     if (key in mix) mix[key] = (mix[key] ?? 0) + 1;
   });
@@ -277,14 +280,18 @@ export const OverdueDigestEmail = ({
   const verdict = overdue.length
     ? `${overdue.length} task${overdue.length === 1 ? "" : "s"} slipped past their date. Clear the top one first — the rest of the day gets easier.`
     : dueToday.length
-      ? `Nothing is late. ${dueToday.length} task${dueToday.length === 1 ? "" : "s"} land today — a clean, finishable day.`
-      : "Nothing overdue, nothing due today. Use the free space for the work that actually moves things forward.";
+      ? `Nothing is late. ${dueToday.length} task${dueToday.length === 1 ? "" : "s"} have a hard deadline today.`
+      : plannedToday.length
+        ? `No deadlines are burning. ${plannedToday.length} planned task${plannedToday.length === 1 ? "" : "s"} are already on today's execution list.`
+        : "Nothing overdue, due, or planned today. Use the free space for the work that actually moves things forward.";
 
   const previewText = overdue.length
     ? `${overdue.length} overdue · ${dueToday.length} due today · start with “${plan[0]?.title ?? ""}”`
     : dueToday.length
       ? `${dueToday.length} due today · start with “${plan[0]?.title ?? ""}”`
-      : `All clear · ${completedWeek} finished this week`;
+      : plannedToday.length
+        ? `${plannedToday.length} planned today · start with “${plan[0]?.title ?? ""}”`
+        : `All clear · ${completedWeek} finished this week`;
 
   return (
     <Html lang="en" dir="ltr">
@@ -303,7 +310,9 @@ export const OverdueDigestEmail = ({
                       ? "You are clear today"
                       : overdue.length
                         ? `${overdue.length} overdue · ${dueToday.length} due today`
-                        : `${dueToday.length} task${dueToday.length === 1 ? "" : "s"} due today`}
+                        : dueToday.length
+                          ? `${dueToday.length} task${dueToday.length === 1 ? "" : "s"} due today`
+                          : `${plannedToday.length} planned for today`}
                   </Heading>
                   <Text style={dateLine}>{weekday(date)}</Text>
                   <Text style={subLine}>{verdict}</Text>
@@ -546,6 +555,14 @@ export const OverdueDigestEmail = ({
             tasks={dueToday}
           />
           <Group
+            emoji="⚡"
+            title="PLANNED TODAY"
+            hint="Time you intentionally reserved for work — separate from hard deadlines."
+            color="#5925dc"
+            tasks={plannedToday}
+            limit={6}
+          />
+          <Group
             emoji="🌅"
             title="DUE TOMORROW"
             hint="Prep anything here that needs someone else."
@@ -725,6 +742,7 @@ export const template = {
       { title: "Publish blog post", priority: "medium", dueDate: "2026-08-30", startTime: "15:00" },
       { title: "Team stand-up", priority: "low", dueDate: "2026-08-30", startTime: "09:30" },
     ],
+    plannedToday: [{ title: "Improve Mission Control email flow", priority: "high", dueDate: "2026-09-03", startTime: "11:00" }],
     dueTomorrow: [{ title: "Weekly review", priority: "low", dueDate: "2026-08-31" }],
   },
 } satisfies TemplateEntry;
