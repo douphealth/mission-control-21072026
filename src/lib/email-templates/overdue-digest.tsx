@@ -254,6 +254,9 @@ export const OverdueDigestEmail = ({
     })
     .slice(0, 3);
 
+  const escalations = issues.filter((issue) => issue.severity === "high").slice(0, 3);
+  const visibleIssues = issues.slice(0, 8);
+
   const scheduled = [...overdue, ...dueToday]
     .filter((t) => !!t.startTime)
     .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""))
@@ -343,6 +346,35 @@ export const OverdueDigestEmail = ({
               <StatTile value={openLoad} label="Open total" color="#334155" bg="#f7f9fc" />
             </Row>
           </Section>
+
+          {/* ── Escalations ──────────────────────────────────────────────── */}
+          {escalations.length > 0 && (
+            <table width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ margin: "0 0 20px" }}>
+              <tbody>
+                <tr>
+                  <td style={escalationBox}>
+                    <Text style={escalationLabel}>HANDLE BEFORE ROUTINE WORK</Text>
+                    {escalations.map((issue, index) => (
+                      <table key={`escalation-${index}`} width="100%" cellPadding={0} cellSpacing={0} role="presentation" style={{ marginBottom: "10px" }}>
+                        <tbody>
+                          <tr>
+                            <td style={planNumCell}>
+                              <span style={{ ...planNum, backgroundColor: "#e0342a" }}>{index + 1}</span>
+                            </td>
+                            <td>
+                              <Text style={index === 0 ? focusTitle : planTitle}>{issue.label}</Text>
+                              {issue.detail && <Text style={focusMeta}>{issue.detail}</Text>}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    ))}
+                    <Button href={`${APP_URL}/?section=review`} style={cta}>Resolve the blockers →</Button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          )}
 
           {/* ── The plan ─────────────────────────────────────────────────── */}
           {plan.length > 0 ? (
@@ -457,7 +489,7 @@ export const OverdueDigestEmail = ({
                 <span style={groupEmoji}>🚩</span>NEEDS A DECISION
               </Text>
               <Text style={groupHint}>Signals picked up across tasks and bills.</Text>
-              {issues.map((it, i) => {
+              {visibleIssues.map((it, i) => {
                 const sev =
                   it.severity === "high"
                     ? { bg: "#fff5f5", bd: "#fecdca", fg: "#b42318" }
@@ -486,6 +518,14 @@ export const OverdueDigestEmail = ({
                   </table>
                 );
               })}
+              {issues.length > visibleIssues.length && (
+                <Text style={groupHint}>
+                  + {issues.length - visibleIssues.length} more signals in{" "}
+                  <Link href={`${APP_URL}/?section=review`} style={footerLink}>
+                    Mission Control
+                  </Link>
+                </Text>
+              )}
             </Section>
           )}
 
@@ -625,7 +665,7 @@ export const OverdueDigestEmail = ({
             <Link href={APP_URL} style={footerLink}>
               Mission Control
             </Link>
-            {" · "}delivered every morning at 07:00
+            {" · "}delivered on your configured daily schedule
           </Text>
           <Text style={footerFine}>You receive this because you own this workspace.</Text>
         </Container>
@@ -655,8 +695,6 @@ export const template = {
     return `Daily briefing — ${head}${done ? ` · ${done} done` : ""}${first ? ` — start with “${first}”` : ""}`;
   },
   displayName: "Daily briefing",
-  // Fixed recipient — this digest only ever goes to the account owner.
-  to: "papalexios@gmail.com",
   previewData: {
     date: "2026-08-30",
     completedToday: 3,
@@ -765,6 +803,20 @@ const tileLabel = {
   color: MUTED,
   margin: "0",
   fontWeight: "bold" as const,
+};
+
+const escalationBox = {
+  backgroundColor: "#fff5f5",
+  border: "1px solid #fecdca",
+  borderRadius: "18px",
+  padding: "20px 20px 18px",
+};
+const escalationLabel = {
+  fontSize: "10px",
+  letterSpacing: "1.7px",
+  color: "#b42318",
+  fontWeight: "bold" as const,
+  margin: "0 0 14px",
 };
 
 const focusBox = {
