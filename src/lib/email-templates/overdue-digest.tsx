@@ -501,7 +501,7 @@ export const OverdueDigestEmail = ({
               <tbody>
                 <tr>
                   <td style={focusBox}>
-                    <Text style={focusLoadLabel}>DO THESE, IN THIS ORDER</Text>
+                    <Text style={focusLabel}>DO THESE, IN THIS ORDER</Text>
                     {plan.map((t, i) => (
                       <table
                         key={`plan-${i}`}
