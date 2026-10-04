@@ -6,17 +6,30 @@ const root = join(__dirname, "..", "..", "..");
 const read = (p: string) => readFileSync(join(root, p), "utf8");
 
 describe("production hardening gates", () => {
-  it("server digest cannot access private local records", () => {
-    const src = read("src/routes/api/public/digest.ts");
-    expect(src).toContain("standalone: true");
-    expect(src).toContain("status: 410");
-    expect(src).not.toContain("supabaseAdmin");
+  it("server digest accepts only sanitized snapshots from a verified Google identity", () => {
+    const route = read("src/routes/api/public/digest.ts");
+    const snapshot = read("src/lib/dailyDigestSnapshot.ts");
+
+    expect(route).toContain("verifiedGoogleEmail");
+    expect(route).toContain("openidconnect.googleapis.com/v1/userinfo");
+    expect(route).toContain("validSnapshot");
+    expect(route).not.toContain("supabaseAdmin");
+    expect(route).not.toContain("papalexios@gmail.com");
+
+    expect(snapshot).not.toContain("db.credentials");
+    expect(snapshot).not.toContain("db.notes");
+    expect(snapshot).not.toContain("wpPassword");
+    expect(snapshot).not.toContain("apiKey");
   });
 
-  it("server digest does not embed account or timezone configuration", () => {
-    const src = read("src/routes/api/public/digest.ts");
-    expect(src).not.toContain("MISSION_CONTROL_OWNER_USER_ID");
-    expect(src).not.toContain("DIGEST_CRON_SECRET");
+  it("daily digest scheduler requires a server-side secret and never embeds it", () => {
+    const route = read("src/routes/api/public/digest.ts");
+    const workflow = read(".github/workflows/daily-mission-control-email.yml");
+
+    expect(route).toContain('env("DIGEST_CRON_SECRET")');
+    expect(route).toContain('request.headers.get("x-mission-control-cron")');
+    expect(workflow).toContain("secrets.MISSION_CONTROL_DIGEST_CRON_SECRET");
+    expect(workflow).not.toMatch(/MISSION_CONTROL_DIGEST_CRON_SECRET:\s*['"][^$]/);
   });
 
   it("account sync is restricted to Google's private app storage", () => {
