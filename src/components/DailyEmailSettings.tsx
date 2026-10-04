@@ -8,6 +8,7 @@ import {
   Send,
   ShieldCheck,
   TriangleAlert,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -15,6 +16,7 @@ import { db } from "@/lib/db";
 import { getCloudUserId } from "@/lib/cloudSync";
 import {
   getDailyDigestHealth,
+  isGmailDeliverySetupError,
   syncDailyDigestSnapshot,
   type DigestHealth,
 } from "@/lib/dailyDigestSync";
@@ -34,6 +36,7 @@ export default function DailyEmailSettings() {
   const settings = useLiveQuery(() => db.settings.get("default"), []);
   const [busy, setBusy] = useState<"sync" | "send" | null>(null);
   const [health, setHealth] = useState<DigestHealth | null>(null);
+  const [gmailSetup, setGmailSetup] = useState<{ url: string; message: string } | null>(null);
 
   const browserTimezone = useMemo(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
@@ -97,6 +100,7 @@ export default function DailyEmailSettings() {
   const syncNow = async (sendNow = false) => {
     setBusy(sendNow ? "send" : "sync");
     try {
+      setGmailSetup(null);
       const result = await syncDailyDigestSnapshot({ sendNow });
       if (!result.ok) throw new Error(result.error || "Daily briefing sync failed.");
       toast.success(
@@ -105,9 +109,20 @@ export default function DailyEmailSettings() {
       );
       await refreshHealth();
     } catch (error) {
-      toast.error(sendNow ? "Email was not sent" : "Briefing was not synced", {
-        description: error instanceof Error ? error.message : String(error),
-      });
+      if (sendNow && isGmailDeliverySetupError(error)) {
+        setGmailSetup({ url: error.setupUrl, message: error.message });
+        toast.error("Gmail needs one Google-side permission", {
+          description: error.message,
+          action: {
+            label: "Enable Gmail API",
+            onClick: () => window.open(error.setupUrl, "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        toast.error(sendNow ? "Email was not sent" : "Briefing was not synced", {
+          description: error instanceof Error ? error.message : String(error),
+        });
+      }
     } finally {
       setBusy(null);
     }
@@ -248,6 +263,39 @@ export default function DailyEmailSettings() {
                 : "Automatic 09:00 delivery is not configured yet. Manual one-click sending works through your connected Google account."}
           </div>
         </div>
+
+        {gmailSetup && (
+          <div className="px-4 pb-4 sm:px-5">
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/8 p-4">
+              <div className="flex items-start gap-3">
+                <TriangleAlert size={16} className="mt-0.5 shrink-0 text-amber-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-extrabold text-foreground">Google Gmail API needs one-time activation</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">{gmailSetup.message}</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.open(gmailSetup.url, "_blank", "noopener,noreferrer")}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-xl bg-amber-500 px-3 text-[11px] font-bold text-white"
+                    >
+                      <ExternalLink size={12} />
+                      Enable Gmail API
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void syncNow(true)}
+                      disabled={busy !== null}
+                      className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-border/50 bg-card px-3 text-[11px] font-bold"
+                    >
+                      <RefreshCw size={12} />
+                      Retry send
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-border/40 bg-secondary/15 p-4 sm:p-5">
           <button
