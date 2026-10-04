@@ -128,6 +128,18 @@ export function getGoogleOrigin(): string {
   return window.location.origin;
 }
 
+export function getGoogleProjectNumber(): string {
+  const clientId = getGoogleClientId();
+  const match = clientId.match(/^(\d+)-/);
+  return match?.[1] || "";
+}
+
+export function getGmailApiSetupUrl(): string {
+  const project = getGoogleProjectNumber();
+  const base = "https://console.cloud.google.com/apis/library/gmail.googleapis.com";
+  return project ? `${base}?project=${encodeURIComponent(project)}` : base;
+}
+
 export function readGoogleToken(): StoredGoogleToken | null {
   if (typeof window === "undefined") return null;
   try {
@@ -194,6 +206,7 @@ export async function requestGoogleToken(opts?: {
     const client = w.google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: opts?.scope || GOOGLE_SCOPES,
+      include_granted_scopes: true,
       prompt: opts?.prompt || "",
       callback: (resp: any) => {
         settled = true;
