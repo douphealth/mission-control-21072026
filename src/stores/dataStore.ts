@@ -131,6 +131,9 @@ function schedulePush() {
     /* ignore */
   }
   queueCloudPush();
+  void import("@/lib/dailyDigestSync")
+    .then(({ queueDailyDigestSnapshot }) => queueDailyDigestSnapshot())
+    .catch(() => undefined);
   notifySaveStatus("saved");
 }
 
