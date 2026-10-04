@@ -13,4 +13,4 @@ export async function syncDailyDigestSnapshot(options?:{sendNow?:boolean;silent?
   if(!response.ok||data.ok===false){if(!options?.silent)throw new Error(data.error||"Daily briefing sync failed.");return{ok:false,error:data.error||"Daily briefing sync failed.",configured:data.configured};}
   const now=new Date().toISOString(); await db.settings.update("default",{digestEmailLastSnapshotAt:now,...(data.sent?{digestEmailLastSentAt:now}:{})}); return data;
 }
-export async function getDailyDigestHealth(){const r=await fetch("/api/public/digest",{cache:"no-store"});const d=await r.json().catch(()=>({})) as any;return{ok:r.ok&&d.ok===true,storageConfigured:d.storageConfigured===true,emailConfigured:d.emailConfigured===true,schedulerReady:d.schedulerReady===true};}
+export async function getDailyDigestHealth(){const r=await fetch("/api/public/digest",{cache:"no-store"});const d=await r.json().catch(()=>({})) as any;return{ok:r.ok&&d.ok===true,storageConfigured:d.storageConfigured===true,emailConfigured:d.emailConfigured===true,mailflareConfigured:d.mailflareConfigured===true,resendConfigured:d.resendConfigured===true,schedulerReady:d.schedulerReady===true};}
