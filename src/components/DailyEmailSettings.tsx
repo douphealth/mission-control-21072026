@@ -113,7 +113,7 @@ export default function DailyEmailSettings() {
     }
   };
 
-  const liveSendReady = health?.emailConfigured === true && !!recipient;
+  const liveSendReady = busy === null;
   const automationReady =
     health?.storageConfigured &&
     health?.emailConfigured &&
@@ -235,7 +235,7 @@ export default function DailyEmailSettings() {
         {!automationReady && (
           <div className="px-4 pt-1 sm:px-5">
             <div className="rounded-2xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
-              Manual send can work as soon as email delivery is configured. The 09:00 automation additionally needs snapshot storage and the scheduler.
+              "Send executive email now" uses your connected Google account directly and does not require Mailflare, Resend, Supabase, or the 09:00 scheduler. Google may ask once for Gmail send permission.
             </div>
           </div>
         )}
@@ -245,7 +245,7 @@ export default function DailyEmailSettings() {
               ? "Mailflare is the primary transport. Resend remains an automatic fallback when configured."
               : health?.resendConfigured
                 ? "Resend fallback is active. Add Mailflare runtime configuration to make Mailflare primary."
-                : "Email transport is not configured yet. Add Mailflare (preferred) or Resend runtime configuration."}
+                : "Automatic 09:00 delivery is not configured yet. Manual one-click sending works through your connected Google account."}
           </div>
         </div>
 
@@ -260,7 +260,7 @@ export default function DailyEmailSettings() {
           </button>
           <button
             onClick={() => void syncNow(true)}
-            disabled={busy !== null || !liveSendReady}
+            disabled={!liveSendReady}
             className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-primary-foreground shadow-lg shadow-primary/15 disabled:opacity-40"
           >
             <Send size={13} />

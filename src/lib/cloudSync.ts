@@ -70,6 +70,35 @@ function readObject<T>(name: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(name) || 'null') ?? fallback; } catch { return fallback; }
 }
 function readDirty(): DirtyRecordMap { return readObject(DIRTY_KEY, {}); }
+
+export async function repairStaleCloudJournal(): Promise<number> {
+  const dirty = readDirty();
+  const next = { ...dirty };
+  let repaired = 0;
+
+  for (const [recordKey, change] of Object.entries(dirty)) {
+    if (change.operation !== 'put') continue;
+    const [collection, id] = recordKey.split('::');
+    const table = COLLECTIONS[collection];
+    if (!table || !id) continue;
+    const local = await table.get(id);
+    if (local) continue;
+
+    // This is a stale queue instruction, not a deletion request. Removing only
+    // the journal entry allows any real remote copy to be restored during sync.
+    delete next[recordKey];
+    repaired++;
+  }
+
+  if (repaired) {
+    writeDirty(next);
+    if (/pending .* record is missing locally/i.test(lastError || '')) {
+      setStatus(hasSession() ? 'syncing' : 'signed-out', null);
+    }
+  }
+
+  return repaired;
+}
 function setStatus(next: CloudStatus, error: string | null = null) {
   status = next; lastError = error;
   listeners.forEach(callback => callback(next, error));
@@ -205,6 +234,7 @@ async function syncCycle(): Promise<SyncResult> {
   setStatus('syncing');
   try {
     await bindIdentity(token.access_token, currentEpoch);
+    await repairStaleCloudJournal();
     const remote = await readRemote(token.access_token, currentEpoch);
     if (!localSeedChecked) await seedMissingRecords(remote.records);
     const captured = readDirty();

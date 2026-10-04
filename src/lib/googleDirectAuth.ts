@@ -21,6 +21,7 @@ const TOKEN_TTL_MS = 55 * 60 * 1000; // Google access tokens live ~60 min
 export const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar";
 export const GTASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
 export const GDRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
+export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
 export const GOOGLE_SCOPES = [
   "openid",
   "email",
@@ -29,6 +30,8 @@ export const GOOGLE_SCOPES = [
   GTASKS_SCOPE,
   GDRIVE_APPDATA_SCOPE,
 ].join(" ");
+
+export const GOOGLE_EMAIL_SEND_SCOPES = [GOOGLE_SCOPES, GMAIL_SEND_SCOPE].join(" ");
 
 export type StoredGoogleToken = {
   access_token: string;

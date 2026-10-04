@@ -3,7 +3,7 @@ import { Cloud, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useTasks } from '@/hooks/useTableData';
 import { getCloudStatus, getCloudError, getCloudUserId, getLastCloudSync, getPendingCloudCount,
-  onCloudStatus, onDirtyRecordsChange, signInToCloud, forceCloudSync } from '@/lib/cloudSync';
+  onCloudStatus, onDirtyRecordsChange, signInToCloud, forceCloudSync, repairStaleCloudJournal } from '@/lib/cloudSync';
 
 function snapshot() { return { status: getCloudStatus(), error: getCloudError(), email: getCloudUserId(), at: getLastCloudSync(), pending: getPendingCloudCount() }; }
 export default function CrossDeviceSyncBar() {
@@ -15,6 +15,24 @@ export default function CrossDeviceSyncBar() {
     const offStatus = onCloudStatus(update), offDirty = onDirtyRecordsChange(update);
     return () => { offStatus(); offDirty(); };
   }, []);
+
+  useEffect(() => {
+    if (!/pending .* record is missing locally/i.test(sync.error || "")) return;
+    let cancelled = false;
+    void (async () => {
+      const repaired = await repairStaleCloudJournal();
+      if (cancelled || !repaired) return;
+      const result = await forceCloudSync();
+      if (!cancelled && result.ok) {
+        toast.success("Sync queue repaired", {
+          description: `Removed ${repaired} stale queue entr${repaired === 1 ? "y" : "ies"} and resumed cloud synchronization.`,
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [sync.error]);
   const connect = sync.status === 'signed-out' || !sync.email || /expired|session|reconnect|not connected/i.test(sync.error || '');
   const act = async () => {
     if (busy) return;
