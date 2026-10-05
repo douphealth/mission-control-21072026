@@ -255,11 +255,25 @@ export default function MobileBottomNav() {
             </button>
 
             <button
-              onClick={() => go("projects")}
-              className={tabCls(activeSection === "projects")}
+              onClick={() => go(area === "personal" ? "calendar" : "projects")}
+              className={tabCls(
+                area === "personal" ? activeSection === "calendar" : activeSection === "projects",
+              )}
             >
-              <PanelsTopLeft size={20} strokeWidth={activeSection === "projects" ? 2.4 : 1.7} />
-              <span className="text-[10px] font-medium leading-none">Projects</span>
+              {area === "personal" ? (
+                <Calendar
+                  size={20}
+                  strokeWidth={activeSection === "calendar" ? 2.4 : 1.7}
+                />
+              ) : (
+                <PanelsTopLeft
+                  size={20}
+                  strokeWidth={activeSection === "projects" ? 2.4 : 1.7}
+                />
+              )}
+              <span className="text-[10px] font-medium leading-none">
+                {area === "personal" ? "Calendar" : "Projects"}
+              </span>
             </button>
 
             <button
