@@ -41,8 +41,12 @@ describe("voice capture quality guards", () => {
     expect(inferLanguageFromTranscript("Call the client tomorrow morning")).toBe("en");
   });
 
-  it("uses Greek as a regional fallback when Chrome is English but the device timezone is Athens", () => {
-    expect(browserEnvironmentLanguageHint(["en-US"], "en-US", "Europe/Athens")).toBe("el");
+  it("does not mistake timezone for language when Chrome declares English", () => {
+    expect(browserEnvironmentLanguageHint(["en-US"], "en-US", "Europe/Athens")).toBe("en");
+  });
+
+  it("uses regional Greek only when the browser exposes no usable language", () => {
+    expect(browserEnvironmentLanguageHint([], "", "Europe/Athens")).toBe("el");
   });
 
   it("prefers an explicit Greek browser locale over timezone inference", () => {
@@ -53,6 +57,8 @@ describe("voice capture quality guards", () => {
     expect(normalizeRequestedLanguage("en")).toBe("en-US");
     expect(normalizeRequestedLanguage("el")).toBe("el-GR");
     expect(normalizeRequestedLanguage("el-GR")).toBe("el-GR");
+    expect(normalizeRequestedLanguage("ar")).toBe("ar-EG");
+    expect(normalizeRequestedLanguage("zh")).toBe("cmn-Hans-CN");
     expect(normalizeRequestedLanguage("auto")).toBeUndefined();
     expect(normalizeRequestedLanguage("not a language")).toBeUndefined();
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildGeminiTranscriptionRequest,
   extractGeminiInteractionTranscript,
+  MISSION_CONTROL_VOICE_VOCABULARY,
 } from "@/lib/aiGateway.server";
 
 describe("Gemini transcription API contract", () => {
@@ -24,10 +25,22 @@ describe("Gemini transcription API contract", () => {
       generation_config: {
         transcription_config: {
           language_codes: [],
+          custom_vocabulary: MISSION_CONTROL_VOICE_VOCABULARY,
           mode: { type: "verbatim" },
         },
       },
     });
+  });
+
+  it("biases domain-specific proper nouns without disabling auto language detection", () => {
+    const request = buildGeminiTranscriptionRequest({
+      uri: "file-uri",
+      mimeType: "audio/wav",
+      language: "auto",
+    });
+    expect(request.generation_config.transcription_config.custom_vocabulary).toContain("GearUpToFit");
+    expect(request.generation_config.transcription_config.custom_vocabulary).toContain("DataForSEO");
+    expect(request.generation_config.transcription_config.language_codes).toEqual([]);
   });
 
   it("passes an explicit BCP-47 language when requested", () => {

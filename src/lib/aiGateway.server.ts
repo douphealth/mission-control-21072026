@@ -9,6 +9,35 @@ const GATEWAY = "https://ai.gateway.lovable.dev/v1";
 export const TRANSCRIBE_MODEL = "google/gemini-3.5-transcribe";
 export const REASONING_MODEL = "openai/gpt-6-astra";
 
+export const MISSION_CONTROL_VOICE_VOCABULARY = [
+  "Mission Control",
+  "GearUpToFit",
+  "Affiliate Marketing for Success",
+  "Plantastic Haven",
+  "GearUpToGrow",
+  "Mystical Digits",
+  "FrenchyFab",
+  "Mice Gone Guide",
+  "Efficient GPT Prompts",
+  "OpenClaw Skills Hub",
+  "OpenClaw",
+  "Hermes",
+  "JEV",
+  "WordPress",
+  "Cloudflare",
+  "Supabase",
+  "Stripe",
+  "GitHub",
+  "Lovable",
+  "DataForSEO",
+  "Google Search Console",
+  "GSC",
+  "GA4",
+  "SEO",
+  "GEO",
+  "AEO",
+];
+
 function apiKey(): string | undefined {
   return process.env["LOVABLE_API_KEY"];
 }
@@ -48,9 +77,20 @@ export async function transcribeAudio(
   language?: string,
 ): Promise<{ text: string; provider: "lovable" | "gemini" } | null> {
   const key = apiKey();
+  const directGemini = geminiKey();
+  let triedDirectGemini = false;
+
+  // Prefer direct Gemini 3.5 Transcribe when configured because it supports
+  // custom vocabulary biasing for the user's brands, technical terms and
+  // proper nouns. Lovable remains the resilient fallback.
+  if (directGemini) {
+    triedDirectGemini = true;
+    const primary = await transcribeAudioWithGemini(file, language).catch(() => null);
+    if (primary?.text) return primary;
+  }
 
   if (!key) {
-    return transcribeAudioWithGemini(file, language);
+    return null;
   }
 
   const form = new FormData();
@@ -103,8 +143,10 @@ export async function transcribeAudio(
   } catch (error) {
     // If the Lovable transcription path is unavailable or rate-limited, use
     // the configured direct Gemini key rather than dropping to browser STT.
-    const fallback = await transcribeAudioWithGemini(file, language).catch(() => null);
-    if (fallback) return fallback;
+    if (!triedDirectGemini) {
+      const fallback = await transcribeAudioWithGemini(file, language).catch(() => null);
+      if (fallback) return fallback;
+    }
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -212,6 +254,7 @@ async function genericGeminiAudioFallback(
                 languageRule,
                 "Do not summarize, translate, paraphrase, or omit words.",
                 "Preserve proper nouns, domains, acronyms, numbers, and product names.",
+                `Prefer these exact spellings when they match the audio: ${MISSION_CONTROL_VOICE_VOCABULARY.join(", ")}.`,
                 "Return only the transcript text.",
               ].join(" "),
             },
@@ -251,6 +294,7 @@ export function buildGeminiTranscriptionRequest(input: {
     generation_config: {
       transcription_config: {
         language_codes: requestedLanguage ? [requestedLanguage] : [],
+        custom_vocabulary: MISSION_CONTROL_VOICE_VOCABULARY,
         mode: { type: "verbatim" },
       },
     },
