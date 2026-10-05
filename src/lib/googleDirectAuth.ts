@@ -22,6 +22,7 @@ export const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar";
 export const GTASKS_SCOPE = "https://www.googleapis.com/auth/tasks";
 export const GDRIVE_APPDATA_SCOPE = "https://www.googleapis.com/auth/drive.appdata";
 export const GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send";
+export const GSC_READONLY_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
 export const GOOGLE_SCOPES = [
   "openid",
   "email",
@@ -32,6 +33,7 @@ export const GOOGLE_SCOPES = [
 ].join(" ");
 
 export const GOOGLE_EMAIL_SEND_SCOPES = [GOOGLE_SCOPES, GMAIL_SEND_SCOPE].join(" ");
+export const GOOGLE_SEARCH_CONSOLE_SCOPES = [GOOGLE_SCOPES, GSC_READONLY_SCOPE].join(" ");
 
 export type StoredGoogleToken = {
   access_token: string;
@@ -137,6 +139,12 @@ export function getGoogleProjectNumber(): string {
 export function getGmailApiSetupUrl(): string {
   const project = getGoogleProjectNumber();
   const base = "https://console.cloud.google.com/apis/library/gmail.googleapis.com";
+  return project ? `${base}?project=${encodeURIComponent(project)}` : base;
+}
+
+export function getSearchConsoleApiSetupUrl(): string {
+  const project = getGoogleProjectNumber();
+  const base = "https://console.cloud.google.com/apis/library/searchconsole.googleapis.com";
   return project ? `${base}?project=${encodeURIComponent(project)}` : base;
 }
 
