@@ -32,6 +32,7 @@ import { computeCapacity, fixedEventsFor, isPlannedToday, suggestOutcomes } from
 import { usePlanStore, inArea } from "@/stores/planStore";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { isGCalConnected } from "@/lib/googleCalendar";
+import { isCurrentSEOIssue } from "@/lib/seoEvidence";
 
 export function useDailyOps() {
   const allTasks = useTasks();
@@ -68,7 +69,7 @@ export function useDailyOps() {
         decisions,
         payments,
         health,
-        seoIssues,
+        seoIssues: seoIssues.filter((issue) => isCurrentSEOIssue(issue)),
         validations,
         today,
       }),
@@ -105,47 +106,68 @@ export function useDailyOps() {
     [tasks, reminders, payments, decisions, websites, notes],
   );
 
-  /** Outcomes = tasks explicitly chosen for today (pinned or with a block/plan
-   *  for today). The engine fills in when nothing has been chosen yet. */
+  /**
+   * Today is an execution surface, not an exception inbox.
+   * Only items that actually belong to today are allowed into the timeline:
+   * overdue/due work, explicitly planned tasks, today's reminders/payments,
+   * and timed work. Open findings/decisions stay in Review until converted to
+   * a task or deliberately committed.
+   */
   const dayItems = useMemo(
-    () => (queues.now ? [queues.now, ...queues.today] : queues.today),
-    [queues.now, queues.today],
+    () =>
+      queues.all.filter((item) => {
+        if (item.kind === "decision") return false;
+        if (item.kind === "task") {
+          const task = item.raw as Task;
+          return (
+            item.overdueDays > 0 ||
+            item.due === today ||
+            isPlannedToday(task, today) ||
+            (!!item.time && (item.scheduled === today || item.due === today))
+          );
+        }
+        return item.overdueDays > 0 || item.due === today;
+      }),
+    [queues.all, today],
   );
   const chosenOutcomes = useMemo(
     () => dayItems.filter((i) => i.kind === "task" && isPlannedToday(i.raw as Task, today)),
     [dayItems, today],
   );
   const commitments = useMemo(
-    () => (chosenOutcomes.length ? chosenOutcomes.slice(0, 3) : queues.today.slice(0, 3)),
-    [chosenOutcomes, queues.today],
+    () =>
+      (chosenOutcomes.length
+        ? chosenOutcomes
+        : dayItems.filter((item) => item.kind === "task")
+      ).slice(0, 3),
+    [chosenOutcomes, dayItems],
   );
   const outcomesAreChosen = chosenOutcomes.length > 0;
   const upNext = useMemo(
-    () => queues.today.filter((i) => !commitments.some((c) => c.id === i.id)),
-    [queues.today, commitments],
+    () => dayItems.filter((i) => !commitments.some((c) => c.id === i.id)),
+    [dayItems, commitments],
   );
   /** One clear next action: the top of what was chosen, else the engine's #1. */
   const nextAction = useMemo(
     () =>
       commitments.find((i) => i.kind === "task" && (i.raw as Task).status !== "blocked") ??
-      queues.now ??
+      dayItems.find((i) => i.kind === "task" && (i.raw as Task).status !== "blocked") ??
+      dayItems[0] ??
       null,
-    [commitments, queues.now],
+    [commitments, dayItems],
   );
 
-  /** The unified Today timeline: attention flags + timed commitments + the
-   *  engine-ordered queue, one chronology with a NOW marker. Replaces the
-   *  siloed agenda / commitments / attention trio. */
+  /** Execution-only chronology. Portfolio/site/system exceptions belong in
+   * Review and their dedicated workspaces, never in the Day timeline. */
   const timeline = useMemo<Timeline>(
     () =>
       buildTimeline({
-        // The whole day, including the item promoted to "next action".
         items: dayItems,
-        attention,
+        attention: [],
         nowTime: hhmmNow(),
         today,
       }),
-    [dayItems, attention, today],
+    [dayItems, today],
   );
 
   /** Fixed commitments from Google Calendar (read-only, never tasks). */
