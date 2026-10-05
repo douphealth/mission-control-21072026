@@ -18,6 +18,10 @@ describe("standalone Google sync regression", () => {
     expect(cloudSync).toContain("appDataFolder");
     expect(cloudSync).toContain("mc-cloud-dirty-records-v3");
     expect(cloudSync).toContain("Google Drive backup failed");
+    expect(cloudSync).toContain("installMutationJournal");
+    expect(cloudSync).toContain("MAX_PUSH_LATENCY_MS");
+    expect(cloudSync).toContain("pagehide");
+    expect(cloudSync).toContain("rebaseLocalPending");
   });
 
   it("does not ship managed-service dependencies or setup UI", () => {
