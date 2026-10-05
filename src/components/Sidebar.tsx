@@ -253,7 +253,7 @@ export default function Sidebar() {
           {!collapsed && (
             <div className="min-w-0">
               <div className="truncate text-[14px] font-extrabold tracking-tight">Mission Control</div>
-              <div className="text-[10px] font-medium text-sidebar-foreground/42">Focus. Execute. Grow.</div>
+              <div className="text-[10px] font-medium text-sidebar-foreground/42">Home. Work. One place.</div>
             </div>
           )}
         </div>
@@ -291,7 +291,7 @@ export default function Sidebar() {
             <section>
               <button
                 type="button"
-                onClick={() => setSystemsOpen((v) => !v)
+                onClick={() => setSystemsOpen((v) => !v)}
                 className={`flex w-full items-center rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/40 transition hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/70 ${
                   collapsed ? "justify-center px-0" : "justify-between"
                 }`}
