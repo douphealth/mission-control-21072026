@@ -3,6 +3,7 @@
 
 import type { Website, SEOProfile, SEOIssue, SEOSnapshot, SyncHealth } from "@/lib/db";
 import { ageLabel } from "@/lib/reliability";
+import { isCurrentSEOIssue, snapshotFreshness } from "@/lib/seoEvidence";
 
 export type SiteStatus = "attention" | "healthy" | "unknown";
 
@@ -26,9 +27,7 @@ export function buildSitePulse(input: {
   health?: SyncHealth[];
   limit?: number;
 }): SitePulseRow[] {
-  const issues = (input.seoIssues ?? []).filter(
-    (i) => i.status === "open" || i.status === "in-progress",
-  );
+  const issues = (input.seoIssues ?? []).filter((issue) => isCurrentSEOIssue(issue));
   const rows: SitePulseRow[] = [];
 
   for (const site of input.websites) {
@@ -41,7 +40,8 @@ export function buildSitePulse(input: {
       .filter((s) => s.websiteId === site.id)
       .sort((a, b) => (b.date || "").localeCompare(a.date || ""))[0];
 
-    const hasEvidence = !!snapshot || !!profile?.lastSyncedAt || siteIssues.length > 0;
+    const freshness = snapshotFreshness(snapshot);
+    const hasFreshEvidence = freshness === "fresh";
 
     let status: SiteStatus = "unknown";
     let headline = "Status unknown";
@@ -65,18 +65,20 @@ export function buildSitePulse(input: {
       status = "attention";
       headline = "Sync failing";
       detail = profile.syncError || "The search data connection returned an error.";
-    } else if (profile?.syncStatus === "stale") {
+    } else if (profile?.syncStatus === "stale" || freshness === "stale" || freshness === "expired") {
       status = "unknown";
-      headline = "Data stale";
-      detail = `Last successful sync ${ageLabel(profile.lastSyncedAt)}`;
-    } else if (hasEvidence) {
+      headline = "Evidence stale";
+      detail = snapshot
+        ? `Latest ${snapshot.source.toUpperCase()} observation is ${ageLabel(snapshot.importedAt || snapshot.date)}`
+        : `Last successful sync ${ageLabel(profile?.lastSyncedAt)}`;
+    } else if (hasFreshEvidence) {
       status = "healthy";
-      headline = "Healthy";
-      detail = "No action required.";
+      headline = "No current issue";
+      detail = "Fresh evidence exists and no current verified issue is open.";
     }
 
     const sourceBits: string[] = [];
-    if (snapshot) sourceBits.push(`${snapshot.source.toUpperCase()} · ${snapshot.date}`);
+    if (snapshot) sourceBits.push(`${snapshot.source.toUpperCase()} · ${snapshot.date} · ${freshness}`);
     else if (profile?.lastSyncedAt)
       sourceBits.push(`Search data · ${ageLabel(profile.lastSyncedAt)}`);
     else sourceBits.push("No verified source");

@@ -160,13 +160,12 @@ export default function TodayTimeline({
       <div className="zen-glow-spot -top-16 -right-10" aria-hidden />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
-          <div className="se-label">Day timeline</div>
+          <div className="se-label">Today only</div>
           <h3 className="title-grad mt-1 font-display text-[20px] font-extrabold tracking-tight sm:text-[24px]">
-            Meetings + planned work
+            Calendar + execution plan
           </h3>
           <p className="mt-0.5 text-[11px] text-muted-foreground">
-            {counts.flags > 0 ? `${counts.flags} needing attention · ` : ""}
-            {counts.timed} timed · {counts.untimed} queued
+            {counts.timed} timed · {counts.untimed} planned/urgent
           </p>
         </div>
         <button
@@ -228,11 +227,11 @@ export default function TodayTimeline({
           </div>
         )}
 
-        {counts.flags === 0 && entries.length > 0 && (
+        {entries.length > 0 && (
           <div className="flex items-center gap-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.05] p-4">
             <Flag size={16} className="text-emerald-500" />
             <p className="text-[12px] text-muted-foreground">
-              No exceptions. Deadlines, payments, decisions and syncs are all healthy.
+              Portfolio, SEO and system findings stay out of Today unless you turn them into scheduled work.
             </p>
           </div>
         )}

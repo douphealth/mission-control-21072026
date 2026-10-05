@@ -6,8 +6,6 @@ import {
   type GitHubRepo,
   type Idea,
   type LinkItem,
-  type SEOAction,
-  type SEOIssue,
   type SEOProfile,
   type SyncHealth,
   type WatchTerm,
@@ -369,108 +367,48 @@ async function ensureSeoControlData(websites: Website[]) {
     }
   }
 
-  const byDomain = new Map(websites.map((w) => [domainOf(w.url), w]));
-  const issueSeeds: Array<{ domain: string; issue: Omit<SEOIssue, "id" | "websiteId">; action: Omit<SEOAction, "id" | "websiteId" | "issueId"> }> = [
-    {
-      domain: "gearuptofit.com",
-      issue: {
-        title: "Historical indexation collapse requires URL-level recovery",
-        category: "indexing",
-        severity: "critical",
-        status: "in-progress",
-        observedAt: "2026-07-17",
-        source: "manual",
-        evidence: "Portfolio evidence records a severe indexed-URL collapse. Validate current state in GSC before acting; classify historical URLs by live status, canonical/noindex and retained value.",
-        expectedMechanism: "Restore crawlable canonical 200 URLs or redirect historically valuable URLs to their closest relevant equivalents; remove sitemap/internal-link waste.",
-        rollback: "Keep a redirect/restoration manifest and revert individual routing changes if validation shows loss or mismatch.",
-        validation: "Compare GSC indexed pages, impressions/clicks and priority URL inspection after implementation.",
-        createdAt: now(),
-        updatedAt: now(),
-      },
-      action: {
-        title: "Classify and recover GearUpToFit historical URLs",
-        priority: "critical",
-        status: "in-progress",
-        rationale: "Indexation recovery has higher expected leverage than publishing new URLs.",
-        expectedMechanism: "Recover historical search equity and remove crawl/indexation contradictions.",
-        rollback: "Maintain per-URL before/after route manifest.",
-        validation: "GSC URL Inspection + sitemap coverage + priority query/URL trends.",
-        source: "system",
-        createdAt: now(),
-        updatedAt: now(),
-      },
-    },
-    {
-      domain: "affiliatemarketingforsuccess.com",
-      issue: {
-        title: "Commercial review pages have incomplete monetization coverage",
-        category: "content",
-        severity: "high",
-        status: "open",
-        observedAt: "2026-08-24",
-        source: "manual",
-        evidence: "Portfolio audit identified review URLs without complete tracking/merchant links. Re-verify the current page set before bulk edits.",
-        expectedMechanism: "Improve revenue capture on traffic that already exists without expanding thin content.",
-        rollback: "Retain previous CTA/link markup per URL.",
-        validation: "Affiliate-click event coverage and merchant-link verification on the priority review set.",
-        createdAt: now(),
-        updatedAt: now(),
-      },
-      action: {
-        title: "Repair AMFS priority review monetization",
-        priority: "critical",
-        status: "ready",
-        rationale: "Existing review pages are closer to revenue than new content.",
-        expectedMechanism: "Increase qualified merchant clicks from existing organic demand.",
-        rollback: "Restore previous CTA/link markup.",
-        validation: "GA4 affiliate_click plus tracked merchant link presence.",
-        source: "system",
-        createdAt: now(),
-        updatedAt: now(),
-      },
-    },
-    {
-      domain: "openclaw-skillshub.com",
-      issue: {
-        title: "Canonical deployment ambiguity needs consolidation",
-        category: "canonical",
-        severity: "medium",
-        status: "open",
-        observedAt: today(),
-        source: "manual",
-        evidence: "Portfolio mapping contains the public domain plus deployment variants. Confirm canonical host and remove contradictory signals.",
-        expectedMechanism: "Concentrate crawl/indexation signals on one public host.",
-        rollback: "Retain deployment mapping and revert canonical/redirect changes individually.",
-        validation: "Canonical tags, redirects, sitemap URLs and search-engine inspection agree on one host.",
-        createdAt: now(),
-        updatedAt: now(),
-      },
-      action: {
-        title: "Consolidate OpenClaw Skills Hub canonical signals",
-        priority: "medium",
-        status: "ready",
-        rationale: "Duplicate deployment identities can dilute crawl and indexing signals.",
-        expectedMechanism: "One canonical public URL per resource.",
-        rollback: "Revert host redirects/canonical changes from the route manifest.",
-        validation: "Inspect canonical, redirects and indexed URL set after recrawl.",
-        source: "system",
-        createdAt: now(),
-        updatedAt: now(),
-      },
-    },
-  ];
+  // Historical portfolio audits are useful context, but they are not live facts.
+  // Older builds seeded these records as active issues/actions, which polluted
+  // Today and the Portfolio SEO counts. Retire those exact bootstrap records
+  // without deleting them so the audit context remains available.
+  const legacyIssueTitles = new Set([
+    "Historical indexation collapse requires URL-level recovery",
+    "Commercial review pages have incomplete monetization coverage",
+    "Canonical deployment ambiguity needs consolidation",
+  ]);
+  const legacyActionTitles = new Set([
+    "Classify and recover GearUpToFit historical URLs",
+    "Repair AMFS priority review monetization",
+    "Consolidate OpenClaw Skills Hub canonical signals",
+  ]);
 
-  for (const seed of issueSeeds) {
-    const website = byDomain.get(seed.domain);
-    if (!website) continue;
-    const existing = await db.seoIssues.where("websiteId").equals(website.id).filter((row) => row.title === seed.issue.title).first();
-    if (existing) continue;
-    const issueId = genId();
-    await db.seoIssues.put({ ...seed.issue, id: issueId, websiteId: website.id });
-    markCloudRecordDirty("seoIssues", issueId);
-    const actionId = genId();
-    await db.seoActions.put({ ...seed.action, id: actionId, websiteId: website.id, issueId });
-    markCloudRecordDirty("seoActions", actionId);
+  const legacyIssues = (await db.seoIssues.toArray()).filter(
+    (issue) =>
+      legacyIssueTitles.has(issue.title) &&
+      issue.source === "manual" &&
+      (issue.status === "open" || issue.status === "in-progress"),
+  );
+  for (const issue of legacyIssues) {
+    await db.seoIssues.update(issue.id, {
+      status: "ignored",
+      updatedAt: now(),
+    });
+    markCloudRecordDirty("seoIssues", issue.id);
+  }
+
+  const legacyActions = (await db.seoActions.toArray()).filter(
+    (action) =>
+      legacyActionTitles.has(action.title) &&
+      action.source === "system" &&
+      action.status !== "done" &&
+      action.status !== "cancelled",
+  );
+  for (const action of legacyActions) {
+    await db.seoActions.update(action.id, {
+      status: "cancelled",
+      updatedAt: now(),
+    });
+    markCloudRecordDirty("seoActions", action.id);
   }
 }
 

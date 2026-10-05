@@ -35,6 +35,7 @@ import {
 import { useNavigationStore } from "@/stores/navigationStore";
 import { todayISO } from "@/lib/overdue";
 import { usePlanStore, type AreaFilter } from "@/stores/planStore";
+import { isCurrentSEOIssue } from "@/lib/seoEvidence";
 
 const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
@@ -64,7 +65,7 @@ export default function LifeBusinessControlTower() {
   const activeWebsites = websites.filter((site) => site.status === "active");
   const criticalSites = activeWebsites.filter((site) => site.priority === "critical");
   const deployedBuilds = builds.filter((build) => build.status === "deployed");
-  const openSeoIssues = seoIssues.filter((issue) => issue.status !== "resolved");
+  const openSeoIssues = seoIssues.filter((issue) => isCurrentSEOIssue(issue));
   const majorSeoIssues = openSeoIssues.filter(
     (issue) => issue.severity === "critical" || issue.severity === "high",
   );
@@ -142,7 +143,7 @@ export default function LifeBusinessControlTower() {
       icon: Globe2,
       value: activeWebsites.length,
       suffix: "active",
-      detail: criticalSites.length + " critical · " + majorSeoIssues.length + " major SEO findings",
+      detail: criticalSites.length + " critical · " + majorSeoIssues.length + " current verified SEO findings",
       tone: "info",
       rows: activeWebsites
         .slice()
@@ -155,8 +156,8 @@ export default function LifeBusinessControlTower() {
       title: "SEO / AI visibility",
       icon: Search,
       value: openSeoIssues.length,
-      suffix: "findings",
-      detail: readySeoActions.length + " actions ready or active",
+      suffix: "current",
+      detail: readySeoActions.length + " actions ready or active · stale findings excluded",
       tone: majorSeoIssues.length ? "warning" : "success",
       rows: openSeoIssues
         .slice()
