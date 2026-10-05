@@ -55,6 +55,7 @@ export default function DashboardHome() {
   const ops = useDailyOps();
   const isMobile = useIsMobile();
   const [showInsights, setShowInsights] = useState(false);
+  const [showOverview, setShowOverview] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [showClose, setShowClose] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -245,7 +246,7 @@ export default function DashboardHome() {
             <span>Move faster</span>
             <strong>Signals &amp; workspaces</strong>
           </div>
-          <small>Secondary controls stay below the daily plan.</small>
+          <small>Shortcuts only. Portfolio diagnostics stay out of today.</small>
         </div>
 
         {!ops.isEmpty && (
@@ -317,11 +318,33 @@ export default function DashboardHome() {
         </div>
       </section>
 
-      <div className="ultra-rise-3">
-        <Suspense fallback={<div className="v10-skeleton h-72" />}>
-          <LifeBusinessControlTower />
-        </Suspense>
-      </div>
+      <section className="ultra-rise-4">
+        <button
+          onClick={() => setShowOverview((v) => !v)}
+          className="se-card flex w-full items-center justify-between p-4 text-left transition hover:-translate-y-0.5 sm:p-5"
+          aria-expanded={showOverview}
+        >
+          <span>
+            <span className="block font-display text-[15px] font-extrabold tracking-tight text-foreground">
+              Life &amp; business overview
+            </span>
+            <span className="block text-[11px] text-muted-foreground">
+              Portfolio, finance, websites, apps and systems — open when reviewing, not while executing today.
+            </span>
+          </span>
+          <ChevronDown
+            size={16}
+            className={`text-muted-foreground transition-transform ${showOverview ? "rotate-180" : ""}`}
+          />
+        </button>
+        {showOverview && (
+          <div className="mt-4">
+            <Suspense fallback={<div className="v10-skeleton h-72" />}>
+              <LifeBusinessControlTower />
+            </Suspense>
+          </div>
+        )}
+      </section>
 
       {/* ═══ Everything else — on demand ═══ */}
       {!ops.isEmpty && (
