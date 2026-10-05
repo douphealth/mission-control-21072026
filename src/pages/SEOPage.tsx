@@ -19,6 +19,7 @@ import {
   Layers3,
   ListChecks,
   Plus,
+  RefreshCw,
   Search,
   Settings2,
   Sparkles,
@@ -59,6 +60,13 @@ import {
   issueEvidenceState,
   snapshotFreshness,
 } from "@/lib/seoEvidence";
+import {
+  SearchConsoleSetupError,
+  fetchSearchConsoleMetrics,
+  listSearchConsoleSites,
+  matchSearchConsoleProperty,
+} from "@/lib/googleSearchConsole";
+import { reportSync } from "@/lib/reliability";
 
 const SOURCE_LABELS: Record<SEODataSource, string> = {
   gsc: "Search Console",
@@ -458,9 +466,16 @@ function SiteStatus({
         <Info size={11} /> Needs evidence
       </span>
     );
+  const freshness = snapshotFreshness(latest);
+  if (freshness !== "fresh")
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-1 text-[10px] font-bold text-amber-600 dark:text-amber-300">
+        <AlertTriangle size={11} /> {freshness === "expired" ? "Evidence expired" : "Evidence stale"}
+      </span>
+    );
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-bold text-emerald-500">
-      <CheckCircle2 size={11} /> Evidence ready
+      <CheckCircle2 size={11} /> Fresh evidence
     </span>
   );
 }
@@ -487,6 +502,7 @@ export default function SEOPage() {
   const [actionForm, setActionForm] = useState<ActionForm>(EMPTY_ACTION_FORM);
   const [importOpen, setImportOpen] = useState(false);
   const [importText, setImportText] = useState(EMPTY_IMPORT);
+  const [refreshingGsc, setRefreshingGsc] = useState(false);
 
   const websiteMap = useMemo(
     () => new Map(websites.map((website) => [website.id, website])),
@@ -881,6 +897,126 @@ export default function SEOPage() {
     );
   };
 
+  const refreshSearchConsole = async () => {
+    if (refreshingGsc) return;
+    setRefreshingGsc(true);
+    const startedAt = new Date().toISOString();
+    await reportSync("gsc", {
+      label: "Google Search Console",
+      status: "syncing",
+      detail: "Refreshing first-party search performance evidence.",
+    });
+
+    try {
+      const sites = await listSearchConsoleSites();
+      const scopedSites = websites.filter(
+        (website) => scope === "all" || website.id === scope,
+      );
+
+      let refreshed = 0;
+      let unmatched = 0;
+
+      for (const website of scopedSites) {
+        const profile = profileMap.get(website.id);
+        const property =
+          profile?.gscProperty?.trim() ||
+          matchSearchConsoleProperty(website.url, sites);
+
+        if (!property) {
+          unmatched += 1;
+          continue;
+        }
+
+        const result = await fetchSearchConsoleMetrics(property);
+        const existingSnapshot = snapshots.find(
+          (snapshot) =>
+            snapshot.websiteId === website.id &&
+            snapshot.source === "gsc" &&
+            snapshot.date === result.endDate,
+        );
+        const payload = {
+          websiteId: website.id,
+          date: result.endDate,
+          source: "gsc" as const,
+          periodDays: 28,
+          clicks: result.metrics.clicks,
+          impressions: result.metrics.impressions,
+          ctr: result.metrics.ctr,
+          avgPosition: result.metrics.avgPosition,
+          sourceRef: property,
+          notes: `First-party Search Console query: ${result.startDate} to ${result.endDate}. Imported directly from Google.`,
+          importedAt: new Date().toISOString(),
+        };
+
+        if (existingSnapshot) {
+          await updateItem<SEOSnapshot>("seoSnapshots", existingSnapshot.id, payload);
+        } else {
+          await addItem<SEOSnapshot>("seoSnapshots", payload);
+        }
+
+        const nowIso = new Date().toISOString();
+        if (profile) {
+          await updateItem<SEOProfile>("seoProfiles", profile.id, {
+            gscProperty: property,
+            syncStatus: "connected",
+            lastSyncedAt: nowIso,
+            syncError: undefined,
+            updatedAt: nowIso,
+          });
+        } else {
+          await addItem<SEOProfile>("seoProfiles", {
+            websiteId: website.id,
+            priority: website.priority || "medium",
+            gscProperty: property,
+            bingSiteUrl: website.url,
+            targetLanguages: ["en"],
+            trackedQueries: [],
+            syncStatus: "connected",
+            lastSyncedAt: nowIso,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          });
+        }
+        refreshed += 1;
+      }
+
+      await reportSync("gsc", {
+        label: "Google Search Console",
+        status: "ok",
+        detail: `${refreshed} portfolio site${refreshed === 1 ? "" : "s"} refreshed from first-party Search Console data.`,
+        pending: unmatched,
+      });
+
+      toast.success("Search Console evidence refreshed", {
+        description:
+          refreshed > 0
+            ? `${refreshed} site${refreshed === 1 ? "" : "s"} updated${unmatched ? ` · ${unmatched} unmatched` : ""}.`
+            : "No portfolio site matched a Search Console property. Configure the property or verify access.",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Search Console refresh failed.";
+      await reportSync("gsc", {
+        label: "Google Search Console",
+        status: "error",
+        error: message,
+        detail: `Refresh attempt ${startedAt}`,
+      });
+      if (error instanceof SearchConsoleSetupError) {
+        toast.error("Search Console needs Google-side setup", {
+          description: error.message,
+          action: {
+            label: "Enable API",
+            onClick: () => window.open(error.setupUrl, "_blank", "noopener,noreferrer"),
+          },
+        });
+      } else {
+        toast.error("Search Console refresh failed", { description: message });
+      }
+    } finally {
+      setRefreshingGsc(false);
+    }
+  };
+
   const tabItems = [
     { id: "overview" as const, label: "Portfolio overview", icon: BarChart3 },
     { id: "changes" as const, label: "Exact changes", icon: History, count: scopedChanges.length },
@@ -924,10 +1060,18 @@ export default function SEOPage() {
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <button
-                onClick={() => setImportOpen(true)}
-                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-xs font-bold text-slate-900 shadow-lg transition hover:scale-[1.02]"
+                onClick={() => void refreshSearchConsole()}
+                disabled={refreshingGsc}
+                className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-3 text-xs font-bold text-slate-900 shadow-lg transition hover:scale-[1.02] disabled:opacity-60"
               >
-                <Upload size={14} /> Import evidence
+                <RefreshCw size={14} className={refreshingGsc ? "animate-spin" : ""} />
+                {refreshingGsc ? "Refreshing…" : "Refresh Search Console"}
+              </button>
+              <button
+                onClick={() => setImportOpen(true)}
+                className="inline-flex items-center gap-2 rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-xs font-semibold text-white transition hover:bg-white/15"
+              >
+                <Upload size={14} /> Import other evidence
               </button>
               <button
                 onClick={() => openNewAction()}
