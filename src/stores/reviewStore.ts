@@ -1,6 +1,7 @@
 // Review ritual state — last weekly review + last daily shutdown.
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { resilientWebStorage } from "@/lib/resilientStorage";
 
 interface ReviewState {
   lastWeeklyReview: string | null; // YYYY-MM-DD
@@ -17,6 +18,9 @@ export const useReviewStore = create<ReviewState>()(
       markWeeklyReview: (day) => set({ lastWeeklyReview: day }),
       markShutdown: (day) => set({ lastShutdown: day }),
     }),
-    { name: "mc-review-v1" },
+    {
+      name: "mc-review-v1",
+      storage: createJSONStorage(() => resilientWebStorage),
+    },
   ),
 );
