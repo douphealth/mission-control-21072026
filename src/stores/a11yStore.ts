@@ -1,6 +1,7 @@
 // Accessibility & inclusivity preferences — applied globally on <html>.
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { resilientWebStorage } from "@/lib/resilientStorage";
 
 export type MotionPref = "system" | "reduced" | "full";
 
@@ -66,6 +67,7 @@ export const useA11yStore = create<A11yState>()(
     }),
     {
       name: "mc-a11y-v1",
+      storage: createJSONStorage(() => resilientWebStorage),
       partialize: (s) => ({
         highContrast: s.highContrast,
         fontScale: s.fontScale,
