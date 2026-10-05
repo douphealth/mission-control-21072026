@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCredentialBatch } from "@/lib/credentialBulk";
+import { detectApiKeyValue, parseCredentialBatch } from "@/lib/credentialBulk";
 
 describe("credential bulk parser", () => {
   it("parses spreadsheet TSV with common header aliases", () => {
@@ -64,5 +64,62 @@ describe("credential bulk parser", () => {
     const row = "GitHub | GitHub | github.com | alex | pass | token | Development";
     const result = parseCredentialBatch(`${row}\n${row}`);
     expect(result.items).toHaveLength(1);
+  });
+});
+
+
+describe("API key intelligence", () => {
+  it("recognizes provider-specific API keys with high confidence", () => {
+    expect(detectApiKeyValue("ghp_abcdefghijklmnopqrstuvwxyz0123456789", "GitHub")).toMatchObject({
+      isApiKey: true,
+      confidence: "high",
+      provider: "GitHub",
+      category: "Development",
+    });
+    expect(detectApiKeyValue("sk_live_1234567890abcdefABCDEF", "Stripe")).toMatchObject({
+      isApiKey: true,
+      confidence: "high",
+      provider: "Stripe",
+      category: "Payments",
+    });
+    expect(detectApiKeyValue("AIzaSyA123456789012345678901234567890123", "Google API")).toMatchObject({
+      isApiKey: true,
+      confidence: "high",
+      provider: "Google",
+    });
+  });
+
+  it("moves a provider API key out of the password slot automatically", () => {
+    const result = parseCredentialBatch(
+      "OpenAI | OpenAI | https://platform.openai.com | alex@example.com | sk-proj-abcdefghijklmnopqrstuvwxyz012345 | | AI Tools",
+    );
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].password).toBe("");
+    expect(result.items[0].apiKey).toContain("sk-proj-");
+    expect(result.items[0].service).toBe("OpenAI");
+  });
+
+  it("understands loose provider plus API key lines", () => {
+    const result = parseCredentialBatch(
+      [
+        "GitHub ghp_abcdefghijklmnopqrstuvwxyz0123456789",
+        "Stripe sk_live_1234567890abcdefABCDEF",
+      ].join("\n"),
+    );
+    expect(result.items).toHaveLength(2);
+    expect(result.items[0].apiKey).toContain("ghp_");
+    expect(result.items[1].apiKey).toContain("sk_live_");
+  });
+
+  it("understands unknown token-like values when an API label is explicit", () => {
+    const result = parseCredentialBatch(
+      [
+        "Label: Internal API",
+        "API token: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      ].join("\n"),
+    );
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].apiKey).toBe("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+    expect(result.items[0].password).toBe("");
   });
 });
