@@ -6,7 +6,7 @@
 import { db } from '@/lib/db';
 import { GDRIVE_APPDATA_SCOPE, GOOGLE_SCOPES, clearGoogleToken, fetchGoogleEmail,
   getGoogleClientId, googleTokenHasScopes, readGoogleToken, requestGoogleToken } from '@/lib/googleDirectAuth';
-import { compareRemote, mergeRemoteRecords, parseBackup, revisionOf,
+import { compareRemote, mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
   type RemoteBackup, type RemoteRecords } from '@/lib/cloudSyncProtocol';
 
 export type CloudStatus = 'signed-out' | 'connecting' | 'syncing' | 'synced' | 'offline' | 'error';
@@ -64,6 +64,11 @@ let verifiedToken = '';
 let tabWriter = '';
 let logicalTime = 0;
 let localSeedChecked = false;
+let mutationJournalInstalled = false;
+let suppressMutationJournal = 0;
+let firstQueuedAt = 0;
+const MAX_PUSH_LATENCY_MS = 4_000;
+const JOURNAL_EXCLUDED = new Set(['auditLog', 'syncHealth']);
 const remoteCache = new Map<string, { modifiedTime: string; backup: RemoteBackup }>();
 function key(collection: string, id: string) { return `${collection}::${id}`; }
 function readObject<T>(name: string, fallback: T): T {
@@ -120,6 +125,39 @@ function newChange(operation: DirtyOperation): DirtyRecord {
 }
 function sameChange(a?: DirtyRecord, b?: DirtyRecord) {
   return !!a && !!b && (a.revision || a.changedAt) === (b.revision || b.changedAt);
+}
+
+function journalCommittedMutation(collection: string, id: string, operation: DirtyOperation) {
+  if (suppressMutationJournal || JOURNAL_EXCLUDED.has(collection) || !id) return;
+  markCloudRecordDirty(collection, id, operation);
+  queueCloudPush(650);
+}
+
+function installMutationJournal() {
+  if (mutationJournalInstalled || typeof window === 'undefined') return;
+  mutationJournalInstalled = true;
+
+  for (const [collection, table] of Object.entries(COLLECTIONS)) {
+    if (JOURNAL_EXCLUDED.has(collection)) continue;
+
+    table.hook('creating', function (this: any, primKey: unknown, obj: any) {
+      if (suppressMutationJournal) return;
+      const id = String(primKey ?? obj?.id ?? '');
+      this.onsuccess = () => journalCommittedMutation(collection, id, 'put');
+    });
+
+    table.hook('updating', function (this: any, _mods: unknown, primKey: unknown) {
+      if (suppressMutationJournal) return;
+      const id = String(primKey ?? '');
+      this.onsuccess = () => journalCommittedMutation(collection, id, 'put');
+    });
+
+    table.hook('deleting', function (this: any, primKey: unknown) {
+      if (suppressMutationJournal) return;
+      const id = String(primKey ?? '');
+      this.onsuccess = () => journalCommittedMutation(collection, id, 'delete');
+    });
+  }
 }
 function validRecord(collection: string, data: unknown, id: string): data is Record<string, unknown> {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
@@ -256,20 +294,43 @@ async function syncCycle(): Promise<SyncResult> {
         continue;
       }
 
-      const candidate = {
+      const remoteRecord = merged[recordKey];
+      const originalCandidate = {
         data: data || null,
         deleted: change.operation === 'delete',
         updatedAt: change.changedAt,
         revision: change.revision,
       };
-      if (!merged[recordKey] || compareRemote(candidate, merged[recordKey]) > 0) merged[recordKey] = candidate;
-      else if (data && JSON.stringify(data) !== JSON.stringify(merged[recordKey].data)) {
+      const differsFromRemote =
+        !!remoteRecord &&
+        (remoteRecord.deleted !== originalCandidate.deleted ||
+          JSON.stringify(remoteRecord.data) !== JSON.stringify(originalCandidate.data));
+
+      if (differsFromRemote) {
         const conflictId = `sync-conflict-${change.revision || `${collection}-${id}-${change.changedAt}`}`;
-        const conflict = { id: conflictId, at: new Date().toISOString(), action: 'sync', collection,
-          recordId: id, label: 'Concurrent edit preserved before applying the newer remote version', before: data };
+        const conflict = {
+          id: conflictId,
+          at: new Date().toISOString(),
+          action: 'sync',
+          collection,
+          recordId: id,
+          label: 'Remote version preserved before applying pending local edit',
+          before: remoteRecord?.data ?? null,
+        };
         await db.auditLog.put(conflict as any);
-        merged[key('auditLog', conflictId)] = { data: conflict, deleted: false, updatedAt: change.changedAt, revision: conflictId };
+        merged[key('auditLog', conflictId)] = {
+          data: conflict,
+          deleted: false,
+          updatedAt: change.changedAt,
+          revision: conflictId,
+        };
       }
+
+      // A pending local mutation is explicit user intent. Rebase it above the
+      // newest remote clock instead of letting device clock skew silently erase
+      // the change. Other devices will then pull this exact confirmed revision.
+      const candidate = rebaseLocalPending(originalCandidate, remoteRecord);
+      merged[recordKey] = candidate;
     }
     const outboundKeys = Object.keys(captured).filter(
       recordKey => !repairedQueueEntries.has(recordKey),
@@ -294,23 +355,33 @@ async function syncCycle(): Promise<SyncResult> {
     if (epoch !== currentEpoch || readGoogleToken()?.access_token !== token.access_token) throw new Error('Account changed before applying sync.');
     const receipts = readObject<Record<string, string>>(RECEIPTS_KEY, {});
     let restored = 0;
-    await db.transaction('rw', Object.values(COLLECTIONS), async () => {
-      for (const [recordKey, record] of Object.entries(merged)) {
-        const [collection, id] = recordKey.split('::');
-        const table = COLLECTIONS[collection];
-        if (!table || !id) continue;
-        const dirty = readDirty()[recordKey];
-        if (!dirty && receipts[recordKey] === revisionOf(record)) continue;
-        if (dirty && !sameChange(dirty, captured[recordKey])) continue;
-        if (epoch !== currentEpoch) throw new Error('Sync cancelled.');
-        if (record.deleted) await table.delete(id);
-        else if (validRecord(collection, record.data, id)) {
-          const local = await table.get(id);
-          if (JSON.stringify(local) !== JSON.stringify(record.data)) { await table.put(record.data); restored++; }
-        } else throw new Error(`Invalid ${collection} record. No local records were overwritten.`);
-        receipts[recordKey] = revisionOf(record);
-      }
-    });
+    suppressMutationJournal++;
+    try {
+      await db.transaction('rw', Object.values(COLLECTIONS), async () => {
+        for (const [recordKey, record] of Object.entries(merged)) {
+          const [collection, id] = recordKey.split('::');
+          const table = COLLECTIONS[collection];
+          if (!table || !id) continue;
+          const dirty = readDirty()[recordKey];
+          if (!dirty && receipts[recordKey] === revisionOf(record)) continue;
+          if (dirty && !sameChange(dirty, captured[recordKey])) continue;
+          if (epoch !== currentEpoch) throw new Error('Sync cancelled.');
+          if (record.deleted) await table.delete(id);
+          else if (validRecord(collection, record.data, id)) {
+            const local = await table.get(id);
+            if (JSON.stringify(local) !== JSON.stringify(record.data)) {
+              await table.put(record.data);
+              restored++;
+            }
+          } else {
+            throw new Error(`Invalid ${collection} record. No local records were overwritten.`);
+          }
+          receipts[recordKey] = revisionOf(record);
+        }
+      });
+    } finally {
+      suppressMutationJournal = Math.max(0, suppressMutationJournal - 1);
+    }
     const current = readDirty();
     for (const [recordKey, change] of Object.entries(captured)) {
       if (
@@ -381,13 +452,28 @@ export function getPendingCloudCount() { return Object.keys(readDirty()).length;
 export function onCloudStatus(callback: (next: CloudStatus, error: string | null) => void) {
   listeners.add(callback); callback(status, lastError); return () => { listeners.delete(callback); };
 }
-export function queueCloudPush(delay = 1200) {
-  if (!hasSession()) { setStatus('signed-out', 'Saved on this device. Connect Google to sync with your other device.'); return; }
+export function queueCloudPush(delay = 900) {
+  if (!hasSession()) {
+    setStatus('signed-out', 'Saved on this device. Connect Google to sync with your other device.');
+    return;
+  }
+
+  const now = Date.now();
+  if (!firstQueuedAt) firstQueuedAt = now;
+  const remaining = Math.max(0, MAX_PUSH_LATENCY_MS - (now - firstQueuedAt));
+  const wait = Math.min(Math.max(0, delay), remaining);
+
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => { pushTimer = null; void synchronize(); }, delay);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    firstQueuedAt = 0;
+    void synchronize();
+  }, wait);
 }
 export async function flushCloudChanges() {
-  if (pushTimer) clearTimeout(pushTimer); pushTimer = null;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = null;
+  firstQueuedAt = 0;
   let result = await synchronize();
   if (result.ok && getPendingCloudCount()) result = await synchronize();
   return result;
@@ -398,14 +484,29 @@ export const forceCloudSync = () => flushCloudChanges();
 function installRefreshListeners() {
   if (started || typeof window === 'undefined') return;
   started = true;
-  const refresh = () => { if (document.visibilityState !== 'hidden') void synchronize(); };
+
+  const refresh = () => {
+    if (document.visibilityState !== 'hidden') void synchronize();
+  };
+  const flushBeforeBackground = () => {
+    if (getPendingCloudCount() > 0 && hasSession() && navigator.onLine) {
+      void flushCloudChanges();
+    }
+  };
+
   window.addEventListener('focus', refresh);
   window.addEventListener('online', refresh);
-  document.addEventListener('visibilitychange', refresh);
-  window.addEventListener('storage', event => {
-    if ([DIRTY_KEY, USER_EMAIL_KEY, 'mc_google_access_token_v1'].includes(event.key || '')) queueCloudPush(500);
+  window.addEventListener('pagehide', flushBeforeBackground);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushBeforeBackground();
+    else refresh();
   });
-  setInterval(refresh, 30_000);
+  window.addEventListener('storage', event => {
+    if ([DIRTY_KEY, USER_EMAIL_KEY, 'mc_google_access_token_v1'].includes(event.key || '')) {
+      queueCloudPush(250);
+    }
+  });
+  setInterval(refresh, 15_000);
 }
 export async function signInToCloud(): Promise<void> {
   try {
@@ -421,14 +522,22 @@ export async function signInToCloud(): Promise<void> {
 }
 export async function signOutOfCloud() {
   epoch++; verifiedToken = ''; remoteCache.clear();
-  if (pushTimer) clearTimeout(pushTimer); pushTimer = null;
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = null;
+  firstQueuedAt = 0;
   clearGoogleToken(); userEmail = null; setStatus('signed-out');
 }
 export async function requestEmailCode(_email: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function verifyEmailCode(_email: string, _code: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function verifyMagicLink(_url: string, _email?: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function startCloudSync(_force = false): Promise<{ signedIn: boolean; restored: number }> {
+  installMutationJournal();
   installRefreshListeners();
   const result = await synchronize();
   return { signedIn: hasSession() && result.ok, restored: result.restored };
+}
+
+
+if (typeof window !== 'undefined') {
+  installMutationJournal();
 }
