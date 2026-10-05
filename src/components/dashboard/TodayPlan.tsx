@@ -108,7 +108,7 @@ export default function TodayPlan({
   };
 
   return (
-    <section className="mc21-plan-card se-card ultra-rise-3 p-4 sm:p-5" aria-labelledby="today-heading">
+    <section className="mc21-plan-card mc38-plan-card se-card ultra-rise-3 p-4 sm:p-5" aria-labelledby="today-heading">
       {/* ── Guided plan header ── */}
       <div className="mc21-plan-head">
         <div className="min-w-0">
