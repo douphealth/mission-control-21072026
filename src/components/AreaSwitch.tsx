@@ -28,7 +28,7 @@ export default function AreaSwitch({
       role="radiogroup"
       aria-label="Workspace view"
       title="View filter only — Home and Business are not privacy boundaries"
-      className={\`mc34-mode-switch inline-flex items-center rounded-2xl border border-border/60 bg-secondary/45 p-1 \${className}\`}
+      className={`mc34-mode-switch inline-flex items-center rounded-2xl border border-border/60 bg-secondary/45 p-1 ${className}`}
     >
       {OPTIONS.map((option) => {
         const Icon = option.icon;
@@ -38,11 +38,11 @@ export default function AreaSwitch({
             role="radio"
             aria-checked={area === option.id}
             onClick={() => setArea(option.id)}
-            className={\`mc34-mode-option inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl px-2.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:px-3 \${
+            className={`mc34-mode-option inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl px-2.5 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 sm:px-3 ${
               area === option.id
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-background/55 hover:text-foreground"
-            }\`}
+            }`}
           >
             <Icon size={13} strokeWidth={2} />
             <span>{compact ? option.compact : option.label}</span>
