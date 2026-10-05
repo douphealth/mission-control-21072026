@@ -347,10 +347,16 @@ export default function DashboardHome() {
         >
           <span>
             <span className="block font-display text-[15px] font-extrabold tracking-tight text-foreground">
-              Life &amp; business overview
+              {ops.area === "personal"
+                ? "Home overview"
+                : ops.area === "work"
+                  ? "Business overview"
+                  : "Life & business overview"}
             </span>
             <span className="block text-[11px] text-muted-foreground">
-              Portfolio, finance, websites, apps and systems — open when reviewing, not while executing today.
+              {ops.area === "personal"
+                ? "Household, habits, reminders, notes and personal finance — open only when you want the bigger picture."
+                : "Portfolio, finance, websites, apps and systems — open when reviewing, not while executing today."}
             </span>
           </span>
           <ChevronDown
