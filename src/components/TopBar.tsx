@@ -3,6 +3,7 @@ import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { todayISO } from "@/lib/overdue";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
+import AreaSwitch from "@/components/AreaSwitch";
 import { Search, Bell, Plus, Menu, Download, Mail, History, Moon, Sun } from "lucide-react";
 import { forwardRef, lazy, Suspense, useState, useEffect } from "react";
 
@@ -149,6 +150,10 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
             </kbd>
           </div>
         </button>
+
+        <div className="hidden xl:block">
+          <AreaSwitch />
+        </div>
 
         <div className="flex items-center gap-1 sm:gap-1.5 ml-auto">
           {/* Mobile day/night — sidebar is hidden below lg, so this control must live in the top bar. */}
