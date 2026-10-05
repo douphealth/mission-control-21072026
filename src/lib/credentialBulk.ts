@@ -166,7 +166,7 @@ function detectDelimiter(line: string) {
 
 function parseDelimited(text: string): CredentialBatchParseResult | null {
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
-  if (lines.length < 2) return null;
+  if (lines.length < 1) return null;
 
   const delimiter = detectDelimiter(lines[0]);
   if (!delimiter) return null;
@@ -176,7 +176,7 @@ function parseDelimited(text: string): CredentialBatchParseResult | null {
   const headerHits = mappedHeaders.filter(Boolean).length;
 
   // Header-based CSV/TSV/spreadsheet paste.
-  if (headerHits >= 2) {
+  if (headerHits >= 2 && lines.length > 1) {
     const items: CredentialDraft[] = [];
     const errors: string[] = [];
     for (let i = 1; i < lines.length; i++) {
