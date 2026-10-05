@@ -1,5 +1,6 @@
 import { db, type Task } from "@/lib/db";
 import { addDaysLocal, daysOverdue, PRIORITY_RANK, todayISO } from "@/lib/overdue";
+import { isCurrentSEOIssue } from "@/lib/seoEvidence";
 
 export type DigestSeverity = "high" | "medium" | "low";
 
@@ -236,8 +237,10 @@ export async function buildExecutiveDigestSnapshot(): Promise<ExecutiveDigestSna
       }
     });
 
-  seoIssues
-    .filter((issue) => issue.status === "open" || issue.status === "in-progress")
+  const currentSeoIssues = seoIssues.filter((issue) => isCurrentSEOIssue(issue));
+  const currentSeoIssueIds = new Set(currentSeoIssues.map((issue) => issue.id));
+
+  currentSeoIssues
     .forEach((issue) =>
       addIssue({
         label: `SEO · ${issue.title}`,
@@ -259,6 +262,7 @@ export async function buildExecutiveDigestSnapshot(): Promise<ExecutiveDigestSna
     .filter(
       (action) =>
         !["done", "cancelled"].includes(action.status) &&
+        (!action.issueId || currentSeoIssueIds.has(action.issueId)) &&
         (action.priority === "critical" ||
           action.priority === "high" ||
           (!!action.dueDate && action.dueDate <= weekEnd)),
