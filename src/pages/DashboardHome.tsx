@@ -177,7 +177,9 @@ export default function DashboardHome() {
       <div className="mc-home-toolbar ultra-fade">
         <div className="flex min-w-0 items-center gap-2">
           <span className="mc-home-toolbar-label">Today</span>
-          <AreaSwitch />
+          <div className="xl:hidden">
+            <AreaSwitch compact />
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
