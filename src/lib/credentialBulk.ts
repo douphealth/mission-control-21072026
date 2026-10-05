@@ -10,32 +10,61 @@ export interface CredentialBatchParseResult {
   format: "hosting-dump" | "json" | "delimited" | "key-value" | "lines" | "empty";
 }
 
+export interface ApiKeyDetection {
+  isApiKey: boolean;
+  confidence: "high" | "medium" | "low";
+  provider?: string;
+  category?: string;
+  reason?: string;
+}
+
 const DEFAULT_CATEGORY = "General";
 
-const HEADER_ALIASES: Record<string, keyof CredentialDraft | "tags"> = {
+type DraftField = keyof CredentialDraft | "tags";
+
+const HEADER_ALIASES: Record<string, DraftField> = {
   label: "label",
   name: "label",
   account: "label",
+  accountname: "label",
   title: "label",
   service: "service",
   provider: "service",
+  platform: "service",
+  product: "service",
   site: "service",
   url: "url",
   loginurl: "url",
   login: "url",
   website: "url",
+  dashboard: "url",
   username: "username",
   user: "username",
+  userid: "username",
   email: "username",
   accountemail: "username",
+  loginemail: "username",
   password: "password",
   pass: "password",
   pwd: "password",
+  passwd: "password",
   apikey: "apiKey",
   api: "apiKey",
-  token: "apiKey",
   apitoken: "apiKey",
+  token: "apiKey",
+  accesstoken: "apiKey",
+  authtoken: "apiKey",
+  bearertoken: "apiKey",
+  personaltoken: "apiKey",
+  personalaccesstoken: "apiKey",
+  pat: "apiKey",
   secret: "apiKey",
+  secretkey: "apiKey",
+  apisecret: "apiKey",
+  clientsecret: "apiKey",
+  privatetoken: "apiKey",
+  servicerolekey: "apiKey",
+  anonkey: "apiKey",
   category: "category",
   group: "category",
   notes: "notes",
@@ -43,8 +72,129 @@ const HEADER_ALIASES: Record<string, keyof CredentialDraft | "tags"> = {
   tags: "tags",
 };
 
+const API_LABEL_RE =
+  /\b(api\s*(?:key|token|secret)|access\s*token|auth\s*token|bearer\s*token|personal\s*access\s*token|\bpat\b|client\s*secret|secret\s*key|private\s*token|service\s*role\s*key|anon\s*key)\b/i;
+
+type ProviderRule = {
+  provider: string;
+  category: string;
+  pattern: RegExp;
+  reason: string;
+};
+
+const PROVIDER_RULES: ProviderRule[] = [
+  {
+    provider: "OpenAI",
+    category: "AI Tools",
+    pattern: /^sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{16,}$/,
+    reason: "OpenAI-style key prefix",
+  },
+  {
+    provider: "Anthropic",
+    category: "AI Tools",
+    pattern: /^sk-ant-[A-Za-z0-9_-]{16,}$/,
+    reason: "Anthropic-style key prefix",
+  },
+  {
+    provider: "Stripe",
+    category: "Payments",
+    pattern: /^(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{12,}$/,
+    reason: "Stripe secret/restricted key prefix",
+  },
+  {
+    provider: "GitHub",
+    category: "Development",
+    pattern: /^(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})$/,
+    reason: "GitHub token prefix",
+  },
+  {
+    provider: "Google",
+    category: "Development",
+    pattern: /^AIza[0-9A-Za-z_-]{20,}$/,
+    reason: "Google API key prefix",
+  },
+  {
+    provider: "Slack",
+    category: "Development",
+    pattern: /^xox[baprs]-[A-Za-z0-9-]{10,}$/,
+    reason: "Slack token prefix",
+  },
+  {
+    provider: "Hugging Face",
+    category: "AI Tools",
+    pattern: /^hf_[A-Za-z0-9]{20,}$/,
+    reason: "Hugging Face token prefix",
+  },
+  {
+    provider: "Groq",
+    category: "AI Tools",
+    pattern: /^gsk_[A-Za-z0-9]{20,}$/,
+    reason: "Groq key prefix",
+  },
+  {
+    provider: "Perplexity",
+    category: "AI Tools",
+    pattern: /^pplx-[A-Za-z0-9_-]{20,}$/,
+    reason: "Perplexity key prefix",
+  },
+  {
+    provider: "Resend",
+    category: "Email",
+    pattern: /^re_[A-Za-z0-9_-]{16,}$/,
+    reason: "Resend key prefix",
+  },
+  {
+    provider: "SendGrid",
+    category: "Email",
+    pattern: /^SG\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/,
+    reason: "SendGrid key format",
+  },
+  {
+    provider: "Mailgun",
+    category: "Email",
+    pattern: /^key-[A-Za-z0-9]{20,}$/,
+    reason: "Mailgun key prefix",
+  },
+  {
+    provider: "Shopify",
+    category: "Development",
+    pattern: /^shp(?:at|ss|ca|pa)_[A-Za-z0-9]{20,}$/,
+    reason: "Shopify token prefix",
+  },
+];
+
+const PROVIDER_HINTS: Array<{
+  pattern: RegExp;
+  provider: string;
+  category: string;
+}> = [
+  { pattern: /openai|chatgpt/i, provider: "OpenAI", category: "AI Tools" },
+  { pattern: /anthropic|claude/i, provider: "Anthropic", category: "AI Tools" },
+  { pattern: /groq/i, provider: "Groq", category: "AI Tools" },
+  { pattern: /perplexity/i, provider: "Perplexity", category: "AI Tools" },
+  { pattern: /hugging\s*face|huggingface/i, provider: "Hugging Face", category: "AI Tools" },
+  { pattern: /stripe/i, provider: "Stripe", category: "Payments" },
+  { pattern: /github/i, provider: "GitHub", category: "Development" },
+  { pattern: /cloudflare/i, provider: "Cloudflare", category: "Infrastructure" },
+  { pattern: /supabase/i, provider: "Supabase", category: "Development" },
+  { pattern: /vercel/i, provider: "Vercel", category: "Development" },
+  { pattern: /google|gemini/i, provider: "Google", category: "Development" },
+  { pattern: /slack/i, provider: "Slack", category: "Development" },
+  { pattern: /resend/i, provider: "Resend", category: "Email" },
+  { pattern: /sendgrid/i, provider: "SendGrid", category: "Email" },
+  { pattern: /mailgun/i, provider: "Mailgun", category: "Email" },
+  { pattern: /shopify/i, provider: "Shopify", category: "Development" },
+];
+
 function cleanHeader(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function fieldForLabel(label: string): DraftField | null {
+  const direct = HEADER_ALIASES[cleanHeader(label)];
+  if (direct) return direct;
+  if (API_LABEL_RE.test(label)) return "apiKey";
+  return null;
 }
 
 function normalizeUrl(value: string) {
@@ -73,16 +223,138 @@ function normalizeTags(value: unknown): string[] | undefined {
   return tags.length ? Array.from(new Set(tags)).slice(0, 20) : undefined;
 }
 
+function providerHint(text: string) {
+  return PROVIDER_HINTS.find((hint) => hint.pattern.test(text));
+}
+
+function looksLikeOpaqueToken(value: string) {
+  const trimmed = value.trim();
+  if (trimmed.length < 24 || /\s/.test(trimmed)) return false;
+  if (/^(?:https?:\/\/|www\.)/i.test(trimmed)) return false;
+  if (/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmed)) return false;
+  return /^[A-Za-z0-9_\-./+=:]+$/.test(trimmed);
+}
+
+export function detectApiKeyValue(
+  value: string,
+  context = "",
+  label = "",
+): ApiKeyDetection {
+  const trimmed = value.trim();
+  if (!trimmed) return { isApiKey: false, confidence: "low" };
+
+  for (const rule of PROVIDER_RULES) {
+    if (rule.pattern.test(trimmed)) {
+      return {
+        isApiKey: true,
+        confidence: "high",
+        provider: rule.provider,
+        category: rule.category,
+        reason: rule.reason,
+      };
+    }
+  }
+
+  const hint = providerHint(`${context} ${label}`);
+  if (API_LABEL_RE.test(label) && trimmed.length >= 8) {
+    return {
+      isApiKey: true,
+      confidence: "high",
+      provider: hint?.provider,
+      category: hint?.category,
+      reason: "Field label identifies an API/token secret",
+    };
+  }
+
+  if (
+    hint &&
+    looksLikeOpaqueToken(trimmed) &&
+    /api|token|secret|key|credential/i.test(`${context} ${label}`)
+  ) {
+    return {
+      isApiKey: true,
+      confidence: "medium",
+      provider: hint.provider,
+      category: hint.category,
+      reason: "Provider context plus token-like value",
+    };
+  }
+
+  if (
+    /^eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/.test(trimmed) &&
+    /supabase|jwt|token|service\s*role|anon/i.test(`${context} ${label}`)
+  ) {
+    return {
+      isApiKey: true,
+      confidence: "medium",
+      provider: hint?.provider || "Supabase",
+      category: hint?.category || "Development",
+      reason: "JWT token with API/service context",
+    };
+  }
+
+  return { isApiKey: false, confidence: "low" };
+}
+
+function normalizeIncomingObject(value: Record<string, unknown>) {
+  const out: Record<string, unknown> = {};
+  for (const [key, raw] of Object.entries(value)) {
+    const field = fieldForLabel(key);
+    if (!field) continue;
+    if (field === "tags") out.tags = normalizeTags(raw);
+    else out[field] = raw;
+  }
+  return out as Partial<CredentialDraft>;
+}
+
 function makeDraft(value: Partial<CredentialDraft>, fallbackLabel = ""): CredentialDraft | null {
-  const label = String(value.label || fallbackLabel).trim();
-  const service = String(value.service || "").trim();
+  let label = String(value.label || fallbackLabel).trim();
+  let service = String(value.service || "").trim();
   const username = String(value.username || "").trim();
   const url = normalizeUrl(String(value.url || ""));
-  const password = String(value.password || "");
-  const apiKey = String(value.apiKey || "");
+  let password = String(value.password || "");
+  let apiKey = String(value.apiKey || "");
   const notes = String(value.notes || "").trim();
-  const category = normalizeCategory(value.category);
-  const tags = normalizeTags(value.tags);
+  let category = normalizeCategory(value.category);
+  let tags = normalizeTags(value.tags) || [];
+
+  const context = [label, service, url, notes].filter(Boolean).join(" ");
+  let detection = detectApiKeyValue(apiKey, context, "API key");
+  if (!apiKey && password) {
+    const passwordDetection = detectApiKeyValue(password, context, "password");
+    if (passwordDetection.isApiKey && passwordDetection.confidence === "high") {
+      apiKey = password;
+      password = "";
+      detection = passwordDetection;
+    }
+  }
+
+  if (apiKey) {
+    const explicit = detectApiKeyValue(apiKey, context, "API key");
+    if (explicit.isApiKey) detection = explicit;
+  }
+
+  if (detection.isApiKey) {
+    if (!service && detection.provider) service = detection.provider;
+    if (!label && detection.provider) label = detection.provider;
+    if (
+      category === DEFAULT_CATEGORY &&
+      detection.category
+    ) {
+      category = detection.category;
+    }
+    tags = Array.from(
+      new Set([
+        ...tags,
+        "api-key",
+        ...(detection.provider ? [detection.provider.toLowerCase().replace(/\s+/g, "-")] : []),
+      ]),
+    );
+  }
+
+  const hinted = providerHint(`${label} ${service} ${url}`);
+  if (!service && hinted) service = hinted.provider;
+  if (category === DEFAULT_CATEGORY && hinted) category = hinted.category;
 
   const resolvedLabel =
     label ||
@@ -102,7 +374,7 @@ function makeDraft(value: Partial<CredentialDraft>, fallbackLabel = ""): Credent
     notes,
     category,
     createdAt: value.createdAt || todayISO(),
-    tags,
+    tags: tags.length ? tags.slice(0, 20) : undefined,
   };
 }
 
@@ -164,6 +436,72 @@ function detectDelimiter(line: string) {
   return count >= 2 ? best : "";
 }
 
+function isEmail(value: string) {
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
+}
+
+function isUrlLike(value: string) {
+  return /^https?:\/\//i.test(value.trim()) || /^[\w.-]+\.[a-z]{2,}(?:\/|$)/i.test(value.trim());
+}
+
+function smartQuickRow(cells: string[]): CredentialDraft | null {
+  const cleaned = cells.map((cell) => cell.trim()).filter((cell) => cell.length > 0);
+  if (cleaned.length < 2) return null;
+
+  let apiIndex = -1;
+  let apiDetection: ApiKeyDetection | null = null;
+
+  for (let i = 0; i < cleaned.length; i++) {
+    const context = cleaned.filter((_, index) => index !== i).join(" ");
+    const detection = detectApiKeyValue(cleaned[i], context, context);
+    if (detection.isApiKey && detection.confidence === "high") {
+      apiIndex = i;
+      apiDetection = detection;
+      break;
+    }
+  }
+
+  if (apiIndex >= 0) {
+    const apiKey = cleaned[apiIndex];
+    const rest = cleaned.filter((_, index) => index !== apiIndex);
+    const url = rest.find(isUrlLike) || "";
+    const username = rest.find(isEmail) || "";
+    const textParts = rest.filter((value) => value !== url && value !== username);
+    const service =
+      apiDetection?.provider ||
+      textParts.find((value) => !API_LABEL_RE.test(value)) ||
+      "";
+    const label =
+      textParts.find((value) => value !== service) ||
+      service ||
+      apiDetection?.provider ||
+      "API credential";
+
+    return makeDraft({
+      label,
+      service,
+      url,
+      username,
+      apiKey,
+      password: "",
+      category: apiDetection?.category || DEFAULT_CATEGORY,
+      notes: "",
+    });
+  }
+
+  const [label, service, url, username, password, apiKey, category, ...notes] = cells;
+  return makeDraft({
+    label: label || "",
+    service: service || "",
+    url: url || "",
+    username: username || "",
+    password: password || "",
+    apiKey: apiKey || "",
+    category: category || DEFAULT_CATEGORY,
+    notes: notes.join(" | "),
+  });
+}
+
 function parseDelimited(text: string): CredentialBatchParseResult | null {
   const lines = text.split(/\r?\n/).filter((line) => line.trim());
   if (lines.length < 1) return null;
@@ -172,10 +510,9 @@ function parseDelimited(text: string): CredentialBatchParseResult | null {
   if (!delimiter) return null;
 
   const first = splitDelimitedLine(lines[0], delimiter);
-  const mappedHeaders = first.map((header) => HEADER_ALIASES[cleanHeader(header)] || null);
+  const mappedHeaders = first.map((header) => fieldForLabel(header));
   const headerHits = mappedHeaders.filter(Boolean).length;
 
-  // Header-based CSV/TSV/spreadsheet paste.
   const looksLikeHeader =
     lines.length > 1 &&
     headerHits >= 2 &&
@@ -186,36 +523,25 @@ function parseDelimited(text: string): CredentialBatchParseResult | null {
     const errors: string[] = [];
     for (let i = 1; i < lines.length; i++) {
       const cells = splitDelimitedLine(lines[i], delimiter);
-      const raw: Partial<CredentialDraft> & { tags?: string[] } = {};
+      const raw: Record<string, unknown> = {};
       mappedHeaders.forEach((field, index) => {
         if (!field) return;
-        const value = cells[index] ?? "";
-        if (field === "tags") raw.tags = normalizeTags(value);
-        else (raw as Record<string, unknown>)[field] = value;
+        const cell = cells[index] ?? "";
+        if (field === "tags") raw.tags = normalizeTags(cell);
+        else raw[field] = cell;
       });
-      const item = makeDraft(raw);
+      const item = makeDraft(raw as Partial<CredentialDraft>);
       if (item) items.push(item);
-      else errors.push(`Row ${i + 1}: missing a usable label/service and credential value.`);
+      else errors.push(`Row ${i + 1}: missing a usable credential value.`);
     }
     return { items: dedupe(items), errors, format: "delimited" };
   }
 
-  // Headerless quick rows: Label | Service | URL | Username | Password | API Key | Category | Notes
   const items: CredentialDraft[] = [];
   const errors: string[] = [];
   for (let i = 0; i < lines.length; i++) {
     const cells = splitDelimitedLine(lines[i], delimiter);
-    if (cells.length < 2) continue;
-    const item = makeDraft({
-      label: cells[0] || "",
-      service: cells[1] || "",
-      url: cells[2] || "",
-      username: cells[3] || "",
-      password: cells[4] || "",
-      apiKey: cells[5] || "",
-      category: cells[6] || DEFAULT_CATEGORY,
-      notes: cells.slice(7).join(" | "),
-    });
+    const item = smartQuickRow(cells);
     if (item) items.push(item);
     else errors.push(`Row ${i + 1}: could not create a credential.`);
   }
@@ -236,22 +562,44 @@ function parseKeyValue(text: string): CredentialBatchParseResult | null {
   blocks.forEach((block, blockIndex) => {
     const raw: Record<string, unknown> = {};
     const noteLines: string[] = [];
+    const contextLines: string[] = [];
+
     for (const line of block.split(/\r?\n/)) {
-      const match = line.match(/^\s*([^:=]{2,32})\s*[:=]\s*(.*)$/);
+      const match = line.match(/^\s*([^:=]{2,48})\s*[:=]\s*(.*)$/);
       if (!match) {
         if (line.trim()) noteLines.push(line.trim());
         continue;
       }
-      const field = HEADER_ALIASES[cleanHeader(match[1])];
+
+      const label = match[1].trim();
+      const cell = match[2].trim();
+      let field = fieldForLabel(label);
+
+      if (!field) {
+        const detection = detectApiKeyValue(cell, block, label);
+        if (detection.isApiKey) field = "apiKey";
+      }
+
       if (!field) {
         noteLines.push(line.trim());
         continue;
       }
+
       recognizedPairs++;
-      if (field === "tags") raw.tags = normalizeTags(match[2]);
-      else raw[field] = match[2];
+      contextLines.push(label);
+      if (field === "tags") raw.tags = normalizeTags(cell);
+      else raw[field] = cell;
     }
+
     if (noteLines.length && !raw.notes) raw.notes = noteLines.join("\n");
+
+    const hint = providerHint(`${block} ${contextLines.join(" ")}`);
+    if (hint) {
+      if (!raw.service) raw.service = hint.provider;
+      if (!raw.category) raw.category = hint.category;
+      if (!raw.label) raw.label = hint.provider;
+    }
+
     const item = makeDraft(raw as Partial<CredentialDraft>);
     if (item) items.push(item);
     else if (recognizedPairs) errors.push(`Block ${blockIndex + 1}: incomplete credential.`);
@@ -266,16 +614,62 @@ function parseJson(text: string): CredentialBatchParseResult | null {
   if (!(trimmed.startsWith("[") || trimmed.startsWith("{"))) return null;
   try {
     const parsed = JSON.parse(trimmed);
-    const rows = Array.isArray(parsed) ? parsed : Array.isArray(parsed.credentials) ? parsed.credentials : [parsed];
+    const rows = Array.isArray(parsed)
+      ? parsed
+      : Array.isArray(parsed.credentials)
+        ? parsed.credentials
+        : [parsed];
+
     const items = rows
-      .map((row: unknown) => (row && typeof row === "object" ? makeDraft(row as Partial<CredentialDraft>) : null))
+      .map((row: unknown) => {
+        if (!row || typeof row !== "object" || Array.isArray(row)) return null;
+        return makeDraft(normalizeIncomingObject(row as Record<string, unknown>));
+      })
       .filter((item: CredentialDraft | null): item is CredentialDraft => Boolean(item));
+
     return items.length
       ? { items: dedupe(items), errors: [], format: "json" }
-      : { items: [], errors: ["JSON was valid but contained no usable credentials."], format: "json" };
+      : {
+          items: [],
+          errors: ["JSON was valid but contained no usable credentials."],
+          format: "json",
+        };
   } catch {
     return null;
   }
+}
+
+function parseLooseApiLines(text: string): CredentialBatchParseResult | null {
+  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const items: CredentialDraft[] = [];
+
+  for (const line of lines) {
+    if (/[:=|,;\t]/.test(line)) continue;
+    const parts = line.split(/\s+/);
+    if (parts.length < 2) continue;
+
+    for (let i = parts.length - 1; i >= 1; i--) {
+      const candidate = parts[i];
+      const context = parts.slice(0, i).join(" ");
+      const detection = detectApiKeyValue(candidate, context, context);
+      if (!detection.isApiKey || detection.confidence !== "high") continue;
+
+      const item = makeDraft({
+        label: detection.provider || context || "API credential",
+        service: detection.provider || context,
+        apiKey: candidate,
+        password: "",
+        category: detection.category || DEFAULT_CATEGORY,
+        notes: context && detection.provider && context !== detection.provider ? context : "",
+      });
+      if (item) items.push(item);
+      break;
+    }
+  }
+
+  return items.length
+    ? { items: dedupe(items), errors: [], format: "lines" }
+    : null;
 }
 
 export function parseCredentialBatch(text: string): CredentialBatchParseResult {
@@ -296,10 +690,11 @@ export function parseCredentialBatch(text: string): CredentialBatchParseResult {
   return (
     parseJson(trimmed) ||
     parseDelimited(trimmed) ||
-    parseKeyValue(trimmed) || {
+    parseKeyValue(trimmed) ||
+    parseLooseApiLines(trimmed) || {
       items: [],
       errors: [
-        "No credentials detected. Use CSV/TSV headers, key: value blocks, JSON, or pipe-separated rows.",
+        "No credentials detected. Use spreadsheet/CSV/TSV, JSON, key:value blocks, provider + API key lines, or pipe-separated rows.",
       ],
       format: "empty",
     }

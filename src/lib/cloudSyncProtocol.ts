@@ -43,3 +43,22 @@ export function parseBackup(value: unknown): RemoteBackup {
   }
   return b as RemoteBackup;
 }
+
+
+/**
+ * A record in the local dirty journal represents explicit user intent on this
+ * device. Rebase that intent above the newest remote timestamp so wall-clock
+ * skew or a stale remote writer can never silently erase a pending local edit.
+ * The revision remains the local mutation's revision for read-back verification.
+ */
+export function rebaseLocalPending(
+  local: RemoteRecord,
+  remote?: RemoteRecord,
+  nowMs = Date.now(),
+): RemoteRecord {
+  const localMs = Number.isFinite(Date.parse(local.updatedAt)) ? Date.parse(local.updatedAt) : 0;
+  const remoteMs =
+    remote && Number.isFinite(Date.parse(remote.updatedAt)) ? Date.parse(remote.updatedAt) : 0;
+  const rebasedMs = Math.max(nowMs, localMs, remoteMs + (remote ? 1 : 0));
+  return { ...local, updatedAt: new Date(rebasedMs).toISOString() };
+}

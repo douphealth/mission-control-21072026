@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mergeRemoteRecords, parseBackup, type RemoteRecord } from '../cloudSyncProtocol';
+import { mergeRemoteRecords, parseBackup, rebaseLocalPending, type RemoteRecord } from '../cloudSyncProtocol';
 import { audienceProfile, measuredCount, profileJsonMetrics } from '../audienceEvidence';
 import { coverageOutcome, isOwnedDomainCoverage, mapLimited, mentionQuery } from '../intelligenceRunQuality';
 import { audienceCapabilities, readAudience } from '../audienceProviders.server';
@@ -161,5 +161,33 @@ describe('coverage outcomes', () => {
     let active = 0, maximum = 0;
     const output = await mapLimited([1, 2, 3, 4], 2, async i => { active++; maximum = Math.max(maximum, active); await new Promise(r => setTimeout(r, 2)); active--; return i * 2; });
     expect(maximum).toBeLessThanOrEqual(2); expect(output).toEqual([2, 4, 6, 8]);
+  });
+});
+
+
+describe("pending local edits beat stale remote clocks", () => {
+  it("rebases explicit local intent above a newer remote wall clock", () => {
+    const local: RemoteRecord = {
+      data: { id: "task-1", title: "Newest user edit" },
+      deleted: false,
+      updatedAt: "2026-10-05T06:00:00.000Z",
+      revision: "local-revision",
+    };
+    const remote: RemoteRecord = {
+      data: { id: "task-1", title: "Older remote value" },
+      deleted: false,
+      updatedAt: "2026-10-05T08:00:00.000Z",
+      revision: "remote-revision",
+    };
+
+    const rebased = rebaseLocalPending(
+      local,
+      remote,
+      Date.parse("2026-10-05T07:00:00.000Z"),
+    );
+
+    expect(rebased.revision).toBe("local-revision");
+    expect(Date.parse(rebased.updatedAt)).toBeGreaterThan(Date.parse(remote.updatedAt));
+    expect(rebased.data?.title).toBe("Newest user edit");
   });
 });
