@@ -271,8 +271,8 @@ export default function DashboardHome() {
       <section className="mc21-utility-deck ultra-rise-3" aria-label="Today signals and workspaces">
         <div className="mc21-utility-head">
           <div>
-            <span>${ops.area === "personal" ? "Home mode" : ops.area === "work" ? "Business mode" : "All areas"}</span>
-            <strong>${ops.area === "personal" ? "Simple family shortcuts" : "Move faster"}</strong>
+            <span>{ops.area === "personal" ? "Home mode" : ops.area === "work" ? "Business mode" : "All areas"}</span>
+            <strong>{ops.area === "personal" ? "Simple family shortcuts" : "Move faster"}</strong>
           </div>
           <small>Shortcuts only. Portfolio diagnostics stay out of today.</small>
         </div>
