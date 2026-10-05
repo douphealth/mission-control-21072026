@@ -1,0 +1,697 @@
+/*
+ * Mission Control v37 — Today WOW
+ * Final visual treatment for the Today command center.
+ * Purpose: editorial hero, immersive sunrise artwork, softer premium surfaces,
+ * faster scanning, clearer planning, and polished mobile behavior.
+ */
+
+:root {
+  --mc37-ink: 222 38% 13%;
+  --mc37-muted: 218 11% 45%;
+  --mc37-green: 161 64% 39%;
+  --mc37-green-2: 174 70% 45%;
+  --mc37-cyan: 190 77% 67%;
+  --mc37-pearl: 196 44% 98%;
+  --mc37-warm: 39 74% 96%;
+  --mc37-line: 206 24% 88%;
+  --mc37-shadow: 0 24px 70px -38px hsl(205 42% 28% / .28);
+  --mc37-shadow-soft: 0 12px 34px -26px hsl(205 38% 32% / .2);
+}
+
+.dark {
+  --mc37-ink: 210 30% 97%;
+  --mc37-muted: 215 13% 65%;
+  --mc37-green: 162 76% 56%;
+  --mc37-green-2: 184 74% 59%;
+  --mc37-cyan: 194 80% 66%;
+  --mc37-pearl: 226 26% 9%;
+  --mc37-warm: 226 22% 11%;
+  --mc37-line: 221 18% 20%;
+  --mc37-shadow: 0 28px 80px -42px hsl(230 70% 1% / .95);
+  --mc37-shadow-soft: 0 16px 40px -28px hsl(230 70% 1% / .72);
+}
+
+/* Today masthead */
+.mc37-today-brand {
+  min-height: 48px;
+}
+
+.mc37-today-sun {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  place-items: center;
+  border: 1px solid hsl(var(--mc37-line) / .78);
+  border-radius: 14px;
+  color: hsl(42 92% 52%);
+  background:
+    radial-gradient(circle at 50% 38%, hsl(45 100% 72% / .3), transparent 55%),
+    hsl(var(--card) / .88);
+  box-shadow: var(--mc37-shadow-soft);
+}
+
+.mc37-today-tagline {
+  margin-top: 2px;
+  color: hsl(var(--mc37-muted));
+  font-size: 10.5px;
+  font-weight: 550;
+  letter-spacing: -.01em;
+}
+
+.mc-home-toolbar {
+  margin-bottom: 2px !important;
+}
+
+.mc-home-toolbar-label {
+  font-size: 21px !important;
+  letter-spacing: -.05em !important;
+}
+
+.mc-home-toolbar-action {
+  min-height: 40px !important;
+  border-radius: 13px !important;
+  padding-inline: 13px !important;
+  background: hsl(var(--card) / .84) !important;
+  box-shadow: 0 1px 0 hsl(0 0% 100% / .58) inset, var(--mc37-shadow-soft) !important;
+}
+
+/* Entire command stage feels like one premium product surface. */
+.mc36-command-stage {
+  isolation: isolate;
+}
+
+.mc36-command-stage::before {
+  content: "";
+  position: absolute;
+  inset: -22px -14px -28px;
+  z-index: -1;
+  border-radius: 42px;
+  background:
+    radial-gradient(780px 340px at 22% 2%, hsl(var(--mc37-cyan) / .13), transparent 68%),
+    radial-gradient(700px 360px at 88% 8%, hsl(var(--mc37-green) / .09), transparent 72%);
+  filter: blur(16px);
+  pointer-events: none;
+}
+
+.mc36-command-stage .mc13-hero {
+  border-color: hsl(var(--mc37-line) / .74) !important;
+  border-radius: 30px !important;
+  background:
+    radial-gradient(780px 360px at 18% -10%, hsl(var(--mc37-cyan) / .08), transparent 68%),
+    linear-gradient(180deg, hsl(var(--card) / .97), hsl(var(--mc37-pearl) / .94)) !important;
+  box-shadow: var(--mc37-shadow) !important;
+}
+
+.dark .mc36-command-stage .mc13-hero {
+  background:
+    radial-gradient(820px 360px at 16% -12%, hsl(var(--mc37-green) / .08), transparent 68%),
+    linear-gradient(180deg, hsl(226 26% 10%), hsl(227 28% 7.5%)) !important;
+}
+
+.mc13-hero-top {
+  padding: 13px 18px !important;
+}
+
+.mc13-live-pill {
+  min-height: 27px;
+  padding-inline: 10px !important;
+  border-radius: 999px !important;
+  border-color: hsl(var(--mc37-green) / .18) !important;
+  background: hsl(var(--mc37-green) / .08) !important;
+  color: hsl(var(--mc37-green)) !important;
+  font-size: 9.5px !important;
+  letter-spacing: .11em !important;
+}
+
+.mc13-date {
+  font-size: 10px !important;
+}
+
+.mc13-hero-grid {
+  grid-template-columns: minmax(0, 1.8fr) minmax(270px, .72fr) !important;
+  gap: 12px !important;
+  padding: 0 12px 12px !important;
+}
+
+.mc13-now-panel {
+  position: relative;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.22fr) minmax(290px, .78fr);
+  min-height: 350px !important;
+  overflow: hidden;
+  padding: 0 !important;
+  border-color: hsl(var(--mc37-line) / .66) !important;
+  border-radius: 24px !important;
+  background: hsl(var(--card) / .78) !important;
+}
+
+.mc37-priority-copy {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(26px, 3vw, 44px);
+}
+
+.mc13-eyebrow {
+  margin-bottom: 12px !important;
+  color: hsl(var(--mc37-green)) !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: .13em !important;
+  text-transform: uppercase;
+}
+
+.mc13-now-title {
+  max-width: 820px !important;
+  margin: 0 !important;
+  color: hsl(var(--mc37-ink)) !important;
+  font-family: var(--font-display) !important;
+  font-size: clamp(2.15rem, 3.4vw, 4rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: -.065em !important;
+  line-height: .98 !important;
+  text-wrap: balance;
+}
+
+.mc36-context-copy {
+  max-width: 650px;
+  margin-top: 13px !important;
+  font-size: 12px !important;
+  line-height: 1.55 !important;
+}
+
+.mc13-meta-row {
+  margin-top: 20px !important;
+}
+
+.mc13-meta-row span {
+  min-height: 29px;
+  border: 1px solid hsl(var(--mc37-line) / .72) !important;
+  border-radius: 999px !important;
+  padding-inline: 10px !important;
+  background: hsl(var(--card) / .74) !important;
+  box-shadow: 0 1px 0 hsl(0 0% 100% / .52) inset;
+}
+
+.mc13-actions {
+  margin-top: 22px !important;
+}
+
+.mc13-primary-action,
+.mc13-secondary-action {
+  min-height: 48px !important;
+  border-radius: 14px !important;
+}
+
+.mc13-primary-action {
+  min-width: 158px;
+  background: linear-gradient(135deg, hsl(var(--mc37-green)), hsl(var(--mc37-green-2))) !important;
+  box-shadow: 0 18px 36px -20px hsl(var(--mc37-green) / .72) !important;
+}
+
+.mc13-secondary-action {
+  background: hsl(var(--card) / .86) !important;
+  box-shadow: var(--mc37-shadow-soft) !important;
+}
+
+/* Hero artwork is real SVG, not an image of UI. */
+.mc37-hero-art {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background-image: url("/today-hero-landscape.svg");
+  background-position: center;
+  background-size: cover;
+}
+
+.mc37-hero-art::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, hsl(var(--card) / .88), transparent 26%),
+    linear-gradient(180deg, transparent 50%, hsl(212 38% 12% / .22));
+}
+
+.dark .mc37-hero-art::before {
+  background:
+    linear-gradient(90deg, hsl(226 26% 10% / .9), transparent 28%),
+    linear-gradient(180deg, transparent 48%, hsl(226 45% 2% / .45));
+}
+
+.mc37-hero-art-shade {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(420px 300px at 72% 56%, transparent, hsl(205 40% 18% / .06));
+}
+
+.mc37-hero-quote {
+  position: absolute;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  max-width: 180px;
+  flex-direction: column;
+  align-items: flex-end;
+  color: white;
+  text-align: right;
+  text-shadow: 0 2px 20px hsl(210 55% 8% / .45);
+}
+
+.mc37-hero-quote span {
+  font-size: 18px;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: -.03em;
+}
+
+.mc37-hero-quote strong {
+  margin-top: -3px;
+  font-family: var(--font-display);
+  font-size: 25px;
+  letter-spacing: -.05em;
+}
+
+.mc37-hero-quote em {
+  margin-top: 10px;
+  max-width: 155px;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: .16em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  opacity: .86;
+}
+
+/* Execution pulse */
+.mc13-day-panel {
+  position: relative;
+  overflow: hidden;
+  min-height: 350px !important;
+  padding: 20px !important;
+  border-color: hsl(var(--mc37-line) / .66) !important;
+  border-radius: 24px !important;
+  background:
+    radial-gradient(360px 200px at 100% 100%, hsl(var(--mc37-cyan) / .16), transparent 70%),
+    hsl(var(--card) / .82) !important;
+}
+
+.mc13-day-panel::after {
+  content: "";
+  position: absolute;
+  right: -34px;
+  bottom: -34px;
+  width: 220px;
+  height: 104px;
+  border-radius: 50%;
+  background:
+    repeating-radial-gradient(
+      ellipse at center,
+      hsl(var(--mc37-green) / .16) 0 1px,
+      transparent 1px 9px
+    );
+  opacity: .6;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.mc13-day-head,
+.mc13-mini-grid,
+.mc13-progress-line {
+  position: relative;
+  z-index: 2;
+}
+
+.mc13-day-head > div > strong {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  letter-spacing: -.035em;
+}
+
+.mc13-mini-grid {
+  gap: 8px !important;
+  margin-top: 18px !important;
+}
+
+.mc13-mini-card {
+  min-height: 72px !important;
+  border-color: hsl(var(--mc37-line) / .72) !important;
+  border-radius: 16px !important;
+  background: hsl(var(--card) / .76) !important;
+  box-shadow: 0 1px 0 hsl(0 0% 100% / .6) inset, var(--mc37-shadow-soft);
+}
+
+.mc13-mini-card-accent {
+  background:
+    linear-gradient(135deg, hsl(var(--mc37-green) / .10), hsl(var(--mc37-cyan) / .14)),
+    hsl(var(--card) / .84) !important;
+}
+
+/* Capture ribbon */
+.mc36-capture-ribbon {
+  margin: -12px 20px 0 !important;
+  padding: 13px !important;
+  border: 1px solid hsl(var(--mc37-green) / .18) !important;
+  border-radius: 23px !important;
+  background:
+    radial-gradient(520px 120px at 10% 0%, hsl(var(--mc37-cyan) / .18), transparent 70%),
+    linear-gradient(90deg, hsl(var(--mc37-green) / .055), hsl(var(--card) / .98)) !important;
+  box-shadow: 0 20px 50px -30px hsl(var(--mc37-green) / .32), var(--mc37-shadow-soft) !important;
+}
+
+.mc21-capture-deck-head {
+  align-items: center !important;
+}
+
+.mc21-capture-deck-head span {
+  color: hsl(var(--mc37-green)) !important;
+}
+
+.mc21-capture-deck-head strong {
+  font-size: 15px !important;
+}
+
+.mc36-capture-ribbon .mc13-capture {
+  min-height: 58px;
+  border-color: hsl(var(--mc37-line) / .7) !important;
+  border-radius: 17px !important;
+  background: hsl(var(--card) / .9) !important;
+  box-shadow: 0 1px 0 hsl(0 0% 100% / .78) inset !important;
+}
+
+.mc36-capture-ribbon .mc13-capture:focus-within {
+  border-color: hsl(var(--mc37-green) / .38) !important;
+  box-shadow: 0 0 0 4px hsl(var(--mc37-green) / .08) !important;
+}
+
+.mc36-capture-ribbon .mc13-capture-icon {
+  width: 42px !important;
+  height: 42px !important;
+  color: hsl(var(--mc37-green)) !important;
+  background: hsl(var(--mc37-green) / .10) !important;
+}
+
+.mc36-capture-ribbon .se-btn-primary {
+  min-height: 42px !important;
+  border-radius: 13px !important;
+  background: linear-gradient(135deg, hsl(var(--mc37-green)), hsl(var(--mc37-green-2))) !important;
+}
+
+/* Planning + timeline panels */
+.mc21-day-grid {
+  gap: 14px !important;
+  align-items: start;
+}
+
+.mc21-plan-card,
+.mc21-timeline-card {
+  border-color: hsl(var(--mc37-line) / .76) !important;
+  border-radius: 24px !important;
+  background:
+    linear-gradient(180deg, hsl(var(--card) / .96), hsl(var(--mc37-pearl) / .84)) !important;
+  box-shadow: var(--mc37-shadow-soft) !important;
+}
+
+.mc21-plan-card {
+  padding: 20px !important;
+}
+
+.mc21-plan-head h2,
+.mc21-timeline-card h3 {
+  color: hsl(var(--mc37-ink)) !important;
+  font-size: clamp(1.35rem, 2vw, 1.8rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: -.05em !important;
+}
+
+.mc21-plan-head > div > p:last-child {
+  margin-top: 4px;
+  max-width: 620px;
+  color: hsl(var(--mc37-muted));
+  font-size: 11px;
+}
+
+.mc21-plan-primary {
+  min-height: 38px !important;
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, hsl(var(--mc37-green)), hsl(var(--mc37-green-2))) !important;
+  box-shadow: 0 14px 28px -18px hsl(var(--mc37-green) / .6) !important;
+}
+
+.mc21-capacity {
+  border-color: hsl(var(--mc37-line) / .66) !important;
+  border-radius: 16px !important;
+  background: hsl(var(--card) / .6) !important;
+}
+
+.zen-cap-bar {
+  height: 5px !important;
+  border-radius: 999px !important;
+  background: hsl(var(--mc37-line) / .65) !important;
+}
+
+.zen-cap-fill {
+  background: linear-gradient(90deg, hsl(var(--mc37-green)), hsl(var(--mc37-cyan))) !important;
+}
+
+.se-outcome,
+.mc21-plan-card li.rounded-2xl {
+  min-height: 62px;
+  border-radius: 15px !important;
+  border-color: hsl(var(--mc37-line) / .58) !important;
+  background: hsl(var(--card) / .62) !important;
+}
+
+.mc21-plan-card ul.divide-y {
+  overflow: hidden;
+  border-color: hsl(var(--mc37-line) / .62) !important;
+  border-radius: 16px !important;
+  background: hsl(var(--card) / .58) !important;
+}
+
+.mc21-timeline-card {
+  padding: 20px !important;
+}
+
+.mc21-timeline-card .zen-glow-spot {
+  opacity: .36 !important;
+}
+
+.mc21-timeline-card .se-tl-row {
+  min-height: 70px;
+  border: 1px solid hsl(var(--mc37-line) / .55);
+  border-radius: 16px !important;
+  padding: 11px !important;
+  background: hsl(var(--card) / .56);
+}
+
+.mc21-timeline-card .se-tl-row-now {
+  border-color: hsl(var(--mc37-green) / .34) !important;
+  background:
+    linear-gradient(90deg, hsl(var(--mc37-green) / .09), hsl(var(--mc37-cyan) / .05)),
+    hsl(var(--card) / .75) !important;
+  box-shadow: 0 0 0 1px hsl(var(--mc37-green) / .06) inset;
+}
+
+.mc21-timeline-card .se-time {
+  color: hsl(var(--mc37-green));
+}
+
+.mc21-timeline-card .living-badge {
+  background: hsl(var(--mc37-green) / .12) !important;
+  color: hsl(var(--mc37-green)) !important;
+}
+
+/* Evening card */
+.mc37-day-close {
+  position: relative;
+  overflow: hidden;
+  border-color: hsl(235 40% 88% / .78) !important;
+  border-radius: 22px !important;
+  background:
+    radial-gradient(420px 120px at 92% 100%, hsl(var(--mc37-cyan) / .10), transparent 70%),
+    linear-gradient(180deg, hsl(var(--card) / .96), hsl(220 65% 98% / .9)) !important;
+  box-shadow: var(--mc37-shadow-soft) !important;
+}
+
+.dark .mc37-day-close {
+  background:
+    radial-gradient(420px 120px at 92% 100%, hsl(var(--mc37-cyan) / .06), transparent 70%),
+    hsl(227 24% 9%) !important;
+}
+
+.mc37-day-close::after {
+  content: "";
+  position: absolute;
+  right: 80px;
+  bottom: -28px;
+  width: 260px;
+  height: 88px;
+  background: url("/today-hero-landscape.svg") center 72% / cover no-repeat;
+  opacity: .13;
+  mask-image: linear-gradient(90deg, transparent, black 30%, black);
+  pointer-events: none;
+}
+
+.mc37-day-close > * {
+  position: relative;
+  z-index: 2;
+}
+
+/* Responsive: preserve the wow, remove the weight. */
+@media (max-width: 1199px) {
+  .mc13-hero-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mc13-day-panel {
+    min-height: auto !important;
+  }
+
+  .mc13-day-panel::after {
+    width: 300px;
+  }
+
+  .mc13-mini-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .mc13-now-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .mc37-hero-art {
+    min-height: 220px;
+  }
+
+  .mc37-hero-art::before {
+    background: linear-gradient(180deg, hsl(var(--card) / .8), transparent 28%, hsl(212 38% 12% / .24));
+  }
+}
+
+@media (max-width: 767px) {
+  .mc37-today-sun {
+    width: 34px;
+    height: 34px;
+  }
+
+  .mc-home-toolbar {
+    padding-inline: 2px !important;
+  }
+
+  .mc-home-toolbar-action {
+    width: 40px !important;
+    min-width: 40px !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .mc36-command-stage::before {
+    inset: -10px -4px -14px;
+  }
+
+  .mc36-command-stage .mc13-hero {
+    border-radius: 22px !important;
+  }
+
+  .mc13-hero-grid {
+    padding: 0 8px 8px !important;
+  }
+
+  .mc13-now-panel {
+    border-radius: 18px !important;
+  }
+
+  .mc37-priority-copy {
+    padding: 20px !important;
+  }
+
+  .mc13-now-title {
+    font-size: clamp(1.8rem, 8.7vw, 2.65rem) !important;
+  }
+
+  .mc37-hero-art {
+    min-height: 170px;
+  }
+
+  .mc37-hero-quote {
+    right: 16px;
+    bottom: 14px;
+  }
+
+  .mc37-hero-quote span {
+    font-size: 14px;
+  }
+
+  .mc37-hero-quote strong {
+    font-size: 20px;
+  }
+
+  .mc37-hero-quote em {
+    display: none;
+  }
+
+  .mc13-mini-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .mc36-capture-ribbon {
+    margin: -7px 8px 0 !important;
+    border-radius: 18px !important;
+  }
+
+  .mc21-plan-card,
+  .mc21-timeline-card,
+  .mc37-day-close {
+    border-radius: 20px !important;
+  }
+
+  .mc21-plan-card,
+  .mc21-timeline-card {
+    padding: 14px !important;
+  }
+
+  .mc21-timeline-card .se-tl-row {
+    min-height: 64px;
+  }
+}
+
+@media (max-width: 420px) {
+  .mc37-today-sun {
+    display: none;
+  }
+
+  .mc37-priority-copy {
+    padding: 17px !important;
+  }
+
+  .mc13-actions {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .mc13-primary-action,
+  .mc13-secondary-action {
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .mc37-hero-art {
+    min-height: 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mc36-command-stage::before {
+    filter: none;
+  }
+}
