@@ -15,6 +15,7 @@ import lumaCss from "../luma-ui.css?url";
 import obsidianAtelierCss from "../obsidian-atelier.css?url";
 import midnightAuroraCss from "../midnight-aurora.css?url";
 import todayWowCss from "../today-wow.css?url";
+import todayLuxCss from "../today-lux.css?url";
 
 function NotFoundComponent() {
   return (
@@ -115,6 +116,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "stylesheet",
         href: todayWowCss,
+      },
+      {
+        rel: "stylesheet",
+        href: todayLuxCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

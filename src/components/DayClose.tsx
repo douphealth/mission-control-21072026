@@ -61,7 +61,7 @@ export default function DayClose({ tasks, compact = false }: { tasks: Task[]; co
   };
 
   return (
-    <section className={`card-elevated mc37-day-close space-y-3 ${compact ? "p-3.5" : "p-4"}`}>
+    <section className={`card-elevated mc37-day-close mc38-day-close space-y-3 ${compact ? "p-3.5" : "p-4"}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">

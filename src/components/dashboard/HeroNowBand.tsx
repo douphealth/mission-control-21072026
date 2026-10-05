@@ -121,7 +121,7 @@ export default function HeroNowBand({
         : "One calm view across home and business, with only the next useful action promoted.";
 
   return (
-    <section className="mc13-hero" aria-label="Current priority and day progress">
+    <section className="mc13-hero mc38-hero" aria-label="Current priority and day progress">
       <div className="mc13-hero-mesh" aria-hidden />
       <div className="mc13-hero-glow mc13-hero-glow-a" aria-hidden />
       <div className="mc13-hero-glow mc13-hero-glow-b" aria-hidden />
@@ -210,7 +210,7 @@ export default function HeroNowBand({
           )}
           </div>
 
-          <div className="mc37-hero-art" aria-hidden="true">
+          <div className="mc37-hero-art mc38-hero-art" aria-hidden="true">
             <div className="mc37-hero-art-shade" />
             <div className="mc37-hero-quote">
               <span>Small steps.</span>

@@ -174,7 +174,7 @@ export default function DashboardHome() {
   );
 
   return (
-    <div className="mc16-dashboard flex flex-col gap-4 pb-8 sm:gap-5">
+    <div className="mc16-dashboard mc38-today-page flex flex-col gap-4 pb-8 sm:gap-5">
       <div className="mc-home-toolbar ultra-fade">
         <div className="mc37-today-brand flex min-w-0 items-center gap-3">
           <span className="mc37-today-sun" aria-hidden="true"><Sunrise size={20} /></span>
@@ -220,7 +220,7 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      <section className="mc36-command-stage ultra-rise-1" aria-label="Today command center">
+      <section className="mc36-command-stage mc38-command-stage ultra-rise-1" aria-label="Today command center">
         <div className="mc36-hero-frame">
           <HeroNowBand
             area={ops.area}
@@ -234,7 +234,7 @@ export default function DashboardHome() {
           />
         </div>
 
-        <div className="mc21-capture-deck mc36-capture-ribbon" aria-label="Quick capture">
+        <div className="mc21-capture-deck mc36-capture-ribbon mc38-capture-ribbon" aria-label="Quick capture">
           <div className="mc21-capture-deck-head">
             <div>
               <span>Instant capture</span>
@@ -266,7 +266,7 @@ export default function DashboardHome() {
               {timeline}
             </div>
           ) : (
-            <div className="mc21-day-grid ultra-rise-3 grid grid-cols-1 gap-4 lg:grid-cols-12">
+            <div className="mc21-day-grid mc38-day-grid ultra-rise-3 grid grid-cols-1 gap-4 lg:grid-cols-12">
               <div className="flex flex-col gap-4 lg:col-span-7">
                 {plan}
                 {evening && <DayClose tasks={ops.allTasks} />}

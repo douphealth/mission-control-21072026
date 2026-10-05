@@ -156,7 +156,7 @@ export default function TodayTimeline({
   const { entries, nowIndex, counts } = timeline;
 
   return (
-    <section className="mc21-timeline-card se-card-acc ultra-rise-3 p-4 sm:p-5">
+    <section className="mc21-timeline-card mc38-timeline-card se-card-acc ultra-rise-3 p-4 sm:p-5">
       <div className="zen-glow-spot -top-16 -right-10" aria-hidden />
       <div className="mb-4 flex items-end justify-between gap-3">
         <div>
