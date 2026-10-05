@@ -85,7 +85,17 @@ export function inferLanguageFromTranscript(
   if (arabic >= 3) return "ar";
   if (devanagari >= 3) return "hi";
   if (han >= 2) return "zh";
-  if (latin >= 4 && greek === 0 && cyrillic === 0) return "en";
+  if (latin >= 4 && greek === 0 && cyrillic === 0) {
+    const tokens = text
+      .toLowerCase()
+      .match(/[a-z]+/g) || [];
+    const englishSignals = new Set([
+      "the", "and", "to", "for", "with", "tomorrow", "today", "call", "email",
+      "meeting", "client", "please", "remind", "note", "idea", "task", "this", "that",
+    ]);
+    const hits = tokens.filter((token) => englishSignals.has(token)).length;
+    if (hits >= 1) return "en";
+  }
   return undefined;
 }
 
@@ -95,15 +105,20 @@ export function browserEnvironmentLanguageHint(
   timeZone?: string,
 ): string | undefined {
   const locales = [...browserLanguages, browserLanguage].filter(Boolean);
-  if (locales.some((locale) => locale.toLowerCase().startsWith("el"))) return "el";
 
-  // Mission Control is commonly used from Greece while Chrome itself may be
-  // configured in English. Use Greek only as a last-resort regional hint; once
-  // a successful transcript exists, that learned hint takes precedence.
+  // Respect the user's declared browser-language order first. Timezone is not
+  // a language signal: English-speaking users in Greece and Greek-speaking
+  // users abroad must not be forced into the wrong recognizer.
+  for (const locale of locales) {
+    const base = locale.split("-")[0]?.toLowerCase();
+    if (base && LANGUAGE_LOCALES[base]) return base;
+  }
+
+  // Regional inference is only a last resort when the browser exposes no
+  // usable language at all. A learned successful language hint still takes
+  // precedence in browserRecognitionLanguage().
   if (timeZone === "Europe/Athens") return "el";
-
-  const base = (browserLanguage || "").split("-")[0]?.toLowerCase();
-  return base && LANGUAGE_LOCALES[base] ? base : undefined;
+  return undefined;
 }
 
 export function normalizeRequestedLanguage(language: string): string | undefined {
