@@ -165,7 +165,7 @@ export default function DashboardLayout() {
               activeSection === "focus" ||
               activeSection === "review") && <DailyBriefingBanner />}
 
-            <WorkspacePulseBar />
+            {activeSection !== "dashboard" && <WorkspacePulseBar />}
 
             <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
               <Suspense fallback={<LoadingSkeleton />}>

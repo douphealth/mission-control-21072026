@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import premiumCss from "../premium-ui.css?url";
 import lumaCss from "../luma-ui.css?url";
+import obsidianAtelierCss from "../obsidian-atelier.css?url";
 
 function NotFoundComponent() {
   return (
@@ -100,6 +101,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "stylesheet",
         href: lumaCss,
+      },
+      {
+        rel: "stylesheet",
+        href: obsidianAtelierCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
