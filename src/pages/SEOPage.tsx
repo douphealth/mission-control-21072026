@@ -53,6 +53,12 @@ import type {
   Website,
 } from "@/lib/db";
 import { useNavigationStore } from "@/stores/navigationStore";
+import {
+  evidenceAgeDays,
+  isCurrentSEOIssue,
+  issueEvidenceState,
+  snapshotFreshness,
+} from "@/lib/seoEvidence";
 
 const SOURCE_LABELS: Record<SEODataSource, string> = {
   gsc: "Search Console",
@@ -542,15 +548,20 @@ export default function SEOPage() {
             latest,
             previous,
             issues: issues.filter(
-              (issue) =>
-                issue.websiteId === website.id &&
-                (issue.status === "open" || issue.status === "in-progress"),
+              (issue) => issue.websiteId === website.id && isCurrentSEOIssue(issue),
             ),
             actions: actions.filter(
               (action) =>
                 action.websiteId === website.id &&
                 action.status !== "done" &&
-                action.status !== "cancelled",
+                action.status !== "cancelled" &&
+                (!action.issueId ||
+                  isCurrentSEOIssue(issues.find((issue) => issue.id === action.issueId) ?? {
+                    status: "ignored",
+                    source: "manual",
+                    observedAt: "",
+                    evidence: "",
+                  })),
             ),
             trend: [...rows]
               .sort((a, b) => a.date.localeCompare(b.date))
@@ -568,35 +579,55 @@ export default function SEOPage() {
         .filter((snapshot): snapshot is SEOSnapshot => Boolean(snapshot)),
     [siteRows],
   );
-  const totalClicks = optionalSum(latestSnapshots.map((snapshot) => snapshot.clicks));
-  const totalImpressions = optionalSum(latestSnapshots.map((snapshot) => snapshot.impressions));
-  const averagePosition = optionalAverage(latestSnapshots.map((snapshot) => snapshot.avgPosition));
-  const openIssueCount = scopedIssues.filter(
-    (issue) => issue.status === "open" || issue.status === "in-progress",
+  const freshSnapshots = latestSnapshots.filter(
+    (snapshot) => snapshotFreshness(snapshot) === "fresh",
+  );
+  const staleSnapshotCount = latestSnapshots.filter(
+    (snapshot) => snapshotFreshness(snapshot) !== "fresh",
   ).length;
-  const openActionCount = scopedActions.filter(
-    (action) => action.status !== "done" && action.status !== "cancelled",
+  const currentIssues = scopedIssues.filter((issue) => isCurrentSEOIssue(issue));
+  const staleIssueCount = scopedIssues.filter(
+    (issue) =>
+      (issue.status === "open" || issue.status === "in-progress") &&
+      issueEvidenceState(issue) !== "current",
   ).length;
+  const currentIssueIds = new Set(currentIssues.map((issue) => issue.id));
+  const actionableActions = scopedActions.filter(
+    (action) =>
+      action.status !== "done" &&
+      action.status !== "cancelled" &&
+      (!action.issueId || currentIssueIds.has(action.issueId)),
+  );
+  const totalClicks = optionalSum(freshSnapshots.map((snapshot) => snapshot.clicks));
+  const totalImpressions = optionalSum(freshSnapshots.map((snapshot) => snapshot.impressions));
+  const averagePosition = optionalAverage(freshSnapshots.map((snapshot) => snapshot.avgPosition));
+  const openIssueCount = currentIssues.length;
+  const openActionCount = actionableActions.length;
   const configuredCount = websites.filter(
     (website) =>
       scopedWebsiteIds.has(website.id) && profileMap.get(website.id)?.syncStatus === "connected",
   ).length;
-  const evidenceSiteCount = latestSnapshots.length;
-  const mentionedCount = scopedVisibility.filter((check) => check.mentioned).length;
-  const citedCount = scopedVisibility.filter((check) => check.cited).length;
-  const aiCheckCount = scopedVisibility.length;
+  const evidenceSiteCount = freshSnapshots.length;
+  const needsFreshEvidenceCount = siteRows.filter(
+    (row) => snapshotFreshness(row.latest) !== "fresh",
+  ).length;
+  const freshVisibility = scopedVisibility.filter(
+    (check) => (evidenceAgeDays(check.checkedAt) ?? Number.POSITIVE_INFINITY) <= 30,
+  );
+  const mentionedCount = freshVisibility.filter((check) => check.mentioned).length;
+  const citedCount = freshVisibility.filter((check) => check.cited).length;
+  const aiCheckCount = freshVisibility.length;
 
   const priorityActions = useMemo(
     () =>
-      [...scopedActions]
-        .filter((action) => action.status !== "done" && action.status !== "cancelled")
+      [...actionableActions]
         .sort(
           (a, b) =>
             PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority] ||
             (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"),
         )
         .slice(0, 6),
-    [scopedActions],
+    [actionableActions],
   );
 
   const recentChanges = useMemo(
@@ -620,14 +651,13 @@ export default function SEOPage() {
 
   const openIssues = useMemo(
     () =>
-      [...scopedIssues]
-        .filter((issue) => issue.status === "open" || issue.status === "in-progress")
+      [...currentIssues]
         .sort(
           (a, b) =>
             PRIORITY_RANK[b.severity] - PRIORITY_RANK[a.severity] ||
             b.observedAt.localeCompare(a.observedAt),
         ),
-    [scopedIssues],
+    [currentIssues],
   );
 
   const setProfile = (siteId: string) => {
@@ -889,8 +919,8 @@ export default function SEOPage() {
               Portfolio SEO control center
             </h1>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-white/65 sm:text-[15px]">
-              Review every website, exact before and after changes, search performance, technical
-              health, AI visibility, AEO, and GEO opportunities from one evidence-backed workspace.
+              Current evidence only. Fresh observations drive metrics and priorities; stale or
+              historical audit records are clearly separated and never presented as live truth.
             </p>
             <div className="mt-5 flex flex-wrap gap-2">
               <button
@@ -917,30 +947,46 @@ export default function SEOPage() {
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
               <div className="text-2xl font-extrabold text-white">{websites.length}</div>
               <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                Sites in portfolio
+                Sites tracked
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
               <div className="text-2xl font-extrabold text-white">{evidenceSiteCount}</div>
               <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                Sites with evidence
+                Fresh evidence
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
               <div className="text-2xl font-extrabold text-white">{openIssueCount}</div>
               <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                Open issues
+                Current verified issues
               </div>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/10 p-4 backdrop-blur">
-              <div className="text-2xl font-extrabold text-white">{openActionCount}</div>
+              <div className="text-2xl font-extrabold text-white">{needsFreshEvidenceCount}</div>
               <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-white/50">
-                Open actions
+                Need fresh evidence
               </div>
             </div>
           </div>
         </div>
       </section>
+
+      {(staleSnapshotCount > 0 || staleIssueCount > 0 || needsFreshEvidenceCount > 0) && (
+        <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.05] p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-500" />
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-bold text-foreground">Evidence freshness guard is active</div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {needsFreshEvidenceCount} site{needsFreshEvidenceCount === 1 ? "" : "s"} need fresh evidence ·
+                {" "}{staleSnapshotCount} stale/expired snapshot{staleSnapshotCount === 1 ? "" : "s"} ·
+                {" "}{staleIssueCount} historical/unverified finding{staleIssueCount === 1 ? "" : "s"} excluded from current issue counts.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-card/70 p-3 shadow-sm sm:flex-row sm:items-center">
         <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl bg-secondary/70 px-3 py-2.5">
@@ -979,7 +1025,7 @@ export default function SEOPage() {
           detail={
             totalClicks === undefined
               ? "Connect or import Search Console data"
-              : `${latestSnapshots.filter((snapshot) => isNumber(snapshot.clicks)).length} site snapshots`
+              : `${freshSnapshots.filter((snapshot) => isNumber(snapshot.clicks)).length} fresh site snapshots`
           }
           icon={TrendingUp}
           tone="emerald"
@@ -989,8 +1035,8 @@ export default function SEOPage() {
           value={formatNumber(totalImpressions)}
           detail={
             totalImpressions === undefined
-              ? "No verified search exposure loaded"
-              : "Latest available snapshot per site"
+              ? "No fresh verified search exposure loaded"
+              : "Fresh snapshots only; stale observations excluded"
           }
           icon={Eye}
           tone="blue"
@@ -1000,8 +1046,8 @@ export default function SEOPage() {
           value={formatNumber(averagePosition, 1)}
           detail={
             averagePosition === undefined
-              ? "No comparable position data"
-              : "Unweighted mean of latest observations"
+              ? "No fresh comparable position data"
+              : "Unweighted mean of fresh observations"
           }
           icon={Target}
           tone="violet"
@@ -1011,8 +1057,8 @@ export default function SEOPage() {
           value={aiCheckCount ? `${mentionedCount} / ${citedCount}` : "No data"}
           detail={
             aiCheckCount
-              ? `${aiCheckCount} recorded visibility checks`
-              : "Record prompt evidence before judging AI visibility"
+              ? `${aiCheckCount} visibility checks from the last 30 days`
+              : "No fresh AI visibility evidence in the last 30 days"
           }
           icon={Sparkles}
           tone="amber"
@@ -1020,7 +1066,7 @@ export default function SEOPage() {
         <MetricCard
           label="Connected sources"
           value={`${configuredCount}/${websites.filter((website) => scopedWebsiteIds.has(website.id)).length || 0}`}
-          detail="Profiles marked connected, not guessed"
+          detail={`Profiles marked connected · ${staleSnapshotCount} stale/expired snapshots · ${staleIssueCount} findings need revalidation`}
           icon={Activity}
           tone="rose"
         />
