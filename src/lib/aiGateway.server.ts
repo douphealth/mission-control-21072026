@@ -78,11 +78,13 @@ export async function transcribeAudio(
 ): Promise<{ text: string; provider: "lovable" | "gemini" } | null> {
   const key = apiKey();
   const directGemini = geminiKey();
+  let triedDirectGemini = false;
 
   // Prefer direct Gemini 3.5 Transcribe when configured because it supports
   // custom vocabulary biasing for the user's brands, technical terms and
   // proper nouns. Lovable remains the resilient fallback.
   if (directGemini) {
+    triedDirectGemini = true;
     const primary = await transcribeAudioWithGemini(file, language).catch(() => null);
     if (primary?.text) return primary;
   }
@@ -141,8 +143,10 @@ export async function transcribeAudio(
   } catch (error) {
     // If the Lovable transcription path is unavailable or rate-limited, use
     // the configured direct Gemini key rather than dropping to browser STT.
-    const fallback = await transcribeAudioWithGemini(file, language).catch(() => null);
-    if (fallback) return fallback;
+    if (!triedDirectGemini) {
+      const fallback = await transcribeAudioWithGemini(file, language).catch(() => null);
+      if (fallback) return fallback;
+    }
     throw error;
   } finally {
     clearTimeout(timeout);
