@@ -1,6 +1,7 @@
 // Planning preferences + private local metrics. Persisted on this device only.
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { resilientWebStorage } from "@/lib/resilientStorage";
 
 export type AreaFilter = "all" | "personal" | "work";
 
@@ -71,7 +72,10 @@ export const usePlanStore = create<PlanState>()(
       bump: (key, by = 1) =>
         set((s) => ({ metrics: { ...s.metrics, [key]: (s.metrics[key] ?? 0) + by } })),
     }),
-    { name: "mc-plan-v1" },
+    {
+      name: "mc-plan-v1",
+      storage: createJSONStorage(() => resilientWebStorage),
+    },
   ),
 );
 
