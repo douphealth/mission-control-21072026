@@ -563,17 +563,82 @@ export default function CredentialsPage() {
   };
 
   const importCredentials = async (items: CredentialDraft[]) => {
-    const encrypted = await Promise.all(
-      items.map(async (item) => ({
-        ...item,
-        password: item.password ? await encrypt(item.password) : "",
-        apiKey: item.apiKey ? await encrypt(item.apiKey) : "",
-      })),
+    const norm = (value: string | undefined) => (value || "").trim().toLowerCase();
+    const host = (value: string | undefined) =>
+      norm(value).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+
+    const identity = (item: Pick<CredentialVault, "label" | "service" | "url" | "username">) => {
+      const urlHost = host(item.url);
+      const service = norm(item.service);
+      const username = norm(item.username);
+      return urlHost || service
+        ? `${urlHost}|${service}|${username}`
+        : `label|${norm(item.label)}`;
+    };
+
+    const existingByIdentity = new Map(
+      credentials.map((credential) => [identity(credential), credential] as const),
     );
-    await bulkAddItems<CredentialVault>("credentials", encrypted);
+    const newItems: Omit<CredentialVault, "id">[] = [];
+    let enriched = 0;
+
+    for (const item of items) {
+      const password = item.password ? await encrypt(item.password) : "";
+      const apiKey = item.apiKey ? await encrypt(item.apiKey) : "";
+      const encrypted: Omit<CredentialVault, "id"> = { ...item, password, apiKey };
+      const existing = existingByIdentity.get(identity(encrypted));
+
+      if (!existing) {
+        newItems.push(encrypted);
+        continue;
+      }
+
+      // Existing records are enriched, never destructively overwritten by a
+      // bulk paste. Secrets are filled only when the stored field is empty.
+      const changes: Partial<CredentialVault> = {};
+      if (!existing.service && encrypted.service) changes.service = encrypted.service;
+      if (!existing.url && encrypted.url) changes.url = encrypted.url;
+      if (!existing.username && encrypted.username) changes.username = encrypted.username;
+      if (!existing.password && encrypted.password) changes.password = encrypted.password;
+      if (!existing.apiKey && encrypted.apiKey) changes.apiKey = encrypted.apiKey;
+      if ((!existing.notes || existing.notes.length < encrypted.notes.length) && encrypted.notes) {
+        changes.notes = existing.notes && !encrypted.notes.includes(existing.notes)
+          ? `${existing.notes}\n${encrypted.notes}`
+          : encrypted.notes;
+      }
+      if (
+        existing.category === "General" &&
+        encrypted.category &&
+        encrypted.category !== "General"
+      ) {
+        changes.category = encrypted.category;
+      }
+      const mergedTags = Array.from(
+        new Set([...(existing.tags || []), ...(encrypted.tags || [])]),
+      );
+      if (mergedTags.length > (existing.tags || []).length) changes.tags = mergedTags;
+
+      if (Object.keys(changes).length) {
+        await updateItem<CredentialVault>("credentials", existing.id, changes);
+        enriched++;
+      }
+    }
+
+    if (newItems.length) await bulkAddItems<CredentialVault>("credentials", newItems);
+
     toast.success(
       `${items.length} credential${items.length === 1 ? "" : "s"} processed securely`,
-      { description: "Existing matches were deduplicated/enriched automatically." },
+      {
+        description: [
+          newItems.length ? `${newItems.length} added` : "",
+          enriched ? `${enriched} existing enriched` : "",
+          items.length - newItems.length - enriched > 0
+            ? `${items.length - newItems.length - enriched} unchanged`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      },
     );
   };
 
