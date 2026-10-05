@@ -4,6 +4,7 @@
 import { create } from "zustand";
 import { db } from "@/lib/db";
 import type { UserSettings } from "@/lib/db";
+import { resilientWebStorage } from "@/lib/resilientStorage";
 import {
   nextDayNightTheme,
   resolveTheme,
@@ -42,7 +43,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   setTheme: (t) => {
     const resolvedTheme = applyTheme(t);
     set({ theme: t, resolvedTheme });
-    if (typeof localStorage !== "undefined") localStorage.setItem("mc-theme", t);
+    if (typeof window !== "undefined") resilientWebStorage.setItem("mc-theme", t);
     void db.settings.update("default", { theme: t });
   },
 
@@ -84,7 +85,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     const settings = await db.settings.get("default");
     if (settings) {
       const persistedTheme =
-        typeof localStorage !== "undefined" ? localStorage.getItem("mc-theme") : null;
+        typeof window !== "undefined" ? resilientWebStorage.getItem("mc-theme") : null;
       const theme = (settings.theme || persistedTheme || "sage") as ThemeName;
       const resolvedTheme = applyTheme(theme);
       set({
@@ -97,7 +98,7 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
       });
     } else {
       const persistedTheme =
-        typeof localStorage !== "undefined" ? localStorage.getItem("mc-theme") : null;
+        typeof window !== "undefined" ? resilientWebStorage.getItem("mc-theme") : null;
       const theme = (persistedTheme || "sage") as ThemeName;
       const resolvedTheme = applyTheme(theme);
       set({ isLoading: false, theme, resolvedTheme });
