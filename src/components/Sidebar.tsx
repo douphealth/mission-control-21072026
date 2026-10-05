@@ -406,7 +406,9 @@ export default function Sidebar() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-bold">{userName}</div>
-                <div className="truncate text-[9px] text-sidebar-foreground/40">{userRole}</div>
+                <div className="truncate text-[9px] text-sidebar-foreground/40">
+                  {area === "personal" ? "Home mode" : area === "work" ? "Business mode" : userRole}
+                </div>
               </div>
               <button
                 type="button"
