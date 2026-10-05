@@ -7,6 +7,7 @@ import {
 } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { usePlanStore } from "@/stores/planStore";
 import { useState } from "react";
 import {
   Home,
@@ -118,6 +119,7 @@ export default function Sidebar() {
     setSidebarCollapsed,
   } = useNavigationStore();
   const { userName, userRole, theme, toggleTheme } = useSettingsStore();
+  const area = usePlanStore((state) => state.area);
 
   const [systemsOpen, setSystemsOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
@@ -164,6 +166,23 @@ export default function Sidebar() {
   };
 
   const collapsed = sidebarCollapsed;
+
+  const familyGroup = {
+    label: "Home",
+    hint: "Simple daily life",
+    items: [
+      { id: "dashboard", label: "Today", icon: Home },
+      { id: "tasks", label: "Tasks", icon: CheckSquare },
+      { id: "calendar", label: "Calendar", icon: Calendar },
+      { id: "reminders", label: "Reminders", icon: Bell },
+      { id: "habits", label: "Habits", icon: Flame },
+      { id: "notes", label: "Notes", icon: FileText },
+      { id: "payments", label: "Finance", icon: DollarSign },
+      { id: "ideas", label: "Ideas", icon: Lightbulb },
+    ],
+  };
+
+  const visibleGroups = area === "personal" ? [familyGroup] : navGroups;
 
   const NavItem = ({
     item,
@@ -250,7 +269,7 @@ export default function Sidebar() {
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <div className="space-y-5">
-            {navGroups.map((group) => (
+            {visibleGroups.map((group) => (
               <section key={group.label}>
                 {!collapsed && (
                   <div className="mb-1.5 px-3">
@@ -268,10 +287,11 @@ export default function Sidebar() {
               </section>
             ))}
 
+            {area !== "personal" && (
             <section>
               <button
                 type="button"
-                onClick={() => setSystemsOpen((v) => !v)}
+                onClick={() => setSystemsOpen((v) => !v)
                 className={`flex w-full items-center rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/40 transition hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/70 ${
                   collapsed ? "justify-center px-0" : "justify-between"
                 }`}
@@ -294,8 +314,9 @@ export default function Sidebar() {
                 </div>
               )}
             </section>
+            )}
 
-            {customModules.filter((m) => m.visible).length > 0 && (
+            {area !== "personal" && customModules.filter((m) => m.visible).length > 0 && (
               <section>
                 {!collapsed && (
                   <div className="mb-1.5 px-3 text-[9px] font-extrabold uppercase tracking-[0.18em] text-sidebar-foreground/34">
@@ -331,7 +352,7 @@ export default function Sidebar() {
               </section>
             )}
 
-            {!collapsed && (
+            {!collapsed && area !== "personal" && (
               <section>
                 {!customOpen ? (
                   <button
