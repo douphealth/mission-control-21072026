@@ -215,27 +215,30 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      <div className="ultra-rise-1">
-        <HeroNowBand
-          nextAction={ops.nextAction}
-          commitmentsTotal={commitmentsTotal}
-          commitmentsDone={commitmentsDone}
-          plannedMin={ops.capacity.plannedMin}
-          availableMin={ops.capacity.availableMin}
-          onFocus={(item) => setDockItem(item)}
-          onComplete={ops.complete}
-        />
-      </div>
-
-      <section className="mc21-capture-deck ultra-rise-1" aria-label="Quick capture">
-        <div className="mc21-capture-deck-head">
-          <div>
-            <span>Capture</span>
-            <strong>Get it out of your head in seconds.</strong>
-          </div>
-          <small>N · natural language · Inbox by default</small>
+      <section className="mc36-command-stage ultra-rise-1" aria-label="Today command center">
+        <div className="mc36-hero-frame">
+          <HeroNowBand
+            area={ops.area}
+            nextAction={ops.nextAction}
+            commitmentsTotal={commitmentsTotal}
+            commitmentsDone={commitmentsDone}
+            plannedMin={ops.capacity.plannedMin}
+            availableMin={ops.capacity.availableMin}
+            onFocus={(item) => setDockItem(item)}
+            onComplete={ops.complete}
+          />
         </div>
-        <QuickCaptureBar />
+
+        <div className="mc21-capture-deck mc36-capture-ribbon" aria-label="Quick capture">
+          <div className="mc21-capture-deck-head">
+            <div>
+              <span>Instant capture</span>
+              <strong>Drop it here. Mission Control sorts the rest.</strong>
+            </div>
+            <small>N · natural language · Inbox by default</small>
+          </div>
+          <QuickCaptureBar />
+        </div>
       </section>
 
       {dockItem && (
@@ -270,17 +273,17 @@ export default function DashboardHome() {
         </>
       )}
 
-      <section className="mc21-utility-deck ultra-rise-3" aria-label="Today signals and workspaces">
+      <section className="mc21-utility-deck mc36-launchpad ultra-rise-3" aria-label="Today signals and workspaces">
         <div className="mc21-utility-head">
           <div>
             <span>{ops.area === "personal" ? "Home mode" : ops.area === "work" ? "Business mode" : "All areas"}</span>
-            <strong>{ops.area === "personal" ? "Simple family shortcuts" : "Move faster"}</strong>
+            <strong>{ops.area === "personal" ? "Family launchpad" : ops.area === "work" ? "Operator launchpad" : "One place to move everything forward"}</strong>
           </div>
-          <small>Shortcuts only. Portfolio diagnostics stay out of today.</small>
+          <small>{ops.area === "personal" ? "Big, simple actions for everyday family use." : "Fast routes only. Deep diagnostics stay out of Today."}</small>
         </div>
 
         {!ops.isEmpty && (
-          <div className="mc-kpi-grid" role="navigation" aria-label="Today at a glance">
+          <div className="mc-kpi-grid mc36-kpi-strip" role="navigation" aria-label="Today at a glance">
             {attentionCount > 0 && (
               <button type="button" onClick={() => setActiveSection("tasks")} className="mc-kpi-card" data-tone="bad">
                 <span className="mc-kpi-icon"><AlertTriangle size={15} /></span>
@@ -320,14 +323,15 @@ export default function DashboardHome() {
           </div>
         )}
 
-        <div className="mc-launch-grid" aria-label="Primary workspaces">
-          {launchItems.map((item) => (
+        <div className="mc-launch-grid mc36-workspace-grid" aria-label="Primary workspaces">
+          {launchItems.map((item, index) => (
             <button
               key={item.id}
               type="button"
               onClick={() => setActiveSection(item.id)}
               className="mc-launch-card group"
               data-tone={item.tone}
+              data-featured={index === 0 ? "true" : undefined}
               aria-label={`${item.label}: ${item.detail}`}
             >
               <span className="mc-launch-icon"><item.icon size={16} /></span>

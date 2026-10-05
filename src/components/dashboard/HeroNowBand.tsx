@@ -16,6 +16,7 @@ import { estimateOf, fmtMinutes } from "@/lib/planning";
 import type { Task } from "@/lib/db";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
+import type { AreaFilter } from "@/stores/planStore";
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -73,6 +74,7 @@ function ProgressRing({ pct }: { pct: number }) {
 }
 
 export default function HeroNowBand({
+  area,
   nextAction,
   commitmentsTotal,
   commitmentsDone,
@@ -81,6 +83,7 @@ export default function HeroNowBand({
   onFocus,
   onComplete,
 }: {
+  area: AreaFilter;
   nextAction: WorkItem | null;
   commitmentsTotal: number;
   commitmentsDone: number;
@@ -108,6 +111,14 @@ export default function HeroNowBand({
   });
   const donePct =
     commitmentsTotal > 0 ? Math.round((commitmentsDone / commitmentsTotal) * 100) : 0;
+  const contextLabel =
+    area === "personal" ? "Family day" : area === "work" ? "Business day" : "Whole life";
+  const contextCopy =
+    area === "personal"
+      ? "Keep home, school, appointments and routines moving without the work noise."
+      : area === "work"
+        ? "Protect the highest-leverage work and keep every revenue asset moving."
+        : "One calm view across home and business, with only the next useful action promoted.";
 
   return (
     <section className="mc13-hero" aria-label="Current priority and day progress">
@@ -118,7 +129,7 @@ export default function HeroNowBand({
       <div className="mc13-hero-top">
         <div className="mc13-live-pill">
           <span className="mc13-live-dot" />
-          Live command deck
+          {contextLabel}
         </div>
         <div className="mc13-date">
           <span>{date}</span>
@@ -130,12 +141,13 @@ export default function HeroNowBand({
         <div className="mc13-now-panel">
           <div className="mc13-eyebrow">
             <Sparkles size={12} />
-            {greeting} · highest-value next action
+            {greeting} · your next best move
           </div>
 
           {nextAction ? (
             <>
               <h1 className="mc13-now-title">{nextAction.title}</h1>
+              <p className="mc36-context-copy">{contextCopy}</p>
 
               <div className="mc13-meta-row">
                 {nextAction.kind === "task" && (
@@ -171,9 +183,7 @@ export default function HeroNowBand({
           ) : (
             <>
               <h1 className="mc13-now-title">Clear deck. Choose the next meaningful move.</h1>
-              <p className="mc13-now-subtitle">
-                Capture what matters or choose one outcome to anchor the day.
-              </p>
+              <p className="mc13-now-subtitle">{contextCopy}</p>
               <div className="mc13-actions">
                 <button
                   type="button"
@@ -203,7 +213,7 @@ export default function HeroNowBand({
           <div className="mc13-day-head">
             <div>
               <span className="mc13-day-kicker">Today</span>
-              <strong>Execution pulse</strong>
+              <strong>{area === "personal" ? "Family rhythm" : area === "work" ? "Execution pulse" : "Life rhythm"}</strong>
             </div>
             <ProgressRing pct={donePct} />
           </div>
