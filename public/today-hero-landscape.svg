@@ -1,0 +1,74 @@
+<svg width="1600" height="900" viewBox="0 0 1600 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="210" y1="40" x2="1390" y2="860" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E9FBFF"/>
+      <stop offset=".35" stop-color="#E8F5F2"/>
+      <stop offset=".68" stop-color="#EEDFD0"/>
+      <stop offset="1" stop-color="#D7EEF0"/>
+    </linearGradient>
+    <linearGradient id="mountA" x1="420" y1="440" x2="880" y2="820" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#91B9B7"/>
+      <stop offset="1" stop-color="#2F5861"/>
+    </linearGradient>
+    <linearGradient id="mountB" x1="900" y1="370" x2="1350" y2="850" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#78989A"/>
+      <stop offset="1" stop-color="#17343C"/>
+    </linearGradient>
+    <linearGradient id="temple" x1="1160" y1="250" x2="1380" y2="690" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6E5C9"/>
+      <stop offset=".45" stop-color="#CBAA78"/>
+      <stop offset="1" stop-color="#745637"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0" cy="0" r="1" gradientTransform="translate(790 335) rotate(90) scale(220)">
+      <stop stop-color="#FFF9DA" stop-opacity="1"/>
+      <stop offset=".35" stop-color="#FFF4BD" stop-opacity=".85"/>
+      <stop offset="1" stop-color="#FFF4BD" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="mist" x1="760" y1="620" x2="760" y2="890" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity=".65"/>
+      <stop offset="1" stop-color="white" stop-opacity=".1"/>
+    </linearGradient>
+    <filter id="blur40" x="-200" y="-200" width="2000" height="1300">
+      <feGaussianBlur stdDeviation="40"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" rx="48" fill="url(#sky)"/>
+  <circle cx="790" cy="335" r="220" fill="url(#sun)"/>
+  <circle cx="790" cy="335" r="64" fill="#FFF7CF" opacity=".96"/>
+
+  <path d="M0 715L250 560L430 650L625 470L830 650L990 540L1200 690L1450 520L1600 610V900H0V715Z" fill="url(#mountA)" opacity=".62"/>
+  <path d="M690 770L930 510L1080 625L1220 410L1420 635L1600 495V900H690V770Z" fill="url(#mountB)" opacity=".82"/>
+  <path d="M0 760C230 690 410 725 610 775C840 834 1040 730 1230 748C1420 766 1510 835 1600 824V900H0V760Z" fill="url(#mist)"/>
+
+  <g opacity=".92">
+    <path d="M1145 390L1332 390L1298 347L1179 347L1145 390Z" fill="url(#temple)"/>
+    <rect x="1174" y="390" width="128" height="20" rx="4" fill="#B48A56"/>
+    <rect x="1170" y="410" width="136" height="18" rx="4" fill="#E2C59B"/>
+    <g fill="url(#temple)">
+      <rect x="1182" y="428" width="20" height="210" rx="7"/>
+      <rect x="1212" y="428" width="20" height="210" rx="7"/>
+      <rect x="1242" y="428" width="20" height="210" rx="7"/>
+      <rect x="1272" y="428" width="20" height="210" rx="7"/>
+    </g>
+    <rect x="1166" y="638" width="142" height="22" rx="5" fill="#9D764B"/>
+    <rect x="1148" y="660" width="178" height="18" rx="5" fill="#72553B"/>
+    <path d="M1120 680C1180 650 1270 655 1350 705C1320 725 1280 750 1238 780H1120V680Z" fill="#263F43"/>
+  </g>
+
+  <g fill="#17363C" opacity=".9">
+    <path d="M1060 687C1100 636 1128 620 1157 607C1140 658 1134 694 1137 744C1105 730 1083 714 1060 687Z"/>
+    <path d="M1375 683C1406 642 1434 623 1460 610C1442 660 1438 696 1444 742C1416 730 1393 713 1375 683Z"/>
+  </g>
+
+  <g opacity=".28" filter="url(#blur40)">
+    <ellipse cx="440" cy="715" rx="310" ry="92" fill="#BFF4EE"/>
+    <ellipse cx="1190" cy="770" rx="330" ry="110" fill="#D6EDFF"/>
+  </g>
+
+  <g stroke="#78D9C7" stroke-width="2" opacity=".4">
+    <path d="M980 770C1090 720 1220 727 1340 790"/>
+    <path d="M960 794C1090 750 1240 757 1390 820"/>
+    <path d="M1010 818C1145 790 1265 800 1430 850"/>
+  </g>
+</svg>
