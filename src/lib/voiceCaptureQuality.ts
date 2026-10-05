@@ -29,6 +29,14 @@ const LANGUAGE_LOCALES: Record<string, string> = {
   vi: "vi-VN",
 };
 
+// Provider-specific hints. Browser speech engines accept broad locale aliases,
+// while Gemini Transcribe has its own documented BCP-47 set.
+const TRANSCRIPTION_LOCALES: Record<string, string> = {
+  ...LANGUAGE_LOCALES,
+  ar: "ar-EG",
+  zh: "cmn-Hans-CN",
+};
+
 /** Browser recognition is only a live preview; never let a quiet mic discard a transcript. */
 export function hasUsableVoiceCapture(
   transcript: string,
@@ -101,7 +109,7 @@ export function browserEnvironmentLanguageHint(
 export function normalizeRequestedLanguage(language: string): string | undefined {
   const value = language.trim();
   if (value === "auto") return undefined;
-  const locale = LANGUAGE_LOCALES[value] ?? value;
+  const locale = TRANSCRIPTION_LOCALES[value] ?? value;
   return /^[a-z]{2}(?:-[A-Za-z0-9]{2,8})?$/.test(locale) ? locale : undefined;
 }
 
