@@ -22,6 +22,7 @@ import {
   AppWindow,
   Command,
   Mail,
+  Sunrise,
 } from "lucide-react";
 import TodayPlan from "@/components/dashboard/TodayPlan";
 import TodayTimeline from "@/components/dashboard/TodayTimeline";
@@ -175,8 +176,12 @@ export default function DashboardHome() {
   return (
     <div className="mc16-dashboard flex flex-col gap-4 pb-8 sm:gap-5">
       <div className="mc-home-toolbar ultra-fade">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="mc-home-toolbar-label">Today</span>
+        <div className="mc37-today-brand flex min-w-0 items-center gap-3">
+          <span className="mc37-today-sun" aria-hidden="true"><Sunrise size={20} /></span>
+          <span className="min-w-0">
+            <span className="mc-home-toolbar-label block">Today</span>
+            <span className="mc37-today-tagline hidden sm:block">Focus today. A calmer, more intentional tomorrow.</span>
+          </span>
           <div className="xl:hidden">
             <AreaSwitch compact />
           </div>

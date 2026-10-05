@@ -139,6 +139,7 @@ export default function HeroNowBand({
 
       <div className="mc13-hero-grid">
         <div className="mc13-now-panel">
+          <div className="mc37-priority-copy">
           <div className="mc13-eyebrow">
             <Sparkles size={12} />
             {greeting} · your next best move
@@ -207,6 +208,16 @@ export default function HeroNowBand({
               </div>
             </>
           )}
+          </div>
+
+          <div className="mc37-hero-art" aria-hidden="true">
+            <div className="mc37-hero-art-shade" />
+            <div className="mc37-hero-quote">
+              <span>Small steps.</span>
+              <strong>Bigger freedom.</strong>
+              <em>Discipline today creates freedom tomorrow.</em>
+            </div>
+          </div>
         </div>
 
         <aside className="mc13-day-panel" aria-label="Day progress">
