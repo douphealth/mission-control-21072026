@@ -66,6 +66,34 @@ export default function DashboardHome() {
   const setCommandPaletteOpen = useNavigationStore((s) => s.setCommandPaletteOpen);
   const evening = hhmmNow() >= workdayEnd || showClose;
 
+  const launchItems =
+    ops.area === "personal"
+      ? [
+          { id: "tasks", label: "Tasks", detail: "What needs doing", icon: CheckSquare, tone: "mint" },
+          { id: "calendar", label: "Calendar", detail: "Family schedule", icon: CalendarClock, tone: "sky" },
+          { id: "reminders", label: "Reminders", detail: "Don't forget", icon: Inbox, tone: "amber" },
+          { id: "habits", label: "Habits", detail: "Daily routines", icon: CheckCircle2, tone: "violet" },
+          { id: "notes", label: "Notes", detail: "Keep it handy", icon: BarChart3, tone: "rose" },
+          { id: "payments", label: "Finance", detail: "Bills & money", icon: Zap, tone: "indigo" },
+        ]
+      : ops.area === "work"
+        ? [
+            { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare, tone: "mint" },
+            { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft, tone: "violet" },
+            { id: "websites", label: "Websites", detail: "Growth", icon: Globe, tone: "sky" },
+            { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search, tone: "amber" },
+            { id: "apps-funnels", label: "Apps", detail: "Funnels", icon: AppWindow, tone: "rose" },
+            { id: "github", label: "GitHub", detail: "Build", icon: Github, tone: "indigo" },
+          ]
+        : [
+            { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare, tone: "mint" },
+            { id: "calendar", label: "Calendar", detail: "Schedule", icon: CalendarClock, tone: "sky" },
+            { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft, tone: "violet" },
+            { id: "websites", label: "Websites", detail: "Growth", icon: Globe, tone: "amber" },
+            { id: "notes", label: "Notes", detail: "Knowledge", icon: BarChart3, tone: "rose" },
+            { id: "payments", label: "Finance", detail: "Money", icon: Zap, tone: "indigo" },
+          ];
+
   const sendExecutiveEmail = async () => {
     if (sendingBriefing) return;
     setSendingBriefing(true);
@@ -243,8 +271,8 @@ export default function DashboardHome() {
       <section className="mc21-utility-deck ultra-rise-3" aria-label="Today signals and workspaces">
         <div className="mc21-utility-head">
           <div>
-            <span>Move faster</span>
-            <strong>Signals &amp; workspaces</strong>
+            <span>{ops.area === "personal" ? "Home mode" : ops.area === "work" ? "Business mode" : "All areas"}</span>
+            <strong>{ops.area === "personal" ? "Simple family shortcuts" : "Move faster"}</strong>
           </div>
           <small>Shortcuts only. Portfolio diagnostics stay out of today.</small>
         </div>
@@ -291,14 +319,7 @@ export default function DashboardHome() {
         )}
 
         <div className="mc-launch-grid" aria-label="Primary workspaces">
-          {[
-            { id: "tasks", label: "Tasks", detail: "Execute", icon: CheckSquare, tone: "mint" },
-            { id: "projects", label: "Projects", detail: "Priorities", icon: PanelsTopLeft, tone: "violet" },
-            { id: "websites", label: "Websites", detail: "Growth", icon: Globe, tone: "sky" },
-            { id: "seo", label: "SEO / AI", detail: "Visibility", icon: Search, tone: "amber" },
-            { id: "apps-funnels", label: "Apps", detail: "Funnels", icon: AppWindow, tone: "rose" },
-            { id: "github", label: "GitHub", detail: "Build", icon: Github, tone: "indigo" },
-          ].map((item) => (
+          {launchItems.map((item) => (
             <button
               key={item.id}
               type="button"
@@ -326,10 +347,16 @@ export default function DashboardHome() {
         >
           <span>
             <span className="block font-display text-[15px] font-extrabold tracking-tight text-foreground">
-              Life &amp; business overview
+              {ops.area === "personal"
+                ? "Home overview"
+                : ops.area === "work"
+                  ? "Business overview"
+                  : "Life & business overview"}
             </span>
             <span className="block text-[11px] text-muted-foreground">
-              Portfolio, finance, websites, apps and systems — open when reviewing, not while executing today.
+              {ops.area === "personal"
+                ? "Household, habits, reminders, notes and personal finance — open only when you want the bigger picture."
+                : "Portfolio, finance, websites, apps and systems — open when reviewing, not while executing today."}
             </span>
           </span>
           <ChevronDown

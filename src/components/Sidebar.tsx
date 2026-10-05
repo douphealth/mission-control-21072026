@@ -7,6 +7,7 @@ import {
 } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { usePlanStore } from "@/stores/planStore";
 import { useState } from "react";
 import {
   Home,
@@ -118,6 +119,7 @@ export default function Sidebar() {
     setSidebarCollapsed,
   } = useNavigationStore();
   const { userName, userRole, theme, toggleTheme } = useSettingsStore();
+  const area = usePlanStore((state) => state.area);
 
   const [systemsOpen, setSystemsOpen] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
@@ -164,6 +166,23 @@ export default function Sidebar() {
   };
 
   const collapsed = sidebarCollapsed;
+
+  const familyGroup = {
+    label: "Home",
+    hint: "Simple daily life",
+    items: [
+      { id: "dashboard", label: "Today", icon: Home },
+      { id: "tasks", label: "Tasks", icon: CheckSquare },
+      { id: "calendar", label: "Calendar", icon: Calendar },
+      { id: "reminders", label: "Reminders", icon: Bell },
+      { id: "habits", label: "Habits", icon: Flame },
+      { id: "notes", label: "Notes", icon: FileText },
+      { id: "payments", label: "Finance", icon: DollarSign },
+      { id: "ideas", label: "Ideas", icon: Lightbulb },
+    ],
+  };
+
+  const visibleGroups = area === "personal" ? [familyGroup] : navGroups;
 
   const NavItem = ({
     item,
@@ -234,7 +253,7 @@ export default function Sidebar() {
           {!collapsed && (
             <div className="min-w-0">
               <div className="truncate text-[14px] font-extrabold tracking-tight">Mission Control</div>
-              <div className="text-[10px] font-medium text-sidebar-foreground/42">Focus. Execute. Grow.</div>
+              <div className="text-[10px] font-medium text-sidebar-foreground/42">Home. Work. One place.</div>
             </div>
           )}
         </div>
@@ -250,7 +269,7 @@ export default function Sidebar() {
 
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <div className="space-y-5">
-            {navGroups.map((group) => (
+            {visibleGroups.map((group) => (
               <section key={group.label}>
                 {!collapsed && (
                   <div className="mb-1.5 px-3">
@@ -268,6 +287,7 @@ export default function Sidebar() {
               </section>
             ))}
 
+            {area !== "personal" && (
             <section>
               <button
                 type="button"
@@ -294,8 +314,9 @@ export default function Sidebar() {
                 </div>
               )}
             </section>
+            )}
 
-            {customModules.filter((m) => m.visible).length > 0 && (
+            {area !== "personal" && customModules.filter((m) => m.visible).length > 0 && (
               <section>
                 {!collapsed && (
                   <div className="mb-1.5 px-3 text-[9px] font-extrabold uppercase tracking-[0.18em] text-sidebar-foreground/34">
@@ -331,7 +352,7 @@ export default function Sidebar() {
               </section>
             )}
 
-            {!collapsed && (
+            {!collapsed && area !== "personal" && (
               <section>
                 {!customOpen ? (
                   <button
@@ -385,7 +406,9 @@ export default function Sidebar() {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-xs font-bold">{userName}</div>
-                <div className="truncate text-[9px] text-sidebar-foreground/40">{userRole}</div>
+                <div className="truncate text-[9px] text-sidebar-foreground/40">
+                  {area === "personal" ? "Home mode" : area === "work" ? "Business mode" : userRole}
+                </div>
               </div>
               <button
                 type="button"

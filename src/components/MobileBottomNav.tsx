@@ -31,6 +31,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
+import AreaSwitch from "@/components/AreaSwitch";
+import { usePlanStore } from "@/stores/planStore";
 
 const moreItems = [
   { id: "tasks", label: "Tasks", icon: CheckSquare },
@@ -67,6 +69,7 @@ export default function MobileBottomNav() {
   const decisions = useDecisions();
   const [moreOpen, setMoreOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const area = usePlanStore((state) => state.area);
 
   useEffect(() => {
     if (!moreOpen) return;
@@ -100,12 +103,27 @@ export default function MobileBottomNav() {
   };
 
   const filteredItems = useMemo(() => {
+    const homeIds = new Set([
+      "tasks",
+      "review",
+      "focus",
+      "calendar",
+      "notes",
+      "reminders",
+      "payments",
+      "habits",
+      "ideas",
+      "links",
+      "dashboard",
+      "settings",
+    ]);
+    const source = area === "personal" ? moreItems.filter((item) => homeIds.has(item.id)) : moreItems;
     const q = query.trim().toLowerCase();
-    if (!q) return moreItems;
-    return moreItems.filter((item) =>
+    if (!q) return source;
+    return source.filter((item) =>
       [item.label, item.id].some((value) => value.toLowerCase().includes(q)),
     );
-  }, [query]);
+  }, [query, area]);
 
   const tabCls = (active: boolean) =>
     `mc14-mobile-tab relative flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-2xl transition-colors touch-manipulation active:scale-[0.94] ${
@@ -139,6 +157,9 @@ export default function MobileBottomNav() {
                   <h2 className="mt-0.5 text-[18px] font-extrabold tracking-tight text-foreground">All workspaces</h2>
                 </div>
                 <span className="text-[10px] font-semibold text-muted-foreground">{filteredItems.length} sections</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <AreaSwitch className="w-full justify-between" />
               </div>
               <label className="mt-3 flex h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/70 px-3 shadow-sm">
                 <Search size={15} className="shrink-0 text-muted-foreground" />
@@ -234,11 +255,25 @@ export default function MobileBottomNav() {
             </button>
 
             <button
-              onClick={() => go("projects")}
-              className={tabCls(activeSection === "projects")}
+              onClick={() => go(area === "personal" ? "calendar" : "projects")}
+              className={tabCls(
+                area === "personal" ? activeSection === "calendar" : activeSection === "projects",
+              )}
             >
-              <PanelsTopLeft size={20} strokeWidth={activeSection === "projects" ? 2.4 : 1.7} />
-              <span className="text-[10px] font-medium leading-none">Projects</span>
+              {area === "personal" ? (
+                <Calendar
+                  size={20}
+                  strokeWidth={activeSection === "calendar" ? 2.4 : 1.7}
+                />
+              ) : (
+                <PanelsTopLeft
+                  size={20}
+                  strokeWidth={activeSection === "projects" ? 2.4 : 1.7}
+                />
+              )}
+              <span className="text-[10px] font-medium leading-none">
+                {area === "personal" ? "Calendar" : "Projects"}
+              </span>
             </button>
 
             <button
