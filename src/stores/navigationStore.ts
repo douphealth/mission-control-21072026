@@ -2,7 +2,8 @@
 // Prevents full-app re-renders when navigating between sections
 
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist } from "zustand/middleware";
+import { resilientWebStorage } from "@/lib/resilientStorage";
 
 interface NavigationState {
   activeSection: string;
@@ -74,6 +75,8 @@ export const useNavigationStore = create<NavigationState>()(
     }),
     {
       name: "mc-navigation-v1",
+      storage: createJSONStorage(() => resilientWebStorage),
+      version: 2,
       partialize: (state) => ({
         activeSection: state.activeSection,
         recentSections: state.recentSections,
