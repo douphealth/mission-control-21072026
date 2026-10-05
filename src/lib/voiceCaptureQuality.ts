@@ -125,7 +125,7 @@ export function normalizeRequestedLanguage(language: string): string | undefined
   const value = language.trim();
   if (value === "auto") return undefined;
   const locale = TRANSCRIPTION_LOCALES[value] ?? value;
-  return /^[a-z]{2}(?:-[A-Za-z0-9]{2,8})?$/.test(locale) ? locale : undefined;
+  return /^[a-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/.test(locale) ? locale : undefined;
 }
 
 
