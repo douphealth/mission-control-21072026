@@ -176,7 +176,12 @@ function parseDelimited(text: string): CredentialBatchParseResult | null {
   const headerHits = mappedHeaders.filter(Boolean).length;
 
   // Header-based CSV/TSV/spreadsheet paste.
-  if (headerHits >= 2 && lines.length > 1) {
+  const looksLikeHeader =
+    lines.length > 1 &&
+    headerHits >= 2 &&
+    headerHits >= Math.ceil(first.length * 0.5);
+
+  if (looksLikeHeader) {
     const items: CredentialDraft[] = [];
     const errors: string[] = [];
     for (let i = 1; i < lines.length; i++) {
