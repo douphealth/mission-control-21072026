@@ -30,7 +30,7 @@ const LAST_SYNC_KEY = 'mc-cloud-last-sync';
 const USER_EMAIL_KEY = 'mc-cloud-user-email';
 const OWNER_KEY = 'mc-cloud-local-owner-v2';
 const DIRTY_KEY = 'mc-cloud-dirty-records-v3';
-const RECEIPTS_KEY = 'mc-cloud-confirmed-v2';
+const LEGACY_RECEIPTS_KEY = 'mc-cloud-confirmed-v2';
 const DEVICE_KEY = 'mc-cloud-device-v2';
 const REQUIRED_FIELDS: Record<string, string[]> = {
   tasks: ['title'], websites: ['name'], notes: ['title'], links: ['title'], repos: ['name'],
@@ -70,6 +70,10 @@ let firstQueuedAt = 0;
 const MAX_PUSH_LATENCY_MS = 4_000;
 const JOURNAL_EXCLUDED = new Set(['auditLog', 'syncHealth']);
 const remoteCache = new Map<string, { modifiedTime: string; backup: RemoteBackup }>();
+// Confirmed revisions are a performance cache, not durable user data.
+// Keeping them in localStorage caused an unbounded mc-cloud-confirmed-v2 payload
+// that could exhaust the origin quota and break synchronization entirely.
+const receiptCache = new Map<string, string>();
 function key(collection: string, id: string) { return `${collection}::${id}`; }
 function readObject<T>(name: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(name) || 'null') ?? fallback; } catch { return fallback; }
@@ -353,7 +357,11 @@ async function syncCycle(): Promise<SyncResult> {
       }
     }
     if (epoch !== currentEpoch || readGoogleToken()?.access_token !== token.access_token) throw new Error('Account changed before applying sync.');
-    const receipts = readObject<Record<string, string>>(RECEIPTS_KEY, {});
+    // Keep confirmation receipts only for this browser session. A cold start may
+    // compare more rows once, but it avoids an unbounded localStorage payload.
+    for (const cachedKey of receiptCache.keys()) {
+      if (!merged[cachedKey]) receiptCache.delete(cachedKey);
+    }
     let restored = 0;
     suppressMutationJournal++;
     try {
@@ -363,7 +371,7 @@ async function syncCycle(): Promise<SyncResult> {
           const table = COLLECTIONS[collection];
           if (!table || !id) continue;
           const dirty = readDirty()[recordKey];
-          if (!dirty && receipts[recordKey] === revisionOf(record)) continue;
+          if (!dirty && receiptCache.get(recordKey) === revisionOf(record)) continue;
           if (dirty && !sameChange(dirty, captured[recordKey])) continue;
           if (epoch !== currentEpoch) throw new Error('Sync cancelled.');
           if (record.deleted) await table.delete(id);
@@ -376,7 +384,7 @@ async function syncCycle(): Promise<SyncResult> {
           } else {
             throw new Error(`Invalid ${collection} record. No local records were overwritten.`);
           }
-          receipts[recordKey] = revisionOf(record);
+          receiptCache.set(recordKey, revisionOf(record));
         }
       });
     } finally {
@@ -391,7 +399,6 @@ async function syncCycle(): Promise<SyncResult> {
         delete current[recordKey];
       }
     }
-    localStorage.setItem(RECEIPTS_KEY, JSON.stringify(receipts));
     writeDirty(current);
     if (journalError) throw new Error('Cloud write completed but the device queue could not be acknowledged.');
     localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
@@ -433,7 +440,7 @@ export function onDirtyRecordsChange(callback: () => void) { dirtyListeners.add(
 export function getRecordSyncState(collection: string, id: string): RecordSyncState {
   if (!hasSession() || status === 'signed-out') return 'local-only';
   if (readDirty()[key(collection, id)]) return status === 'error' ? 'failed' : 'pending';
-  return readObject<Record<string, string>>(RECEIPTS_KEY, {})[key(collection, id)] ? 'saved' : 'pending';
+  return receiptCache.has(key(collection, id)) || status === 'synced' ? 'saved' : 'pending';
 }
 export function markCloudRecordDirty(collection: string, id: string, operation: DirtyOperation = 'put') {
   if (!COLLECTIONS[collection] || !id) return;
@@ -539,5 +546,8 @@ export async function startCloudSync(_force = false): Promise<{ signedIn: boolea
 
 
 if (typeof window !== 'undefined') {
+  // One-time cleanup of the legacy unbounded receipt payload. This key is only
+  // cache data; removing it cannot delete tasks or any other Mission Control data.
+  try { localStorage.removeItem(LEGACY_RECEIPTS_KEY); } catch { /* restricted storage */ }
   installMutationJournal();
 }
