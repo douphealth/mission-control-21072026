@@ -28,4 +28,13 @@ describe("standalone Google sync regression", () => {
     expect(pkg).not.toMatch(/@lovable\.dev|@supabase\/supabase-js/);
     expect(settings).not.toMatch(/Supabase/);
   });
+
+  it("never persists the unbounded cloud confirmation receipt map", () => {
+    expect(cloudSync).toContain("LEGACY_RECEIPTS_KEY");
+    expect(cloudSync).toContain("localStorage.removeItem(LEGACY_RECEIPTS_KEY)");
+    expect(cloudSync).toContain("const receiptCache = new Map<string, string>()");
+    expect(cloudSync).not.toMatch(/setItem\(RECEIPTS_KEY/);
+    expect(cloudSync).not.toMatch(/setItem\(LEGACY_RECEIPTS_KEY/);
+  });
+
 });
