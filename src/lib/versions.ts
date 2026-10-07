@@ -1,23 +1,21 @@
-// Local snapshots are durable IndexedDB records, never a growing localStorage array.
+// Durable IndexedDB snapshots. Portable exports omit credentials; local safety copies retain them.
 import { db } from './db';
 import { versionDb, prepareVersionStorage, validateSnapshot } from './versionStorage';
+import { stripSecretsForExport } from './secrets';
+import { preserveExcludedSecrets } from './versionSecrets';
 export const SNAPSHOTS_TABLE = 'mc_snapshots';
 const DEVICE_KEY = 'mc-device-label';
 const AUTO_KEEP = 30;
 const AUTO_DEBOUNCE_MS = 60_000;
 const AUTO_INTERVAL_MS = 15 * 60_000;
 export interface SnapshotMeta {
-  id: string;
-  name: string;
-  type: 'auto' | 'manual' | 'safety';
-  createdAt: string;
-  device: string;
-  counts: Record<string, number>;
-  sizeBytes: number;
+  id: string; name: string; type: 'auto' | 'manual' | 'safety'; createdAt: string;
+  device: string; counts: Record<string, number>; sizeBytes: number;
 }
 export interface Snapshot extends SnapshotMeta {
   payload: Record<string, any[]>;
   settings?: any;
+  secretPolicy?: 'excluded';
 }
 export function getDeviceLabel(): string {
   try {
@@ -34,8 +32,7 @@ export function setDeviceLabel(label: string) { try { localStorage.setItem(DEVIC
 const snapshotTables = () => db.tables.filter(table => !['settings', 'syncHealth'].includes(table.name));
 async function captureLocal() {
   const tables = snapshotTables();
-  const payload: Record<string, any[]> = {};
-  const counts: Record<string, number> = {};
+  const payload: Record<string, any[]> = {}, counts: Record<string, number> = {};
   let settings: any;
   await db.transaction('r', [...tables, db.settings], async () => {
     for (const table of tables) { payload[table.name] = await table.toArray(); counts[table.name] = payload[table.name].length; }
@@ -43,14 +40,17 @@ async function captureLocal() {
   });
   return { payload, counts, settings };
 }
-export function resetVersionsCache() { /* Compatibility: storage reads are always fresh. */ }
+export function resetVersionsCache() { /* Reads remain fresh across tabs. */ }
 function stripPayload(snapshot: Snapshot): SnapshotMeta {
-  const { payload: _payload, settings: _settings, ...meta } = snapshot;
+  const { payload: _payload, settings: _settings, secretPolicy: _policy, ...meta } = snapshot;
   return meta;
 }
 export async function listVersions(): Promise<SnapshotMeta[]> {
   await prepareVersionStorage();
-  return (await versionDb.snapshots.orderBy('createdAt').reverse().toArray()).map(stripPayload);
+  const summaries: SnapshotMeta[] = [];
+  // Do not retain all full backup payloads in memory just to show their titles.
+  await versionDb.snapshots.orderBy('createdAt').reverse().each(snapshot => { summaries.push(stripPayload(snapshot)); });
+  return summaries;
 }
 export async function saveVersion(opts: { name?: string; type?: SnapshotMeta['type'] } = {}): Promise<SnapshotMeta> {
   await prepareVersionStorage();
@@ -63,7 +63,6 @@ export async function saveVersion(opts: { name?: string; type?: SnapshotMeta['ty
     sizeBytes: new Blob([JSON.stringify({ payload, settings })]).size, payload, settings };
   await versionDb.snapshots.add(snapshot);
   if (!await versionDb.snapshots.get(snapshot.id)) throw new Error('The version could not be verified after saving.');
-  // Pruning is housekeeping; a failure does not invalidate a committed snapshot.
   try {
     const autos = (await listVersions()).filter(item => item.type === 'auto');
     if (autos.length > AUTO_KEEP) await versionDb.snapshots.bulkDelete(autos.slice(AUTO_KEEP).map(item => item.id));
@@ -85,21 +84,31 @@ export async function restoreVersion(id: string, opts: { safety?: boolean } = {}
   if (!snapshot) throw new Error('Version not found');
   validateSnapshot(snapshot);
   const allowed = new Map(snapshotTables().map(table => [table.name, table]));
-  for (const name of Object.keys(snapshot.payload)) if (!allowed.has(name)) throw new Error(`Unsupported version collection: ${name}. No data was changed.`);
-  // Never proceed with a destructive restore when its safety copy failed.
+  const names = Object.keys(snapshot.payload);
+  if (!names.length) throw new Error('The version has no recognized data collections. No data was changed.');
+  for (const name of names) if (!allowed.has(name)) throw new Error(`Unsupported version collection: ${name}. No data was changed.`);
+  // A failed safety copy must stop the restore, not be silently ignored.
   if (opts.safety !== false) await saveVersion({ type:'safety' });
-  const tables = Object.keys(snapshot.payload).map(name => allowed.get(name)!);
+  const tables = names.map(name => allowed.get(name)!);
   let restored = 0;
   await db.transaction('rw', [...tables, db.settings], async () => {
     for (const table of tables) {
-      const rows = snapshot.payload[table.name];
+      let rows = snapshot.payload[table.name];
+      if (snapshot.secretPolicy === 'excluded') {
+        const current = await table.bulkGet(rows.map(row => row.id));
+        rows = rows.map((row, index) => preserveExcludedSecrets(row, current[index]));
+      }
       await table.clear();
       if (rows.length) await table.bulkPut(rows);
       restored += rows.length;
     }
-    if (snapshot.settings) await db.settings.put({ ...snapshot.settings, id:'default' });
+    if (snapshot.settings) {
+      const settings = snapshot.secretPolicy === 'excluded'
+        ? preserveExcludedSecrets(snapshot.settings, await db.settings.get('default')) : snapshot.settings;
+      await db.settings.put({ ...settings, id:'default' });
+    }
   });
-  // Collections absent from an older backup are intentionally not touched.
+  // Collections absent from an older backup are not touched.
   return { restored };
 }
 export async function restoreLatestNonEmptyVersion(): Promise<{ restored: number; versionId?: string }> {
@@ -111,7 +120,8 @@ export async function restoreLatestNonEmptyVersion(): Promise<{ restored: number
 export async function downloadVersionFile(meta: SnapshotMeta) {
   const snapshot = await fetchFullSnapshot(meta.id);
   if (!snapshot) throw new Error('Version not found');
-  const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type:'application/json' }));
+  const portable: Snapshot = { ...stripSecretsForExport(snapshot), secretPolicy: 'excluded' };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(portable, null, 2)], { type:'application/json' }));
   const anchor = document.createElement('a');
   anchor.href = url; anchor.download = `${snapshot.name.replace(/[^a-z0-9]+/gi, '-')}.mcversion.json`;
   anchor.click();
@@ -129,8 +139,7 @@ export async function importVersionFile(file: File): Promise<SnapshotMeta> {
   await versionDb.snapshots.add(snapshot);
   return stripPayload(snapshot);
 }
-let editRevision = 0;
-let savedRevision = 0;
+let editRevision = 0, savedRevision = 0;
 let autoInFlight = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let intervalTimer: ReturnType<typeof setInterval> | null = null;
@@ -166,5 +175,4 @@ export function stopAutoSnapshots() {
   if (visHandler && typeof document !== 'undefined') document.removeEventListener('visibilitychange', visHandler);
   visHandler = null;
 }
-// Retained for compatibility. The standalone app does not use a server SQL table.
 export const SNAPSHOTS_SCHEMA_SQL = '';
