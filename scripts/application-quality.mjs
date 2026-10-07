@@ -48,7 +48,7 @@ try {
     });
   }
   await go('dashboard');
-  await check('Capture prevents same-frame duplicate submissions', async () => {
+  await check('Capture prevents same-frame duplicate submissions', async function captureAndAssert() {
     const title = `Quality capture ${Date.now()}`;
     const input = page.getByRole('textbox', { name: 'Capture a task, note, idea, link or reminder' });
     await input.fill(title);
