@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { resilientWebStorage } from '@/lib/resilientStorage';
+import { sanitizeNavigation } from '@/lib/navigationPreferences';
+export { sanitizeNavigation } from '@/lib/navigationPreferences';
 
 interface NavigationState {
   activeSection: string;
@@ -22,14 +24,6 @@ interface NavigationState {
   setFocusEntity: (e: { type: string; id: string; label?: string } | null) => void;
 }
 const validSection = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
-export function sanitizeNavigation(value: unknown) {
-  const state = value && typeof value === 'object' ? value as Record<string, unknown> : {};
-  return {
-    activeSection: validSection(state.activeSection) ? state.activeSection : 'dashboard',
-    sidebarCollapsed: state.sidebarCollapsed === true,
-    recentSections: Array.isArray(state.recentSections) ? [...new Set(state.recentSections.filter(validSection))].slice(0, 8) : [],
-  };
-}
 export const useNavigationStore = create<NavigationState>()(
   persist(
     set => ({
