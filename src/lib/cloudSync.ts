@@ -6,21 +6,16 @@
 import { db } from '@/lib/db';
 import { GDRIVE_APPDATA_SCOPE, GOOGLE_SCOPES, clearGoogleToken, fetchGoogleEmail,
   getGoogleClientId, googleTokenHasScopes, readGoogleToken, requestGoogleToken } from '@/lib/googleDirectAuth';
-import { compareRemote, mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
+import { mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
   type RemoteBackup, type RemoteRecords } from '@/lib/cloudSyncProtocol';
+import { applyAndConfirm, createCommittedMutationBuffer } from '@/lib/syncTransactionSafety';
 
 export type CloudStatus = 'signed-out' | 'connecting' | 'syncing' | 'synced' | 'offline' | 'error';
 export type RecordSyncState = 'saved' | 'pending' | 'failed' | 'local-only';
 type DirtyOperation = 'put' | 'delete';
 type DirtyRecord = { operation: DirtyOperation; changedAt: string; revision?: string };
 type DirtyRecordMap = Record<string, DirtyRecord>;
-type SyncResult = {
-  ok: boolean;
-  restored: number;
-  remoteRows: number;
-  repairedQueueEntries?: number;
-  error?: string;
-};
+type SyncResult = { ok: boolean; restored: number; remoteRows: number; repairedQueueEntries?: number; error?: string };
 type DriveFile = { id: string; name: string; modifiedTime: string };
 const LEGACY_NAME = 'mission-control-sync-v1.json';
 const PREFIX = 'mission-control-sync-v2-';
@@ -55,73 +50,72 @@ let status: CloudStatus = 'signed-out';
 let lastError: string | null = null;
 let userEmail: string | null = null;
 let pushTimer: ReturnType<typeof setTimeout> | null = null;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryAfter = 0;
 let activeSync: Promise<SyncResult> | null = null;
 let started = false;
 let epoch = 0;
 let retryAttempt = 0;
 let journalError = false;
+let journalReadError = false;
 let verifiedToken = '';
 let tabWriter = '';
 let logicalTime = 0;
 let localSeedChecked = false;
 let mutationJournalInstalled = false;
-let suppressMutationJournal = 0;
 let firstQueuedAt = 0;
+let lastSyncInMemory: string | null = null;
 const MAX_PUSH_LATENCY_MS = 4_000;
 const JOURNAL_EXCLUDED = new Set(['auditLog', 'syncHealth']);
 const remoteCache = new Map<string, { modifiedTime: string; backup: RemoteBackup }>();
-// Confirmed revisions are a performance cache, not durable user data.
-// Keeping them in localStorage caused an unbounded mc-cloud-confirmed-v2 payload
-// that could exhaust the origin quota and break synchronization entirely.
+// Disposable optimization only. Never put record receipts into localStorage.
 const receiptCache = new Map<string, string>();
+let dirtyRaw: string | null | undefined;
+let dirtyCache: DirtyRecordMap = {};
+const unsavedMutations: DirtyRecordMap = {};
 function key(collection: string, id: string) { return `${collection}::${id}`; }
-function readObject<T>(name: string, fallback: T): T {
-  try { return JSON.parse(localStorage.getItem(name) || 'null') ?? fallback; } catch { return fallback; }
-}
-function readDirty(): DirtyRecordMap { return readObject(DIRTY_KEY, {}); }
-
-export async function repairStaleCloudJournal(): Promise<number> {
-  const dirty = readDirty();
-  const next = { ...dirty };
-  let repaired = 0;
-
-  for (const [recordKey, change] of Object.entries(dirty)) {
-    if (change.operation !== 'put') continue;
-    const [collection, id] = recordKey.split('::');
-    const table = COLLECTIONS[collection];
-    if (!table || !id) continue;
-    const local = await table.get(id);
-    if (local) continue;
-
-    // This is a stale queue instruction, not a deletion request. Removing only
-    // the journal entry allows any real remote copy to be restored during sync.
-    delete next[recordKey];
-    repaired++;
-  }
-
-  if (repaired) {
-    writeDirty(next);
-    if (/pending .* record is missing locally/i.test(lastError || '')) {
-      setStatus(hasSession() ? 'syncing' : 'signed-out', null);
+function readDirty(): DirtyRecordMap {
+  try {
+    const raw = localStorage.getItem(DIRTY_KEY);
+    if (raw !== dirtyRaw) {
+      const parsed: unknown = raw ? JSON.parse(raw) : {};
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+          !Object.entries(parsed).every(([recordKey, entry]) => {
+            const value = entry as DirtyRecord | null;
+            return recordKey.includes('::') && !!value &&
+              (value.operation === 'put' || value.operation === 'delete') &&
+              typeof value.changedAt === 'string' && Number.isFinite(Date.parse(value.changedAt));
+          })) throw new Error('Invalid sync journal');
+      dirtyCache = parsed as DirtyRecordMap;
+      dirtyRaw = raw;
     }
+    journalReadError = false;
+  } catch {
+    // Never reinterpret corrupt/unreadable pending operations as an empty queue.
+    journalReadError = true;
   }
-
-  return repaired;
+  return Object.keys(unsavedMutations).length ? { ...dirtyCache, ...unsavedMutations } : dirtyCache;
 }
 function setStatus(next: CloudStatus, error: string | null = null) {
   status = next; lastError = error;
   listeners.forEach(callback => callback(next, error));
   dirtyListeners.forEach(callback => callback());
 }
-function writeDirty(records: DirtyRecordMap) {
+function writeDirty(records: DirtyRecordMap): boolean {
   try {
-    localStorage.setItem(DIRTY_KEY, JSON.stringify(records));
-    journalError = false;
+    if (journalReadError) throw new Error('Unreadable journal');
+    const raw = JSON.stringify(records);
+    localStorage.setItem(DIRTY_KEY, raw);
+    dirtyRaw = raw; dirtyCache = records; journalError = false;
+    for (const recordKey of Object.keys(unsavedMutations)) {
+      if (sameChange(records[recordKey], unsavedMutations[recordKey])) delete unsavedMutations[recordKey];
+    }
   } catch {
     journalError = true;
-    setStatus('error', 'Device storage could not retain the sync queue. Your local records have not been deleted.');
+    setStatus('error', 'Device storage could not retain the sync queue. Local records are preserved; keep this tab open and export a backup before clearing storage.');
   }
   dirtyListeners.forEach(callback => callback());
+  return !journalError;
 }
 function newChange(operation: DirtyOperation): DirtyRecord {
   logicalTime = Math.max(Date.now(), logicalTime + 1);
@@ -130,38 +124,57 @@ function newChange(operation: DirtyOperation): DirtyRecord {
 function sameChange(a?: DirtyRecord, b?: DirtyRecord) {
   return !!a && !!b && (a.revision || a.changedAt) === (b.revision || b.changedAt);
 }
-
-function journalCommittedMutation(collection: string, id: string, operation: DirtyOperation) {
-  if (suppressMutationJournal || JOURNAL_EXCLUDED.has(collection) || !id) return;
-  markCloudRecordDirty(collection, id, operation);
+const mutationBuffer = createCommittedMutationBuffer(changes => {
+  const next = { ...readDirty() };
+  for (const [recordKey, operation] of changes) {
+    const change = newChange(operation);
+    next[recordKey] = change;
+    unsavedMutations[recordKey] = change;
+    receiptCache.delete(recordKey);
+  }
+  writeDirty(next);
   queueCloudPush(650);
-}
-
+});
 function installMutationJournal() {
   if (mutationJournalInstalled || typeof window === 'undefined') return;
   mutationJournalInstalled = true;
-
   for (const [collection, table] of Object.entries(COLLECTIONS)) {
     if (JOURNAL_EXCLUDED.has(collection)) continue;
-
-    table.hook('creating', function (this: any, primKey: unknown, obj: any) {
-      if (suppressMutationJournal) return;
-      const id = String(primKey ?? obj?.id ?? '');
-      this.onsuccess = () => journalCommittedMutation(collection, id, 'put');
+    table.hook('creating', function (this: any, primKey: unknown, obj: any, transaction: any) {
+      this.onsuccess = (createdKey: unknown) => {
+        const id = String(primKey ?? obj?.id ?? createdKey ?? '');
+        if (id) mutationBuffer.stage(transaction, key(collection, id), 'put');
+      };
     });
-
-    table.hook('updating', function (this: any, _mods: unknown, primKey: unknown) {
-      if (suppressMutationJournal) return;
+    table.hook('updating', function (this: any, _mods: unknown, primKey: unknown, _obj: unknown, transaction: any) {
       const id = String(primKey ?? '');
-      this.onsuccess = () => journalCommittedMutation(collection, id, 'put');
+      this.onsuccess = () => { if (id) mutationBuffer.stage(transaction, key(collection, id), 'put'); };
     });
-
-    table.hook('deleting', function (this: any, primKey: unknown) {
-      if (suppressMutationJournal) return;
+    table.hook('deleting', function (this: any, primKey: unknown, _obj: unknown, transaction: any) {
       const id = String(primKey ?? '');
-      this.onsuccess = () => journalCommittedMutation(collection, id, 'delete');
+      this.onsuccess = () => { if (id) mutationBuffer.stage(transaction, key(collection, id), 'delete'); };
     });
   }
+}
+export async function repairStaleCloudJournal(): Promise<number> {
+  const captured = { ...readDirty() };
+  if (journalReadError) throw new Error('The sync queue is unreadable. No pending entries were discarded.');
+  const stale: string[] = [];
+  for (const [recordKey, change] of Object.entries(captured)) {
+    if (change.operation !== 'put') continue;
+    const [collection, id] = recordKey.split('::');
+    const table = COLLECTIONS[collection];
+    if (!table || !id) continue;
+    if (!await table.get(id)) stale.push(recordKey);
+  }
+  // Re-read after all awaits: a user may have created/edited a row in the meantime.
+  const next = { ...readDirty() };
+  let repaired = 0;
+  for (const recordKey of stale) {
+    if (sameChange(next[recordKey], captured[recordKey])) { delete next[recordKey]; repaired++; }
+  }
+  if (repaired && !writeDirty(next)) throw new Error('The sync queue repair could not be saved.');
+  return repaired;
 }
 function validRecord(collection: string, data: unknown, id: string): data is Record<string, unknown> {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
@@ -175,7 +188,6 @@ function hasSession() {
 function writerId() {
   let device = localStorage.getItem(DEVICE_KEY);
   if (!device) { device = crypto.randomUUID(); localStorage.setItem(DEVICE_KEY, device); }
-  // Web Locks serialize tabs. Without it, separate writer files avoid a tab race.
   if (navigator.locks) return device;
   if (!tabWriter) tabWriter = crypto.randomUUID();
   return `${device}-${tabWriter}`;
@@ -186,7 +198,10 @@ async function bindIdentity(accessToken: string, currentEpoch: number) {
   if (epoch !== currentEpoch || readGoogleToken()?.access_token !== accessToken) throw new Error('Account changed during sync; no data was transferred.');
   if (!email) throw new Error('Could not verify the connected Google account. Reconnect before syncing.');
   const clientId = getGoogleClientId();
-  const owner = readObject<{ email: string; clientId: string } | null>(OWNER_KEY, null);
+  // Owner identity must fail closed, not silently become null on a parsing error.
+  const rawOwner = localStorage.getItem(OWNER_KEY);
+  const owner = rawOwner ? JSON.parse(rawOwner) as { email: string; clientId: string } : null;
+  if (rawOwner && (!owner || typeof owner.email !== 'string' || typeof owner.clientId !== 'string')) throw new Error('Stored account identity is invalid. Sync was blocked to protect local data.');
   const legacyEmail = localStorage.getItem(USER_EMAIL_KEY)?.toLowerCase();
   if ((owner && (owner.email !== email || owner.clientId !== clientId)) || (!owner && legacyEmail && legacyEmail !== email)) {
     throw new Error(`This browser contains data for ${owner?.email || legacyEmail}. Reconnect that account with the original Google app. Account mixing was blocked; local data is preserved.`);
@@ -220,6 +235,8 @@ async function readRemote(accessToken: string, currentEpoch: number) {
     const page = await driveJson<{ files?: DriveFile[]; nextPageToken?: string }>(`${DRIVE_FILES}?${params}`, accessToken, currentEpoch);
     files.push(...(page.files || [])); pageToken = page.nextPageToken;
   } while (pageToken);
+  const listed = new Set(files.map(file => file.id));
+  for (const id of remoteCache.keys()) if (!listed.has(id)) remoteCache.delete(id);
   const snapshots: RemoteRecords[] = [];
   for (let offset = 0; offset < files.length; offset += 4) {
     const group = await Promise.all(files.slice(offset, offset + 4).map(async file => {
@@ -251,19 +268,20 @@ async function writeRemote(fileId: string | undefined, backup: RemoteBackup, acc
   return saved.id;
 }
 async function seedMissingRecords(remote: RemoteRecords) {
-  // Do not stop because one dirty row exists: older code left every other local
-  // task stranded on that device. Only genuinely absent IDs are imported.
   for (const [collection, table] of Object.entries(COLLECTIONS)) {
     const rows = await table.toArray();
-    const dirty = readDirty();
+    const dirty = { ...readDirty() };
     for (const row of rows) {
       if (!row?.id) continue;
       const recordKey = key(collection, String(row.id));
       if (!dirty[recordKey] && !remote[recordKey]) dirty[recordKey] = newChange('put');
     }
-    writeDirty(dirty);
+    if (!writeDirty(dirty)) throw new Error('Sync queue storage failed. Pending changes have not been acknowledged.');
   }
-  if (journalError) throw new Error('Sync queue storage failed. Free device storage before reconnecting.');
+}
+function clearRetry() {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null; retryAfter = 0;
 }
 async function syncCycle(): Promise<SyncResult> {
   const token = readGoogleToken();
@@ -271,75 +289,41 @@ async function syncCycle(): Promise<SyncResult> {
     setStatus('signed-out', 'Connect the same Google account on both devices to synchronize tasks.');
     return { ok: false, restored: 0, remoteRows: 0, error: lastError || undefined };
   }
-  if (!navigator.onLine) { setStatus('offline', 'Offline: changes are saved on this device and queued.'); return { ok: false, restored: 0, remoteRows: 0, error: lastError || undefined }; }
+  if (!navigator.onLine) { setStatus('offline', 'Offline: local changes await synchronization.'); return { ok: false, restored: 0, remoteRows: 0, error: lastError || undefined }; }
   const currentEpoch = epoch;
   setStatus('syncing');
   try {
+    const initialDirty = readDirty();
+    if (journalReadError) throw new Error('The sync queue is unreadable. Local and cloud records were left unchanged.');
+    if ((journalError || Object.keys(unsavedMutations).length) && !writeDirty({ ...initialDirty })) throw new Error('Pending changes are not durably queued. Keep this tab open and export a backup.');
     await bindIdentity(token.access_token, currentEpoch);
     await repairStaleCloudJournal();
     const remote = await readRemote(token.access_token, currentEpoch);
     if (!localSeedChecked) await seedMissingRecords(remote.records);
-    const captured = readDirty();
+    const captured = { ...readDirty() };
     const merged = mergeRemoteRecords(remote.records);
     const repairedQueueEntries = new Set<string>();
-
+    const outboundKeys: string[] = [];
     for (const [recordKey, change] of Object.entries(captured)) {
       const [collection, id] = recordKey.split('::');
       const table = COLLECTIONS[collection];
-      if (!table || !id) continue;
+      if (!table || !id) throw new Error(`Unknown queued collection ${collection}. Queue retained for recovery.`);
       const data = change.operation === 'delete' ? null : await table.get(id);
       if (!sameChange(readDirty()[recordKey], change)) continue;
-      // A stale pending "put" must never block the whole queue. This can happen
-      // after an older app version deleted/replaced a row without rewriting the
-      // journal. Preserve remote data if it exists; otherwise discard only the
-      // stale journal entry. Never reinterpret this as a destructive delete.
-      if (!data && change.operation !== 'delete') {
-        repairedQueueEntries.add(recordKey);
-        continue;
-      }
-
+      if (!data && change.operation !== 'delete') { repairedQueueEntries.add(recordKey); continue; }
       const remoteRecord = merged[recordKey];
-      const originalCandidate = {
-        data: data || null,
-        deleted: change.operation === 'delete',
-        updatedAt: change.changedAt,
-        revision: change.revision,
-      };
-      const differsFromRemote =
-        !!remoteRecord &&
-        (remoteRecord.deleted !== originalCandidate.deleted ||
-          JSON.stringify(remoteRecord.data) !== JSON.stringify(originalCandidate.data));
-
+      const originalCandidate = { data: data || null, deleted: change.operation === 'delete', updatedAt: change.changedAt, revision: change.revision };
+      const differsFromRemote = !!remoteRecord && (remoteRecord.deleted !== originalCandidate.deleted || JSON.stringify(remoteRecord.data) !== JSON.stringify(originalCandidate.data));
       if (differsFromRemote) {
         const conflictId = `sync-conflict-${change.revision || `${collection}-${id}-${change.changedAt}`}`;
-        const conflict = {
-          id: conflictId,
-          at: new Date().toISOString(),
-          action: 'sync',
-          collection,
-          recordId: id,
-          label: 'Remote version preserved before applying pending local edit',
-          before: remoteRecord?.data ?? null,
-        };
+        const conflict = { id: conflictId, at: new Date().toISOString(), action: 'sync', collection, recordId: id,
+          label: 'Remote version preserved before applying pending local edit', before: remoteRecord?.data ?? null };
         await db.auditLog.put(conflict as any);
-        merged[key('auditLog', conflictId)] = {
-          data: conflict,
-          deleted: false,
-          updatedAt: change.changedAt,
-          revision: conflictId,
-        };
+        merged[key('auditLog', conflictId)] = { data: conflict, deleted: false, updatedAt: change.changedAt, revision: conflictId };
       }
-
-      // A pending local mutation is explicit user intent. Rebase it above the
-      // newest remote clock instead of letting device clock skew silently erase
-      // the change. Other devices will then pull this exact confirmed revision.
-      const candidate = rebaseLocalPending(originalCandidate, remoteRecord);
-      merged[recordKey] = candidate;
+      merged[recordKey] = rebaseLocalPending(originalCandidate, remoteRecord);
+      outboundKeys.push(recordKey);
     }
-    const outboundKeys = Object.keys(captured).filter(
-      recordKey => !repairedQueueEntries.has(recordKey),
-    );
-
     if (outboundKeys.length) {
       const writer = writerId();
       const file = remote.files.filter(f => f.name === `${PREFIX}${writer}.json`).sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime) || a.id.localeCompare(b.id))[0];
@@ -347,81 +331,56 @@ async function syncCycle(): Promise<SyncResult> {
       const fileId = await writeRemote(file?.id, backup, token.access_token, currentEpoch);
       const verified = parseBackup(await driveJson<unknown>(`${DRIVE_FILES}/${encodeURIComponent(fileId)}?alt=media`, token.access_token, currentEpoch));
       for (const recordKey of outboundKeys) {
-        if (
-          merged[recordKey] &&
-          (!verified.records[recordKey] ||
-            revisionOf(verified.records[recordKey]) !== revisionOf(merged[recordKey]))
-        ) {
-          throw new Error('Cloud read-back did not match the write. Changes remain queued.');
-        }
+        if (!verified.records[recordKey] || revisionOf(verified.records[recordKey]) !== revisionOf(merged[recordKey])) throw new Error('Cloud read-back did not match the write. Changes remain queued.');
       }
     }
-    if (epoch !== currentEpoch || readGoogleToken()?.access_token !== token.access_token) throw new Error('Account changed before applying sync.');
-    // Keep confirmation receipts only for this browser session. A cold start may
-    // compare more rows once, but it avoids an unbounded localStorage payload.
-    for (const cachedKey of receiptCache.keys()) {
-      if (!merged[cachedKey]) receiptCache.delete(cachedKey);
-    }
+    const currentSession = () => epoch === currentEpoch && readGoogleToken()?.access_token === token.access_token;
+    if (!currentSession()) throw new Error('Account changed before applying sync.');
+    for (const cachedKey of receiptCache.keys()) if (!merged[cachedKey]) receiptCache.delete(cachedKey);
     let restored = 0;
-    suppressMutationJournal++;
-    try {
-      await db.transaction('rw', Object.values(COLLECTIONS), async () => {
-        for (const [recordKey, record] of Object.entries(merged)) {
-          const [collection, id] = recordKey.split('::');
-          const table = COLLECTIONS[collection];
-          if (!table || !id) continue;
-          const dirty = readDirty()[recordKey];
-          if (!dirty && receiptCache.get(recordKey) === revisionOf(record)) continue;
-          if (dirty && !sameChange(dirty, captured[recordKey])) continue;
-          if (epoch !== currentEpoch) throw new Error('Sync cancelled.');
-          if (record.deleted) await table.delete(id);
-          else if (validRecord(collection, record.data, id)) {
-            const local = await table.get(id);
-            if (JSON.stringify(local) !== JSON.stringify(record.data)) {
-              await table.put(record.data);
-              restored++;
-            }
-          } else {
-            throw new Error(`Invalid ${collection} record. No local records were overwritten.`);
-          }
-          receiptCache.set(recordKey, revisionOf(record));
-        }
-      });
-    } finally {
-      suppressMutationJournal = Math.max(0, suppressMutationJournal - 1);
-    }
-    const current = readDirty();
-    for (const [recordKey, change] of Object.entries(captured)) {
-      if (
-        sameChange(current[recordKey], change) &&
-        (merged[recordKey] || repairedQueueEntries.has(recordKey))
-      ) {
-        delete current[recordKey];
+    await applyAndConfirm(receiptCache, staged => db.transaction('rw', Object.values(COLLECTIONS), async transaction => {
+      // Suppress only this transaction, not concurrent user-initiated transactions.
+      mutationBuffer.ignore(transaction);
+      for (const [recordKey, record] of Object.entries(merged)) {
+        const [collection, id] = recordKey.split('::');
+        const table = COLLECTIONS[collection];
+        if (!table || !id) continue;
+        const dirty = readDirty()[recordKey];
+        if (journalReadError || journalError) throw new Error('Sync queue became unavailable. Local application was rolled back.');
+        if (!dirty && receiptCache.get(recordKey) === revisionOf(record)) continue;
+        if (dirty && !sameChange(dirty, captured[recordKey])) continue;
+        if (!currentSession()) throw new Error('Sync cancelled.');
+        if (record.deleted) await table.delete(id);
+        else if (validRecord(collection, record.data, id)) {
+          const local = await table.get(id);
+          if (JSON.stringify(local) !== JSON.stringify(record.data)) { await table.put(record.data); restored++; }
+        } else throw new Error(`Invalid ${collection} record. No local records were overwritten.`);
+        staged.set(recordKey, revisionOf(record));
       }
+    }), currentSession);
+    const current = { ...readDirty() };
+    const acknowledged = new Set([...outboundKeys, ...repairedQueueEntries]);
+    for (const [recordKey, change] of Object.entries(captured)) {
+      if (acknowledged.has(recordKey) && sameChange(current[recordKey], change)) delete current[recordKey];
     }
-    writeDirty(current);
-    if (journalError) throw new Error('Cloud write completed but the device queue could not be acknowledged.');
-    localStorage.setItem(LAST_SYNC_KEY, new Date().toISOString());
-    retryAttempt = 0;
-    localSeedChecked = true;
+    if (!writeDirty(current)) throw new Error('Cloud write completed but the device queue could not be acknowledged.');
+    lastSyncInMemory = new Date().toISOString();
+    // A display timestamp is not a sync prerequisite; never undo a verified sync for it.
+    try { localStorage.setItem(LAST_SYNC_KEY, lastSyncInMemory); } catch { /* display only */ }
+    clearRetry(); retryAttempt = 0; localSeedChecked = true;
     setStatus(Object.keys(current).length ? 'syncing' : 'synced');
     if (Object.keys(current).length) queueCloudPush(250);
-    if (typeof window !== 'undefined') {
-      void import('@/lib/dailyDigestSync')
-        .then(({ syncDailyDigestSnapshot }) => syncDailyDigestSnapshot({ silent: true }))
-        .catch(() => undefined);
-    }
-    return {
-      ok: true,
-      restored,
-      remoteRows: Object.keys(merged).length,
-      repairedQueueEntries: repairedQueueEntries.size,
-    };
+    if (typeof window !== 'undefined') void import('@/lib/dailyDigestSync').then(({ syncDailyDigestSnapshot }) => syncDailyDigestSnapshot({ silent: true })).catch(() => undefined);
+    return { ok: true, restored, remoteRows: Object.keys(merged).length, repairedQueueEntries: repairedQueueEntries.size };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Synchronization failed';
     if (epoch === currentEpoch) {
       setStatus(navigator.onLine ? 'error' : 'offline', message);
-      if (++retryAttempt <= 4 && hasSession()) queueCloudPush(Math.min(60_000, 3_000 * 2 ** retryAttempt));
+      if (++retryAttempt <= 4 && hasSession()) {
+        const wait = Math.min(60_000, 3_000 * 2 ** retryAttempt);
+        clearRetry(); retryAfter = Date.now() + wait;
+        retryTimer = setTimeout(() => { retryTimer = null; retryAfter = 0; void synchronize(); }, wait);
+      }
     }
     return { ok: false, restored: 0, remoteRows: 0, error: message };
   }
@@ -440,47 +399,47 @@ export function onDirtyRecordsChange(callback: () => void) { dirtyListeners.add(
 export function getRecordSyncState(collection: string, id: string): RecordSyncState {
   if (!hasSession() || status === 'signed-out') return 'local-only';
   if (readDirty()[key(collection, id)]) return status === 'error' ? 'failed' : 'pending';
-  return receiptCache.has(key(collection, id)) || status === 'synced' ? 'saved' : 'pending';
+  if (journalReadError || journalError) return 'failed';
+  return receiptCache.has(key(collection, id)) ? 'saved' : 'pending';
 }
 export function markCloudRecordDirty(collection: string, id: string, operation: DirtyOperation = 'put') {
   if (!COLLECTIONS[collection] || !id) return;
-  const dirty = readDirty(); dirty[key(collection, id)] = newChange(operation); writeDirty(dirty);
+  const recordKey = key(collection, id);
+  const dirty = { ...readDirty() };
+  const change = newChange(operation);
+  dirty[recordKey] = change; unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
+  writeDirty(dirty);
 }
 export function markCloudRecordsDirty(collection: string, ids: string[], operation: DirtyOperation = 'put') {
-  const dirty = readDirty();
-  ids.forEach(id => { if (COLLECTIONS[collection] && id) dirty[key(collection, id)] = newChange(operation); });
+  const dirty = { ...readDirty() };
+  ids.forEach(id => {
+    if (!COLLECTIONS[collection] || !id) return;
+    const recordKey = key(collection, id), change = newChange(operation);
+    dirty[recordKey] = change; unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
+  });
   writeDirty(dirty);
 }
 export function getCloudStatus() { return status; }
 export function getCloudError() { return lastError; }
 export function getCloudUserId() { return userEmail; }
-export function getLastCloudSync() { try { return localStorage.getItem(LAST_SYNC_KEY); } catch { return null; } }
+export function getLastCloudSync() { if (lastSyncInMemory) return lastSyncInMemory; try { return localStorage.getItem(LAST_SYNC_KEY); } catch { return null; } }
 export function getPendingCloudCount() { return Object.keys(readDirty()).length; }
 export function onCloudStatus(callback: (next: CloudStatus, error: string | null) => void) {
   listeners.add(callback); callback(status, lastError); return () => { listeners.delete(callback); };
 }
 export function queueCloudPush(delay = 900) {
-  if (!hasSession()) {
-    setStatus('signed-out', 'Saved on this device. Connect Google to sync with your other device.');
-    return;
-  }
-
+  if (journalError || journalReadError) return;
+  if (!hasSession()) { setStatus('signed-out', 'Saved on this device. Connect Google to sync with your other device.'); return; }
   const now = Date.now();
   if (!firstQueuedAt) firstQueuedAt = now;
   const remaining = Math.max(0, MAX_PUSH_LATENCY_MS - (now - firstQueuedAt));
-  const wait = Math.min(Math.max(0, delay), remaining);
-
+  const wait = Math.max(Math.min(Math.max(0, delay), remaining), retryAfter - now);
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => {
-    pushTimer = null;
-    firstQueuedAt = 0;
-    void synchronize();
-  }, wait);
+  pushTimer = setTimeout(() => { pushTimer = null; firstQueuedAt = 0; void synchronize(); }, wait);
 }
 export async function flushCloudChanges() {
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = null;
-  firstQueuedAt = 0;
+  pushTimer = null; firstQueuedAt = 0; clearRetry();
   let result = await synchronize();
   if (result.ok && getPendingCloudCount()) result = await synchronize();
   return result;
@@ -491,27 +450,19 @@ export const forceCloudSync = () => flushCloudChanges();
 function installRefreshListeners() {
   if (started || typeof window === 'undefined') return;
   started = true;
-
   const refresh = () => {
-    if (document.visibilityState !== 'hidden') void synchronize();
+    if (document.visibilityState !== 'hidden' && navigator.onLine && hasSession() && Date.now() >= retryAfter) void synchronize();
   };
   const flushBeforeBackground = () => {
-    if (getPendingCloudCount() > 0 && hasSession() && navigator.onLine) {
-      void flushCloudChanges();
-    }
+    if (getPendingCloudCount() > 0 && hasSession() && navigator.onLine && Date.now() >= retryAfter) void flushCloudChanges();
   };
-
   window.addEventListener('focus', refresh);
   window.addEventListener('online', refresh);
   window.addEventListener('pagehide', flushBeforeBackground);
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') flushBeforeBackground();
-    else refresh();
-  });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flushBeforeBackground(); else refresh(); });
   window.addEventListener('storage', event => {
-    if ([DIRTY_KEY, USER_EMAIL_KEY, 'mc_google_access_token_v1'].includes(event.key || '')) {
-      queueCloudPush(250);
-    }
+    if (event.key === DIRTY_KEY) receiptCache.clear();
+    if ([DIRTY_KEY, USER_EMAIL_KEY, 'mc_google_access_token_v1'].includes(event.key || '')) queueCloudPush(250);
   });
   setInterval(refresh, 15_000);
 }
@@ -519,7 +470,7 @@ export async function signInToCloud(): Promise<void> {
   try {
     setStatus('connecting');
     const token = await requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: 'select_account' });
-    epoch++; verifiedToken = ''; remoteCache.clear(); retryAttempt = 0; localSeedChecked = false;
+    epoch++; verifiedToken = ''; remoteCache.clear(); receiptCache.clear(); clearRetry(); retryAttempt = 0; localSeedChecked = false;
     await bindIdentity(token.access_token, epoch);
     installRefreshListeners();
     if (activeSync) await activeSync;
@@ -528,26 +479,20 @@ export async function signInToCloud(): Promise<void> {
   } catch (error) { setStatus('error', error instanceof Error ? error.message : 'Google connection failed'); throw error; }
 }
 export async function signOutOfCloud() {
-  epoch++; verifiedToken = ''; remoteCache.clear();
+  epoch++; verifiedToken = ''; remoteCache.clear(); receiptCache.clear(); clearRetry(); localSeedChecked = false;
   if (pushTimer) clearTimeout(pushTimer);
-  pushTimer = null;
-  firstQueuedAt = 0;
+  pushTimer = null; firstQueuedAt = 0;
   clearGoogleToken(); userEmail = null; setStatus('signed-out');
 }
 export async function requestEmailCode(_email: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function verifyEmailCode(_email: string, _code: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function verifyMagicLink(_url: string, _email?: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function startCloudSync(_force = false): Promise<{ signedIn: boolean; restored: number }> {
-  installMutationJournal();
-  installRefreshListeners();
+  installMutationJournal(); installRefreshListeners();
   const result = await synchronize();
   return { signedIn: hasSession() && result.ok, restored: result.restored };
 }
-
-
 if (typeof window !== 'undefined') {
-  // One-time cleanup of the legacy unbounded receipt payload. This key is only
-  // cache data; removing it cannot delete tasks or any other Mission Control data.
-  try { localStorage.removeItem(LEGACY_RECEIPTS_KEY); } catch { /* restricted storage */ }
+  try { localStorage.removeItem(LEGACY_RECEIPTS_KEY); } catch { /* disposable legacy receipts only */ }
   installMutationJournal();
 }
