@@ -10,12 +10,7 @@ import {
 import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
-import premiumCss from "../premium-ui.css?url";
-import lumaCss from "../luma-ui.css?url";
-import obsidianAtelierCss from "../obsidian-atelier.css?url";
-import midnightAuroraCss from "../midnight-aurora.css?url";
-import todayWowCss from "../today-wow.css?url";
-import todayLuxCss from "../today-lux.css?url";
+import missionControlSotaCss from "../mission-control-sota.css?url";
 
 function NotFoundComponent() {
   return (
@@ -99,33 +94,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       {
         rel: "stylesheet",
-        href: premiumCss,
-      },
-      {
-        rel: "stylesheet",
-        href: lumaCss,
-      },
-      {
-        rel: "stylesheet",
-        href: obsidianAtelierCss,
-      },
-      {
-        rel: "stylesheet",
-        href: midnightAuroraCss,
-      },
-      {
-        rel: "stylesheet",
-        href: todayWowCss,
-      },
-      {
-        rel: "stylesheet",
-        href: todayLuxCss,
+        href: missionControlSotaCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap",
       },
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "alternate icon", href: "/favicon.ico", type: "image/x-icon" },
