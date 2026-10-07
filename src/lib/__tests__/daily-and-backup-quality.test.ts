@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeCapacity, fixedEventsFor, suggestOutcomes } from '../planning';
 import { selectedDailyOutcomes, outcomeProgress } from '../dailyOutcomes';
-import { validateSnapshot, sameSnapshotData } from '../versionStorage';
+import { validateSnapshot, sameSnapshotData } from '../snapshotValidation';
 import { stripSecretsForExport, REDACTED } from '../secrets';
 import { preserveExcludedSecrets } from '../versionSecrets';
 import type { Task } from '../db';
