@@ -31,10 +31,11 @@ describe("production trust guarantees", () => {
     expect(src).not.toMatch(/DailyAgenda/);
   });
 
-  it("the timeline is built by one pure, testable builder", () => {
+  it("the timeline is built by one pure builder and uses the live local minute clock", () => {
     const src = read("src/hooks/useDailyOps.ts");
     expect(src).toMatch(/buildTimeline/);
-    expect(src).toMatch(/hhmmNow/); // local clock, never UTC
+    expect(src).toMatch(/useMinuteClock/);
+    expect(src).toMatch(/nowHHMM/); // local clock from the minute-clock hook, never UTC
   });
 
   it("the app lands on the dashboard", () => {

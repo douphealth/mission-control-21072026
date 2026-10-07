@@ -1,87 +1,60 @@
-// Navigation & UI state — lightweight Zustand store
-// Prevents full-app re-renders when navigating between sections
-
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import { resilientWebStorage } from "@/lib/resilientStorage";
+import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { resilientWebStorage } from '@/lib/resilientStorage';
+import { sanitizeNavigation } from '@/lib/navigationPreferences';
+export { sanitizeNavigation } from '@/lib/navigationPreferences';
 
 interface NavigationState {
   activeSection: string;
   setActiveSection: (section: string) => void;
-
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
-
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   toggleSidebar: () => void;
-
-  // Recent sections for Command Palette
   recentSections: string[];
   pushRecent: (section: string) => void;
-
-  // Command palette state
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
-
-  // Import modal state
   importModalOpen: boolean;
   setImportModalOpen: (open: boolean) => void;
-
-  // Hand-off: task the user chose to focus on from the daily cockpit
   focusTaskId: string | null;
   setFocusTaskId: (id: string | null) => void;
-
-  // Deep context: the exact entity the user clicked from the daily cockpit,
-  // so destination modules can select it instead of making the user search.
   focusEntity: { type: string; id: string; label?: string } | null;
   setFocusEntity: (e: { type: string; id: string; label?: string } | null) => void;
 }
-
+const validSection = (value: unknown): value is string => typeof value === 'string' && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
 export const useNavigationStore = create<NavigationState>()(
   persist(
-    (set, get) => ({
-      activeSection: "dashboard",
-      setActiveSection: (section) => {
-        set({ activeSection: section });
-        get().pushRecent(section);
+    set => ({
+      activeSection: 'dashboard',
+      setActiveSection: section => {
+        if (!validSection(section)) return;
+        set(state => ({ activeSection: section, recentSections: [section, ...state.recentSections.filter(s => s !== section)].slice(0, 8) }));
       },
-
       sidebarOpen: false,
-      setSidebarOpen: (open) => set({ sidebarOpen: open }),
-
+      setSidebarOpen: open => set({ sidebarOpen: open }),
       sidebarCollapsed: false,
-      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
-      toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
-
+      setSidebarCollapsed: collapsed => set({ sidebarCollapsed: collapsed }),
+      toggleSidebar: () => set(state => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       recentSections: [],
-      pushRecent: (section) => {
-        const recent = get().recentSections.filter((s) => s !== section);
-        recent.unshift(section);
-        set({ recentSections: recent.slice(0, 8) });
-      },
-
+      pushRecent: section => { if (validSection(section)) set(state => ({ recentSections: [section, ...state.recentSections.filter(s => s !== section)].slice(0, 8) })); },
       commandPaletteOpen: false,
-      setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
-
+      setCommandPaletteOpen: open => set({ commandPaletteOpen: open }),
       importModalOpen: false,
-      setImportModalOpen: (open) => set({ importModalOpen: open }),
-
+      setImportModalOpen: open => set({ importModalOpen: open }),
       focusTaskId: null,
-      setFocusTaskId: (id) => set({ focusTaskId: id }),
-
+      setFocusTaskId: id => set({ focusTaskId: id }),
       focusEntity: null,
-      setFocusEntity: (e) => set({ focusEntity: e }),
+      setFocusEntity: focusEntity => set({ focusEntity }),
     }),
     {
-      name: "mc-navigation-v1",
+      name: 'mc-navigation-v1',
       storage: createJSONStorage(() => resilientWebStorage),
       version: 2,
-      partialize: (state) => ({
-        activeSection: state.activeSection,
-        recentSections: state.recentSections,
-        sidebarCollapsed: state.sidebarCollapsed,
-      }),
+      migrate: persisted => sanitizeNavigation(persisted),
+      merge: (persisted, current) => ({ ...current, ...sanitizeNavigation(persisted) }),
+      partialize: state => ({ activeSection: state.activeSection, recentSections: state.recentSections, sidebarCollapsed: state.sidebarCollapsed }),
     },
   ),
 );

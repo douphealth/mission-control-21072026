@@ -3,136 +3,78 @@ export interface StringStorage {
   setItem: (name: string, value: string) => void;
   removeItem: (name: string) => void;
 }
-
 type StorageProvider = () => StringStorage | undefined;
-
 interface ResilientStorageOptions {
   primary: StorageProvider;
   fallback?: StorageProvider;
   maxValueLength?: number;
 }
-
 export function isStorageQuotaError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
+  if (!error || typeof error !== 'object') return false;
   const candidate = error as { name?: string; code?: number };
-  return (
-    candidate.name === "QuotaExceededError" ||
-    candidate.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
-    candidate.code === 22 ||
-    candidate.code === 1014
-  );
+  return candidate.name === 'QuotaExceededError' || candidate.name === 'NS_ERROR_DOM_QUOTA_REACHED' || candidate.code === 22 || candidate.code === 1014;
 }
-
 function resolveStorage(provider?: StorageProvider): StringStorage | undefined {
-  if (!provider) return undefined;
-  try {
-    return provider();
-  } catch {
-    return undefined;
-  }
+  try { return provider?.(); } catch { return undefined; }
 }
-
 function removeQuietly(storage: StringStorage | undefined, name: string) {
-  if (!storage) return;
-  try {
-    storage.removeItem(name);
-  } catch {
-    // Storage can be unavailable in private/restricted browser contexts.
-  }
+  try { storage?.removeItem(name); } catch { /* Restricted browser storage. */ }
 }
-
-/**
- * Synchronous web storage that never lets browser storage failures crash the app.
- *
- * Writes prefer localStorage, retry after clearing only the current key on quota
- * errors, then fall back to sessionStorage and finally in-memory state.
- * Oversized values are intentionally kept in memory only so a corrupt/stale
- * persisted payload cannot fill the origin again.
- */
-export function createResilientStorage({
-  primary,
-  fallback,
-  maxValueLength = 16_384,
-}: ResilientStorageOptions): StringStorage {
-  const memory = new Map<string, string>();
-
+/** Best-effort UI preferences ONLY. Never use for sync journals or account identity. */
+export function createResilientStorage({ primary, fallback, maxValueLength = 16_384 }: ResilientStorageOptions): StringStorage & { invalidate: (name: string | null) => void } {
+  const memory = new Map<string, string | null>();
   const read = (storage: StringStorage | undefined, name: string): string | null => {
-    if (!storage) return null;
     try {
-      const value = storage.getItem(name);
-      if (value !== null && value.length > maxValueLength) {
-        removeQuietly(storage, name);
-        return null;
-      }
+      const value = storage?.getItem(name) ?? null;
+      if (value !== null && value.length > maxValueLength) { removeQuietly(storage, name); return null; }
       return value;
-    } catch {
-      return null;
-    }
+    } catch { return null; }
   };
-
   return {
     getItem(name) {
-      const primaryStorage = resolveStorage(primary);
-      const primaryValue = read(primaryStorage, name);
-      if (primaryValue !== null) return primaryValue;
-
-      const fallbackStorage = resolveStorage(fallback);
-      const fallbackValue = read(fallbackStorage, name);
-      if (fallbackValue !== null) return fallbackValue;
-
-      return memory.get(name) ?? null;
+      // A failed write must not be shadowed by an older value still on disk.
+      if (memory.has(name)) return memory.get(name) ?? null;
+      const session = read(resolveStorage(fallback), name);
+      return session ?? read(resolveStorage(primary), name);
     },
-
     setItem(name, value) {
+      const disk = resolveStorage(primary), session = resolveStorage(fallback);
       memory.set(name, value);
-
-      const primaryStorage = resolveStorage(primary);
-      const fallbackStorage = resolveStorage(fallback);
-
-      if (value.length > maxValueLength) {
-        removeQuietly(primaryStorage, name);
-        removeQuietly(fallbackStorage, name);
-        return;
-      }
-
-      if (primaryStorage) {
-        try {
-          primaryStorage.setItem(name, value);
-          removeQuietly(fallbackStorage, name);
+      if (value.length > maxValueLength) return;
+      try {
+        if (disk) {
+          disk.setItem(name, value);
+          removeQuietly(session, name);
+          memory.delete(name);
           return;
-        } catch (error) {
-          // A stale/corrupt copy of this key may itself be consuming the quota.
-          if (isStorageQuotaError(error)) {
-            removeQuietly(primaryStorage, name);
-            try {
-              primaryStorage.setItem(name, value);
-              removeQuietly(fallbackStorage, name);
-              return;
-            } catch {
-              // Continue to the fallback below.
-            }
-          }
         }
-      }
-
-      if (fallbackStorage) {
-        try {
-          fallbackStorage.setItem(name, value);
-        } catch {
-          // In-memory state already contains the value; never crash the UI.
-        }
-      }
+      } catch { /* Preserve the old disk value until a new value is safely stored. */ }
+      try { session?.setItem(name, value); } catch { /* The latest value stays in memory. */ }
     },
-
     removeItem(name) {
-      memory.delete(name);
+      // Retain a tombstone if a restricted backend refuses removal.
+      memory.set(name, null);
       removeQuietly(resolveStorage(primary), name);
       removeQuietly(resolveStorage(fallback), name);
     },
+    invalidate(name) {
+      if (name === null) memory.clear();
+      else { memory.delete(name); removeQuietly(resolveStorage(fallback), name); }
+    },
   };
 }
-
-export const resilientWebStorage = createResilientStorage({
-  primary: () => (typeof window === "undefined" ? undefined : window.localStorage),
-  fallback: () => (typeof window === "undefined" ? undefined : window.sessionStorage),
+const browserStorage = createResilientStorage({
+  primary: () => window.localStorage,
+  fallback: () => window.sessionStorage,
 });
+// SSR requests must not share an in-memory user preference cache.
+export const resilientWebStorage: StringStorage = {
+  getItem: name => typeof window === 'undefined' ? null : browserStorage.getItem(name),
+  setItem: (name, value) => { if (typeof window !== 'undefined') browserStorage.setItem(name, value); },
+  removeItem: name => { if (typeof window !== 'undefined') browserStorage.removeItem(name); },
+};
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', event => {
+    if (event.key === null || /^mc-(navigation|plan|a11y|review|theme)/.test(event.key)) browserStorage.invalidate(event.key);
+  });
+}

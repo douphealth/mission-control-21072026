@@ -1,0 +1,68 @@
+name: Application quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: app-quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check browser runner syntax
+        run: |
+          node --check scripts/application-quality.mjs
+          node --check scripts/version-quality.mjs
+          node --check scripts/browser-reliability.mjs
+      - name: Capture source and tested commit
+        run: |
+          mkdir -p quality-artifacts
+          git archive --format=tar.gz -o quality-artifacts/source.tar.gz HEAD src public scripts package.json vite.config.ts vitest.config.ts tsconfig.json .github/workflows
+          git rev-parse HEAD > quality-artifacts/commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quality-source
+          path: quality-artifacts/
+          retention-days: 3
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build:cloudflare
+      - name: Install real browsers
+        run: bunx playwright install --with-deps chromium webkit
+      - name: Run isolated application, backup and editor checks
+        shell: bash
+        run: |
+          bun run dev --host 127.0.0.1 --port 4173 > quality-artifacts/dev-server.log 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+          READY=0
+          for n in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then READY=1; break; fi
+            sleep 2
+          done
+          test "$READY" = 1
+          set +e
+          node scripts/application-quality.mjs
+          APP_RESULT=$?
+          node scripts/version-quality.mjs
+          BACKUP_RESULT=$?
+          node scripts/browser-reliability.mjs
+          EDITOR_RESULT=$?
+          exit $((APP_RESULT || BACKUP_RESULT || EDITOR_RESULT))
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-results
+          path: |
+            quality-artifacts/
+            test-results/
+          retention-days: 7

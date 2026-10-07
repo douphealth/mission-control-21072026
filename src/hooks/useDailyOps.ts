@@ -1,38 +1,24 @@
-// ─── Canonical daily operating logic ─────────────────────────────────────────
-// One source of truth for the Daily Mission Control home. Both the canonical
-// home and any compatibility route consume this — no duplicated business logic.
-
-import { useMemo } from "react";
+// Shared daily planning logic. Home and compatibility routes use the same data.
+import { useMemo, useRef } from "react";
 import { toast } from "sonner";
-import {
-  useTasks,
-  useReminders,
-  usePayments,
-  useDecisions,
-  useSyncHealth,
-  useUpdateItem,
-  useWebsites,
-  useNotes,
-  useSEOProfiles,
-  useSEOIssues,
-  useSEOSnapshots,
-  useStreamItems,
-  useValidations,
-} from "@/hooks/useTableData";
+import { useTasks, useReminders, usePayments, useDecisions, useSyncHealth, useUpdateItem,
+  useWebsites, useNotes, useSEOProfiles, useSEOIssues, useSEOSnapshots, useStreamItems, useValidations } from "@/hooks/useTableData";
 import { buildWorkQueue, splitQueue, type WorkItem } from "@/lib/workQueue";
 import { buildAttention } from "@/lib/whyNow";
 import { buildSitePulse } from "@/lib/sitePulse";
 import { pendingValidations } from "@/lib/validations";
 import { selectIntelligence } from "@/lib/intelligence";
-import { todayISO, addDaysLocal, buildBriefing } from "@/lib/overdue";
+import { addDaysLocal, buildBriefing, fmtLocal } from "@/lib/overdue";
 import { actOnDecision, deferDecision } from "@/lib/decisions";
-import { buildTimeline, hhmmNow, type Timeline } from "@/lib/timeline";
+import { buildTimeline, type Timeline } from "@/lib/timeline";
 import type { Task } from "@/lib/db";
 import { computeCapacity, fixedEventsFor, isPlannedToday, suggestOutcomes } from "@/lib/planning";
 import { usePlanStore, inArea } from "@/stores/planStore";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
 import { isGCalConnected } from "@/lib/googleCalendar";
 import { isCurrentSEOIssue } from "@/lib/seoEvidence";
+import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { selectedDailyOutcomes, outcomeProgress } from "@/lib/dailyOutcomes";
 
 export function useDailyOps() {
   const allTasks = useTasks();
@@ -49,311 +35,116 @@ export function useDailyOps() {
   const stream = useStreamItems();
   const validations = useValidations();
   const { area, workdayStart, workdayEnd } = usePlanStore();
+  const { today, nowHHMM } = useMinuteClock();
+  const inFlight = useRef(new Set<string>());
   const gcal = useGoogleCalendar({ autoFetch: isGCalConnected() });
   const gcalEvents = gcal.rawEvents;
+  const tasks = useMemo(() => allTasks.filter(t => inArea(t, area)), [allTasks, area]);
+  const queues = useMemo(() => splitQueue(buildWorkQueue({ tasks, reminders, payments, decisions, today })), [tasks, reminders, payments, decisions, today]);
+  const attention = useMemo(() => buildAttention({ work: queues.all, decisions, payments, health,
+    seoIssues: seoIssues.filter(issue => isCurrentSEOIssue(issue)), validations, today }), [queues.all, decisions, payments, health, seoIssues, validations, today]);
+  const sitePulse = useMemo(() => buildSitePulse({ websites, seoProfiles, seoIssues, seoSnapshots, health }), [websites, seoProfiles, seoIssues, seoSnapshots, health]);
+  const validationPulse = useMemo(() => pendingValidations(validations, today), [validations, today]);
+  const intelligence = useMemo(() => selectIntelligence({ stream, websites, tasks }), [stream, websites, tasks]);
+  const briefing = useMemo(() => buildBriefing(tasks, today), [tasks, today]);
+  const isEmpty = tasks.length === 0 && reminders.length === 0 && payments.length === 0 && decisions.length === 0 && websites.length === 0 && notes.length === 0;
 
-  /** Area is a visibility filter, never a permission. */
-  const tasks = useMemo(() => allTasks.filter((t) => inArea(t, area)), [allTasks, area]);
+  // Findings belong in Review until deliberately turned into scheduled work.
+  const dayItems = useMemo(() => queues.all.filter(item => {
+    if (item.kind === "decision") return false;
+    if (item.kind === "task") {
+      const task = item.raw as Task;
+      if (task.notBefore && task.notBefore > today && task.committedOn !== today) return false;
+      return item.overdueDays > 0 || item.due === today || isPlannedToday(task, today) || (!!item.time && (item.scheduled === today || item.due === today));
+    }
+    return item.overdueDays > 0 || item.due === today;
+  }), [queues.all, today]);
 
-  const today = todayISO();
-
-  const queues = useMemo(
-    () => splitQueue(buildWorkQueue({ tasks, reminders, payments, decisions, today })),
-    [tasks, reminders, payments, decisions, today],
-  );
-
-  const attention = useMemo(
-    () =>
-      buildAttention({
-        work: queues.all,
-        decisions,
-        payments,
-        health,
-        seoIssues: seoIssues.filter((issue) => isCurrentSEOIssue(issue)),
-        validations,
-        today,
-      }),
-    [queues.all, decisions, payments, health, seoIssues, validations, today],
-  );
-
-  const sitePulse = useMemo(
-    () => buildSitePulse({ websites, seoProfiles, seoIssues, seoSnapshots, health }),
-    [websites, seoProfiles, seoIssues, seoSnapshots, health],
-  );
-
-  const validationPulse = useMemo(
-    () => pendingValidations(validations, today),
-    [validations, today],
-  );
-
-  const intelligence = useMemo(
-    () => selectIntelligence({ stream, websites, tasks }),
-    [stream, websites, tasks],
-  );
-
-  const briefing = useMemo(() => buildBriefing(tasks as Task[], today), [tasks, today]);
-
-  /** True first-run: zero rows in every core table. Drives the gorgeous
-   *  empty state instead of a dead dashboard. Never fabricated rows. */
-  const isEmpty = useMemo(
-    () =>
-      tasks.length === 0 &&
-      reminders.length === 0 &&
-      payments.length === 0 &&
-      decisions.length === 0 &&
-      websites.length === 0 &&
-      notes.length === 0,
-    [tasks, reminders, payments, decisions, websites, notes],
-  );
-
-  /**
-   * Today is an execution surface, not an exception inbox.
-   * Only items that actually belong to today are allowed into the timeline:
-   * overdue/due work, explicitly planned tasks, today's reminders/payments,
-   * and timed work. Open findings/decisions stay in Review until converted to
-   * a task or deliberately committed.
-   */
-  const dayItems = useMemo(
-    () =>
-      queues.all.filter((item) => {
-        if (item.kind === "decision") return false;
-        if (item.kind === "task") {
-          const task = item.raw as Task;
-          return (
-            item.overdueDays > 0 ||
-            item.due === today ||
-            isPlannedToday(task, today) ||
-            (!!item.time && (item.scheduled === today || item.due === today))
-          );
-        }
-        return item.overdueDays > 0 || item.due === today;
-      }),
-    [queues.all, today],
-  );
-  const chosenOutcomes = useMemo(
-    () => dayItems.filter((i) => i.kind === "task" && isPlannedToday(i.raw as Task, today)),
-    [dayItems, today],
-  );
-  const commitments = useMemo(
-    () =>
-      (chosenOutcomes.length
-        ? chosenOutcomes
-        : dayItems.filter((item) => item.kind === "task")
-      ).slice(0, 3),
-    [chosenOutcomes, dayItems],
-  );
+  // Completed selections stay in the day's results. The open work queue alone
+  // cannot supply a progress denominator because it removes completed tasks.
+  const chosenOutcomes = useMemo(() => selectedDailyOutcomes(tasks, queues.all, today), [tasks, queues.all, today]);
+  const commitments = useMemo(() => chosenOutcomes.slice(0, 3), [chosenOutcomes]);
   const outcomesAreChosen = chosenOutcomes.length > 0;
-  const upNext = useMemo(
-    () => dayItems.filter((i) => !commitments.some((c) => c.id === i.id)),
-    [dayItems, commitments],
-  );
-  /** One clear next action: the top of what was chosen, else the engine's #1. */
-  const nextAction = useMemo(
-    () =>
-      commitments.find((i) => i.kind === "task" && (i.raw as Task).status !== "blocked") ??
-      dayItems.find((i) => i.kind === "task" && (i.raw as Task).status !== "blocked") ??
-      dayItems[0] ??
-      null,
-    [commitments, dayItems],
-  );
-
-  /** Execution-only chronology. Portfolio/site/system exceptions belong in
-   * Review and their dedicated workspaces, never in the Day timeline. */
-  const timeline = useMemo<Timeline>(
-    () =>
-      buildTimeline({
-        items: dayItems,
-        attention: [],
-        nowTime: hhmmNow(),
-        today,
-      }),
-    [dayItems, today],
-  );
-
-  /** Fixed commitments from Google Calendar (read-only, never tasks). */
+  const upNext = useMemo(() => dayItems.filter(item => !commitments.some(c => c.id === item.id)), [dayItems, commitments]);
+  const nextAction = useMemo(() => {
+    const actionable = (item: WorkItem) => item.kind === "task" && !["blocked", "done"].includes((item.raw as Task).status);
+    return commitments.find(actionable) ?? dayItems.find(actionable) ?? dayItems.find(item => item.kind !== "task") ?? null;
+  }, [commitments, dayItems]);
+  const timeline = useMemo<Timeline>(() => buildTimeline({ items: dayItems, attention: [], nowTime: nowHHMM, today }), [dayItems, today, nowHHMM]);
   const fixed = useMemo(() => fixedEventsFor(gcalEvents, today), [gcalEvents, today]);
-
-  /** Available time vs selected work — the "is this realistic?" answer. */
-  const capacity = useMemo(
-    () =>
-      computeCapacity({
-        tasks,
-        fixed,
-        today,
-        nowHHMM: hhmmNow(),
-        workdayStart,
-        workdayEnd,
-      }),
-    [tasks, fixed, today, workdayStart, workdayEnd],
-  );
-
-  /** Deterministic plan suggestion — preview only, applied on confirmation. */
-  const suggestedPlan = useMemo(
-    () =>
-      suggestOutcomes(
-        queues.today
-          .filter((i) => i.kind === "task" && !isPlannedToday(i.raw as Task, today))
-          .map((i) => ({
-            task: i.raw as Task,
-            score: i.score,
-            reasons: [
-              i.overdueDays > 0
-                ? `${i.overdueDays}d overdue`
-                : i.due === today
-                  ? "due today"
-                  : i.priority === "critical" || i.priority === "high"
-                    ? `${i.priority} priority`
-                    : "highest in your queue",
-            ],
-          })),
-        Math.max(0, capacity.availableMin - capacity.plannedMin),
-        Math.max(0, 3 - chosenOutcomes.length),
-      ),
-    [queues.today, today, capacity.availableMin, capacity.plannedMin, chosenOutcomes.length],
-  );
-
-  const waiting = useMemo(() => tasks.filter((t) => t.status === "blocked").length, [tasks]);
-  /** Inbox: captured but undecided — no deadline, no plan, no block. */
-  const inboxTasks = useMemo(
-    () =>
-      tasks.filter(
-        (t) =>
-          t.status === "todo" &&
-          !t.dueDate &&
-          !t.scheduledAt &&
-          !(t.blocks && t.blocks.length) &&
-          !t.archived,
-      ),
-    [tasks],
-  );
-  const inbox = inboxTasks.length;
-  const openDecisions = useMemo(
-    () => decisions.filter((d) => d.status === "open").length,
-    [decisions],
-  );
-
-  /** Agenda: only real, time-stamped commitments. Never fabricated. */
+  const capacity = useMemo(() => computeCapacity({ tasks, fixed, today, nowHHMM, workdayStart, workdayEnd }), [tasks, fixed, today, nowHHMM, workdayStart, workdayEnd]);
+  const suggestedPlan = useMemo(() => suggestOutcomes(
+    queues.today.filter(item => item.kind === "task" && !isPlannedToday(item.raw as Task, today)).map(item => ({
+      task: item.raw as Task, score: item.score,
+      reasons: [item.overdueDays > 0 ? `${item.overdueDays}d overdue` : item.due === today ? "due today" : item.priority === "critical" || item.priority === "high" ? `${item.priority} priority` : "highest in your queue"],
+    })), Math.max(0, capacity.availableMin - capacity.plannedMin), Math.max(0, 3 - chosenOutcomes.length),
+  ), [queues.today, today, capacity.availableMin, capacity.plannedMin, chosenOutcomes.length]);
+  const waiting = useMemo(() => tasks.filter(t => t.status === "blocked" && !t.archived && !t.deletedAt).length, [tasks]);
+  const inboxTasks = useMemo(() => tasks.filter(t => t.status === "todo" && !t.dueDate && !t.scheduledAt && !(t.blocks && t.blocks.length) && !t.archived && !t.deletedAt), [tasks]);
+  const openDecisions = useMemo(() => decisions.filter(d => d.status === "open").length, [decisions]);
   const agenda = useMemo(() => {
     const rows: { id: string; time: string; title: string; kind: string; section: string }[] = [];
     for (const t of tasks) {
-      if (t.status === "done") continue;
-      const day = t.scheduledAt || t.dueDate;
-      if (day !== today || !t.startTime) continue;
-      rows.push({
-        id: `t:${t.id}`,
-        time: t.startTime,
-        title: t.title,
-        kind: "Task",
-        section: "tasks",
-      });
+      if (t.status === "done" || t.archived || t.deletedAt) continue;
+      if ((t.scheduledAt || t.dueDate) !== today || !t.startTime) continue;
+      rows.push({ id: `t:${t.id}`, time: t.startTime, title: t.title, kind: "Task", section: "tasks" });
     }
     for (const r of reminders) {
       if (r.status !== "pending" || !r.remindAt) continue;
-      if (r.remindAt.slice(0, 10) !== today) continue;
-      rows.push({
-        id: `r:${r.id}`,
-        time: r.remindAt.slice(11, 16),
-        title: r.title,
-        kind: "Reminder",
-        section: "reminders",
-      });
+      const date = new Date(r.remindAt);
+      if (!Number.isFinite(date.getTime()) || fmtLocal(date) !== today) continue;
+      const time = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+      rows.push({ id: `r:${r.id}`, time, title: r.title, kind: "Reminder", section: "reminders" });
     }
     for (const p of payments) {
-      if (p.status !== "pending" && p.status !== "overdue") continue;
-      if ((p.dueDate || "").slice(0, 10) !== today) continue;
-      rows.push({
-        id: `p:${p.id}`,
-        time: "—",
-        title: p.title,
-        kind: "Payment due",
-        section: "payments",
-      });
+      if (!["pending", "overdue"].includes(p.status) || (p.dueDate || "").slice(0, 10) !== today) continue;
+      rows.push({ id: `p:${p.id}`, time: "—", title: p.title, kind: "Payment due", section: "payments" });
     }
     return rows.sort((a, b) => a.time.localeCompare(b.time)).slice(0, 6);
   }, [tasks, reminders, payments, today]);
 
+  // An action failure must leave records and the rest of the dashboard usable.
+  async function act(item: WorkItem, operation: () => Promise<void>) {
+    if (inFlight.current.has(item.id)) return;
+    inFlight.current.add(item.id);
+    try { await operation(); }
+    catch (error) { toast.error("Action was not saved", { description: error instanceof Error ? error.message : String(error) }); }
+    finally { inFlight.current.delete(item.id); }
+  }
   async function complete(item: WorkItem) {
-    if (item.kind === "task") {
-      await updateItem("tasks", item.refId, {
-        status: "done",
-        completedAt: new Date().toISOString(),
-        touchedAt: today,
-      } as any);
-    } else if (item.kind === "reminder") {
-      await updateItem("reminders", item.refId, { status: "done" } as any);
-    } else if (item.kind === "payment") {
-      await updateItem("payments", item.refId, { status: "paid", paidDate: today } as any);
-    } else {
-      await actOnDecision(item.raw);
-      toast.success("Decision turned into a task");
-      return;
-    }
-    toast.success("Done — next one is up");
+    return act(item, async () => {
+      if (item.kind === "task") {
+        if ((item.raw as Task).status === "done") return;
+        await updateItem("tasks", item.refId, { status: "done", completedAt: new Date().toISOString(), touchedAt: today } as any);
+      } else if (item.kind === "reminder") await updateItem("reminders", item.refId, { status: "done" } as any);
+      else if (item.kind === "payment") await updateItem("payments", item.refId, { status: "paid", paidDate: today } as any);
+      else { await actOnDecision(item.raw); toast.success("Decision turned into a task"); return; }
+      toast.success("Done — next one is up");
+    });
   }
-
-  /** Planning, not deadline mutation: the real dueDate is never touched. */
   async function schedule(item: WorkItem, days: number) {
-    const next = addDaysLocal(today, days);
-    if (item.kind === "task") {
-      await updateItem("tasks", item.refId, {
-        notBefore: next,
-        scheduledAt: next,
-        reviewAt: next,
-        touchedAt: today,
-        committedOn: undefined,
-      } as any);
-      toast.success(`Planned for ${next} — deadline unchanged`);
-      return;
-    }
-    if (item.kind === "reminder") {
-      await updateItem("reminders", item.refId, { remindAt: `${next}T09:00:00` } as any);
-    } else if (item.kind === "decision") {
-      await deferDecision(item.raw, days);
-    } else {
-      toast.warning("Payment deadlines cannot be moved — pay or renegotiate.");
-      return;
-    }
-    toast.success(`Planned for ${next}`);
+    return act(item, async () => {
+      const next = addDaysLocal(today, days);
+      if (item.kind === "task") {
+        await updateItem("tasks", item.refId, { notBefore: next, scheduledAt: next, reviewAt: next, touchedAt: today, committedOn: undefined } as any);
+        toast.success(`Planned for ${next} — deadline unchanged`); return;
+      }
+      if (item.kind === "reminder") await updateItem("reminders", item.refId, { remindAt: `${next}T09:00:00` } as any);
+      else if (item.kind === "decision") await deferDecision(item.raw, days);
+      else { toast.warning("Payment deadlines cannot be moved — pay or renegotiate."); return; }
+      toast.success(`Planned for ${next}`);
+    });
   }
-
   async function commit(item: WorkItem) {
     if (item.kind !== "task") return;
-    await updateItem("tasks", item.refId, { committedOn: today, notBefore: undefined } as any);
-    toast.success("Pinned to today");
+    return act(item, async () => {
+      await updateItem("tasks", item.refId, { committedOn: today, notBefore: undefined } as any);
+      toast.success("Pinned to today");
+    });
   }
-
-  return {
-    today,
-    queues,
-    now: queues.now,
-    commitments,
-    upNext,
-    timeline,
-    isEmpty,
-    attention,
-    sitePulse,
-    validationPulse,
-    intelligence,
-
-    briefing,
-    agenda,
-    waiting,
-    inbox,
-    inboxTasks,
-    openDecisions,
-    complete,
-    schedule,
-    commit,
-    // Today-centred additions
-    nextAction,
-    outcomesAreChosen,
-    fixed,
-    capacity,
-    suggestedPlan,
-    area,
-    gcalConnected: gcal.connected,
-    allTasks,
-  };
+  return { today, queues, now: queues.now, commitments, upNext, timeline, isEmpty, attention, sitePulse, validationPulse, intelligence,
+    briefing, agenda, waiting, inbox: inboxTasks.length, inboxTasks, openDecisions, complete, schedule, commit,
+    nextAction, outcomesAreChosen, fixed, capacity, suggestedPlan, area, gcalConnected: gcal.connected, allTasks,
+    visibleTasks: tasks, progress: outcomeProgress(chosenOutcomes) };
 }
-
 export type DailyOps = ReturnType<typeof useDailyOps>;
