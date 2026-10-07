@@ -1,320 +1,170 @@
-// ─── Mission Control Versions ─────────────────────────────────────────────────
-// Local snapshot/version system for standalone operation.
-// - Auto snapshots (debounced after edits + every 15 min if dirty)
-// - Manual named snapshots ("Save version")
-// - One-click restore (always takes a safety snapshot first)
-// - Portable: snapshots can be exported and imported between devices
-
-import { db } from "./db";
-import { deduplicateAll } from "./dedup";
-
-export const SNAPSHOTS_TABLE = "mc_snapshots";
-const LOCAL_FALLBACK_KEY = "mc-snapshots-local-v1";
-const DEVICE_KEY = "mc-device-label";
-const AUTO_KEEP = 30; // keep last N auto snapshots
-const AUTO_DEBOUNCE_MS = 60_000; // 1 min after last edit
-const AUTO_INTERVAL_MS = 15 * 60_000; // safety net every 15 min
-
+// Local snapshots are durable IndexedDB records, never a growing localStorage array.
+import { db } from './db';
+import { versionDb, prepareVersionStorage, validateSnapshot } from './versionStorage';
+export const SNAPSHOTS_TABLE = 'mc_snapshots';
+const DEVICE_KEY = 'mc-device-label';
+const AUTO_KEEP = 30;
+const AUTO_DEBOUNCE_MS = 60_000;
+const AUTO_INTERVAL_MS = 15 * 60_000;
 export interface SnapshotMeta {
   id: string;
   name: string;
-  type: "auto" | "manual" | "safety";
+  type: 'auto' | 'manual' | 'safety';
   createdAt: string;
   device: string;
   counts: Record<string, number>;
   sizeBytes: number;
 }
-
 export interface Snapshot extends SnapshotMeta {
   payload: Record<string, any[]>;
   settings?: any;
 }
-
-// ─── Device label ─────────────────────────────────────────────────────────────
-
 export function getDeviceLabel(): string {
   try {
     const existing = localStorage.getItem(DEVICE_KEY);
     if (existing) return existing;
     const ua = navigator.userAgent;
-    let kind = "Device";
-    if (/iPhone|iPad|iPod/i.test(ua)) kind = "iOS";
-    else if (/Android/i.test(ua)) kind = "Android";
-    else if (/Mac/i.test(ua)) kind = "Mac";
-    else if (/Windows/i.test(ua)) kind = "Windows";
-    else if (/Linux/i.test(ua)) kind = "Linux";
+    const kind = /iPhone|iPad|iPod/i.test(ua) ? 'iOS' : /Android/i.test(ua) ? 'Android' : /Mac/i.test(ua) ? 'Mac' : /Windows/i.test(ua) ? 'Windows' : /Linux/i.test(ua) ? 'Linux' : 'Device';
     const label = `${kind} · ${Math.random().toString(36).slice(2, 6)}`;
     localStorage.setItem(DEVICE_KEY, label);
     return label;
-  } catch {
-    return "Device";
-  }
+  } catch { return 'Device'; }
 }
-
-export function setDeviceLabel(label: string) {
-  try {
-    localStorage.setItem(DEVICE_KEY, label.trim() || "Device");
-  } catch {
-    /* ignore */
-  }
-}
-
-// ─── Snapshot capture ─────────────────────────────────────────────────────────
-
-const TABLES = [
-  "websites",
-  "tasks",
-  "repos",
-  "buildProjects",
-  "links",
-  "notes",
-  "payments",
-  "ideas",
-  "credentials",
-  "customModules",
-  "habits",
-] as const;
-
-async function captureLocal(): Promise<{
-  payload: Record<string, any[]>;
-  settings: any;
-  counts: Record<string, number>;
-}> {
+export function setDeviceLabel(label: string) { try { localStorage.setItem(DEVICE_KEY, label.trim() || 'Device'); } catch { /* Nonessential preference. */ } }
+const snapshotTables = () => db.tables.filter(table => !['settings', 'syncHealth'].includes(table.name));
+async function captureLocal() {
+  const tables = snapshotTables();
   const payload: Record<string, any[]> = {};
   const counts: Record<string, number> = {};
-  for (const t of TABLES) {
-    const arr = await (db as any)[t].toArray();
-    payload[t] = arr;
-    counts[t] = arr.length;
-  }
-  const settings = await db.settings.get("default");
-  return { payload, settings, counts };
+  let settings: any;
+  await db.transaction('r', [...tables, db.settings], async () => {
+    for (const table of tables) { payload[table.name] = await table.toArray(); counts[table.name] = payload[table.name].length; }
+    settings = await db.settings.get('default');
+  });
+  return { payload, counts, settings };
 }
-
-// ─── Local fallback storage ───────────────────────────────────────────────────
-
-function readLocal(): Snapshot[] {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_FALLBACK_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-function writeLocal(list: Snapshot[]) {
-  try {
-    localStorage.setItem(LOCAL_FALLBACK_KEY, JSON.stringify(list));
-  } catch {
-    /* ignore */
-  }
-}
-
-export function resetVersionsCache() {
-  // Kept for compatibility with older callers.
-}
-
-// ─── Public API ───────────────────────────────────────────────────────────────
-
-export async function listVersions(): Promise<SnapshotMeta[]> {
-  return readLocal()
-    .map(stripPayload)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
-
-function stripPayload(s: Snapshot): SnapshotMeta {
-  const { payload: _p, settings: _s, ...meta } = s;
+export function resetVersionsCache() { /* Compatibility: storage reads are always fresh. */ }
+function stripPayload(snapshot: Snapshot): SnapshotMeta {
+  const { payload: _payload, settings: _settings, ...meta } = snapshot;
   return meta;
 }
-
-export async function saveVersion(
-  opts: { name?: string; type?: SnapshotMeta["type"] } = {},
-): Promise<SnapshotMeta> {
+export async function listVersions(): Promise<SnapshotMeta[]> {
+  await prepareVersionStorage();
+  return (await versionDb.snapshots.orderBy('createdAt').reverse().toArray()).map(stripPayload);
+}
+export async function saveVersion(opts: { name?: string; type?: SnapshotMeta['type'] } = {}): Promise<SnapshotMeta> {
+  await prepareVersionStorage();
   const { payload, settings, counts } = await captureLocal();
-  const totalItems = Object.values(counts).reduce((a, b) => a + b, 0);
-  const createdAt = new Date().toISOString();
-  const id = `snap_${createdAt.replace(/[^0-9]/g, "").slice(0, 14)}_${Math.random().toString(36).slice(2, 8)}`;
-  const json = JSON.stringify(payload);
-  const snap: Snapshot = {
-    id,
-    name: opts.name?.trim() || defaultName(opts.type ?? "manual", totalItems),
-    type: opts.type ?? "manual",
-    createdAt,
-    device: getDeviceLabel(),
-    counts,
-    sizeBytes: json.length,
-    payload,
-    settings,
-  };
-
-  const list = readLocal();
-  list.unshift(snap);
-  writeLocal(list);
-
-  await pruneAuto();
-  return stripPayload(snap);
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const type = opts.type ?? 'manual';
+  const stamp = new Date().toLocaleString();
+  const name = opts.name?.trim() || (type === 'auto' ? `Auto · ${stamp}` : type === 'safety' ? `Safety · before restore · ${stamp}` : `Manual · ${stamp} · ${total} items`);
+  const snapshot: Snapshot = { id: `snap_${crypto.randomUUID()}`, name, type, createdAt: new Date().toISOString(), device: getDeviceLabel(), counts,
+    sizeBytes: new Blob([JSON.stringify({ payload, settings })]).size, payload, settings };
+  await versionDb.snapshots.add(snapshot);
+  if (!await versionDb.snapshots.get(snapshot.id)) throw new Error('The version could not be verified after saving.');
+  // Pruning is housekeeping; a failure does not invalidate a committed snapshot.
+  try {
+    const autos = (await listVersions()).filter(item => item.type === 'auto');
+    if (autos.length > AUTO_KEEP) await versionDb.snapshots.bulkDelete(autos.slice(AUTO_KEEP).map(item => item.id));
+  } catch (error) { console.warn('Old automatic versions could not be pruned', error); }
+  return stripPayload(snapshot);
 }
-
-function defaultName(type: SnapshotMeta["type"], total: number): string {
-  const d = new Date();
-  const stamp = d.toLocaleString();
-  if (type === "auto") return `Auto · ${stamp}`;
-  if (type === "safety") return `Safety · before restore · ${stamp}`;
-  return `Manual · ${stamp} · ${total} items`;
-}
-
-async function pruneAuto() {
-  const all = await listVersions();
-  const autos = all.filter((s) => s.type === "auto");
-  if (autos.length <= AUTO_KEEP) return;
-  const toDelete = autos.slice(AUTO_KEEP);
-  for (const v of toDelete) await deleteVersion(v.id);
-}
-
 async function fetchFullSnapshot(id: string): Promise<Snapshot | null> {
-  return readLocal().find((s) => s.id === id) ?? null;
+  await prepareVersionStorage();
+  return await versionDb.snapshots.get(id) ?? null;
 }
-
-export async function deleteVersion(id: string): Promise<void> {
-  writeLocal(readLocal().filter((s) => s.id !== id));
-}
-
+export async function deleteVersion(id: string): Promise<void> { await prepareVersionStorage(); await versionDb.snapshots.delete(id); }
 export async function renameVersion(id: string, name: string): Promise<void> {
-  const snap = await fetchFullSnapshot(id);
-  if (!snap) return;
-  snap.name = name.trim() || snap.name;
-  const list = readLocal().map((s) => (s.id === id ? snap : s));
-  writeLocal(list);
+  await prepareVersionStorage();
+  if (!name.trim()) return;
+  if (!await versionDb.snapshots.update(id, { name: name.trim() })) throw new Error('Version no longer exists.');
 }
-
-export async function restoreVersion(
-  id: string,
-  opts: { safety?: boolean } = {},
-): Promise<{ restored: number }> {
-  const snap = await fetchFullSnapshot(id);
-  if (!snap) throw new Error("Version not found");
-
-  // Always keep both: capture current state as a "safety" snapshot first
-  if (opts.safety !== false) {
-    try {
-      await saveVersion({ type: "safety" });
-    } catch (e) {
-      console.warn("Safety snapshot failed", e);
-    }
-  }
-
-  // Replace local data table-by-table (atomic per table)
+export async function restoreVersion(id: string, opts: { safety?: boolean } = {}): Promise<{ restored: number }> {
+  const snapshot = await fetchFullSnapshot(id);
+  if (!snapshot) throw new Error('Version not found');
+  validateSnapshot(snapshot);
+  const allowed = new Map(snapshotTables().map(table => [table.name, table]));
+  for (const name of Object.keys(snapshot.payload)) if (!allowed.has(name)) throw new Error(`Unsupported version collection: ${name}. No data was changed.`);
+  // Never proceed with a destructive restore when its safety copy failed.
+  if (opts.safety !== false) await saveVersion({ type:'safety' });
+  const tables = Object.keys(snapshot.payload).map(name => allowed.get(name)!);
   let restored = 0;
-  for (const t of TABLES) {
-    const rows = snap.payload[t] || [];
-    await (db as any)[t].clear();
-    if (rows.length) await (db as any)[t].bulkPut(rows);
-    restored += rows.length;
-  }
-  if (snap.settings) {
-    await db.settings.put({ ...snap.settings, id: "default" });
-  }
-  await deduplicateAll();
+  await db.transaction('rw', [...tables, db.settings], async () => {
+    for (const table of tables) {
+      const rows = snapshot.payload[table.name];
+      await table.clear();
+      if (rows.length) await table.bulkPut(rows);
+      restored += rows.length;
+    }
+    if (snapshot.settings) await db.settings.put({ ...snapshot.settings, id:'default' });
+  });
+  // Collections absent from an older backup are intentionally not touched.
   return { restored };
 }
-
-export async function restoreLatestNonEmptyVersion(): Promise<{
-  restored: number;
-  versionId?: string;
-}> {
+export async function restoreLatestNonEmptyVersion(): Promise<{ restored: number; versionId?: string }> {
   const versions = await listVersions();
-  const candidate = versions.find((version) =>
-    Object.values(version.counts || {}).some((count) => Number(count) > 0),
-  );
-
-  if (!candidate) return { restored: 0 };
-
-  const result = await restoreVersion(candidate.id, { safety: false });
-  return { restored: result.restored, versionId: candidate.id };
+  const candidate = versions.find(version => Object.values(version.counts || {}).some(count => Number(count) > 0));
+  if (!candidate) return { restored:0 };
+  return { ...await restoreVersion(candidate.id, { safety:false }), versionId:candidate.id };
 }
-
-export function downloadVersionFile(meta: SnapshotMeta) {
-  return fetchFullSnapshot(meta.id).then((snap) => {
-    if (!snap) return;
-    const blob = new Blob([JSON.stringify(snap, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${snap.name.replace(/[^a-z0-9]+/gi, "-")}.mcversion.json`;
-    a.click();
-  });
+export async function downloadVersionFile(meta: SnapshotMeta) {
+  const snapshot = await fetchFullSnapshot(meta.id);
+  if (!snapshot) throw new Error('Version not found');
+  const url = URL.createObjectURL(new Blob([JSON.stringify(snapshot, null, 2)], { type:'application/json' }));
+  const anchor = document.createElement('a');
+  anchor.href = url; anchor.download = `${snapshot.name.replace(/[^a-z0-9]+/gi, '-')}.mcversion.json`;
+  anchor.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
 export async function importVersionFile(file: File): Promise<SnapshotMeta> {
-  const text = await file.text();
-  const snap = JSON.parse(text) as Snapshot;
-  if (!snap.payload) throw new Error("Not a valid version file");
-  snap.id = `snap_imported_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  snap.createdAt = new Date().toISOString();
-  snap.type = "manual";
-  snap.name = snap.name ? `Imported · ${snap.name}` : `Imported · ${snap.createdAt}`;
-  const list = readLocal();
-  list.unshift(snap);
-  writeLocal(list);
-  return stripPayload(snap);
+  const snapshot = JSON.parse(await file.text()) as Snapshot;
+  validateSnapshot(snapshot);
+  snapshot.id = `snap_imported_${crypto.randomUUID()}`;
+  snapshot.createdAt = new Date().toISOString(); snapshot.type = 'manual';
+  snapshot.name = snapshot.name ? `Imported · ${snapshot.name}` : `Imported · ${snapshot.createdAt}`;
+  snapshot.counts = Object.fromEntries(Object.entries(snapshot.payload).map(([name, rows]) => [name, rows.length]));
+  snapshot.sizeBytes = new Blob([JSON.stringify(snapshot.payload)]).size;
+  await prepareVersionStorage();
+  await versionDb.snapshots.add(snapshot);
+  return stripPayload(snapshot);
 }
-
-// ─── Auto-snapshot loop ───────────────────────────────────────────────────────
-
-let dirty = false;
+let editRevision = 0;
+let savedRevision = 0;
+let autoInFlight = false;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let intervalTimer: ReturnType<typeof setInterval> | null = null;
-
-export function markDirty() {
-  dirty = true;
-  if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(() => {
-    if (!dirty) return;
-    dirty = false;
-    saveVersion({ type: "auto" }).catch((e) => console.warn("Auto snapshot failed", e));
-  }, AUTO_DEBOUNCE_MS);
-}
-
 let visHandler: (() => void) | null = null;
-function startTick() {
-  if (intervalTimer) return;
-  intervalTimer = setInterval(() => {
-    if (!dirty) return;
-    dirty = false;
-    saveVersion({ type: "auto" }).catch((e) => console.warn("Auto snapshot failed", e));
-  }, AUTO_INTERVAL_MS);
+async function saveAutomatic() {
+  if (autoInFlight || savedRevision === editRevision) return;
+  const capturedRevision = editRevision;
+  autoInFlight = true;
+  try { await saveVersion({ type:'auto' }); savedRevision = capturedRevision; }
+  catch (error) { console.warn('Automatic version was not saved; retry remains pending', error); }
+  finally { autoInFlight = false; }
 }
-function stopTick() {
-  if (intervalTimer) {
-    clearInterval(intervalTimer);
-    intervalTimer = null;
-  }
+export function markDirty() {
+  editRevision++;
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(() => { debounceTimer = null; void saveAutomatic(); }, AUTO_DEBOUNCE_MS);
 }
-
+function startTick() { if (!intervalTimer) intervalTimer = setInterval(() => { void saveAutomatic(); }, AUTO_INTERVAL_MS); }
+function stopTick() { if (intervalTimer) clearInterval(intervalTimer); intervalTimer = null; }
 export function startAutoSnapshots() {
-  if (typeof document === "undefined" || !document.hidden) startTick();
-  if (!visHandler && typeof document !== "undefined") {
-    visHandler = () => {
-      if (document.hidden) stopTick();
-      else startTick();
-    };
-    document.addEventListener("visibilitychange", visHandler);
+  if (typeof document === 'undefined') return;
+  void prepareVersionStorage().catch(error => console.warn('Original version history retained; migration needs attention', error));
+  if (!document.hidden) startTick();
+  if (!visHandler) {
+    visHandler = () => { if (document.hidden) stopTick(); else startTick(); };
+    document.addEventListener('visibilitychange', visHandler);
   }
 }
-
 export function stopAutoSnapshots() {
   stopTick();
-  if (debounceTimer) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
-  if (visHandler && typeof document !== "undefined") {
-    document.removeEventListener("visibilitychange", visHandler);
-    visHandler = null;
-  }
+  if (debounceTimer) clearTimeout(debounceTimer);
+  debounceTimer = null;
+  if (visHandler && typeof document !== 'undefined') document.removeEventListener('visibilitychange', visHandler);
+  visHandler = null;
 }
-
-export const SNAPSHOTS_SCHEMA_SQL = `
--- Optional: snapshot/version history for Mission Control
-CREATE TABLE IF NOT EXISTS mc_snapshots (data jsonb, id text PRIMARY KEY);
-ALTER TABLE mc_snapshots ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "allow_all_mc" ON mc_snapshots;
-CREATE POLICY "allow_all_mc" ON mc_snapshots FOR ALL USING (true) WITH CHECK (true);
-`;
+// Retained for compatibility. The standalone app does not use a server SQL table.
+export const SNAPSHOTS_SCHEMA_SQL = '';
