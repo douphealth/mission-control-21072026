@@ -15,6 +15,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Check browser runner syntax
+        run: |
+          node --check scripts/application-quality.mjs
+          node --check scripts/version-quality.mjs
+          node --check scripts/browser-reliability.mjs
       - name: Capture source and tested commit
         run: |
           mkdir -p quality-artifacts
