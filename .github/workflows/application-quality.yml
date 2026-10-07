@@ -1,0 +1,54 @@
+name: Application quality
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: app-quality-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Capture reproducible source snapshot
+        run: |
+          mkdir -p quality-artifacts
+          git archive --format=tar.gz -o quality-artifacts/source.tar.gz HEAD src public scripts package.json bun.lockb bun.lock vite.config.ts vitest.config.ts tsconfig.json eslint.config.js .github/workflows 2>/dev/null || git archive --format=tar.gz -o quality-artifacts/source.tar.gz HEAD src public scripts package.json vite.config.ts vitest.config.ts tsconfig.json
+          git rev-parse HEAD > quality-artifacts/commit.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quality-source
+          path: quality-artifacts/
+          retention-days: 3
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test
+      - run: bun run build:cloudflare
+      - name: Install browser
+        run: bunx playwright install --with-deps chromium
+      - name: Run isolated application checks
+        shell: bash
+        run: |
+          if [ ! -f scripts/application-quality.mjs ]; then
+            echo 'Browser audit script will be added after baseline source review.'
+            exit 0
+          fi
+          bun run dev --host 127.0.0.1 --port 4173 > quality-artifacts/dev-server.log 2>&1 &
+          for n in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then break; fi
+            sleep 2
+          done
+          node scripts/application-quality.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quality-results
+          path: quality-artifacts/
+          retention-days: 7
