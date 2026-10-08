@@ -1,3 +1,4 @@
+import "@/components/websites/portfolio-aurora.css";
 import {
   useWebsites,
   useAddItem,
@@ -7,48 +8,34 @@ import {
   useBulkDeleteItems,
   useDuplicateItem,
   useTasks,
+  useSEOSnapshots,
+  useExportAllData,
 } from "@/hooks/useTableData";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Plus,
   Search,
-  ExternalLink,
   Copy,
-  Eye,
-  EyeOff,
   Globe,
   Edit2,
   Trash2,
   LayoutGrid,
   List,
-  Shield,
-  Server,
-  Key,
-  Lock,
-  Unlock,
-  ChevronDown,
-  ChevronRight,
-  Activity,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-  ArrowUpRight,
-  Filter,
-  SortAsc,
-  SortDesc,
   Layers,
-  Tag,
-  Puzzle,
-  MoreVertical,
-  RefreshCw,
-  Archive,
-  Zap,
-  TrendingUp,
-  BarChart3,
   CheckSquare,
   Square,
-  XCircle,
+  RefreshCw,
+  Download,
+  SortAsc,
+  SortDesc,
+  ExternalLink,
+  Lock,
+  LockKeyhole,
+  Server,
+  Zap,
+  Rocket,
+  Sparkles,
 } from "lucide-react";
 import FormModal, {
   FormField,
@@ -57,91 +44,49 @@ import FormModal, {
   FormSelect,
   FormTagsInput,
 } from "@/components/FormModal";
-import type { Website } from "@/lib/store";
+import type { Task, Website } from "@/lib/db";
 import { toast } from "sonner";
 import { deduplicateTable } from "@/lib/dedup";
+import { ensurePortfolioBootstrap } from "@/lib/portfolioBootstrap";
+import { useNavigationStore } from "@/stores/navigationStore";
+import {
+  completeness,
+  domainOf,
+  ensureUrl,
+  fleetSummary,
+  latestEvidenceBySource,
+  siteKind,
+  summarizeTasks,
+  tasksForSite,
+} from "@/lib/portfolioInsights";
 import PortfolioWebsiteCard from "@/components/websites/PortfolioWebsiteCard";
+import PortfolioTaskQueue, {
+  type PortfolioQueueItem,
+} from "@/components/websites/PortfolioTaskQueue";
+import {
+  CATEGORY_CONFIG,
+  PRIORITY_TONE,
+  STATUS_CONFIG,
+  WEBSITE_CATEGORY_OPTIONS,
+  categoryVisual,
+} from "@/components/websites/portfolioConfig";
+import { Chip, Meter } from "@/components/websites/portfolioParts";
+import { cn } from "@/lib/utils";
 
-// ─── Constants ──────────────────────────────────────────────────────────────────
-
-const STATUS_CONFIG: Record<
-  string,
-  { label: string; color: string; icon: any; bg: string; border: string; glow: string }
-> = {
-  active: {
-    label: "Active",
-    color: "text-emerald-500",
-    icon: CheckCircle2,
-    bg: "bg-emerald-500/10",
-    border: "border-emerald-500/20",
-    glow: "shadow-emerald-500/10",
-  },
-  maintenance: {
-    label: "Maintenance",
-    color: "text-amber-500",
-    icon: RefreshCw,
-    bg: "bg-amber-500/10",
-    border: "border-amber-500/20",
-    glow: "shadow-amber-500/10",
-  },
-  down: {
-    label: "Down",
-    color: "text-red-500",
-    icon: AlertTriangle,
-    bg: "bg-red-500/10",
-    border: "border-red-500/20",
-    glow: "shadow-red-500/10",
-  },
-  archived: {
-    label: "Archived",
-    color: "text-zinc-400",
-    icon: Archive,
-    bg: "bg-zinc-500/10",
-    border: "border-zinc-500/20",
-    glow: "shadow-zinc-500/10",
-  },
-};
-
-const CATEGORY_CONFIG: Record<string, { gradient: string; emoji: string }> = {
-  "Client Site": { gradient: "from-blue-500 to-cyan-500", emoji: "👔" },
-  "E-Commerce": { gradient: "from-purple-500 to-pink-500", emoji: "🛒" },
-  Personal: { gradient: "from-indigo-500 to-violet-500", emoji: "🏠" },
-  Blog: { gradient: "from-green-500 to-emerald-500", emoji: "📝" },
-  SaaS: { gradient: "from-orange-500 to-amber-500", emoji: "🚀" },
-  Portfolio: { gradient: "from-rose-500 to-pink-500", emoji: "🎨" },
-  "Fitness & Running": { gradient: "from-cyan-500 to-blue-500", emoji: "🏃" },
-  "Affiliate Marketing": { gradient: "from-amber-500 to-orange-500", emoji: "💸" },
-  "Plant Care": { gradient: "from-emerald-500 to-lime-500", emoji: "🌿" },
-  Numerology: { gradient: "from-violet-500 to-fuchsia-500", emoji: "🔢" },
-  "French Bulldog": { gradient: "from-rose-500 to-orange-400", emoji: "🐾" },
-  "Pest Control": { gradient: "from-slate-500 to-zinc-600", emoji: "🏠" },
-  Growth: { gradient: "from-sky-500 to-indigo-500", emoji: "📈" },
-  "AI & Prompts": { gradient: "from-violet-500 to-blue-500", emoji: "✨" },
-  "Developer Tools": { gradient: "from-zinc-600 to-slate-700", emoji: "🛠️" },
-  "AI Image Tool": { gradient: "from-fuchsia-500 to-pink-500", emoji: "🖼️" },
-};
-
-const WEBSITE_CATEGORY_OPTIONS = [
-  "Fitness & Running",
-  "Affiliate Marketing",
-  "Plant Care",
-  "Numerology",
-  "French Bulldog",
-  "Pest Control",
-  "Growth",
-  "AI & Prompts",
-  "Developer Tools",
-  "AI Image Tool",
-  "Personal",
-  "Client Site",
-  "E-Commerce",
-  "Blog",
-  "SaaS",
-  "Portfolio",
-] as const;
-
-type SortField = "name" | "status" | "category" | "dateAdded" | "lastUpdated";
+type SortField = "importance" | "name" | "status" | "category" | "dateAdded" | "lastUpdated";
 type SortDirection = "asc" | "desc";
+type TypeFilter = "all" | "wordpress" | "property";
+
+const SORT_LABEL: Record<SortField, string> = {
+  importance: "Importance",
+  name: "Name",
+  status: "Status",
+  category: "Category",
+  dateAdded: "Date added",
+  lastUpdated: "Last updated",
+};
+
+const today = () => new Date().toISOString().split("T")[0];
 
 const emptyWebsite: Omit<Website, "id"> = {
   name: "",
@@ -157,142 +102,178 @@ const emptyWebsite: Omit<Website, "id"> = {
   status: "active",
   notes: "",
   plugins: [],
-  dateAdded: new Date().toISOString().split("T")[0],
-  lastUpdated: new Date().toISOString().split("T")[0],
+  dateAdded: today(),
+  lastUpdated: today(),
+  tags: [],
+  priority: "medium",
+  importance: 50,
+  niche: "",
+  primaryGoal: "",
+  revenueModel: "",
+  appUrls: [],
+  githubRepos: [],
 };
 
-const fadeUp = (i: number) => ({
-  initial: { opacity: 0, y: 12 },
-  animate: { opacity: 1, y: 0 },
-  transition: { delay: Math.min(i * 0.04, 0.5), duration: 0.35 },
-});
+const cleanList = (values: string[] | undefined) =>
+  (values ?? []).map((value) => value.trim()).filter(Boolean);
 
-// ─── Component ──────────────────────────────────────────────────────────────────
+const cleanUrl = (value: string | undefined) =>
+  value && value.trim() ? ensureUrl(value.trim()) : "";
+
+function compareSites(a: Website, b: Website, field: SortField): number {
+  switch (field) {
+    case "importance":
+      return (a.importance ?? 0) - (b.importance ?? 0) || a.name.localeCompare(b.name);
+    case "name":
+      return a.name.localeCompare(b.name);
+    case "status":
+      return a.status.localeCompare(b.status);
+    case "category":
+      return a.category.localeCompare(b.category);
+    case "dateAdded":
+      return (a.dateAdded || "").localeCompare(b.dateAdded || "");
+    case "lastUpdated":
+      return (a.lastUpdated || "").localeCompare(b.lastUpdated || "");
+  }
+}
 
 export default function WebsitesPage() {
   const websites = useWebsites();
   const tasks = useTasks();
+  const snapshots = useSEOSnapshots();
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const deleteItem = useDeleteItem();
   const bulkPatch = useBulkPatch();
   const bulkDeleteItems = useBulkDeleteItems();
   const duplicateItem = useDuplicateItem();
+  const exportAllData = useExportAllData();
+  const setActiveSection = useNavigationStore((state) => state.setActiveSection);
+
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterType, setFilterType] = useState<TypeFilter>("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-  const [sortField, setSortField] = useState<SortField>("lastUpdated");
+  const [sortField, setSortField] = useState<SortField>("importance");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
-  const [revealedPasswords, setRevealedPasswords] = useState<Set<string>>(new Set());
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyWebsite);
-  const [expandedSite, setExpandedSite] = useState<string | null>(null);
-  const [showFilters, setShowFilters] = useState(false);
+  const [form, setForm] = useState<Omit<Website, "id">>(emptyWebsite);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkMode, setBulkMode] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const cd = useConfirmDialog();
-  // ─── Derived data ──────────────────────────────────────────────
 
-  const categories = useMemo(() => {
-    const cats = new Set(websites.map((w) => w.category));
-    return Array.from(cats).sort();
+  // ─── Derived portfolio data ────────────────────────────────────
+
+  const siteTasks = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const site of websites) map.set(site.id, tasksForSite(site, tasks));
+    return map;
+  }, [websites, tasks]);
+
+  const evidence = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof latestEvidenceBySource>>();
+    for (const site of websites) map.set(site.id, latestEvidenceBySource(site.id, snapshots));
+    return map;
+  }, [websites, snapshots]);
+
+  const completenessById = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof completeness>>();
+    for (const site of websites) map.set(site.id, completeness(site));
+    return map;
   }, [websites]);
 
-  const hostingProviders = useMemo(() => {
-    const providers = new Set(websites.map((w) => w.hostingProvider).filter(Boolean));
-    return Array.from(providers).sort();
-  }, [websites]);
+  const summary = useMemo(
+    () => fleetSummary(websites, tasks, snapshots),
+    [websites, tasks, snapshots],
+  );
 
-  const filtered = useMemo(() => {
-    return websites
-      .filter((w) => filterStatus === "all" || w.status === filterStatus)
-      .filter((w) => filterCategory === "all" || w.category === filterCategory)
-      .filter((w) => {
-        const q = search.toLowerCase();
-        return (
-          w.name.toLowerCase().includes(q) ||
-          w.url.toLowerCase().includes(q) ||
-          w.hostingProvider.toLowerCase().includes(q) ||
-          w.category.toLowerCase().includes(q) ||
-          (w.notes && w.notes.toLowerCase().includes(q))
-        );
-      })
-      .sort((a, b) => {
-        let cmp = 0;
-        switch (sortField) {
-          case "name":
-            cmp = a.name.localeCompare(b.name);
-            break;
-          case "status":
-            cmp = a.status.localeCompare(b.status);
-            break;
-          case "category":
-            cmp = a.category.localeCompare(b.category);
-            break;
-          case "dateAdded":
-            cmp = a.dateAdded.localeCompare(b.dateAdded);
-            break;
-          case "lastUpdated":
-            cmp = a.lastUpdated.localeCompare(b.lastUpdated);
-            break;
-        }
-        return sortDirection === "desc" ? -cmp : cmp;
-      });
-  }, [websites, filterStatus, filterCategory, search, sortField, sortDirection]);
+  const categories = useMemo(
+    () => Array.from(new Set(websites.map((site) => site.category))).sort(),
+    [websites],
+  );
 
-  // Stats
-  const stats = useMemo(
+  const statusCounts = useMemo(
     () => ({
-      total: websites.length,
-      active: websites.filter((w) => w.status === "active").length,
-      maintenance: websites.filter((w) => w.status === "maintenance").length,
-      down: websites.filter((w) => w.status === "down").length,
-      archived: websites.filter((w) => w.status === "archived").length,
-      withWP: websites.filter((w) => w.wpAdminUrl).length,
-      providers: new Set(websites.map((w) => w.hostingProvider).filter(Boolean)).size,
-      totalPlugins: websites.reduce((sum, w) => sum + w.plugins.length, 0),
+      all: websites.length,
+      active: websites.filter((site) => site.status === "active").length,
+      maintenance: websites.filter((site) => site.status === "maintenance").length,
+      down: websites.filter((site) => site.status === "down").length,
+      archived: websites.filter((site) => site.status === "archived").length,
     }),
     [websites],
   );
 
-  // ─── Actions ───────────────────────────────────────────────────
+  const typeCounts = useMemo(
+    () => ({
+      wordpress: websites.filter((site) => siteKind(site) === "wordpress").length,
+      property: websites.filter((site) => siteKind(site) === "property").length,
+    }),
+    [websites],
+  );
 
-  const toggleReveal = useCallback((key: string) => {
-    setRevealedPasswords((prev) => {
-      const n = new Set(prev);
-      if (n.has(key)) n.delete(key);
-      else {
-        n.add(key);
-        setTimeout(
-          () =>
-            setRevealedPasswords((p) => {
-              const x = new Set(p);
-              x.delete(key);
-              return x;
-            }),
-          10000,
-        );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return websites
+      .filter((site) => filterStatus === "all" || site.status === filterStatus)
+      .filter((site) => filterType === "all" || siteKind(site) === filterType)
+      .filter((site) => filterCategory === "all" || site.category === filterCategory)
+      .filter((site) => {
+        if (!q) return true;
+        return [
+          site.name,
+          site.url,
+          site.category,
+          site.hostingProvider,
+          site.niche,
+          site.primaryGoal,
+          site.revenueModel,
+          site.notes,
+          ...(site.tags ?? []),
+          ...(site.appUrls ?? []),
+        ]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(q));
+      })
+      .sort((a, b) => {
+        const cmp = compareSites(a, b, sortField);
+        return sortDirection === "desc" ? -cmp : cmp;
+      });
+  }, [websites, filterStatus, filterType, filterCategory, search, sortField, sortDirection]);
+
+  /** Open portfolio tasks: anything linked to a website, plus the seeded portfolio-wide tasks. */
+  const queue = useMemo<PortfolioQueueItem[]>(() => {
+    const siteNameByTaskId = new Map<string, string>();
+    for (const site of websites) {
+      if (site.status === "archived") continue;
+      for (const task of siteTasks.get(site.id) ?? []) {
+        if (!siteNameByTaskId.has(task.id)) siteNameByTaskId.set(task.id, site.name);
       }
-      return n;
-    });
-  }, []);
+    }
+    return tasks
+      .filter((task) => task.status !== "done")
+      .filter(
+        (task) =>
+          siteNameByTaskId.has(task.id) ||
+          (task.tags ?? []).some((tag) => tag.startsWith("portfolio-key:")),
+      )
+      .map((task) => ({ task, siteName: siteNameByTaskId.get(task.id) ?? null }));
+  }, [websites, siteTasks, tasks]);
 
-  const copyText = useCallback((text: string) => {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied to clipboard!");
-  }, []);
+  // ─── Actions ───────────────────────────────────────────────────
 
   const openAdd = () => {
     setEditId(null);
-    setForm(emptyWebsite);
+    setForm({ ...emptyWebsite, dateAdded: today(), lastUpdated: today() });
     setModalOpen(true);
   };
+
   const openEdit = (site: Website) => {
     setEditId(site.id);
-    const { id, ...rest } = site;
-    setForm(rest);
+    const { id: _id, ...rest } = site;
+    setForm({ ...emptyWebsite, ...rest });
     setModalOpen(true);
   };
 
@@ -301,21 +282,41 @@ export default function WebsitesPage() {
       toast.error("Website name is required.");
       return;
     }
-    const now = new Date().toISOString().split("T")[0];
+    if (!form.url.trim()) {
+      toast.error("Website URL is required.");
+      return;
+    }
+    const payload = {
+      ...form,
+      name: form.name.trim(),
+      url: cleanUrl(form.url),
+      wpAdminUrl: cleanUrl(form.wpAdminUrl),
+      hostingLoginUrl: cleanUrl(form.hostingLoginUrl),
+      appUrls: cleanList(form.appUrls).map(ensureUrl),
+      githubRepos: cleanList(form.githubRepos),
+      plugins: cleanList(form.plugins),
+      tags: cleanList(form.tags).map((tag) => tag.toLowerCase()),
+      importance:
+        typeof form.importance === "number"
+          ? Math.max(0, Math.min(100, form.importance))
+          : undefined,
+      lastUpdated: today(),
+    };
     if (editId) {
-      void updateItem<Website>("websites", editId, { ...form, lastUpdated: now });
-      toast.success("Website updated successfully");
+      void updateItem<Website>("websites", editId, payload);
+      toast.success("Website updated");
     } else {
-      void addItem("websites", { ...form, dateAdded: now, lastUpdated: now } as any);
-      toast.success("Website added successfully");
+      void addItem("websites", { ...payload, dateAdded: today() } as any);
+      toast.success("Website added");
     }
     setModalOpen(false);
   };
 
   const deleteWebsite = (id: string) => {
+    const site = websites.find((w) => w.id === id);
     cd.confirm({
-      title: "Delete Website",
-      description: "This website and all its data will be permanently removed.",
+      title: "Delete website",
+      description: `${site?.name ?? "This website"} and its record will be removed. Linked tasks stay, unlinked.`,
       onConfirm: () => {
         void deleteItem("websites", id);
         toast.success("Website deleted");
@@ -328,6 +329,11 @@ export default function WebsitesPage() {
     if (newId) toast.success("Website duplicated");
   };
 
+  const copyText = useCallback((text: string) => {
+    void navigator.clipboard.writeText(text);
+    toast.success("Copied to clipboard");
+  }, []);
+
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const n = new Set(prev);
@@ -338,685 +344,609 @@ export default function WebsitesPage() {
   }, []);
 
   const selectAll = useCallback(() => {
-    if (selectedIds.size === filtered.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(filtered.map((w) => w.id)));
-    }
+    if (selectedIds.size === filtered.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(filtered.map((w) => w.id)));
   }, [filtered, selectedIds.size]);
 
   const bulkDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
     cd.confirm({
-      title: `Delete ${selectedIds.size} Website(s)`,
-      description: `This will permanently remove ${selectedIds.size} websites.`,
+      title: `Delete ${selectedIds.size} website${selectedIds.size === 1 ? "" : "s"}`,
+      description: `This permanently removes ${selectedIds.size} website record${selectedIds.size === 1 ? "" : "s"}.`,
       onConfirm: () => {
         void bulkDeleteItems("websites", [...selectedIds]);
-        toast.success(`${selectedIds.size} websites deleted`);
+        toast.success(`${selectedIds.size} website${selectedIds.size === 1 ? "" : "s"} deleted`);
         setSelectedIds(new Set());
         setBulkMode(false);
       },
     });
   }, [selectedIds, bulkDeleteItems, cd]);
 
-  const bulkUpdateStatus = useCallback(
-    (status: string) => {
+  const bulkUpdate = useCallback(
+    (changes: Partial<Website>, label: string) => {
       if (selectedIds.size === 0) return;
-      const now = new Date().toISOString().split("T")[0];
-      void bulkPatch("websites", [...selectedIds], { status, lastUpdated: now });
-      toast.success(`${selectedIds.size} websites updated to ${status}`);
+      void bulkPatch("websites", [...selectedIds], { ...changes, lastUpdated: today() });
+      toast.success(`${selectedIds.size} website${selectedIds.size === 1 ? "" : "s"} ${label}`);
       setSelectedIds(new Set());
     },
     [selectedIds, bulkPatch],
   );
 
-  const bulkUpdateCategory = useCallback(
-    (category: string) => {
-      if (selectedIds.size === 0) return;
-      const now = new Date().toISOString().split("T")[0];
-      void bulkPatch("websites", [...selectedIds], { category, lastUpdated: now });
-      toast.success(`${selectedIds.size} websites updated to ${category}`);
-      setSelectedIds(new Set());
-    },
-    [selectedIds, bulkPatch],
-  );
-
-  const toggleSort = (field: SortField) => {
-    if (sortField === field) setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
-    else {
-      setSortField(field);
-      setSortDirection("desc");
+  const restorePortfolio = async () => {
+    setRestoring(true);
+    try {
+      const result = await ensurePortfolioBootstrap();
+      const changed = result.websitesAdded + result.websitesUpdated + result.tasksAdded;
+      if (changed) {
+        toast.success("Portfolio restored", {
+          description: `${result.websitesAdded} website${result.websitesAdded === 1 ? "" : "s"} added · ${result.websitesUpdated} updated · ${result.tasksAdded} task${result.tasksAdded === 1 ? "" : "s"} added`,
+        });
+      } else {
+        toast.success(
+          `All ${result.websitesInPortfolio} portfolio websites are already in My Websites`,
+        );
+      }
+    } catch {
+      toast.error("Could not restore the portfolio. Check browser storage and try again.");
+    } finally {
+      setRestoring(false);
     }
   };
 
-  const uf = (field: keyof typeof form, val: any) => setForm((f) => ({ ...f, [field]: val }));
+  const backup = async () => {
+    try {
+      const data = await exportAllData();
+      const blob = new Blob([data], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `mission-control-backup-${today()}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast.success("Backup downloaded");
+    } catch {
+      toast.error("Backup failed. Please try again.");
+    }
+  };
 
-  const ensureUrl = (url: string) => (url.match(/^https?:\/\//) ? url : `https://${url}`);
+  const startTask = (task: Task) => {
+    void updateItem<Task>("tasks", task.id, { status: "in-progress" });
+    toast.success("Started", { description: task.title });
+  };
 
-  // ─── Render helpers ────────────────────────────────────────────
+  const completeTask = (task: Task) => {
+    void updateItem<Task>("tasks", task.id, {
+      status: "done",
+      completedAt: new Date().toISOString(),
+    });
+    toast.success("Done", { description: task.title });
+  };
 
-  const renderStatusBadge = (status: string) => {
-    const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.active;
-    const Icon = cfg.icon;
+  const toggleSort = (field: SortField) => {
+    if (sortField === field)
+      setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"));
+    else {
+      setSortField(field);
+      setSortDirection(
+        field === "name" || field === "status" || field === "category" ? "asc" : "desc",
+      );
+    }
+  };
+
+  const uf = <K extends keyof Omit<Website, "id">>(field: K, value: Omit<Website, "id">[K]) =>
+    setForm((current) => ({ ...current, [field]: value }));
+
+  // ─── Card + row renderers ──────────────────────────────────────
+
+  const renderCard = (site: Website) => {
+    const tasksFor = siteTasks.get(site.id) ?? [];
     return (
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold ${cfg.bg} ${cfg.color} ${cfg.border} border`}
-      >
-        <Icon size={11} /> {cfg.label}
-      </span>
+      <PortfolioWebsiteCard
+        key={site.id}
+        site={site}
+        tasks={tasksFor}
+        evidence={evidence.get(site.id) ?? []}
+        completeness={completenessById.get(site.id) ?? completeness(site)}
+        selected={selectedIds.has(site.id)}
+        bulkMode={bulkMode}
+        onToggleSelect={() => toggleSelect(site.id)}
+        onEdit={() => openEdit(site)}
+        onDuplicate={() => void duplicateWebsite(site.id)}
+        onDelete={() => deleteWebsite(site.id)}
+        onCopy={copyText}
+        onConnectEvidence={() => setActiveSection("seo")}
+      />
     );
   };
 
-  const renderCredentialField = (
-    label: string,
-    value: string,
-    siteId: string,
-    isPassword?: boolean,
-  ) => {
-    if (!value) return null;
-    const revealKey = `${siteId}-${label}`;
-    const isRevealed = revealedPasswords.has(revealKey);
-
+  const renderRow = (site: Website) => {
+    const visual = categoryVisual(site.category);
+    const tasksFor = summarizeTasks(siteTasks.get(site.id) ?? []);
+    const status = STATUS_CONFIG[site.status] ?? STATUS_CONFIG.active;
+    const done = completenessById.get(site.id)?.percent ?? 0;
+    const selected = selectedIds.has(site.id);
+    const kind = siteKind(site);
     return (
-      <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-all group/cred">
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider w-14 flex-shrink-0">
-            {label}
-          </span>
-          <span className="text-xs text-card-foreground font-mono truncate">
-            {isPassword && !isRevealed ? "••••••••••" : value}
-          </span>
+      <div
+        key={site.id}
+        className={cn("pf-row", selected && "pf-row--selected", bulkMode && "cursor-pointer")}
+        onClick={bulkMode ? () => toggleSelect(site.id) : undefined}
+      >
+        <div className="flex items-center gap-3">
+          {bulkMode &&
+            (selected ? (
+              <CheckSquare size={18} className="text-[hsl(var(--pf-accent))]" aria-hidden />
+            ) : (
+              <Square size={18} className="text-[hsl(var(--pf-muted))]" aria-hidden />
+            ))}
+          <div
+            className={cn(
+              "grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-gradient-to-br text-sm font-extrabold text-white shadow-sm",
+              visual.gradient,
+            )}
+            aria-hidden
+          >
+            {site.name.charAt(0).toUpperCase()}
+          </div>
         </div>
-        <div className="flex items-center gap-0.5 opacity-0 group-hover/cred:opacity-100 transition-opacity">
-          {isPassword && (
-            <button
-              onClick={() => toggleReveal(revealKey)}
-              className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+        <div className="pf-row-main">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="pf-name text-[14px]">{site.name}</span>
+            <Chip tone={status.tone}>{status.label}</Chip>
+            {site.priority && (
+              <Chip tone={PRIORITY_TONE[site.priority] ?? "muted"}>{site.priority}</Chip>
+            )}
+            <Chip tone={kind === "wordpress" ? "sky" : "violet"}>
+              {kind === "wordpress" ? "WordPress" : "Property"}
+            </Chip>
+          </div>
+          {site.primaryGoal && (
+            <div
+              className="line-clamp-1 text-[12px] font-semibold"
+              style={{ color: "hsl(var(--pf-ink) / 0.85)" }}
             >
-              {isRevealed ? <EyeOff size={11} /> : <Eye size={11} />}
-            </button>
+              {site.primaryGoal}
+            </div>
+          )}
+          <div className="pf-row-meta">
+            <a
+              href={ensureUrl(site.url)}
+              target="_blank"
+              rel="noreferrer"
+              className="pf-domain m-0 max-w-[260px]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              {domainOf(site.url)}
+            </a>
+            <span>
+              {visual.emoji} {site.category}
+            </span>
+            {site.hostingProvider && (
+              <span className="inline-flex items-center gap-1">
+                <Server size={10} aria-hidden /> {site.hostingProvider}
+              </span>
+            )}
+            <span>
+              {tasksFor.open} open task{tasksFor.open === 1 ? "" : "s"}
+            </span>
+            <span>
+              {(site.appUrls ?? []).length} app{(site.appUrls ?? []).length === 1 ? "" : "s"}
+            </span>
+            <span className="inline-flex items-center gap-2">
+              Profile {done}%
+              <span className="w-16">
+                <Meter percent={done} />
+              </span>
+            </span>
+          </div>
+        </div>
+        <div className="pf-row-actions" onClick={(event) => event.stopPropagation()}>
+          <a
+            href={ensureUrl(site.url)}
+            target="_blank"
+            rel="noreferrer"
+            className="pf-icon-btn"
+            title="Open site"
+            aria-label={`Open ${site.name}`}
+          >
+            <ExternalLink size={14} aria-hidden />
+          </a>
+          {site.wpAdminUrl && (
+            <a
+              href={ensureUrl(site.wpAdminUrl)}
+              target="_blank"
+              rel="noreferrer"
+              className="pf-icon-btn"
+              title="WP admin"
+              aria-label={`WP admin for ${site.name}`}
+            >
+              <LockKeyhole size={14} aria-hidden />
+            </a>
           )}
           <button
-            onClick={() => copyText(value)}
-            className="p-1 rounded-md text-muted-foreground hover:text-primary transition-colors"
+            type="button"
+            className="pf-icon-btn"
+            onClick={() => duplicateWebsite(site.id)}
+            title="Duplicate"
+            aria-label={`Duplicate ${site.name}`}
           >
-            <Copy size={11} />
+            <Copy size={14} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="pf-icon-btn"
+            onClick={() => openEdit(site)}
+            title="Edit"
+            aria-label={`Edit ${site.name}`}
+          >
+            <Edit2 size={14} aria-hidden />
+          </button>
+          <button
+            type="button"
+            className="pf-icon-btn pf-icon-btn--danger"
+            onClick={() => deleteWebsite(site.id)}
+            title="Delete"
+            aria-label={`Delete ${site.name}`}
+          >
+            <Trash2 size={14} aria-hidden />
           </button>
         </div>
       </div>
     );
   };
 
-  // ─── Grid card ─────────────────────────────────────────────────
-
-  const renderGridCard = (site: Website, _i: number) => (
-    <PortfolioWebsiteCard
-      key={site.id}
-      site={site}
-      tasks={tasks}
-      selected={selectedIds.has(site.id)}
-      bulkMode={bulkMode}
-      onToggleSelect={() => toggleSelect(site.id)}
-      onEdit={() => openEdit(site)}
-      onDuplicate={() => void duplicateWebsite(site.id)}
-      onDelete={() => deleteWebsite(site.id)}
-      onCopy={copyText}
-    />
-  );
-
-  // ─── List row ──────────────────────────────────────────────────
-
-  const renderListRow = (site: Website, i: number) => {
-    const catConfig = CATEGORY_CONFIG[site.category] || {
-      gradient: "from-zinc-500 to-zinc-600",
-      emoji: "🌐",
-    };
-    const hasCredentials = site.wpUsername || site.hostingUsername;
-    const isExpanded = expandedSite === site.id;
-
-    return (
-      <div
-        key={site.id}
-        {...fadeUp(i)}
-        onClick={bulkMode ? () => toggleSelect(site.id) : undefined}
-        className={`group bg-card rounded-xl border transition-all overflow-hidden hover:shadow-md ${bulkMode ? "cursor-pointer" : ""} ${selectedIds.has(site.id) ? "border-primary/50 ring-1 ring-primary/20" : "border-border/20 hover:border-border/50"}`}
-      >
-        <div className="flex items-center gap-4 px-5 py-3.5">
-          {/* Bulk checkbox */}
-          {bulkMode && (
-            <div className="flex-shrink-0">
-              {selectedIds.has(site.id) ? (
-                <CheckSquare size={18} className="text-primary" />
-              ) : (
-                <Square size={18} className="text-muted-foreground" />
-              )}
-            </div>
-          )}
-          {/* Avatar */}
-          <div
-            className={`w-10 h-10 rounded-xl bg-gradient-to-br ${catConfig.gradient} flex items-center justify-center text-white text-base font-bold flex-shrink-0 shadow-sm`}
-          >
-            {site.name.charAt(0).toUpperCase()}
-          </div>
-
-          {/* Main info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <h3 className="font-bold text-card-foreground text-sm truncate">{site.name}</h3>
-              {renderStatusBadge(site.status)}
-            </div>
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <a
-                href={ensureUrl(site.url)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-primary transition-colors font-mono truncate max-w-xs"
-              >
-                {site.url.replace(/^https?:\/\//, "")}
-              </a>
-              <span className="text-border">·</span>
-              <span className="flex items-center gap-1">
-                {catConfig.emoji} {site.category}
-              </span>
-              {site.hostingProvider && (
-                <>
-                  <span className="text-border">·</span>
-                  <span className="flex items-center gap-1">
-                    <Server size={10} /> {site.hostingProvider}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Quick actions */}
-          <div className="flex items-center gap-1.5 flex-shrink-0">
-            <a
-              href={ensureUrl(site.url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="p-2 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-            >
-              <ExternalLink size={14} />
-            </a>
-            {site.wpAdminUrl && (
-              <a
-                href={ensureUrl(site.wpAdminUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-all"
-              >
-                <Lock size={14} />
-              </a>
-            )}
-            {hasCredentials && (
-              <button
-                onClick={() => setExpandedSite(isExpanded ? null : site.id)}
-                className={`p-2 rounded-lg transition-all ${isExpanded ? "text-amber-500 bg-amber-500/10" : "text-muted-foreground hover:text-amber-500 hover:bg-amber-500/10"}`}
-              >
-                <Shield size={14} />
-              </button>
-            )}
-            <button
-              onClick={() => duplicateWebsite(site.id)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-blue-500 hover:bg-blue-500/10 transition-all"
-              title="Duplicate"
-            >
-              <Copy size={14} />
-            </button>
-            <button
-              onClick={() => openEdit(site)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-all"
-            >
-              <Edit2 size={14} />
-            </button>
-            <button
-              onClick={() => deleteWebsite(site.id)}
-              className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-            >
-              <Trash2 size={14} />
-            </button>
-          </div>
-        </div>
-
-        {/* Expandable details */}
-        <>
-          {isExpanded && (
-            <div className="overflow-hidden">
-              <div className="px-5 pb-4 pt-1 border-t border-border/15">
-                <div className="grid grid-cols-2 gap-4 mt-3">
-                  {(site.wpUsername || site.wpPassword) && (
-                    <div className="space-y-1.5">
-                      <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                        WordPress Credentials
-                      </div>
-                      {renderCredentialField("User", site.wpUsername, site.id)}
-                      {renderCredentialField("Pass", site.wpPassword, site.id, true)}
-                    </div>
-                  )}
-                  {(site.hostingUsername || site.hostingPassword) && (
-                    <div className="space-y-1.5">
-                      <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                        Hosting Credentials
-                      </div>
-                      {renderCredentialField("User", site.hostingUsername, `${site.id}-host`)}
-                      {renderCredentialField("Pass", site.hostingPassword, `${site.id}-host`, true)}
-                    </div>
-                  )}
-                </div>
-                {site.plugins.length > 0 && (
-                  <div className="mt-3">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5">
-                      Plugins
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {site.plugins.map((p) => (
-                        <span
-                          key={p}
-                          className="text-[10px] px-2 py-0.5 rounded-md bg-secondary/50 text-muted-foreground font-medium"
-                        >
-                          {p}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {site.notes && (
-                  <div className="mt-3">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">
-                      Notes
-                    </div>
-                    <p className="text-xs text-muted-foreground/80 leading-relaxed">{site.notes}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </>
-      </div>
-    );
-  };
+  const kpis = [
+    { label: "Websites", value: summary.total, tone: "" },
+    { label: "WordPress", value: summary.wordpress, tone: "" },
+    { label: "Connected apps", value: summary.apps, tone: "pf-kpi--violet" },
+    { label: "Open tasks", value: summary.openTasks, tone: "pf-kpi--accent" },
+    {
+      label: "Blocked",
+      value: summary.blockedTasks,
+      tone: summary.blockedTasks ? "pf-kpi--rose" : "",
+    },
+    {
+      label: "Need attention",
+      value: summary.needsAttention,
+      tone: summary.needsAttention ? "pf-kpi--amber" : "",
+    },
+    { label: "Search data", value: `${summary.withEvidence}/${summary.total}`, tone: "" },
+    { label: "Profile complete", value: `${summary.avgCompleteness}%`, tone: "" },
+  ];
 
   // ─── Main render ───────────────────────────────────────────────
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-foreground tracking-tight">My Websites</h1>
-          <p className="text-sm text-muted-foreground mt-0.5 font-medium">
-            Manage all your websites, credentials, and hosting from one place
-          </p>
+    <div className="pf-root space-y-6">
+      {/* Hero */}
+      <section className="pf-hero" aria-labelledby="pf-title">
+        <div className="pf-orb pf-orb--a" aria-hidden />
+        <div className="pf-orb pf-orb--b" aria-hidden />
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0 max-w-2xl">
+            <div className="pf-eyebrow">Portfolio command center</div>
+            <h1 id="pf-title" className="pf-title">
+              My Websites
+            </h1>
+            <p className="pf-subtitle">
+              Manage all your websites, credentials, and hosting from one place. Each card shows the
+              goal, the revenue path, the apps, the open work and the next move.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className="pf-btn"
+              onClick={restorePortfolio}
+              disabled={restoring}
+            >
+              <RefreshCw size={13} className={cn(restoring && "animate-spin")} aria-hidden />{" "}
+              Restore portfolio
+            </button>
+            <button type="button" className="pf-btn" onClick={backup}>
+              <Download size={13} aria-hidden /> Backup
+            </button>
+            <button
+              type="button"
+              className="pf-btn"
+              onClick={async () => {
+                const n = await deduplicateTable("websites");
+                toast.success(
+                  n > 0 ? `Merged ${n} duplicate${n === 1 ? "" : "s"}` : "No duplicates found",
+                );
+              }}
+            >
+              <Layers size={13} aria-hidden /> Merge duplicates
+            </button>
+            <button
+              type="button"
+              className={cn("pf-btn", bulkMode && "pf-btn--danger")}
+              onClick={() => {
+                setBulkMode(!bulkMode);
+                setSelectedIds(new Set());
+              }}
+              aria-pressed={bulkMode}
+            >
+              <CheckSquare size={13} aria-hidden /> {bulkMode ? "Cancel bulk" : "Bulk select"}
+            </button>
+            <button type="button" className="pf-btn pf-btn--primary" onClick={openAdd}>
+              <Plus size={15} aria-hidden /> Add website
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={async () => {
-              const n = await deduplicateTable("websites");
-              toast.success(
-                n > 0 ? `Merged ${n} duplicate${n === 1 ? "" : "s"}` : "No duplicates found",
-              );
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20 transition-all"
-          >
-            <Layers size={15} /> Merge duplicates
-          </button>
-          <button
-            onClick={() => {
-              setBulkMode(!bulkMode);
-              setSelectedIds(new Set());
-            }}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all ${bulkMode ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20"}`}
-          >
-            <CheckSquare size={15} /> {bulkMode ? "Cancel" : "Bulk"}
-          </button>
 
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-primary to-blue-600 text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-          >
-            <Plus size={16} /> Add Website
-          </button>
+        <div className="pf-kpis" role="list" aria-label="Portfolio totals">
+          {kpis.map((kpi) => (
+            <div key={kpi.label} role="listitem" className={cn("pf-kpi", kpi.tone)}>
+              <div className="pf-kpi-value">{kpi.value}</div>
+              <div className="pf-kpi-label">{kpi.label}</div>
+            </div>
+          ))}
         </div>
-      </div>
+        <p className="pf-note mt-4 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <Sparkles size={11} aria-hidden /> Every change saves on this device as you make it. Dot
+          colors on each card show cloud save status. Back up any time.
+        </p>
+      </section>
 
-      {/* Bulk Action Bar */}
+      {/* Bulk action bar */}
       {bulkMode && (
-        <div className="flex items-center gap-3 p-3 rounded-xl bg-primary/5 border border-primary/15">
-          <button
-            onClick={selectAll}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-secondary/50 hover:bg-secondary transition-all"
-          >
-            {selectedIds.size === filtered.length ? (
-              <CheckSquare size={13} />
+        <div className="pf-panel flex flex-wrap items-center gap-2 !p-3">
+          <button type="button" className="pf-btn" onClick={selectAll}>
+            {selectedIds.size === filtered.length && filtered.length > 0 ? (
+              <CheckSquare size={13} aria-hidden />
             ) : (
-              <Square size={13} />
+              <Square size={13} aria-hidden />
             )}
-            {selectedIds.size === filtered.length ? "Deselect All" : "Select All"}
+            {selectedIds.size === filtered.length && filtered.length > 0
+              ? "Deselect all"
+              : "Select all"}
           </button>
-          <span className="text-xs text-muted-foreground font-medium">
-            {selectedIds.size} selected
-          </span>
+          <span className="pf-note font-bold">{selectedIds.size} selected</span>
           {selectedIds.size > 0 && (
             <>
-              <div className="h-4 w-px bg-border/30" />
               <select
+                aria-label="Set status for selected websites"
+                className="pf-select"
+                value=""
                 onChange={(e) => {
-                  if (e.target.value) bulkUpdateStatus(e.target.value);
-                  e.target.value = "";
+                  if (e.target.value)
+                    bulkUpdate(
+                      { status: e.target.value as Website["status"] },
+                      `set to ${e.target.value}`,
+                    );
                 }}
-                className="px-2.5 py-1.5 rounded-lg bg-secondary/50 text-xs font-semibold text-muted-foreground border border-border/15 outline-none cursor-pointer"
               >
-                <option value="">Set Status...</option>
-                <option value="active">✅ Active</option>
-                <option value="maintenance">🔧 Maintenance</option>
-                <option value="down">🔴 Down</option>
-                <option value="archived">📦 Archived</option>
+                <option value="">Set status…</option>
+                <option value="active">Active</option>
+                <option value="maintenance">Maintenance</option>
+                <option value="down">Down</option>
+                <option value="archived">Archived</option>
               </select>
               <select
+                aria-label="Set category for selected websites"
+                className="pf-select"
+                value=""
                 onChange={(e) => {
-                  if (e.target.value) bulkUpdateCategory(e.target.value);
-                  e.target.value = "";
+                  if (e.target.value)
+                    bulkUpdate({ category: e.target.value }, `moved to ${e.target.value}`);
                 }}
-                className="px-2.5 py-1.5 rounded-lg bg-secondary/50 text-xs font-semibold text-muted-foreground border border-border/15 outline-none cursor-pointer"
               >
-                <option value="">Set Category...</option>
+                <option value="">Set category…</option>
                 {WEBSITE_CATEGORY_OPTIONS.map((category) => (
                   <option key={category} value={category}>
                     {CATEGORY_CONFIG[category]?.emoji || "🌐"} {category}
                   </option>
                 ))}
               </select>
-              <button
-                onClick={bulkDelete}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-destructive/10 text-destructive hover:bg-destructive/20 transition-all ml-auto"
+              <select
+                aria-label="Set priority for selected websites"
+                className="pf-select"
+                value=""
+                onChange={(e) => {
+                  if (e.target.value)
+                    bulkUpdate(
+                      { priority: e.target.value as Website["priority"] },
+                      `set to ${e.target.value} priority`,
+                    );
+                }}
               >
-                <Trash2 size={12} /> Delete ({selectedIds.size})
+                <option value="">Set priority…</option>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+              <button type="button" className="pf-btn pf-btn--danger ml-auto" onClick={bulkDelete}>
+                <Trash2 size={13} aria-hidden /> Delete ({selectedIds.size})
               </button>
             </>
           )}
         </div>
       )}
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
-        {[
-          {
-            label: "Total",
-            value: stats.total,
-            icon: Globe,
-            color: "text-foreground",
-            bg: "bg-secondary/30",
-          },
-          {
-            label: "Active",
-            value: stats.active,
-            icon: CheckCircle2,
-            color: "text-emerald-500",
-            bg: "bg-emerald-500/8",
-          },
-          {
-            label: "Maintenance",
-            value: stats.maintenance,
-            icon: RefreshCw,
-            color: "text-amber-500",
-            bg: "bg-amber-500/8",
-          },
-          {
-            label: "Down",
-            value: stats.down,
-            icon: AlertTriangle,
-            color: "text-red-500",
-            bg: "bg-red-500/8",
-          },
-          {
-            label: "Archived",
-            value: stats.archived,
-            icon: Archive,
-            color: "text-zinc-400",
-            bg: "bg-zinc-500/8",
-          },
-          {
-            label: "WordPress",
-            value: stats.withWP,
-            icon: Globe,
-            color: "text-blue-500",
-            bg: "bg-blue-500/8",
-          },
-          {
-            label: "Providers",
-            value: stats.providers,
-            icon: Server,
-            color: "text-purple-500",
-            bg: "bg-purple-500/8",
-          },
-          {
-            label: "Plugins",
-            value: stats.totalPlugins,
-            icon: Puzzle,
-            color: "text-violet-500",
-            bg: "bg-violet-500/8",
-          },
-        ].map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div
-              key={stat.label}
-              className={`${stat.bg} rounded-xl p-3 border border-border/15 text-center`}
-            >
-              <Icon size={14} className={`${stat.color} mx-auto mb-1`} />
-              <div className={`text-lg font-extrabold ${stat.color} tabular-nums`}>
-                {stat.value}
-              </div>
-              <div className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wider">
-                {stat.label}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Filters & Controls */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex items-center bg-secondary/50 rounded-xl px-3.5 py-2.5 gap-2 flex-1 max-w-sm border border-border/20">
-          <Search size={15} className="text-muted-foreground flex-shrink-0" />
+      {/* Toolbar */}
+      <div className="pf-toolbar flex flex-wrap items-center gap-2">
+        <label className="pf-search">
+          <Search size={15} aria-hidden />
+          <span className="sr-only">Search websites</span>
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search sites, URLs, providers..."
-            className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none w-full"
+            placeholder="Search name, goal, niche, app, tag…"
           />
-        </div>
+        </label>
 
-        {/* Status pills */}
-        <div className="flex items-center gap-1 bg-secondary/30 rounded-xl p-1 border border-border/15">
-          {["all", "active", "maintenance", "down", "archived"].map((s) => (
+        <div className="pf-seg" role="group" aria-label="Filter by status">
+          {(["all", "active", "maintenance", "down", "archived"] as const).map((s) => (
             <button
               key={s}
+              type="button"
+              aria-pressed={filterStatus === s}
               onClick={() => setFilterStatus(s)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                filterStatus === s
-                  ? "bg-card text-card-foreground shadow-sm border border-border/30"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
             >
-              {s === "all" ? "All" : STATUS_CONFIG[s]?.label || s}
-              {s !== "all" && (
-                <span className="ml-1 text-[10px] opacity-60">
-                  {s === "active"
-                    ? stats.active
-                    : s === "maintenance"
-                      ? stats.maintenance
-                      : s === "down"
-                        ? stats.down
-                        : stats.archived}
-                </span>
-              )}
+              {s === "all" ? "All" : STATUS_CONFIG[s].label}
+              <span className="pf-seg-count">{statusCounts[s]}</span>
             </button>
           ))}
         </div>
 
-        {/* Additional filters toggle */}
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all border ${showFilters ? "bg-primary/10 text-primary border-primary/20" : "bg-secondary/30 text-muted-foreground border-border/15 hover:text-foreground"}`}
-        >
-          <Filter size={13} /> Filters
-          {filterCategory !== "all" && <span className="w-1.5 h-1.5 rounded-full bg-primary" />}
-        </button>
+        <div className="pf-seg" role="group" aria-label="Filter by type">
+          {(["all", "wordpress", "property"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={filterType === t}
+              onClick={() => setFilterType(t)}
+            >
+              {t === "all" ? "All types" : t === "wordpress" ? "WordPress" : "Web property"}
+              <span className="pf-seg-count">{t === "all" ? websites.length : typeCounts[t]}</span>
+            </button>
+          ))}
+        </div>
 
-        {/* Sort */}
-        <div className="flex items-center gap-1 ml-auto">
+        <select
+          aria-label="Filter by category"
+          className="pf-select"
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+        >
+          <option value="all">All categories</option>
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {CATEGORY_CONFIG[category]?.emoji || "🌐"} {category}
+            </option>
+          ))}
+        </select>
+
+        <div className="ml-auto flex items-center gap-2">
           <select
+            aria-label="Sort by"
+            className="pf-select"
             value={sortField}
             onChange={(e) => toggleSort(e.target.value as SortField)}
-            className="px-2.5 py-2 rounded-xl bg-secondary/30 text-xs font-semibold text-muted-foreground border border-border/15 outline-none cursor-pointer"
           >
-            <option value="lastUpdated">Last Updated</option>
-            <option value="dateAdded">Date Added</option>
-            <option value="name">Name</option>
-            <option value="status">Status</option>
-            <option value="category">Category</option>
+            {(Object.keys(SORT_LABEL) as SortField[]).map((field) => (
+              <option key={field} value={field}>
+                {SORT_LABEL[field]}
+              </option>
+            ))}
           </select>
           <button
-            onClick={() => setSortDirection((d) => (d === "asc" ? "desc" : "asc"))}
-            className="p-2 rounded-xl bg-secondary/30 text-muted-foreground hover:text-foreground transition-all border border-border/15"
+            type="button"
+            className="pf-icon-btn"
+            onClick={() => setSortDirection((direction) => (direction === "asc" ? "desc" : "asc"))}
+            aria-label={`Sort ${sortDirection === "asc" ? "descending" : "ascending"}`}
+            title="Flip sort direction"
           >
-            {sortDirection === "desc" ? <SortDesc size={14} /> : <SortAsc size={14} />}
+            {sortDirection === "desc" ? (
+              <SortDesc size={15} aria-hidden />
+            ) : (
+              <SortAsc size={15} aria-hidden />
+            )}
           </button>
-
-          {/* View mode */}
-          <div className="flex items-center gap-0.5 bg-secondary/30 rounded-xl p-1 border border-border/15 ml-1">
+          <div className="pf-seg" role="group" aria-label="View">
             <button
+              type="button"
+              aria-pressed={viewMode === "grid"}
               onClick={() => setViewMode("grid")}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === "grid" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+              aria-label="Card view"
             >
-              <LayoutGrid size={14} />
+              <LayoutGrid size={14} aria-hidden />
             </button>
             <button
+              type="button"
+              aria-pressed={viewMode === "list"}
               onClick={() => setViewMode("list")}
-              className={`p-1.5 rounded-lg transition-all ${viewMode === "list" ? "bg-card shadow-sm text-foreground" : "text-muted-foreground"}`}
+              aria-label="List view"
             >
-              <List size={14} />
+              <List size={14} aria-hidden />
             </button>
           </div>
         </div>
       </div>
 
-      {/* Extended filters */}
-      <>
-        {showFilters && (
-          <div className="overflow-hidden">
-            <div className="flex flex-wrap gap-3 p-4 rounded-xl bg-secondary/15 border border-border/15">
-              <div>
-                <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                  Category
-                </label>
-                <div className="flex flex-wrap gap-1">
-                  <button
-                    onClick={() => setFilterCategory("all")}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${filterCategory === "all" ? "bg-primary/10 text-primary" : "bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
-                  >
-                    All
-                  </button>
-                  {categories.map((cat) => {
-                    const config = CATEGORY_CONFIG[cat] || { emoji: "🌐" };
-                    return (
-                      <button
-                        key={cat}
-                        onClick={() => setFilterCategory(cat)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${filterCategory === cat ? "bg-primary/10 text-primary" : "bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
-                      >
-                        {config.emoji} {cat}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              {hostingProviders.length > 0 && (
-                <div>
-                  <label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                    Hosting Providers
-                  </label>
-                  <div className="flex flex-wrap gap-1">
-                    {hostingProviders.map((p) => (
-                      <span
-                        key={p}
-                        className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-secondary/50 text-muted-foreground"
-                      >
-                        <Server size={9} className="inline mr-1" />
-                        {p}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </>
-
-      {/* Results count */}
-      <div className="text-xs text-muted-foreground font-medium">
+      <div className="pf-note font-semibold">
         Showing {filtered.length} of {websites.length} websites
-        {search && (
+        {search.trim() && (
           <span>
             {" "}
-            matching <span className="text-primary font-semibold">"{search}"</span>
+            matching{" "}
+            <span style={{ color: "hsl(var(--pf-accent))" }}>&ldquo;{search.trim()}&rdquo;</span>
           </span>
         )}
       </div>
 
       {/* Main content */}
-      {viewMode === "grid" ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {filtered.map((site, i) => renderGridCard(site, i))}
-        </div>
+      {filtered.length > 0 ? (
+        viewMode === "grid" ? (
+          <div className="pf-grid">{filtered.map((site) => renderCard(site))}</div>
+        ) : (
+          <div className="pf-list">{filtered.map((site) => renderRow(site))}</div>
+        )
       ) : (
-        <div className="space-y-2">{filtered.map((site, i) => renderListRow(site, i))}</div>
-      )}
-
-      {/* Empty state */}
-      {filtered.length === 0 && (
-        <div className="text-center py-20">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-secondary/30 flex items-center justify-center mb-4">
-            <Globe size={36} className="text-muted-foreground/30" />
+        <div className="pf-empty">
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-[hsl(var(--pf-surface-2))]">
+            <Globe size={30} className="text-[hsl(var(--pf-muted))]" aria-hidden />
           </div>
-          <h3 className="text-lg font-bold text-card-foreground mb-1">No websites found</h3>
-          <p className="text-sm text-muted-foreground mb-4">
-            {search || filterStatus !== "all" || filterCategory !== "all"
-              ? "Try adjusting your search or filters"
-              : "Add your first website to get started"}
+          <h3>{websites.length === 0 ? "No websites yet" : "No websites match these filters"}</h3>
+          <p className="pf-note max-w-sm">
+            {websites.length === 0
+              ? "Restore your portfolio to bring back every site you manage, or add one yourself."
+              : "Try a different search, status or type."}
           </p>
-          <button
-            onClick={openAdd}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-all shadow-lg shadow-primary/20"
-          >
-            <Plus size={16} /> Add Website
-          </button>
+          <div className="flex flex-wrap justify-center gap-2">
+            {websites.length === 0 && (
+              <button type="button" className="pf-btn" onClick={restorePortfolio}>
+                <RefreshCw size={13} aria-hidden /> Restore portfolio
+              </button>
+            )}
+            <button type="button" className="pf-btn pf-btn--primary" onClick={openAdd}>
+              <Plus size={14} aria-hidden /> Add website
+            </button>
+          </div>
         </div>
       )}
 
-      {/* ─── Modal ─────────────────────────────────────────────── */}
+      {/* Portfolio task queue */}
+      <PortfolioTaskQueue items={queue} onStart={startTask} onDone={completeTask} />
+
+      {/* Quick glance at revenue paths */}
+      {summary.total > 0 && (
+        <div className="pf-note flex flex-wrap items-center gap-2">
+          <Rocket size={12} aria-hidden /> Revenue paths in your portfolio:
+          {Array.from(
+            new Set(
+              websites
+                .filter((s) => s.status !== "archived" && s.revenueModel)
+                .map((s) => s.revenueModel),
+            ),
+          ).map((model) => (
+            <Chip key={model} tone="accent">
+              <Zap size={10} aria-hidden /> {model}
+            </Chip>
+          ))}
+        </div>
+      )}
+
+      {/* ─── Add / edit ─────────────────────────────────────────── */}
       <FormModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
-        title={editId ? "Edit Website" : "Add Website"}
+        title={editId ? "Edit website" : "Add website"}
         onSubmit={saveForm}
         size="lg"
       >
-        <div className="space-y-5">
-          {/* Section: Basic Info */}
-          <div>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Globe size={13} className="text-primary" /> Basic Information
+        <div className="space-y-6">
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Globe size={13} className="text-primary" aria-hidden /> Basics
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField label="Site Name *">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FormField label="Site name *">
                 <FormInput
                   value={form.name}
                   onChange={(v) => uf("name", v)}
-                  placeholder="My Awesome Site"
+                  placeholder="GearUpToFit"
                 />
               </FormField>
               <FormField label="URL *">
@@ -1039,109 +969,183 @@ export default function WebsitesPage() {
               <FormField label="Status">
                 <FormSelect
                   value={form.status}
-                  onChange={(v) => uf("status", v as any)}
+                  onChange={(v) => uf("status", v as Website["status"])}
                   options={[
-                    { value: "active", label: "✅ Active" },
-                    { value: "maintenance", label: "🔧 Maintenance" },
-                    { value: "down", label: "🔴 Down" },
-                    { value: "archived", label: "📦 Archived" },
+                    { value: "active", label: "Active" },
+                    { value: "maintenance", label: "Maintenance" },
+                    { value: "down", label: "Down" },
+                    { value: "archived", label: "Archived" },
                   ]}
                 />
               </FormField>
+              <FormField label="Priority">
+                <FormSelect
+                  value={form.priority ?? "medium"}
+                  onChange={(v) => uf("priority", v as Website["priority"])}
+                  options={[
+                    { value: "critical", label: "Critical" },
+                    { value: "high", label: "High" },
+                    { value: "medium", label: "Medium" },
+                    { value: "low", label: "Low" },
+                  ]}
+                />
+              </FormField>
+              <FormField label="Importance (0–100)">
+                <FormInput
+                  type="number"
+                  value={form.importance === undefined ? "" : String(form.importance)}
+                  onChange={(v) => uf("importance", v === "" ? undefined : Number(v))}
+                  placeholder="50"
+                />
+              </FormField>
             </div>
-          </div>
+          </section>
 
-          {/* Section: WordPress */}
-          <div>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Lock size={13} className="text-blue-500" /> WordPress Access
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Sparkles size={13} className="text-[hsl(var(--pf-accent))]" aria-hidden /> Strategy
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <FormField label="WP Admin URL">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FormField label="Niche">
+                <FormInput
+                  value={form.niche ?? ""}
+                  onChange={(v) => uf("niche", v)}
+                  placeholder="Running shoes, fitness, supplements"
+                />
+              </FormField>
+              <FormField label="Revenue model">
+                <FormInput
+                  value={form.revenueModel ?? ""}
+                  onChange={(v) => uf("revenueModel", v)}
+                  placeholder="Affiliate commissions + app funnel"
+                />
+              </FormField>
+            </div>
+            <div className="mt-4">
+              <FormField label="Main goal">
+                <FormTextarea
+                  value={form.primaryGoal ?? ""}
+                  onChange={(v) => uf("primaryGoal", v)}
+                  placeholder="The one outcome that matters most for this site"
+                />
+              </FormField>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Lock size={13} className="text-sky-500" aria-hidden /> WordPress access
+            </h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <FormField label="WP admin URL">
                 <FormInput
                   value={form.wpAdminUrl}
                   onChange={(v) => uf("wpAdminUrl", v)}
                   placeholder="https://site.com/wp-admin/"
                 />
               </FormField>
-              <FormField label="WP Username">
+              <FormField label="WP username">
                 <FormInput
                   value={form.wpUsername}
                   onChange={(v) => uf("wpUsername", v)}
                   placeholder="admin"
                 />
               </FormField>
-              <FormField label="WP Password">
+              <FormField label="WP password">
                 <FormInput
+                  type="password"
                   value={form.wpPassword}
                   onChange={(v) => uf("wpPassword", v)}
                   placeholder="••••••"
-                  type="password"
                 />
               </FormField>
             </div>
-          </div>
+            <p className="pf-note mt-2">
+              Credentials stay in this browser. They are never written to the shared portfolio.
+            </p>
+          </section>
 
-          {/* Section: Hosting */}
-          <div>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Server size={13} className="text-purple-500" /> Hosting Details
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Server size={13} className="text-violet-500" aria-hidden /> Hosting
             </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField label="Hosting Provider">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FormField label="Hosting provider">
                 <FormInput
                   value={form.hostingProvider}
                   onChange={(v) => uf("hostingProvider", v)}
-                  placeholder="SiteGround, Cloudways, etc."
+                  placeholder="Cloudflare, SiteGround, Cloudways…"
                 />
               </FormField>
-              <FormField label="Hosting Login URL">
+              <FormField label="Hosting login URL">
                 <FormInput
                   value={form.hostingLoginUrl}
                   onChange={(v) => uf("hostingLoginUrl", v)}
-                  placeholder="https://my.host.com"
+                  placeholder="https://dash.cloudflare.com/"
                 />
               </FormField>
-              <FormField label="Hosting Username">
+              <FormField label="Hosting username">
                 <FormInput
                   value={form.hostingUsername}
                   onChange={(v) => uf("hostingUsername", v)}
                   placeholder="Username"
                 />
               </FormField>
-              <FormField label="Hosting Password">
+              <FormField label="Hosting password">
                 <FormInput
+                  type="password"
                   value={form.hostingPassword}
                   onChange={(v) => uf("hostingPassword", v)}
-                  type="password"
                   placeholder="••••••"
                 />
               </FormField>
             </div>
-          </div>
+          </section>
 
-          {/* Section: Details */}
-          <div>
-            <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Layers size={13} className="text-emerald-500" /> Additional Details
+          <section>
+            <h3 className="mb-3 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              <Zap size={13} className="text-amber-500" aria-hidden /> Apps, repos & details
             </h3>
-            <FormField label="Plugins">
-              <FormTagsInput
-                value={form.plugins}
-                onChange={(v) => uf("plugins", v)}
-                placeholder="Add plugin name and press Enter"
-              />
-            </FormField>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <FormField label="Connected app URLs">
+                <FormTagsInput
+                  value={form.appUrls ?? []}
+                  onChange={(v) => uf("appUrls", v)}
+                  placeholder="Paste a URL and press Enter"
+                />
+              </FormField>
+              <FormField label="GitHub repos">
+                <FormTagsInput
+                  value={form.githubRepos ?? []}
+                  onChange={(v) => uf("githubRepos", v)}
+                  placeholder="https://github.com/owner/repo"
+                />
+              </FormField>
+              <FormField label="Plugins">
+                <FormTagsInput
+                  value={form.plugins}
+                  onChange={(v) => uf("plugins", v)}
+                  placeholder="Plugin name and Enter"
+                />
+              </FormField>
+              <FormField label="Tags (used to link tasks)">
+                <FormTagsInput
+                  value={form.tags ?? []}
+                  onChange={(v) => uf("tags", v)}
+                  placeholder="gearuptofit, seo…"
+                />
+              </FormField>
+            </div>
             <div className="mt-4">
               <FormField label="Notes">
                 <FormTextarea
                   value={form.notes}
                   onChange={(v) => uf("notes", v)}
-                  placeholder="Quick notes about this site..."
+                  placeholder="Quick notes about this site…"
                 />
               </FormField>
             </div>
-          </div>
+          </section>
         </div>
       </FormModal>
 
