@@ -328,9 +328,19 @@ function domainKey(url: string) {
   }
 }
 
-export async function ensurePortfolioBootstrap() {
+export interface PortfolioBootstrapResult {
+  websitesAdded: number;
+  websitesUpdated: number;
+  tasksAdded: number;
+  websitesInPortfolio: number;
+}
+
+export async function ensurePortfolioBootstrap(): Promise<PortfolioBootstrapResult> {
   const websites = await db.websites.toArray();
   const byDomain = new Map(websites.map((site) => [domainKey(site.url), site]));
+  let websitesAdded = 0;
+  let websitesUpdated = 0;
+  let tasksAdded = 0;
 
   for (const seed of WEBSITE_PORTFOLIO) {
     const { slug: _slug, ...record } = seed;
@@ -342,6 +352,7 @@ export async function ensurePortfolioBootstrap() {
       await db.websites.put({ ...record, id });
       markCloudRecordDirty("websites", id);
       byDomain.set(domain, { ...record, id });
+      websitesAdded += 1;
       continue;
     }
 
@@ -361,13 +372,18 @@ export async function ensurePortfolioBootstrap() {
       const current = existing[field];
       const incoming = record[field];
       const empty = current === undefined || current === "" || (Array.isArray(current) && current.length === 0);
-      if (empty && incoming !== undefined) (additivePatch as any)[field] = incoming;
+      // Only write when the seed actually has something to add, so restore never rewrites
+      // unchanged records or marks them dirty for cloud sync.
+      const hasIncoming =
+        incoming !== undefined && incoming !== "" && !(Array.isArray(incoming) && incoming.length === 0);
+      if (empty && hasIncoming) (additivePatch as any)[field] = incoming;
     }
     if (!existing.wpAdminUrl && record.wpAdminUrl) additivePatch.wpAdminUrl = record.wpAdminUrl;
     if (!existing.notes && record.notes) additivePatch.notes = record.notes;
     if (Object.keys(additivePatch).length) {
       await db.websites.update(existing.id, additivePatch);
       markCloudRecordDirty("websites", existing.id);
+      websitesUpdated += 1;
     }
   }
 
@@ -391,5 +407,8 @@ export async function ensurePortfolioBootstrap() {
       inbox: false
     });
     markCloudRecordDirty("tasks", id);
+    tasksAdded += 1;
   }
+
+  return { websitesAdded, websitesUpdated, tasksAdded, websitesInPortfolio: WEBSITE_PORTFOLIO.length };
 }

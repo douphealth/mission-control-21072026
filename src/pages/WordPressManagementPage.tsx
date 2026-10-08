@@ -1,5 +1,15 @@
-import { useWebsites } from "@/hooks/useTableData";
-import { useEffect, useMemo, useState } from "react";
+import "@/components/websites/portfolio-aurora.css";
+import { useTasks, useWebsites } from "@/hooks/useTableData";
+import { useEffect, useMemo, useRef, useState } from "react";
+import WordPressSiteCard from "@/components/websites/WordPressSiteCard";
+import {
+  criticalHealthCount,
+  pluginUpdateCount,
+  scoreWpSite,
+  wpConnection,
+  type WpSiteSnapshot,
+} from "@/lib/wpScores";
+import { summarizeTasks, tasksForSite } from "@/lib/portfolioInsights";
 import {
   Globe,
   Activity,
@@ -116,7 +126,10 @@ const StatusPill = ({ ok, label }: { ok: boolean | null | undefined; label: stri
 
 export default function WordPressManagementPage() {
   const websites = useWebsites();
+  const tasks = useTasks();
   const { setActiveSection } = useNavigationStore();
+  const inflight = useRef(new Set<string>());
+  const statusesRef = useRef<Record<string, SiteStatus>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [statuses, setStatuses] = useState<Record<string, SiteStatus>>({});
@@ -150,6 +163,26 @@ export default function WordPressManagementPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
+
+  useEffect(() => {
+    statusesRef.current = statuses;
+  }, [statuses]);
+
+  // Public evidence (reachability, HTTPS, WordPress detection, SEO basics) is cheap and
+  // needs no login, so every WordPress card gets it on open. Authenticated checks stay manual.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      for (const site of wpSites) {
+        if (cancelled) return;
+        if (!statusesRef.current[site.id]?.health) await runQuickCheck(site.id, site.url);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wpSites.length]);
 
   // ─── Auth handlers ────────────────────────────────────────────
 
@@ -195,12 +228,18 @@ export default function WordPressManagementPage() {
   // ─── Check runners ─────────────────────────────────────────────
 
   async function runQuickCheck(id: string, url: string) {
+    if (inflight.current.has(id)) return;
+    inflight.current.add(id);
     setStatuses((s) => ({ ...s, [id]: { ...s[id], loading: true } }));
-    const [health, seo] = await Promise.all([checkHealth(url), checkSeo(url)]);
-    setStatuses((s) => ({
-      ...s,
-      [id]: { ...s[id], health, seo, loading: false, lastChecked: new Date().toISOString() },
-    }));
+    try {
+      const [health, seo] = await Promise.all([checkHealth(url), checkSeo(url)]);
+      setStatuses((s) => ({
+        ...s,
+        [id]: { ...s[id], health, seo, loading: false, lastChecked: new Date().toISOString() },
+      }));
+    } finally {
+      inflight.current.delete(id);
+    }
   }
 
   async function runFullCheck(id: string, url: string) {
@@ -280,53 +319,36 @@ export default function WordPressManagementPage() {
 
   // ─── Score calculations ────────────────────────────────────────
 
-  const scores = useMemo(() => {
-    const h = selectedStatus.health;
-    const seoEvidence = selectedStatus.seo;
-    const plugins = selectedStatus.plugins;
-    const siteHealth = selectedStatus.siteHealth;
-
-    const health =
-      !h
-        ? null
-        : Math.min(
-            100,
-            (h.reachable ? 45 : 0) +
-              (h.protocol === "https" ? 20 : 0) +
-              (h.isWordPress ? 20 : 0) +
-              (h.responseMs && h.responseMs < 1500 ? 15 : 0),
-          );
-
-    const seo =
-      !seoEvidence
-        ? null
-        : Math.min(
-            100,
-            (seoEvidence.hasSitemap ? 30 : 0) +
-              (seoEvidence.hasRobots ? 20 : 0) +
-              (seoEvidence.title ? 20 : 0) +
-              (seoEvidence.description ? 15 : 0) +
-              (seoEvidence.ogTitle ? 8 : 0) +
-              (seoEvidence.canonical ? 7 : 0),
-          );
-
-    const security =
-      !plugins || !siteHealth || !selectedStatus.currentUser
-        ? null
-        : Math.min(
-            100,
-            (h?.protocol === "https" ? 20 : 0) +
-              (plugins.filter((x) => x.update && x.update !== "none").length === 0 ? 20 : 5) +
-              (siteHealth.filter((test) => test.status === "critical").length === 0 ? 35 : 0) +
-              (siteHealth.filter((test) => test.status === "recommended").length <= 1 ? 15 : 5) +
-              (selectedStatus.currentUser.roles?.includes("administrator") ? 10 : 5),
-          );
-
-    return { health, seo, security };
-  }, [selectedStatus]);
+  const scores = useMemo(() => scoreWpSite(selectedStatus), [selectedStatus]);
 
   const pluginUpdates =
     selectedStatus.plugins?.filter((p) => p.update && p.update !== "none") || [];
+
+  const fleet = useMemo(() => {
+    const rows = wpSites.map((site) => {
+      const snapshot: WpSiteSnapshot = statuses[site.id] || {};
+      const connection = wpConnection(snapshot, !!credsMap[site.id]);
+      return {
+        site,
+        snapshot,
+        connection,
+        taskSummary: summarizeTasks(tasksForSite(site, tasks)),
+        scores: scoreWpSite(snapshot),
+      };
+    });
+    const healthScores = rows.map((row) => row.scores.health).filter((value): value is number => value !== null);
+    return {
+      rows,
+      checked: rows.filter((row) => row.snapshot.health).length,
+      online: rows.filter((row) => row.snapshot.health?.reachable).length,
+      verified: rows.filter((row) => row.connection === "verified").length,
+      updates: rows.reduce((sum, row) => sum + pluginUpdateCount(row.snapshot.plugins), 0),
+      critical: rows.reduce((sum, row) => sum + criticalHealthCount(row.snapshot.siteHealth), 0),
+      avgHealth: healthScores.length
+        ? Math.round(healthScores.reduce((sum, value) => sum + value, 0) / healthScores.length)
+        : null,
+    };
+  }, [wpSites, statuses, credsMap, tasks]);
 
   // ─── Render ────────────────────────────────────────────────────
 
@@ -349,7 +371,7 @@ export default function WordPressManagementPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="pf-root space-y-5">
       {/* ─── Header ─── */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
@@ -390,7 +412,57 @@ export default function WordPressManagementPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-5">
+      {/* ─── WordPress fleet: one evidence card per site ─── */}
+      <section className="space-y-4" aria-labelledby="wp-fleet-title">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 id="wp-fleet-title" className="pf-section-h">
+              <Globe size={14} aria-hidden /> WordPress fleet
+            </h2>
+            <p className="pf-note mt-1">
+              Every WordPress site with its live evidence, connection state and next move. Select a card to open its full panel.
+            </p>
+          </div>
+          <div className="pf-note flex flex-wrap gap-x-4 gap-y-1 font-bold">
+            <span>{fleet.rows.length} sites</span>
+            <span>
+              {fleet.online}/{fleet.checked} online
+            </span>
+            <span>{fleet.verified} REST verified</span>
+            <span>{fleet.updates} plugin updates</span>
+            <span>{fleet.critical} critical issues</span>
+            <span>Avg health {fleet.avgHealth ?? "—"}</span>
+          </div>
+        </div>
+
+        {fleet.rows.length > 0 && (
+          <div className="pf-grid">
+            {fleet.rows.map(({ site, snapshot, connection, taskSummary }) => (
+              <WordPressSiteCard
+                key={site.id}
+                site={site}
+                snapshot={snapshot}
+                connection={connection}
+                openTasks={taskSummary.open}
+                nextTaskTitle={taskSummary.next?.title ?? null}
+                selected={site.id === selectedId}
+                onSelect={() => {
+                  setSelectedId(site.id);
+                  setTab("overview");
+                  document.getElementById("wp-detail")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+                onCheck={() => {
+                  const cred = credsMap[site.id];
+                  if (cred?.username && cred?.appPassword) void runFullCheck(site.id, site.url);
+                  else void runQuickCheck(site.id, site.url);
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div id="wp-detail" className="grid grid-cols-12 gap-5">
         {/* ─── Site list ─── */}
         <aside className="col-span-12 lg:col-span-3 space-y-1.5">
           <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground px-2 mb-2">
