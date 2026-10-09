@@ -39,6 +39,7 @@ import {
   SlidersHorizontal,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { celebrate, completionMessage } from "@/lib/celebrate";
 import { toast } from "sonner";
 import type { Task, Subtask } from "@/lib/db";
 import { todayISO } from "@/lib/overdue";
@@ -1839,7 +1840,22 @@ export default function TasksPage() {
         status: next,
         completedAt: next === "done" ? today : undefined,
       });
-      toast.success(next === "done" ? "✅ Done!" : "Reopened");
+      if (next === "done") {
+        const isPlanned = (x: Task) =>
+          x.scheduledAt === today || x.dueDate === today || x.committedOn === today;
+        const plannedLeft = isPlanned(t)
+          ? tasks.filter((x) => x.id !== id && x.status !== "done" && !x.archived && isPlanned(x))
+              .length
+          : null;
+        const message = completionMessage(plannedLeft);
+        celebrate({ count: message.big ? 30 : 14 });
+        toast.success(
+          message.title,
+          message.description ? { description: message.description } : undefined,
+        );
+      } else {
+        toast.success("Reopened");
+      }
     },
     [tasks, updateItem],
   );

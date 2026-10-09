@@ -97,3 +97,38 @@ describe("design layer", () => {
     expect(order[order.length - 1]).toBe("mcDesignSystemCss");
   });
 });
+
+describe("celebration", () => {
+  it("plans a deterministic burst that radiates in every direction", async () => {
+    const { burstPlan } = await import("@/lib/celebrate");
+    const first = burstPlan(14);
+    expect(first).toHaveLength(14);
+    expect(burstPlan(14)).toEqual(first);
+    expect(first.some((p) => p.dx > 0)).toBe(true);
+    expect(first.some((p) => p.dx < 0)).toBe(true);
+    expect(first.every((p) => p.delay >= 0 && p.delay <= 60)).toBe(true);
+    expect(new Set(first.map((p) => p.color)).size).toBeGreaterThan(1);
+  });
+
+  it("tells you how much of today is left, and marks a finished day", async () => {
+    const { completionMessage } = await import("@/lib/celebrate");
+    expect(completionMessage(null)).toEqual({ title: "Done", big: false });
+    expect(completionMessage(3)).toEqual({ title: "Done", description: "3 left for today", big: false });
+    const finished = completionMessage(0);
+    expect(finished.title).toBe("Today is done");
+    expect(finished.big).toBe(true);
+  });
+
+  it("marks streak milestones, and starts a new streak gently", async () => {
+    const { habitMessage } = await import("@/lib/celebrate");
+    expect(habitMessage("Walk", 1).description).toMatch(/Day one/);
+    expect(habitMessage("Walk", 5)).toMatchObject({ description: "5-day streak", big: false });
+    expect(habitMessage("Walk", 7).big).toBe(true);
+    expect(habitMessage("Walk", 100).big).toBe(true);
+  });
+
+  it("does nothing without a browser", async () => {
+    const { celebrate } = await import("@/lib/celebrate");
+    expect(() => celebrate()).not.toThrow();
+  });
+});

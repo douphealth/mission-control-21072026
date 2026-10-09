@@ -1,6 +1,7 @@
 // Shared daily planning logic. Home and compatibility routes use the same data.
 import { useMemo, useRef } from "react";
 import { toast } from "sonner";
+import { celebrate } from "@/lib/celebrate";
 import { useTasks, useReminders, usePayments, useDecisions, useSyncHealth, useUpdateItem,
   useWebsites, useNotes, useSEOProfiles, useSEOIssues, useSEOSnapshots, useStreamItems, useValidations } from "@/hooks/useTableData";
 import { buildWorkQueue, splitQueue, type WorkItem } from "@/lib/workQueue";
@@ -119,6 +120,7 @@ export function useDailyOps() {
       } else if (item.kind === "reminder") await updateItem("reminders", item.refId, { status: "done" } as any);
       else if (item.kind === "payment") await updateItem("payments", item.refId, { status: "paid", paidDate: today } as any);
       else { await actOnDecision(item.raw); toast.success("Decision turned into a task"); return; }
+      celebrate();
       toast.success("Done — next one is up");
     });
   }
