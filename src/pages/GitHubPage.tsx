@@ -556,7 +556,7 @@ export default function GitHubPage() {
                   {repo.priority || "medium"}
                 </span>
                 <span
-                  className={`badge-${repo.status === "active" ? "success" : repo.status === "stable" ? "info" : repo.status === "paused" ? "warning" : "muted"}`}
+                  className={`badge badge-${repo.status === "active" ? "success" : repo.status === "stable" ? "info" : repo.status === "paused" ? "warning" : "muted"}`}
                 >
                   {repo.status}
                 </span>

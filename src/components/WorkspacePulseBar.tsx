@@ -190,6 +190,8 @@ export default function WorkspacePulseBar() {
   );
   const vercelBuilds = builds.filter((build) => build.platform === "vercel");
   const healthState = (id: string) => health.find((item) => item.id === id)?.status ?? "not-configured";
+  const connectorLabel = (state: string) =>
+    state === "ok" ? "Live" : state === "error" ? "Error" : state === "not-configured" ? "Not connected" : state.replace("-", " ");
 
   const config: Record<string, PulseConfig> = {
     review: {
@@ -297,7 +299,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Linked local tasks", value: linkedGoogleTasks.length, tone: "primary" },
         { label: "Open linked", value: linkedGoogleTasks.filter((task) => task.status !== "done").length, tone: "info" },
-        { label: "Connector", value: healthState("google-tasks").replace("-", " "), tone: healthState("google-tasks") === "ok" ? "success" : "neutral" },
+        { label: "Connector", value: connectorLabel(healthState("google-tasks")), tone: healthState("google-tasks") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Tasks", section: "tasks" },
@@ -313,7 +315,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Known hosted sites", value: cloudflareSites.length, tone: "info" },
         { label: "Saved credentials", value: credentials.filter((c) => (c.service + " " + c.label).toLowerCase().includes("cloudflare")).length, tone: "violet" },
-        { label: "Connector", value: healthState("cloudflare").replace("-", " "), tone: healthState("cloudflare") === "ok" ? "success" : "neutral" },
+        { label: "Connector", value: connectorLabel(healthState("cloudflare")), tone: healthState("cloudflare") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Websites", section: "websites" },
@@ -329,7 +331,7 @@ export default function WorkspacePulseBar() {
       stats: [
         { label: "Local Vercel builds", value: vercelBuilds.length, tone: "primary" },
         { label: "Saved credentials", value: credentials.filter((c) => (c.service + " " + c.label).toLowerCase().includes("vercel")).length, tone: "violet" },
-        { label: "Connector", value: healthState("vercel").replace("-", " "), tone: healthState("vercel") === "ok" ? "success" : "neutral" },
+        { label: "Connector", value: connectorLabel(healthState("vercel")), tone: healthState("vercel") === "ok" ? "success" : "neutral" },
       ],
       related: [
         { label: "Build Projects", section: "builds" },

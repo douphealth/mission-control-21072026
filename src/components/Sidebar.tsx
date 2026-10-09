@@ -273,10 +273,10 @@ export default function Sidebar() {
               <section key={group.label}>
                 {!collapsed && (
                   <div className="mb-1.5 px-3">
-                    <div className="text-[9px] font-extrabold uppercase tracking-[0.18em] text-sidebar-foreground/34">
+                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/70">
                       {group.label}
                     </div>
-                    <div className="mt-0.5 text-[9px] text-sidebar-foreground/26">{group.hint}</div>
+                    <div className="mt-0.5 text-[11px] text-sidebar-foreground/55">{group.hint}</div>
                   </div>
                 )}
                 <div className="space-y-0.5">
@@ -319,7 +319,7 @@ export default function Sidebar() {
             {area !== "personal" && customModules.filter((m) => m.visible).length > 0 && (
               <section>
                 {!collapsed && (
-                  <div className="mb-1.5 px-3 text-[9px] font-extrabold uppercase tracking-[0.18em] text-sidebar-foreground/34">
+                  <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/70">
                     Custom
                   </div>
                 )}

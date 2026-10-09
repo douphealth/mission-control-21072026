@@ -1,0 +1,444 @@
+/*
+ * Mission Control — Aurora Deck, design system pass.
+ * Loaded last, so it refines every page through shared tokens and shell surfaces.
+ *
+ * Principles
+ *  - Legible first: nothing reads smaller than 10px, and muted text keeps a contrast floor.
+ *  - Calm surfaces: one border, one soft shadow, no competing glows.
+ *  - One floating control at a time: the capture dock never sits on top of the last row.
+ *  - Status is a pill, not a raw word.
+ */
+
+/* ─── 1 · Tokens ──────────────────────────────────────────────────────────── */
+
+:root {
+  --muted-foreground: 220 12% 36%;
+}
+
+.dark {
+  --muted-foreground: 218 16% 68%;
+  --sidebar-foreground: 214 18% 72%;
+  --border: 226 24% 18%;
+}
+
+/* ─── 2 · Type floor ──────────────────────────────────────────────────────── */
+/* Tiny utility sizes move up one step. Labels stay labels, but they can be read. */
+
+:root .text-\[8px\],
+:root .text-\[9px\] {
+  font-size: 10px;
+}
+
+:root .text-\[10px\] {
+  font-size: 11px;
+}
+
+:root .text-\[11px\] {
+  font-size: 12px;
+}
+
+/* ─── 3 · Sync strip: one calm line under the top bar ─────────────────────── */
+
+.mc20-syncbar {
+  background: hsl(var(--background) / 0.72);
+  border-bottom: 1px solid hsl(var(--border) / 0.6);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.mc20-syncbar-inner {
+  min-height: 40px;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.mc20-sync-title {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.mc20-sync-meta {
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ─── 4 · Page canvas: room above the status bar and the capture dock ─────── */
+
+@media (min-width: 1024px) {
+  .mc13-page {
+    padding-bottom: 5.5rem;
+  }
+}
+
+/* ─── 5 · Capture dock: compact, and never heavier than the content beneath it ── */
+
+[data-floating-dock] > div {
+  background: hsl(var(--card) / 0.86);
+  border-color: hsl(var(--border) / 0.7);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+
+@media (max-width: 1023px) {
+  [data-floating-dock] > div {
+    transform: scale(0.92);
+    transform-origin: bottom left;
+  }
+}
+
+/* ─── 6 · Status pills: every status reads as a pill ──────────────────────── */
+
+.badge-success,
+.badge-warning,
+.badge-info,
+.badge-muted,
+.badge-primary,
+.badge-violet,
+.badge-destructive {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.badge-success {
+  border-color: hsl(var(--success) / 0.25);
+}
+
+.badge-warning {
+  border-color: hsl(var(--warning) / 0.3);
+}
+
+.badge-info {
+  border-color: hsl(var(--info) / 0.25);
+}
+
+.badge-violet {
+  border-color: hsl(var(--violet) / 0.28);
+}
+
+.badge-destructive {
+  border-color: hsl(var(--destructive) / 0.3);
+}
+
+.badge-primary {
+  border-color: hsl(var(--primary) / 0.25);
+}
+
+.badge-muted {
+  border-color: hsl(var(--border) / 0.7);
+}
+
+/* ─── 7 · Quiet scrollbars and selection ──────────────────────────────────── */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--border)) transparent;
+}
+
+::selection {
+  background: hsl(var(--primary) / 0.28);
+  color: hsl(var(--foreground));
+}
+
+/* ─── 8 · Contrast floor for muted text (generated from the classes in use) ── */
+
+/* Lifts each low-opacity text class to its floor. Higher opacities are left as designed. */
+:root .text-muted-foreground\/30 {
+  color: color-mix(in oklab, hsl(var(--muted-foreground)) 62%, transparent);
+}
+:root .text-muted-foreground\/35 {
+  color: color-mix(in oklab, hsl(var(--muted-foreground)) 62%, transparent);
+}
+:root .text-muted-foreground\/40 {
+  color: color-mix(in oklab, hsl(var(--muted-foreground)) 62%, transparent);
+}
+:root .text-muted-foreground\/45 {
+  color: color-mix(in oklab, hsl(var(--muted-foreground)) 62%, transparent);
+}
+:root .text-muted-foreground\/50 {
+  color: color-mix(in oklab, hsl(var(--muted-foreground)) 62%, transparent);
+}
+:root .text-muted-foreground\/55 {
+  color: color-mix(in oklab, hsl(var(--muted-foreground)) 62%, transparent);
+}
+:root .text-muted-foreground\/60 {
+  color: color-mix(in oklab, hsl(var(--muted-foreground)) 62%, transparent);
+}
+:root .text-sidebar-foreground\/26 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-sidebar-foreground\/30 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-sidebar-foreground\/34 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-sidebar-foreground\/38 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-sidebar-foreground\/40 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-sidebar-foreground\/42 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-sidebar-foreground\/50 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-sidebar-foreground\/55 {
+  color: color-mix(in oklab, hsl(var(--sidebar-foreground)) 58%, transparent);
+}
+:root .text-foreground\/50 {
+  color: color-mix(in oklab, hsl(var(--foreground)) 62%, transparent);
+}
+:root .text-foreground\/60 {
+  color: color-mix(in oklab, hsl(var(--foreground)) 62%, transparent);
+}
+
+/* ─── 9 · Canvas: the aurora is part of the room, not a rumour ───────────── */
+/* Earlier layers faded the aurora to 16%. Restore it, so the background has depth. */
+
+.v10-aurora-bg {
+  opacity: 0.9 !important;
+}
+
+.dark .v10-aurora-bg {
+  opacity: 1 !important;
+}
+
+/* ─── 10 · Sync strip on one calm line ────────────────────────────────────── */
+
+.mc20-sync-copy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+
+.mc20-sync-title {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.mc20-sync-meta {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+/* ─── 11 · Capture dock recedes until you reach for it ────────────────────── */
+
+[data-floating-dock] > div {
+  opacity: 0.9;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+[data-floating-dock]:hover > div,
+[data-floating-dock]:focus-within > div {
+  opacity: 1;
+}
+
+/* ─── 12 · Aurora, at the strength the palette was designed for ───────────── */
+
+.dark .v10-aurora-bg {
+  background-image:
+    radial-gradient(55% 46% at 10% -8%, hsl(var(--primary) / 0.22), transparent 70%),
+    radial-gradient(48% 40% at 96% -6%, hsl(var(--info) / 0.17), transparent 70%),
+    radial-gradient(52% 44% at 52% 112%, hsl(var(--violet) / 0.14), transparent 70%) !important;
+}
+
+/* Signed-out devices get the Connect Google button, not a second orange line. */
+.mc20-syncbar[data-state="signed-out"] .mc20-sync-error {
+  display: none;
+}
+
+/* ─── 13 · Type floor, part two: sizes that are not Tailwind steps ────────── */
+
+:root .text-\[8\.5px\] {
+  font-size: 10px;
+}
+
+:root .text-\[9\.5px\] {
+  font-size: 11px;
+}
+
+:root .mc13-live-pill,
+:root .mc13-day-kicker,
+:root .revenue-card-kicker,
+:root .revenue-status,
+:root .mc-demo-kicker,
+:root .mc-demo-score-label,
+:root .mc-demo-score-foot,
+:root .mc21-tasks-eyebrow {
+  font-size: 11px;
+}
+
+/* ─── 14 · Primary actions: one confident gradient, one soft glow ─────────── */
+
+button.bg-primary,
+a.bg-primary {
+  background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.84));
+  box-shadow: 0 10px 26px -14px hsl(var(--primary) / 0.7);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease,
+    filter 0.2s ease;
+}
+
+button.bg-primary:hover,
+a.bg-primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 14px 30px -14px hsl(var(--primary) / 0.8);
+}
+
+button.bg-primary:active,
+a.bg-primary:active {
+  transform: scale(0.98);
+}
+
+button.bg-primary:disabled {
+  box-shadow: none;
+  filter: none;
+}
+
+/* ─── 15 · Inputs: a clear, calm focus state everywhere ───────────────────── */
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--ring) / 0.22);
+  border-color: hsl(var(--ring) / 0.55);
+}
+
+/* ─── 16 · Phone: the capture dock is a clear, solid control, not a ghost ─── */
+
+@media (max-width: 1023px) {
+  [data-floating-dock] > div {
+    background: hsl(var(--card) / 0.94);
+    box-shadow: 0 16px 36px -18px hsl(var(--foreground) / 0.5);
+  }
+}
+
+/* ─── 17 · Remaining small labels found by the audit ──────────────────────── */
+
+:root .mc-workspace-pulse-eyebrow,
+:root .mc-workspace-pulse-truth,
+:root .mc-demo-progress-pill,
+:root .mc21-task-capture-add,
+:root .mc21-task-capture-today,
+:root .mc21-task-capture-key {
+  font-size: 11px;
+}
+
+:root kbd {
+  font-size: 10px;
+}
+
+/* ─── 18 · Small labels in older stylesheets, lifted to the 10px floor ───── */
+/* Generated from every rule that sets a font-size under 10px. */
+:root .se-pill,
+:root .mc-home-toolbar-action kbd,
+:root .mc-kpi-copy small,
+:root .mc13-live-pill,
+:root .mc13-eyebrow,
+:root .mc13-day-kicker,
+:root .mc13-mini-card span,
+:root #main-content th,
+:root .revenue-card-kicker,
+:root .revenue-status,
+:root .revenue-score > div:last-child span,
+:root .revenue-health,
+:root .revenue-alt-label,
+:root .revenue-alt-list a,
+:root .revenue-next-label,
+:root .mc-tower-eyebrow,
+:root .mc-tower-truth,
+:root .mc-tower-card-metric small,
+:root .mc-tower-card-detail,
+:root .mc-tower-card-rows > span,
+:root .mc-tower-footer button,
+:root .mc-workspace-pulse-eyebrow,
+:root .mc-workspace-pulse-stat span,
+:root .mc-workspace-pulse-truth,
+:root .mc-workspace-pulse-related button,
+:root .mc-demo-kicker,
+:root .mc-demo-score-label,
+:root .mc-demo-score-foot,
+:root .mc-demo-progress-pill,
+:root .mc-demo-step span,
+:root .mc-demo-step small,
+:root .mc-demo-guide-eyebrow,
+:root .mc-demo-guide-open,
+:root .mc-demo-guide-nav button,
+:root .mc-demo-stat-detail,
+:root .mc-demo-agenda-time,
+:root .mc-demo-agenda-type,
+:root .mc-demo-decision-row small,
+:root .mc-demo-rhythm-card span,
+:root .mc-demo-footer-note,
+:root .cc-intel-kpi span,
+:root .cc-audience-spark-empty,
+:root .mc20-sync-meta,
+:root .mc20-sync-action,
+:root .mc20-sync-error,
+:root .mc13-date,
+:root .mc16-control-kicker,
+:root .mc16-control-hint,
+:root .se-label,
+:root .mc21-capture-deck-head span,
+:root .mc21-utility-head span,
+:root .mc21-capture-deck-head small,
+:root .mc21-utility-head small,
+:root .mc21-outcomes-head > span,
+:root .mc21-tasks-eyebrow,
+:root .mc21-task-capture-add,
+:root .mc21-task-capture-today,
+:root .mc21-task-capture-meta,
+:root .mc21-task-chip,
+:root .mc21-smartview-copy strong,
+:root .mc21-toolbar-button,
+:root .mc21-view-toggle button,
+:root .mc21-filter-status button,
+:root .mc21-task-filters select,
+:root .mc21-list-summary span,
+:root .mc21-list-actions button,
+:root .mc21-bulkbar button,
+:root .mc21-bulkbar select,
+:root .mc21-bulkbar > span,
+:root .mc20-sync-title,
+:root thead th,
+:root .mc37-hero-quote em {
+  font-size: 10px;
+}
+@media (max-width: 639px) {
+:root .mc13-live-pill {
+  font-size: 10px;
+}
+}
+@media (max-width: 430px) {
+:root .mc21-smartview-copy strong {
+  font-size: 10px;
+}
+}
+@media (max-width: 420px) {
+:root .mc13-live-pill,
+:root .mc36-workspace-grid .mc-launch-detail {
+  font-size: 10px;
+}
+}
