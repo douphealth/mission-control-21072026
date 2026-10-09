@@ -292,7 +292,11 @@
 
 button.bg-primary,
 a.bg-primary {
-  background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary) / 0.84));
+  background-image: linear-gradient(
+    135deg,
+    hsl(var(--primary)),
+    color-mix(in oklab, hsl(var(--primary)) 86%, black)
+  );
   box-shadow: 0 10px 26px -14px hsl(var(--primary) / 0.7);
   transition:
     transform 0.15s ease,
@@ -518,7 +522,8 @@ select:focus-visible {
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: hsl(var(--mc-tone));
+  /* Mixed toward the ink color, so every tone reads on light and dark canvases. */
+  color: color-mix(in oklab, hsl(var(--mc-tone)) 48%, hsl(var(--foreground)));
 }
 
 .mc-pagehead-title {
@@ -827,4 +832,110 @@ select:focus-visible {
 
 #main-content > div {
   isolation: auto;
+}
+
+/* ─── 23 · Phone: the capture dock steps aside while the page scrolls ─────── */
+
+@media (max-width: 1023px) {
+  [data-floating-dock][data-scrolling="true"] > div {
+    opacity: 0;
+    transform: translateY(10px) scale(0.9);
+    pointer-events: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-floating-dock] > div {
+    transition: none;
+  }
+}
+
+/* ─── 24 · Today launch tiles always fill their last row ──────────────────── */
+/* Desktop is a six-column grid: one featured tile (4) then tiles of 2, three to a row.
+   Whatever ends a row early stretches to close it, whatever the workspace count. */
+
+@media (min-width: 1024px) {
+  .mc36-workspace-grid .mc-launch-card:last-child:nth-child(3n) {
+    grid-column: span 6 !important;
+  }
+
+  .mc36-workspace-grid .mc-launch-card:last-child:nth-child(3n + 1),
+  .mc36-workspace-grid .mc-launch-card:nth-last-child(2):nth-child(3n) {
+    grid-column: span 3 !important;
+  }
+}
+
+/* Phones are two columns with a full-width featured tile, so an even count leaves one alone. */
+@media (max-width: 1023px) {
+  .mc36-workspace-grid .mc-launch-card:last-child:nth-child(2n):not([data-featured="true"]) {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+/* ─── 25 · Phone: Today headings and KPI cards say their whole sentence ───── */
+
+@media (max-width: 1023px) {
+  :root .mc21-utility-head > div,
+  :root .mc21-capture-deck-head > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  :root .mc21-utility-head strong,
+  :root .mc21-capture-deck-head strong {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+  }
+
+  :root .mc36-kpi-strip .mc-kpi-card {
+    flex: 0 0 156px;
+    min-width: 156px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "icon value arrow"
+      "copy copy copy";
+    row-gap: 8px;
+    padding: 12px;
+  }
+
+  :root .mc36-kpi-strip .mc-kpi-icon {
+    grid-area: icon;
+  }
+
+  :root .mc36-kpi-strip .mc-kpi-value {
+    grid-area: value;
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  :root .mc36-kpi-strip .mc-kpi-arrow {
+    grid-area: arrow;
+  }
+
+  :root .mc36-kpi-strip .mc-kpi-copy {
+    grid-area: copy;
+  }
+
+  :root .mc36-kpi-strip .mc-kpi-copy strong,
+  :root .mc36-kpi-strip .mc-kpi-copy small {
+    overflow: visible;
+    white-space: normal;
+    text-overflow: clip;
+  }
+}
+
+/* ─── 26 · Light theme: primary buttons that can be read ─────────────────── */
+/* The sage palette paints .btn-primary as white text on a pale lime gradient. */
+
+:root:not(.dark) .btn-primary,
+:root:not(.dark) button.bg-primary,
+:root:not(.dark) a.bg-primary {
+  color: hsl(var(--primary-foreground));
+  background-image: linear-gradient(
+    135deg,
+    color-mix(in oklab, hsl(var(--primary)) 88%, black),
+    color-mix(in oklab, hsl(var(--primary)) 74%, black)
+  );
 }

@@ -2433,16 +2433,36 @@ export default function TasksPage() {
 
           {listTasks.length === 0 && (
             <EmptyState
-              icon={CheckSquare}
-              title="Nothing here. You're clear."
-              description="Clear the filters, or capture something new to work on."
+              icon={preset === "today" && stats.inbox > 0 ? Inbox : CheckSquare}
+              tone={preset === "today" && stats.inbox > 0 ? "violet" : "accent"}
+              title={
+                preset === "today" && stats.inbox > 0
+                  ? "Today is open. Pick what matters."
+                  : "Nothing here. You're clear."
+              }
+              description={
+                preset === "today" && stats.inbox > 0
+                  ? `${stats.inbox} task${stats.inbox === 1 ? " is" : "s are"} waiting in your Inbox for a decision. Choose the few that belong in today.`
+                  : "Clear the filters, or capture something new to work on."
+              }
               action={
-                <button
-                  onClick={() => setModal({ open: true, task: null })}
-                  className="btn-primary text-sm"
-                >
-                  <Plus size={13} /> New Task
-                </button>
+                <>
+                  {preset === "today" && stats.inbox > 0 && (
+                    <button onClick={() => setPreset("inbox")} className="btn-primary text-sm">
+                      <Inbox size={13} /> Review Inbox ({stats.inbox})
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setModal({ open: true, task: null })}
+                    className={
+                      preset === "today" && stats.inbox > 0
+                        ? "rounded-xl border border-border/60 bg-secondary/50 px-4 py-2 text-sm font-semibold text-foreground"
+                        : "btn-primary text-sm"
+                    }
+                  >
+                    <Plus size={13} /> New Task
+                  </button>
+                </>
               }
             />
           )}
