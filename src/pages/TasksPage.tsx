@@ -1524,6 +1524,9 @@ export interface TaskListHandlers {
   onFocus: (id: string) => void;
 }
 
+/** Rows rendered inline before a list is virtualized. Rows are cheap; hidden tasks are not. */
+const INLINE_ROW_LIMIT = 400;
+
 function VirtualizedList({
   tasks,
   bulkMode,
@@ -1576,8 +1579,9 @@ function VirtualizedList({
     onToggleSelect: () => onToggleSelect(task.id),
   });
 
-  // For small lists, skip virtualization overhead
-  if (tasks.length <= 30) {
+  // Lists render inline, in the page's own scroll, up to INLINE_ROW_LIMIT rows. Only a truly huge
+  // list is virtualized, and then inside a box with an explicit height.
+  if (tasks.length <= INLINE_ROW_LIMIT) {
     return (
       <>
         {tasks.map((task, i) => (
@@ -1593,7 +1597,9 @@ function VirtualizedList({
     <div
       ref={parentRef}
       className="overflow-auto"
-      style={{ maxHeight: "calc(100vh - 280px)", contain: "strict" }}
+      // An explicit height is required: a size-contained box with only a max-height collapses to
+      // nothing, which hid every task in any group over 30 rows.
+      style={{ height: `min(${virtualizer.getTotalSize()}px, calc(100dvh - 280px))`, contain: "layout paint" }}
     >
       <div style={{ height: virtualizer.getTotalSize(), width: "100%", position: "relative" }}>
         {items.map((v) => {

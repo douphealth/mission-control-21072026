@@ -3,6 +3,7 @@
 
 import "./bc-polyfill";
 import Dexie, { type Table } from "dexie";
+import { installTaskChangeHooks } from "@/lib/taskChangeHooks";
 
 // ─── Core Entity Types ─────────────────────────────────────────────────────────
 
@@ -274,6 +275,18 @@ export interface Task {
   allDay?: boolean; // defaults to true if not set
   gcalEventId?: string; // Google Calendar event ID if pushed
   gtaskId?: string; // Google Tasks item ID if mirrored
+  /** The Google Tasks list that item lives in. */
+  gtaskListId?: string;
+  /** Google's `updated` stamp for the item the last time both sides agreed. */
+  gtaskUpdated?: string;
+  /** Fingerprint of title, notes, due date and done-ness the last time both sides agreed. */
+  gtaskHash?: string;
+  /** Google's `updated` stamp for this task's calendar event the last time we wrote or read it. */
+  gcalUpdated?: string;
+  /** Fingerprint of the calendar event we last wrote for this task. */
+  gcalHash?: string;
+  /** When the user last edited this task (ISO). Settles conflicts between devices and Google. */
+  updatedAt?: string;
   reminder?: "none" | "at-time" | "5min" | "15min" | "30min" | "1hr" | "2hr" | "1day";
   reminderFired?: boolean; // prevents re-firing
   /** Multiple reminders — each entry is a preset key or 'custom:MINUTES' */
@@ -859,6 +872,7 @@ class MissionControlDB extends Dexie {
 }
 
 export const db = new MissionControlDB();
+installTaskChangeHooks(db.tasks);
 
 // ─── Migration from localStorage ─────────────────────────────────────────────
 

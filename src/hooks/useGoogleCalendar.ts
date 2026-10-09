@@ -12,12 +12,12 @@ import {
   listCalendars,
   syncGCalEvents,
   gCalEventToCalEvent,
-  pushTasksToGCal,
   taskIdToGCalId,
   type GoogleCalendarList,
   type GoogleCalendarEvent,
 } from "@/lib/googleCalendar";
 import { db, type Task } from "@/lib/db";
+import { requestGoogleSync } from "@/lib/googleSync";
 import { useDataStore } from "@/stores/dataStore";
 
 export interface GCalSyncState {
@@ -118,32 +118,9 @@ export function useGoogleCalendar(opts?: {
       syncLockRef.current = true;
       setState((s) => ({ ...s, syncing: true, error: null }));
       try {
-        const allTasks = await db.tasks.toArray();
-        // Every task goes to Google Calendar (undated ones land on today),
-        // and already-pushed ones are re-upserted so overdue flags stay current.
-        const tasksToPush = allTasks.filter(
-          (t) => !t.gcalEventId || t.gcalEventId.startsWith("mc"),
-        );
-        if (tasksToPush.length > 0) {
-          const pushed = await pushTasksToGCal(tasksToPush);
-          for (const [taskId, gcalId] of pushed) {
-            const existing = allTasks.find((t) => t.id === taskId);
-            if (existing?.gcalEventId !== gcalId) {
-              await storeUpdateItem<Task>("tasks", taskId, {
-                gcalEventId: gcalId,
-              } as Partial<Task>);
-            }
-          }
-          if (pushed.size > 0) console.log(`📤 Synced ${pushed.size} tasks to Google Calendar`);
-        }
-
-        // Keep Google Tasks mirrored both ways (best-effort — never blocks calendar).
-        try {
-          const { syncGoogleTasks } = await import("@/lib/googleTasksSync");
-          await syncGoogleTasks();
-        } catch (e) {
-          console.warn("Google Tasks sync skipped:", e);
-        }
+        // One serialised pass writes every task to Google Tasks and Google Calendar and reads back
+        // what changed there, including deletes. It reports its own status and never throws.
+        await requestGoogleSync({ reason: "calendar" });
 
 
         const { min, max } = getTimeRange();

@@ -114,6 +114,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         // Pre-load the app's Google identity so "Connect Google" is one click.
         void import("@/lib/googleDirectAuth").then((m) => m.ensureGoogleClientId());
         await startCloudSync();
+        // Keep tasks in step with Google Tasks and Calendar for as long as the app is open.
+        void import("@/lib/googleSync").then((m) => m.startGoogleAutoSync());
       } catch (e) {
         console.error("DB init error:", e);
       } finally {
