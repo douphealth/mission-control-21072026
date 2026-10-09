@@ -16,6 +16,7 @@ import obsidianAtelierCss from "../obsidian-atelier.css?url";
 import midnightAuroraCss from "../midnight-aurora.css?url";
 import todayWowCss from "../today-wow.css?url";
 import todayLuxCss from "../today-lux.css?url";
+import mcDesignSystemCss from "../mc-design-system.css?url";
 
 function NotFoundComponent() {
   return (
@@ -120,6 +121,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         rel: "stylesheet",
         href: todayLuxCss,
+      },
+      {
+        rel: "stylesheet",
+        href: mcDesignSystemCss,
       },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },

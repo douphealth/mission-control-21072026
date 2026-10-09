@@ -618,7 +618,7 @@ a.pf-chip:hover {
 }
 .pf-mini-l {
   margin-top: 4px;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -733,7 +733,7 @@ a.pf-chip:hover {
   font-size: 11px;
 }
 .pf-secret b {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
