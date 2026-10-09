@@ -36,6 +36,23 @@ export default function DraggableFloatingDock({
   const drag = useRef<{ pointerId: number; dx: number; dy: number } | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [scrolling, setScrolling] = useState(false);
+
+  // While the page scrolls the dock steps aside, so it never covers what is being read.
+  // It returns as soon as scrolling stops. CSS decides whether that applies (phones only).
+  useEffect(() => {
+    let timer: number | undefined;
+    const onScroll = () => {
+      setScrolling(true);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setScrolling(false), 650);
+    };
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener("scroll", onScroll, true);
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   const clamp = useCallback((x: number, y: number): Position => {
     const rect = rootRef.current?.getBoundingClientRect();
@@ -145,6 +162,7 @@ export default function DraggableFloatingDock({
       className={position ? "fixed" : defaultClassName}
       style={{ zIndex: DOCK_Z_INDEX, ...(position ? { left: position.x, top: position.y } : {}) }}
       data-floating-dock
+      data-scrolling={scrolling ? "true" : undefined}
     >
       <div className={`relative inline-flex items-center gap-1 rounded-[22px] border border-border/45 bg-background/88 p-1.5 shadow-[0_14px_45px_-18px_hsl(var(--foreground)/0.45)] backdrop-blur-xl transition-[box-shadow,transform,border-color] duration-150 ${dragging ? "scale-[1.02] border-primary/50 shadow-[0_18px_55px_-18px_hsl(var(--primary)/0.55)]" : "hover:border-border/70"}`}>
         <button
