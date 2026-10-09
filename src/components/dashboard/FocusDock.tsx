@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState } from "react";
 import { CheckCircle2, Pause, Play, RotateCcw, Timer, X } from "lucide-react";
 import { toast } from "sonner";
+import { celebrate } from "@/lib/celebrate";
 import type { WorkItem } from "@/lib/workQueue";
 import { useUpdateItem } from "@/hooks/useTableData";
 import { todayISO } from "@/lib/overdue";
@@ -45,6 +46,7 @@ export default function FocusDock({
         completedAt: new Date().toISOString(),
         touchedAt: today,
       } as never);
+      celebrate({ count: 24 });
       toast.success(`"${item.title}" done — session closed`);
     } else {
       toast.info("Only tasks complete from the dock — open the item for other kinds");

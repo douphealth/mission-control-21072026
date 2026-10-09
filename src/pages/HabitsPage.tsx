@@ -24,6 +24,7 @@ import {
   Copy,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
+import { celebrate, habitMessage } from "@/lib/celebrate";
 import type { HabitTracker } from "@/lib/db";
 import FormModal, { FormField, FormInput, FormSelect } from "@/components/FormModal";
 import { toast } from "sonner";
@@ -122,7 +123,11 @@ export default function HabitsPage() {
       completions: newCompletions,
       streak: newStreak,
     });
-    if (!completions.includes(today)) toast.success(`${h.icon} ${h.name} completed!`);
+    if (!completions.includes(today)) {
+      const message = habitMessage(h.name, newStreak);
+      celebrate({ count: message.big ? 30 : 14 });
+      toast.success(`${h.icon} ${message.title}`, { description: message.description });
+    }
   };
 
   const openAdd = () => {

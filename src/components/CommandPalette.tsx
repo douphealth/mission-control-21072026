@@ -35,6 +35,8 @@ import {
   AtSign,
   Users,
   WandSparkles,
+  AlertTriangle,
+  Rocket,
 } from "lucide-react";
 import {
   useWebsites,
@@ -271,9 +273,39 @@ interface CommandItem {
   sub: string;
   action: () => void;
   emoji: string;
+  /** Leading glyph, drawn as a line icon so the palette matches the rest of the app. */
+  glyph?: any;
   icon?: any;
   keywords?: string[];
   priority?: number;
+}
+
+/** Line icons for the emoji that data and action rows still carry. */
+const EMOJI_GLYPH: Record<string, any> = {
+  "✅": CheckSquare,
+  "☑️": CheckSquare,
+  "🔴": AlertTriangle,
+  "💰": DollarSign,
+  "⚡": Zap,
+  "📥": Upload,
+  "📤": Download,
+  "🌙": Moon,
+  "🌐": Globe,
+  "🐙": Github,
+  "🚀": Rocket,
+  "🛠️": Hammer,
+  "🔗": Link2,
+  "📝": FileText,
+};
+
+function PaletteGlyph({ item }: { item: CommandItem }) {
+  const Glyph = item.glyph ?? EMOJI_GLYPH[item.emoji];
+  if (!Glyph) return <span className="mc-palette-glyph mc-palette-glyph--emoji">{item.emoji}</span>;
+  return (
+    <span className="mc-palette-glyph" aria-hidden>
+      <Glyph size={16} strokeWidth={2} />
+    </span>
+  );
 }
 
 interface CommandPaletteProps {
@@ -446,6 +478,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
             onClose();
           },
           emoji: sec.emoji,
+          glyph: sec.icon,
           icon: Clock,
           priority: 100 - i,
         });
@@ -464,6 +497,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
           onClose();
         },
         emoji: s.emoji,
+        glyph: s.icon,
         icon: ArrowRight,
         keywords: s.keywords,
         priority: 50,
@@ -858,7 +892,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
                         : "border-l-2 border-transparent hover:bg-secondary/40"
                     }`}
                   >
-                    <span className="text-base flex-shrink-0 w-7 text-center">{item.emoji}</span>
+                    <PaletteGlyph item={item} />
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] font-semibold text-foreground truncate">
                         {item.label}
