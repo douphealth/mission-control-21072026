@@ -152,7 +152,7 @@ export default function DashboardLayout() {
       <div className="mc13-sidebar-wrap relative z-[1] hidden lg:block">
         <Sidebar />
       </div>
-      <div className="mc13-main-wrap relative z-[1] flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="mc13-main-wrap relative flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar />
         <CrossDeviceSyncBar />
         <main

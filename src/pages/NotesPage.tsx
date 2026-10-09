@@ -16,6 +16,8 @@ import {
   Image,
   FileText,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -188,28 +190,33 @@ export default function NotesPage() {
   return (
     <div className="space-y-3 sm:space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Notes</h1>
-          <p className="text-[11px] sm:text-sm text-muted-foreground mt-0.5">
-            {notes.length} notes · {notes.filter((n) => n.pinned).length} pinned
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={bulk.toggleBulkMode}
-            className={`flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all touch-manipulation ${bulk.bulkMode ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20"}`}
-          >
-            <CheckSquare size={14} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
-          </button>
-          <button
-            onClick={addNote}
-            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20 touch-manipulation"
-          >
-            <Plus size={15} /> <span className="hidden sm:inline">New</span> Note
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={FileText}
+        eyebrow="Capture"
+        title="Notes"
+        tone="amber"
+        subtitle="Quick thoughts, drafts and reference. Searchable and always saved."
+        stats={[
+          { label: "Notes", value: notes.length },
+          { label: "Pinned", value: notes.filter((n) => n.pinned).length, tone: "amber" },
+        ]}
+        actions={
+          <>
+            <button
+              onClick={bulk.toggleBulkMode}
+              className={`flex items-center gap-1.5 px-3 py-2 sm:py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all touch-manipulation ${bulk.bulkMode ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20"}`}
+            >
+              <CheckSquare size={14} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
+            </button>
+            <button
+              onClick={addNote}
+              className="flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-xs sm:text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20 touch-manipulation"
+            >
+              <Plus size={15} /> <span className="hidden sm:inline">New</span> Note
+            </button>
+          </>
+        }
+      />
 
       {bulk.bulkMode && (
         <BulkActionBar
@@ -304,9 +311,13 @@ export default function NotesPage() {
                 );
               })}
               {filtered.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  <p className="text-sm">No notes found</p>
-                </div>
+                <EmptyState
+                  compact
+                  icon={FileText}
+                  tone="amber"
+                  title="No notes found"
+                  description="Try a different search, or start a new note."
+                />
               )}
             </div>
           </div>
@@ -417,15 +428,19 @@ export default function NotesPage() {
                 </div>
               </>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground text-sm gap-3">
-                <div className="text-5xl">📝</div>
-                <p>Select a note or create a new one</p>
-                <button
-                  onClick={addNote}
-                  className="text-primary hover:underline text-sm touch-manipulation"
-                >
-                  + New Note
-                </button>
+              <div className="flex flex-1 items-center justify-center p-4">
+                <EmptyState
+                  bare
+                  icon={FileText}
+                  tone="amber"
+                  title="Select a note or start a new one"
+                  description="Notes save as you type, so nothing is lost."
+                  action={
+                    <button onClick={addNote} className="btn-primary text-sm touch-manipulation">
+                      <Plus size={13} /> New note
+                    </button>
+                  }
+                />
               </div>
             )}
           </div>

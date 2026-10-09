@@ -13,6 +13,7 @@ import {
   ListTodo,
   Settings,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import { db } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
@@ -347,11 +348,11 @@ export default function GoogleTasksPage() {
 
       <div className="space-y-2">
         {tasks.length === 0 && !loading && (
-          <div className="text-center py-16 text-muted-foreground">
-            <div className="text-5xl mb-3">✅</div>
-            <p className="font-semibold text-foreground">No tasks</p>
-            <p className="text-sm">{showCompleted ? "Nothing here yet." : "All caught up!"}</p>
-          </div>
+          <EmptyState
+            icon={CheckCircle2}
+            title="No tasks"
+            description={showCompleted ? "Nothing here yet." : "All caught up!"}
+          />
         )}
         {tasks.map((t) => {
           const done = t.status === "completed";

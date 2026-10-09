@@ -39,7 +39,9 @@ import {
   Eye,
   EyeOff,
   Mail,
+  Settings,
 } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
 import { useGoogleReady } from "@/hooks/useGoogleReady";
 import { GoogleSetupModal } from "@/components/dashboard/GoogleSetupModal";
 import { generateStrongKey, setEncryptionKey, hasCustomEncryptionKey } from "@/lib/encryption";
@@ -53,15 +55,15 @@ import DailyEmailSettings from "@/components/DailyEmailSettings";
 import { toast } from "sonner";
 
 const tabs = [
-  { id: "profile", label: "Profile", icon: User },
-  { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "accessibility", label: "Accessibility", icon: Accessibility },
-  { id: "connections", label: "Connections", icon: Plug },
-  { id: "daily-email", label: "Daily email", icon: Mail },
-  { id: "google-calendar", label: "Google Calendar", icon: Calendar },
-  { id: "security", label: "Security", icon: Shield },
-  { id: "data", label: "Data", icon: Database },
-  { id: "about", label: "About", icon: Info },
+  { id: "profile", label: "Profile", hint: "Your name and role", icon: User },
+  { id: "appearance", label: "Appearance", hint: "Theme and display", icon: Palette },
+  { id: "accessibility", label: "Accessibility", hint: "Contrast, motion, text", icon: Accessibility },
+  { id: "connections", label: "Connections", hint: "Accounts and services", icon: Plug },
+  { id: "daily-email", label: "Daily email", hint: "Your morning briefing", icon: Mail },
+  { id: "google-calendar", label: "Google Calendar", hint: "Sync and calendars", icon: Calendar },
+  { id: "security", label: "Security", hint: "Encryption key", icon: Shield },
+  { id: "data", label: "Data", hint: "Backup and restore", icon: Database },
+  { id: "about", label: "About", hint: "Version and credits", icon: Info },
 ];
 
 const themes = [
@@ -213,34 +215,37 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-5 max-w-4xl">
-      <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Settings</h1>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-          Manage your Mission Control preferences, data, and security
-        </p>
-      </div>
+    <div className="max-w-5xl space-y-4 sm:space-y-5">
+      <PageHeader
+        icon={Settings}
+        eyebrow="Preferences"
+        title="Settings"
+        tone="sky"
+        subtitle="Your profile, appearance, connections, data and security, all saved on this device."
+      />
 
-      <div className="flex flex-col lg:flex-row gap-4">
-        {/* Sidebar nav — horizontal scroll on mobile */}
-        <div className="lg:w-52 flex lg:flex-col gap-1 overflow-x-auto hide-scrollbar pb-1 lg:pb-0">
+      <div className="flex flex-col gap-4 lg:flex-row lg:gap-6">
+        {/* Section navigation: a horizontal rail on phones, a sticky column on desktop */}
+        <nav aria-label="Settings sections" className="mc-settings-nav lg:w-64 lg:flex-none">
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-medium transition-all whitespace-nowrap lg:w-full text-left flex-shrink-0
-                ${
-                  activeTab === tab.id
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-                }`}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              className={`mc-settings-tab ${activeTab === tab.id ? "is-active" : ""}`}
             >
-              <tab.icon size={15} />
-              {tab.label}
-              {activeTab === tab.id && <ChevronRight size={13} className="ml-auto opacity-60" />}
+              <span className="mc-settings-tab-icon">
+                <tab.icon size={16} />
+              </span>
+              <span className="mc-settings-tab-copy">
+                <span className="mc-settings-tab-label">{tab.label}</span>
+                <span className="mc-settings-tab-hint">{tab.hint}</span>
+              </span>
+              {activeTab === tab.id && <ChevronRight size={14} className="mc-settings-tab-chevron" />}
             </button>
           ))}
-        </div>
+        </nav>
 
         {/* Content */}
         <div className="flex-1 space-y-4">

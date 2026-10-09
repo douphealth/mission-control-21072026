@@ -21,6 +21,7 @@ import {
   FolderGit2,
   ArrowUpRight,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import FormModal, {
   FormField,
   FormInput,
@@ -835,20 +836,24 @@ export default function GitHubPage() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <div className="text-5xl mb-3">🐙</div>
-          <p className="font-medium">No repositories found</p>
-          <button
-            onClick={() => {
-              setSearch("");
-              setPriorityFilter("all");
-              setPortfolioFilter("all");
-            }}
-            className="mt-3 text-sm text-primary hover:underline"
-          >
-            Clear filters
-          </button>
-        </div>
+        <EmptyState
+          icon={FolderGit2}
+          tone="violet"
+          title="No repositories found"
+          description="Nothing matches the current filters."
+          action={
+            <button
+              onClick={() => {
+                setSearch("");
+                setPriorityFilter("all");
+                setPortfolioFilter("all");
+              }}
+              className="btn-primary text-sm"
+            >
+              Clear filters
+            </button>
+          }
+        />
       )}
 
       <FormModal
