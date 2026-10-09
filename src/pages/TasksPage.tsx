@@ -38,6 +38,7 @@ import {
   Play,
   SlidersHorizontal,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import type { Task, Subtask } from "@/lib/db";
 import { todayISO } from "@/lib/overdue";
@@ -2431,17 +2432,19 @@ export default function TasksPage() {
           })()}
 
           {listTasks.length === 0 && (
-            <div className="text-center py-20 text-muted-foreground">
-              <CheckSquare size={42} className="mx-auto mb-3 opacity-20" />
-              <p className="font-semibold text-foreground">Nothing here — you're clear</p>
-              <p className="text-sm mt-1">Clear filters or create a new task</p>
-              <button
-                onClick={() => setModal({ open: true, task: null })}
-                className="btn-primary mt-4 text-sm"
-              >
-                <Plus size={13} /> New Task
-              </button>
-            </div>
+            <EmptyState
+              icon={CheckSquare}
+              title="Nothing here. You're clear."
+              description="Clear the filters, or capture something new to work on."
+              action={
+                <button
+                  onClick={() => setModal({ open: true, task: null })}
+                  className="btn-primary text-sm"
+                >
+                  <Plus size={13} /> New Task
+                </button>
+              }
+            />
           )}
         </div>
       )}

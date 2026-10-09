@@ -1,4 +1,5 @@
-import { ExternalLink, Archive, Sparkles } from "lucide-react";
+import { ExternalLink, Archive, Sparkles, Inbox } from "lucide-react";
+import SharedEmptyState from "@/components/EmptyState";
 import type { StreamItem } from "@/lib/db";
 import { archiveStreamItem } from "@/lib/controlCenter";
 
@@ -192,11 +193,5 @@ export function StreamRow({ item, onArchive }: { item: StreamItem; onArchive?: (
 }
 
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
-  return (
-    <div className="relative overflow-hidden text-center py-12 rounded-[22px] border border-dashed border-border/65 bg-card/35">
-      <div className="pointer-events-none absolute inset-x-1/3 top-0 h-24 rounded-full bg-primary/5 blur-3xl" />
-      <p className="text-sm font-semibold text-foreground">{title}</p>
-      {hint && <p className="relative text-xs text-muted-foreground mt-1 max-w-md mx-auto">{hint}</p>}
-    </div>
-  );
+  return <SharedEmptyState compact icon={Inbox} title={title} description={hint} />;
 }

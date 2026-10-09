@@ -1,6 +1,7 @@
 import { useBuildProjects, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useCallback } from "react";
-import { ExternalLink, Trash2, Plus, Edit2, Search, CheckSquare, Copy } from "lucide-react";
+import { ExternalLink, Trash2, Plus, Edit2, Search, CheckSquare, Copy, Hammer } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import FormModal, {
   FormField,
   FormInput,
@@ -353,13 +354,17 @@ export default function BuildsPage() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <div className="text-5xl mb-3">🛠️</div>
-          <p className="font-medium">No build projects found</p>
-          <button onClick={openAdd} className="mt-3 text-sm text-primary hover:underline">
-            + Create your first project
-          </button>
-        </div>
+        <EmptyState
+          icon={Hammer}
+          tone="violet"
+          title="No build projects found"
+          description="Track what you are building, where it is deployed and what comes next."
+          action={
+            <button onClick={openAdd} className="btn-primary text-sm">
+              <Plus size={13} /> Create your first project
+            </button>
+          }
+        />
       )}
 
       <FormModal

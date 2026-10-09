@@ -27,6 +27,7 @@ import {
   CloudOff,
   Settings,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import { toast } from "sonner";
 import type { Task } from "@/lib/db";
 import { useGoogleCalendar } from "@/hooks/useGoogleCalendar";
@@ -1363,17 +1364,20 @@ export default function CalendarPage() {
         {view === "agenda" && (
           <div className="card-elevated flex-1 overflow-y-auto p-4 sm:p-5 space-y-5 sm:space-y-6">
             {agendaEvents.length === 0 ? (
-              <div className="text-center py-16 text-muted-foreground">
-                <Calendar size={40} className="mx-auto mb-3 opacity-30" />
-                <p className="font-semibold text-foreground">No upcoming events</p>
-                <p className="text-sm mt-1">Create an event or add tasks with due dates.</p>
-                <button
-                  onClick={() => openNewEvent(today)}
-                  className="btn-primary mt-4 text-sm touch-manipulation"
-                >
-                  <Plus size={13} /> Add Event
-                </button>
-              </div>
+              <EmptyState
+                icon={Calendar}
+                tone="sky"
+                title="No upcoming events"
+                description="Create an event, or add tasks with due dates and they appear here."
+                action={
+                  <button
+                    onClick={() => openNewEvent(today)}
+                    className="btn-primary text-sm touch-manipulation"
+                  >
+                    <Plus size={13} /> Add Event
+                  </button>
+                }
+              />
             ) : (
               agendaEvents.map((group) => {
                 const d = parseDate(group.date);
@@ -1641,9 +1645,12 @@ export default function CalendarPage() {
                 );
               })}
             {tasks.filter((t) => t.status !== "done" && t.dueDate >= today).length === 0 && (
-              <p className="text-[11px] text-muted-foreground text-center py-4">
-                🎉 All tasks done!
-              </p>
+              <EmptyState
+                compact
+                icon={CheckSquare}
+                title="Nothing due"
+                description="Tasks with a due date show up here."
+              />
             )}
           </div>
         </div>

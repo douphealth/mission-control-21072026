@@ -34,6 +34,7 @@ import {
   WandSparkles,
   CheckCircle2,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import FormModal, {
   FormField,
   FormInput,
@@ -1077,35 +1078,36 @@ export default function CredentialsPage() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="rounded-3xl border border-dashed border-border/70 py-16 text-center text-muted-foreground">
-          <KeyRound size={34} className="mx-auto mb-3 opacity-30" />
-          <p className="text-sm font-bold text-foreground">
-            {search || filterCategory !== "all" ? "No credentials match" : "Your vault is empty"}
-          </p>
-          <p className="mt-1 text-xs">
-            {search || filterCategory !== "all"
+        <EmptyState
+          icon={KeyRound}
+          tone="amber"
+          title={search || filterCategory !== "all" ? "No credentials match" : "Your vault is empty"}
+          description={
+            search || filterCategory !== "all"
               ? "Clear the search or category filter."
-              : "Add one credential or paste many at once."}
-          </p>
-          {!search && filterCategory === "all" && (
-            <div className="mt-4 flex justify-center gap-2">
-              <button
-                type="button"
-                onClick={openAdd}
-                className="rounded-xl bg-secondary px-4 py-2 text-xs font-bold text-foreground"
-              >
-                Add one
-              </button>
-              <button
-                type="button"
-                onClick={() => setBulkAddOpen(true)}
-                className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground"
-              >
-                Bulk add
-              </button>
-            </div>
-          )}
-        </div>
+              : "Add one credential or paste many at once."
+          }
+          action={
+            !search && filterCategory === "all" ? (
+              <>
+                <button
+                  type="button"
+                  onClick={openAdd}
+                  className="rounded-xl bg-secondary px-4 py-2 text-xs font-bold text-foreground"
+                >
+                  Add one
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBulkAddOpen(true)}
+                  className="rounded-xl bg-primary px-4 py-2 text-xs font-bold text-primary-foreground"
+                >
+                  Bulk add
+                </button>
+              </>
+            ) : undefined
+          }
+        />
       )}
 
       <FormModal

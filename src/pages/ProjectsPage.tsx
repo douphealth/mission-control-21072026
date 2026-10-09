@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
-import { Plus, Edit2, Trash2, GripVertical, Search, ChevronDown } from "lucide-react";
+import { Plus, Edit2, Trash2, GripVertical, Search, ChevronDown, PanelsTopLeft } from "lucide-react";
+import PageHeader from "@/components/PageHeader";
 import FormModal, {
   FormField,
   FormInput,
@@ -282,21 +283,28 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Projects Tracker</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {cards.length} projects · {cards.filter((c) => c.column === "in-progress").length} in
-            progress · {cards.filter((c) => c.column === "completed").length} completed
-          </p>
-        </div>
-        <button
-          onClick={() => openAdd("ideas")}
-          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
-        >
-          <Plus size={16} /> New Project
-        </button>
-      </div>
+      <PageHeader
+        icon={PanelsTopLeft}
+        eyebrow="Board"
+        title="Projects Tracker"
+        tone="accent"
+        subtitle="Move work from idea to done. Drag cards between columns."
+        stats={[
+          { label: "Projects", value: cards.length },
+          { label: "In progress", value: cards.filter((c) => c.column === "in-progress").length, tone: "accent" },
+          { label: "Completed", value: cards.filter((c) => c.column === "completed").length },
+        ]}
+        actions={
+          <>
+            <button
+              onClick={() => openAdd("ideas")}
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
+            >
+              <Plus size={16} /> New Project
+            </button>
+          </>
+        }
+      />
 
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
         <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 flex-1 sm:max-w-xs">
@@ -380,33 +388,41 @@ export default function ProjectsPage() {
             const isExpanded = expandedCol === col.id;
             return (
               <div key={col.id} className="rounded-2xl bg-secondary/30 overflow-hidden">
-                <button
-                  onClick={() => setExpandedCol(isExpanded ? null : col.id)}
-                  className="w-full flex items-center justify-between p-3.5 touch-manipulation"
-                >
-                  <div className="flex items-center gap-2">
+                <div className="w-full flex items-center justify-between gap-2 p-3.5">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedCol(isExpanded ? null : col.id)}
+                    aria-expanded={isExpanded}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left touch-manipulation"
+                  >
                     <div className={`w-2.5 h-2.5 rounded-full ${col.accent}`} />
                     <span className="text-sm font-semibold text-card-foreground">{col.label}</span>
                     <span className="text-[11px] text-muted-foreground bg-muted rounded-full w-5 h-5 flex items-center justify-center font-medium">
                       {colCards.length}
                     </span>
-                  </div>
+                  </button>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAdd(col.id);
-                      }}
+                      type="button"
+                      onClick={() => openAdd(col.id)}
+                      aria-label={`Add a project to ${col.label}`}
                       className="text-muted-foreground hover:text-primary p-1"
                     >
                       <Plus size={16} />
                     </button>
-                    <ChevronDown
-                      size={16}
-                      className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                    />
+                    <button
+                      type="button"
+                      onClick={() => setExpandedCol(isExpanded ? null : col.id)}
+                      aria-label={isExpanded ? `Collapse ${col.label}` : `Expand ${col.label}`}
+                      className="p-1 touch-manipulation"
+                    >
+                      <ChevronDown
+                        size={16}
+                        className={`text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                      />
+                    </button>
                   </div>
-                </button>
+                </div>
                 {isExpanded && (
                   <div className="px-3 pb-3 space-y-2">
                     {colCards.map(renderCard)}

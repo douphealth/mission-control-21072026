@@ -23,6 +23,7 @@ import {
   CheckSquare,
   Copy,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
 import type { HabitTracker } from "@/lib/db";
 import FormModal, { FormField, FormInput, FormSelect } from "@/components/FormModal";
 import { toast } from "sonner";
@@ -412,14 +413,17 @@ export default function HabitsPage() {
           </div>
         </div>
       ) : (
-        <div className="text-center py-20 text-muted-foreground">
-          <div className="text-6xl mb-4">🎯</div>
-          <p className="text-lg font-semibold text-foreground">No habits yet</p>
-          <p className="text-sm mt-1">Start building positive routines that compound over time</p>
-          <button onClick={openAdd} className="btn-primary mt-5 text-sm">
-            <Plus size={14} /> Add Your First Habit
-          </button>
-        </div>
+        <EmptyState
+          icon={Target}
+          tone="amber"
+          title="No habits yet"
+          description="Start building positive routines that compound over time."
+          action={
+            <button onClick={openAdd} className="btn-primary text-sm">
+              <Plus size={14} /> Add your first habit
+            </button>
+          }
+        />
       )}
 
       <FormModal

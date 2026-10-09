@@ -14,6 +14,8 @@ import {
   CheckSquare,
   Copy,
 } from "lucide-react";
+import EmptyState from "@/components/EmptyState";
+import PageHeader from "@/components/PageHeader";
 import FormModal, { FormField, FormInput, FormTextarea, FormSelect } from "@/components/FormModal";
 import type { Payment } from "@/lib/store";
 import { toast } from "sonner";
@@ -191,31 +193,33 @@ export default function PaymentsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5">
-      <div className="flex items-center justify-between flex-wrap gap-2 sm:gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-foreground">Payments & Finance</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            {payments.length} records
-            {overdueCount > 0 && (
-              <span className="text-destructive font-medium"> · {overdueCount} overdue</span>
-            )}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={bulk.toggleBulkMode}
-            className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-sm font-semibold transition-all ${bulk.bulkMode ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20"}`}
-          >
-            <CheckSquare size={15} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
-          </button>
-          <button
-            onClick={openAdd}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
-          >
-            <Plus size={16} /> Add
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={DollarSign}
+        eyebrow="Finance"
+        title="Payments & Finance"
+        tone="accent"
+        subtitle={
+          overdueCount > 0
+            ? `${overdueCount} overdue. Income, expenses and subscriptions, kept separate by currency.`
+            : "Income, expenses and subscriptions, kept separate by currency."
+        }
+        actions={
+          <>
+            <button
+              onClick={bulk.toggleBulkMode}
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-sm font-semibold transition-all ${bulk.bulkMode ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-secondary/50 text-muted-foreground hover:text-foreground border border-border/20"}`}
+            >
+              <CheckSquare size={15} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
+            </button>
+            <button
+              onClick={openAdd}
+              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
+            >
+              <Plus size={16} /> Add
+            </button>
+          </>
+        }
+      />
 
       {payments.length === 0 && (
         <section className="relative overflow-hidden rounded-[26px] border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.08] via-card to-primary/[0.05] p-4 sm:p-5">
@@ -448,13 +452,16 @@ export default function PaymentsPage() {
       </div>
 
       {filtered.length === 0 && (
-        <div className="text-center py-16 text-muted-foreground">
-          <div className="text-5xl mb-3">💰</div>
-          <p className="font-medium">No payments found</p>
-          <button onClick={openAdd} className="mt-3 text-sm text-primary hover:underline">
-            + Add your first payment
-          </button>
-        </div>
+        <EmptyState
+          icon={DollarSign}
+          title="No payments found"
+          description="Add income, expenses or subscriptions. Totals stay separate by currency."
+          action={
+            <button onClick={openAdd} className="btn-primary text-sm">
+              <Plus size={13} /> Add your first payment
+            </button>
+          }
+        />
       )}
 
       <ConfirmDialog {...cd.dialogProps} />
