@@ -95,8 +95,8 @@ export async function signIn(): Promise<void> {
     const { startCloudSync } = await import("@/lib/cloudSync");
     await startCloudSync(true);
     try {
-      const { syncGoogleTasks } = await import("@/lib/googleTasksSync");
-      await syncGoogleTasks();
+      const { requestGoogleSync } = await import("@/lib/googleSync");
+      await requestGoogleSync({ reason: "connect" });
     } catch {
       /* non-fatal — first sync retries on the next pass */
     }
@@ -132,26 +132,47 @@ export function signOut(): void {
   clearGoogleToken();
 }
 
+/** An error from the Tasks API that keeps its HTTP status, so callers can tell "gone" from "failed". */
+export class GoogleTasksError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "GoogleTasksError";
+  }
+}
+
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = await ensureToken();
-  const res = await fetch(`https://tasks.googleapis.com/tasks/v1${path}`, {
-    ...init,
-    headers: {
-      ...(init.headers || {}),
-      Authorization: `Bearer ${token.access_token}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (res.status === 401) {
-    clearGoogleToken();
-    throw new Error("Google Tasks session expired — please sign in again");
+  for (let attempt = 0; ; attempt++) {
+    const token = await ensureToken();
+    const res = await fetch(`https://tasks.googleapis.com/tasks/v1${path}`, {
+      ...init,
+      headers: {
+        ...(init.headers || {}),
+        Authorization: `Bearer ${token.access_token}`,
+        "Content-Type": "application/json",
+      },
+    });
+    if (res.status === 401) {
+      clearGoogleToken();
+      throw new GoogleTasksError("Google Tasks session expired — please sign in again", 401);
+    }
+    // Rate limits and brief outages are retried with a growing pause. Everything else is final.
+    if (RETRYABLE.has(res.status) && attempt < 3) {
+      await sleep(400 * 2 ** attempt + Math.random() * 200);
+      continue;
+    }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new GoogleTasksError(`Google Tasks ${res.status}: ${text.slice(0, 200)}`, res.status);
+    }
+    if (res.status === 204) return undefined as T;
+    return res.json() as Promise<T>;
   }
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Google Tasks ${res.status}: ${text.slice(0, 200)}`);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
 }
 
 export type GTaskList = { id: string; title: string };
@@ -164,24 +185,59 @@ export type GTask = {
   updated?: string;
   position?: string;
   parent?: string;
+  /** Set when Google lists a task that was deleted (only returned with showDeleted). */
+  deleted?: boolean;
+  hidden?: boolean;
+  completed?: string;
 };
 
 export async function listTaskLists(): Promise<GTaskList[]> {
-  const r = await api<{ items?: GTaskList[] }>("/users/@me/lists");
-  return r.items || [];
+  const lists: GTaskList[] = [];
+  let pageToken: string | undefined;
+  do {
+    const qs = new URLSearchParams({ maxResults: "100" });
+    if (pageToken) qs.set("pageToken", pageToken);
+    const r = await api<{ items?: GTaskList[]; nextPageToken?: string }>(`/users/@me/lists?${qs}`);
+    lists.push(...(r.items || []));
+    pageToken = r.nextPageToken;
+  } while (pageToken);
+  return lists;
+}
+
+/** Every page of a list. A list over 100 tasks used to be cut off at the first page. */
+async function fetchAllTasks(
+  listId: string,
+  flags: { showCompleted: boolean; showHidden: boolean; showDeleted: boolean },
+): Promise<GTask[]> {
+  const tasks: GTask[] = [];
+  let pageToken: string | undefined;
+  do {
+    const qs = new URLSearchParams({
+      maxResults: "100",
+      showCompleted: String(flags.showCompleted),
+      showHidden: String(flags.showHidden),
+      showDeleted: String(flags.showDeleted),
+    });
+    if (pageToken) qs.set("pageToken", pageToken);
+    const r = await api<{ items?: GTask[]; nextPageToken?: string }>(
+      `/lists/${encodeURIComponent(listId)}/tasks?${qs}`,
+    );
+    tasks.push(...(r.items || []));
+    pageToken = r.nextPageToken;
+  } while (pageToken);
+  return tasks;
 }
 
 export async function listTasks(listId: string, showCompleted = false): Promise<GTask[]> {
-  const qs = new URLSearchParams({
-    maxResults: "100",
-    showCompleted: String(showCompleted),
-    showHidden: "false",
-  });
-  const r = await api<{ items?: GTask[] }>(`/lists/${encodeURIComponent(listId)}/tasks?${qs}`);
-  return r.items || [];
+  return fetchAllTasks(listId, { showCompleted, showHidden: false, showDeleted: false });
 }
 
-export async function createTask(listId: string, body: Partial<GTask>): Promise<GTask> {
+/** The complete picture for sync: open, finished, hidden and deleted tasks. */
+export async function listTasksForSync(listId: string): Promise<GTask[]> {
+  return fetchAllTasks(listId, { showCompleted: true, showHidden: true, showDeleted: true });
+}
+
+export async function createTask(listId: string, body: Partial<GTask> | Record<string, unknown>): Promise<GTask> {
   return api<GTask>(`/lists/${encodeURIComponent(listId)}/tasks`, {
     method: "POST",
     body: JSON.stringify(body),
@@ -191,7 +247,7 @@ export async function createTask(listId: string, body: Partial<GTask>): Promise<
 export async function updateTask(
   listId: string,
   taskId: string,
-  body: Partial<GTask>,
+  body: Partial<GTask> | Record<string, unknown>,
 ): Promise<GTask> {
   return api<GTask>(`/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`, {
     method: "PATCH",
@@ -199,8 +255,14 @@ export async function updateTask(
   });
 }
 
+/** Deleting something already gone (404/410) counts as done. */
 export async function deleteTask(listId: string, taskId: string): Promise<void> {
-  await api<void>(`/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`, {
-    method: "DELETE",
-  });
+  try {
+    await api<void>(`/lists/${encodeURIComponent(listId)}/tasks/${encodeURIComponent(taskId)}`, {
+      method: "DELETE",
+    });
+  } catch (error) {
+    if (error instanceof GoogleTasksError && (error.status === 404 || error.status === 410)) return;
+    throw error;
+  }
 }

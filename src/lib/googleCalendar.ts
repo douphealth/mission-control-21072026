@@ -285,7 +285,9 @@ export async function createGCalEvent(
         body: JSON.stringify({ ...event, id: deterministicId }),
       });
     } catch (e: any) {
-      if (!/\(409\)/.test(e?.message || "")) throw e;
+      // Errors read "Google Calendar 409: ...". The old pattern looked for "(409)", never matched,
+      // and so an event that already existed could never be updated after its first push.
+      if (!/\b409\b/.test(e?.message || "")) throw e;
       return gcalApi<GoogleCalendarEvent>(
         `/calendars/${cal}/events/${encodeURIComponent(deterministicId)}`,
         { method: "PUT", body: JSON.stringify(event) },
@@ -338,8 +340,8 @@ export async function connectGCal(): Promise<{ email?: string; redirected?: bool
   const { startCloudSync } = await import("@/lib/cloudSync");
   await startCloudSync(true);
   try {
-    const { syncGoogleTasks } = await import("@/lib/googleTasksSync");
-    await syncGoogleTasks();
+    const { requestGoogleSync } = await import("@/lib/googleSync");
+    await requestGoogleSync({ reason: "connect" });
   } catch {
     /* non-fatal — retried on the next sync pass */
   }
@@ -373,19 +375,26 @@ function localTodayISO(): string {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 }
 
-function nextDateISO(date: string): string {
-  const d = new Date(`${date}T00:00:00`);
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
+/**
+ * The calendar day after `date` (YYYY-MM-DD). Calendar dates carry no time zone, so the arithmetic is
+ * done in UTC. The old version built local midnight and then read it back as UTC, which in any zone
+ * ahead of UTC returned the SAME day. An all-day event then ended the day it started, which Google
+ * rejects as an empty range, so no task event was ever written.
+ */
+export function nextDateISO(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
 }
 
 /** Builds the calendar title for a task, flagging overdue / completed state. */
-export function gcalTaskSummary(task: {
-  title: string;
-  dueDate?: string;
-  status?: string;
-}): string {
-  const today = localTodayISO();
+export function gcalTaskSummary(
+  task: {
+    title: string;
+    dueDate?: string;
+    status?: string;
+  },
+  today = localTodayISO(),
+): string {
   if (task.status === "done") return `✅ ${task.title}`;
   if (task.dueDate && task.dueDate < today) {
     const days = Math.max(
@@ -411,29 +420,96 @@ export function shouldProjectAsBusy(task: { area?: string }): boolean {
   }
 }
 
-export async function pushTasksToGCal(
-  tasks: {
-    id: string;
-    title: string;
-    description?: string;
-    dueDate?: string;
-    status?: string;
-    startDate?: string;
-    startTime?: string;
-    endTime?: string;
-    allDay?: boolean;
-    gcalEventId?: string;
-    recurring?: boolean;
-    recurringInterval?: string;
-    recurringEndType?: string;
-    recurringEndDate?: string;
-    recurringEndCount?: number;
-    recurringCustomDays?: number;
-    area?: string;
-    blocks?: { date: string; start: string; end: string; done?: boolean }[];
-    deletedAt?: string;
-  }[],
-): Promise<Map<string, string>> {
+export interface PushableTask {
+  id: string;
+  title: string;
+  description?: string;
+  dueDate?: string;
+  status?: string;
+  startDate?: string;
+  startTime?: string;
+  endTime?: string;
+  allDay?: boolean;
+  gcalEventId?: string;
+  recurring?: boolean;
+  recurringInterval?: string;
+  recurringEndType?: string;
+  recurringEndDate?: string;
+  recurringEndCount?: number;
+  recurringCustomDays?: number;
+  area?: string;
+  blocks?: { date: string; start: string; end: string; done?: boolean }[];
+  deletedAt?: string;
+}
+
+export type TaskEventBody = {
+  summary: string;
+  description: string;
+  colorId?: string;
+  transparency?: string;
+  visibility?: string;
+  start: { date?: string; dateTime?: string; timeZone?: string };
+  end: { date?: string; dateTime?: string; timeZone?: string };
+  recurrence?: string[];
+};
+
+/**
+ * The calendar event that represents a task. Pure apart from reading the "personal as busy"
+ * preference, so the mirror can compare it with what it last wrote and skip unchanged events.
+ *
+ * A task with a start and an end date becomes a multi-day event over that range; a task with one
+ * date is a single-day event; a planned work block becomes a timed event.
+ */
+export function buildTaskEventBody(
+  task: PushableTask,
+  today: string,
+  rrule?: string | null,
+  timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone,
+): TaskEventBody {
+  // Time allocation comes from the next open work block when one exists;
+  // the deadline is shown in the title, never used to place a block.
+  const nextBlock = [...(task.blocks ?? [])]
+    .filter((b) => !b.done)
+    .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`))[0];
+  const eventDate = nextBlock?.date || task.startDate || task.dueDate || today;
+  const startTime = nextBlock?.start ?? task.startTime;
+  const endTime = nextBlock?.end ?? task.endTime;
+  const isAllDay = !nextBlock && task.allDay !== false && !task.startTime;
+  const isOverdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
+  const busy = shouldProjectAsBusy(task);
+  const body: TaskEventBody = busy
+    ? {
+        summary: "Busy",
+        description: "",
+        transparency: "opaque",
+        visibility: "private",
+        colorId: "8",
+        start: {},
+        end: {},
+      }
+    : {
+        summary: gcalTaskSummary(task, today),
+        description: task.description || "",
+        // 11 = tomato (overdue), 10 = basil (done), 9 = blueberry (normal)
+        colorId: isOverdue ? "11" : task.status === "done" ? "10" : "9",
+        start: {},
+        end: {},
+      };
+  if (isAllDay) {
+    // The last day shown is the due date; Google's all-day end is exclusive, hence the extra day.
+    const lastDay =
+      !nextBlock && task.dueDate && task.dueDate > eventDate ? task.dueDate : eventDate;
+    body.start = { date: eventDate };
+    body.end = { date: nextDateISO(lastDay) };
+  } else {
+    body.start = { dateTime: `${eventDate}T${startTime || "09:00"}:00`, timeZone };
+    body.end = { dateTime: `${eventDate}T${endTime || "10:00"}:00`, timeZone };
+  }
+  if (task.recurring && task.recurringInterval && rrule) body.recurrence = [rrule];
+  return body;
+}
+
+export async function pushTasksToGCal(tasks: PushableTask[]): Promise<Map<string, string>> {
   const { toRRule } = await import("@/lib/recurrence");
   const results = new Map<string, string>();
   const today = localTodayISO();
@@ -443,46 +519,8 @@ export async function pushTasksToGCal(
     if (task.deletedAt) continue;
 
     try {
-      // Time allocation comes from the next open work block when one exists;
-      // the deadline is shown in the title, never used to place a block.
-      const nextBlock = [...(task.blocks ?? [])]
-        .filter((b) => !b.done)
-        .sort((a, b) => `${a.date}${a.start}`.localeCompare(`${b.date}${b.start}`))[0];
-      const eventDate = nextBlock?.date || task.startDate || task.dueDate || today;
-      const startTime = nextBlock?.start ?? task.startTime;
-      const endTime = nextBlock?.end ?? task.endTime;
-      const isAllDay = !nextBlock && task.allDay !== false && !task.startTime;
-      const isOverdue = task.status !== "done" && !!task.dueDate && task.dueDate < today;
-      const busy = shouldProjectAsBusy(task);
-      const eventBody: any = busy
-        ? {
-            summary: "Busy",
-            description: "",
-            transparency: "opaque",
-            visibility: "private",
-            colorId: "8",
-          }
-        : {
-            summary: gcalTaskSummary(task),
-            description: task.description || "",
-            // 11 = tomato (overdue), 10 = basil (done), 9 = blueberry (normal)
-            colorId: isOverdue ? "11" : task.status === "done" ? "10" : "9",
-          };
-      if (isAllDay) {
-        eventBody.start = { date: eventDate };
-        eventBody.end = { date: nextDateISO(eventDate) };
-      } else {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-        eventBody.start = {
-          dateTime: `${eventDate}T${startTime || "09:00"}:00`,
-          timeZone: tz,
-        };
-        eventBody.end = { dateTime: `${eventDate}T${endTime || "10:00"}:00`, timeZone: tz };
-      }
-      if (task.recurring && task.recurringInterval) {
-        const rrule = toRRule(task as any);
-        if (rrule) eventBody.recurrence = [rrule];
-      }
+      const rrule = task.recurring && task.recurringInterval ? toRRule(task as any) : null;
+      const eventBody = buildTaskEventBody(task, today, rrule);
       const deterministicId = taskIdToGCalId(task.id);
       const created = await createGCalEvent("primary", eventBody, deterministicId);
       if (created?.id) results.set(task.id, created.id);
