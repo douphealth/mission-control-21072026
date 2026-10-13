@@ -1,0 +1,30 @@
+{
+  "sha256": "4dd1a82f291f7953b20726ac9e8a028ab01da135635e619c57002a074232064b",
+  "base_commit": "f2833e43f5cb00862478e459dca901c581ca3575",
+  "bytes": 145540,
+  "parts": 3,
+  "paths": [
+    ".github/workflows/application-quality.yml",
+    "scripts/application-quality.mjs",
+    "scripts/library-quality.mjs",
+    "src/components/CommandPalette.tsx",
+    "src/components/LibraryPage.tsx",
+    "src/components/MobileBottomNav.tsx",
+    "src/components/Sidebar.tsx",
+    "src/components/TopBar.tsx",
+    "src/hooks/useTableData.ts",
+    "src/layouts/DashboardLayout.tsx",
+    "src/lib/__tests__/library-import.test.ts",
+    "src/lib/credentialImport.ts",
+    "src/lib/db.ts",
+    "src/lib/dedup.ts",
+    "src/lib/libraryIntake.ts",
+    "src/lib/repoCatalog.ts",
+    "src/pages/AIPromptsPage.tsx",
+    "src/pages/AppsFunnelsPage.tsx",
+    "src/pages/CredentialsPage.tsx",
+    "src/pages/GitHubPage.tsx",
+    "src/pages/LinksPage.tsx",
+    "src/stores/dataStore.ts"
+  ]
+}
