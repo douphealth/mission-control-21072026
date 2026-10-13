@@ -29,7 +29,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
   const rows = useMemo(() => (mode === "prompts" ? prompts : links).map(row => {
     // Project legacy audit lines into structured display fields without
     // rewriting or mutating the actual stored records.
-    let projected = row;
+    let projected: Record<string, unknown> = { ...row };
     if (mode === "links") {
       try { projected = { ...row, ...normalizeLibraryRecord("links", row) }; }
       catch { /* Malformed legacy links remain recoverable via Edit. */ }
