@@ -1,0 +1,28 @@
+name: Wire reviewed bulk intake repair
+on:
+  push:
+    branches: [fix/bulk-import-formats-20261013]
+    paths: ['.github/workflows/intake-wire.yml']
+permissions:
+  contents: write
+jobs:
+  wire:
+    if: github.ref == 'refs/heads/fix/bulk-import-formats-20261013'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply source-only wiring
+        run: |
+          python3 .maintenance/wire-intake.py
+          node --check scripts/intake-quality.mjs
+          node --check scripts/library-quality.mjs
+          git diff --check
+          git add src/components/LibraryPage.tsx src/pages/CredentialsPage.tsx src/lib/credentialBulk.ts scripts/library-quality.mjs
+          git rm .maintenance/wire-intake.py
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: connect mapped bulk intake and non-destructive prompt splitting'
+          git push origin HEAD:refs/heads/fix/bulk-import-formats-20261013
