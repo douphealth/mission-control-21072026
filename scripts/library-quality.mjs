@@ -103,13 +103,14 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
       const exported = JSON.parse(await readFile(filePath, 'utf8'));
       assert.equal(exported.prompts.length, 1); assert.equal(exported.prompts[0].content, original);
     });
-    await check('Import errors and storage failures preserve drafts and block partial saves', async () => {
+    await check('Import errors require explicit opt-in and storage failures retain drafts', async () => {
       await go('links'); await page.getByRole('button', { name: 'Bulk add', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Bulk add links' });
       const box = dialog.getByRole('textbox', { name: 'Bulk library input' });
       await box.fill('[{"url":"https://example.com/valid"},{"url":"javascript:x"}]');
       await dialog.getByRole('button', { name: 'Preview entries' }).click();
-      assert(await dialog.getByRole('button', { name: 'Save batch' }).isDisabled());
+      await dialog.getByText('1 valid entries; 1 errors').waitFor();
+      assert(await dialog.getByRole('button', { name: /^Save (?:batch|\d+ valid entries)$/ }).isDisabled());
       const raw = `https://example.com/qa-failure-${Date.now()}`;
       await box.fill(raw); await dialog.getByRole('button', { name: 'Preview entries' }).click();
       await page.evaluate(async () => { const { useDataStore } = await import('/src/stores/dataStore.ts'); window.__libraryBulk = useDataStore.getState().bulkAddItems; useDataStore.setState({ bulkAddItems: async () => { throw new Error('Synthetic storage failure'); } }); });
@@ -120,6 +121,7 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
       await page.evaluate(async () => { const { useDataStore } = await import('/src/stores/dataStore.ts'); useDataStore.setState({ bulkAddItems: window.__libraryBulk }); delete window.__libraryBulk; });
       await dialog.getByRole('button', { name: 'Close', exact: true }).first().click();
     });
+    await (await import('./intake-quality.mjs')).runIntakeChecks(page, check, engine);
     await check('Libraries persist across reload and fit mobile; screenshots', async () => {
       await page.reload({ waitUntil: 'domcontentloaded' }); await page.locator('#main-content').waitFor(); await go('ai-prompts');
       await page.getByRole('textbox', { name: 'Search library' }).fill(promptTitle);

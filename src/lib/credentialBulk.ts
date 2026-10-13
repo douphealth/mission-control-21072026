@@ -86,7 +86,7 @@ const PROVIDER_RULES: ProviderRule[] = [
   {
     provider: "OpenAI",
     category: "AI Tools",
-    pattern: /^sk-(?:proj-|svcacct-)?[A-Za-z0-9_-]{16,}$/,
+    pattern: /^sk-(?:proj-|svcacct-)[A-Za-z0-9_-]{16,}$/,
     reason: "OpenAI-style key prefix",
   },
   {
@@ -314,8 +314,12 @@ function makeDraft(value: Partial<CredentialDraft>, fallbackLabel = ""): Credent
   const url = normalizeUrl(String(value.url || ""));
   let password = String(value.password || "");
   let apiKey = String(value.apiKey || "");
-  const notes = String(value.notes || "").trim();
+  let notes = String(value.notes || "").trim();
   let category = normalizeCategory(value.category);
+  if (/^(?:\d{1,2}[/.-]\d{1,2}[/.-]\d{2,4}|\d{4}-\d{2}-\d{2})$/.test(category)) {
+    notes = [notes, `Imported date: ${category}`].filter(Boolean).join("\n");
+    category = DEFAULT_CATEGORY;
+  }
   let tags = normalizeTags(value.tags) || [];
 
   const context = [label, service, url, notes].filter(Boolean).join(" ");

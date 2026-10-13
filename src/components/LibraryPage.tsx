@@ -1,10 +1,11 @@
+import BulkIntakeModal from "./BulkIntakeModal";
 import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from "react";
 import { BookOpen, Link2, Plus, Upload, Download, Search, Copy, Pin, Archive, Edit2, Trash2, ArrowUpRight, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
 import { useAIPrompts, useLinks, useAddItem, useUpdateItem, useDeleteItem, useBulkAddItems, useBulkPatch } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { inferredLinkKind, libraryTags, normalizeLibraryRecord, parseLibraryIntake, promptVariables, renderPrompt, safeLibraryUrl, LIBRARY_TEXT_LIMIT, type LibraryMode, type LibraryRecord, type IntakeResult } from "@/lib/libraryIntake";
+import { inferredLinkKind, libraryTags, normalizeLibraryRecord, promptVariables, renderPrompt, safeLibraryUrl, type LibraryMode, type LibraryRecord } from "@/lib/libraryIntake";
 
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-secondary disabled:opacity-50";
 const primary = `${button} bg-primary text-primary-foreground hover:opacity-90`;
@@ -32,14 +33,13 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
   const [network, setNetwork] = useState(""); const [website, setWebsite] = useState("");
   const [page, setPage] = useState(0); const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<LibraryRecord | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false); const [raw, setRaw] = useState("");
-  const [preview, setPreview] = useState<IntakeResult | null>(null);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [splitSource, setSplitSource] = useState<Row | null>(null);
   const [busy, setBusy] = useState(false); const lock = useRef(false);
   const [message, setMessage] = useState("");
   const [usePrompt, setUsePrompt] = useState<Row | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const filters = useMemo(() => ({
     categories: [...new Set(rows.map(row => row.category).filter(Boolean))].sort() as string[],
     tags: [...new Set(rows.flatMap(row => row.tags || []))].sort(),
@@ -77,14 +77,6 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
       setEditor(null); toast.success(`${mode === "prompts" ? "Prompt" : "Link"} saved`);
     });
   }
-  function importRows() {
-    if (!preview || preview.errors.length || !preview.rows.length) return;
-    void operation(async () => {
-      const result = await bulkAdd(table, preview.rows as any[]);
-      setBulkOpen(false); setRaw(""); setPreview(null);
-      toast.success("Import saved", { description: `${result.created} added; ${result.updated} enriched; ${result.skipped} unchanged/combined. No existing values overwritten.` });
-    });
-  }
   function exportRows() {
     const content = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), [mode]: filtered }, null, 2);
     const url = URL.createObjectURL(new Blob([content], { type: "application/json" }));
@@ -113,7 +105,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <p className="text-sm leading-relaxed text-muted-foreground">{mode === "prompts" ? "Save once. Find, adapt and reuse. Original text stays intact; titles, categories and template fields are suggested locally." : "Your tools, resources and affiliate links, together. Tracking parameters stay untouched. Filter by website, network and tags."}</p>
         </div>
         <div className="flex flex-wrap gap-2"><button className={button} onClick={exportRows} disabled={!filtered.length}><Download size={16} />Export view</button>
-          <button className={button} onClick={() => { setBulkOpen(true); setMessage(""); }}><Upload size={16} />Bulk add</button>
+          <button className={button} onClick={() => { setSplitSource(null); setBulkOpen(true); setMessage(""); }}><Upload size={16} />Bulk add</button>
           <button className={primary} onClick={() => { setEditor({ kind: mode === "prompts" ? "ai-prompt" : kind === "affiliate" ? "affiliate" : "standard", title: "", status: "active" }); setMessage(""); }}><Plus size={16} />New {noun}</button>
         </div>
       </header>
@@ -146,6 +138,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <div className="mt-4 flex flex-wrap gap-2">
             <button className={primary} onClick={() => mode === "prompts" ? (setVariables({}), setUsePrompt(row)) : void copy(row.url || "")}><Copy size={15} />{mode === "prompts" ? "Use prompt" : "Copy URL"}</button>
             {mode === "links" && <button className={button} onClick={() => { try { window.open(safeLibraryUrl(row.url), "_blank", "noopener,noreferrer"); } catch (error) { toast.error(errorText(error)); } }}><ArrowUpRight size={15} />Open</button>}
+            {mode === "prompts" && <button className={button} onClick={() => { setSplitSource(row); setBulkOpen(true); }}>Split entry</button>}
             <button className={button} onClick={() => { setEditor({ ...row, kind: mode === "prompts" ? "ai-prompt" : inferredLinkKind(row as any) }); setMessage(""); }}><Edit2 size={15} />Edit</button>
             <button className={button} disabled={busy} aria-label={`${row.status === "archived" ? "Restore" : "Archive"} ${row.title}`} onClick={() => void operation(async () => { await updateItem<Row>(table, row.id, { status: row.status === "archived" ? "active" : "archived" }); })}><Archive size={15} /></button>
             <button className={button} disabled={busy} aria-label={`Delete ${row.title}`} onClick={() => setDeleteTarget(row)}><Trash2 size={15} /></button>
@@ -168,26 +161,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <div className="flex shrink-0 justify-end gap-2 border-t border-border pt-3"><button disabled={busy} className={button} onClick={() => setEditor(null)}>Cancel</button><button disabled={busy} className={primary} onClick={saveEditor}>{busy ? "Saving..." : `Save ${noun}`}</button></div>
         </DialogContent>
       </Dialog>
-      <Dialog open={bulkOpen} onOpenChange={open => { if (!lock.current) setBulkOpen(open); }}>
-        <DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] flex-col gap-4 overflow-hidden rounded-2xl sm:max-w-3xl">
-          <DialogTitle>Bulk add {mode === "prompts" ? "AI prompts" : "links"}</DialogTitle><DialogDescription>{mode === "prompts" ? "Paste JSON/CSV with title and content, or separate complete prompts with a line containing ---PROMPT---. Blank lines and numbered instructions stay together." : "Paste one URL per line, Markdown links, or CSV/TSV/JSON with title, url, kind, merchant, network, website, tags and trackingId."} Up to 1,000 entries / 1 MB.</DialogDescription>
-          <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
-            <input ref={fileRef} className="hidden" type="file" accept=".json,.csv,.tsv,.txt" onChange={event => { const file = event.target.files?.[0]; if (!file) return; if (file.size > LIBRARY_TEXT_LIMIT) { setMessage("Choose a file smaller than 1 MB."); return; } void file.text().then(value => { setRaw(value); setPreview(null); setMessage(""); }).catch(() => setMessage("The file could not be read.")); event.target.value = ""; }} />
-            <button className={button} disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={15} />Choose file</button>
-            <textarea aria-label="Bulk library input" className={`${input} min-h-48 font-mono`} value={raw} disabled={busy} onChange={event => { setRaw(event.target.value); setPreview(null); setMessage(""); }} />
-            {mode === "links" && <p className="text-xs text-muted-foreground">Possible affiliate links are labeled from URL signals; review the classification. Existing attribution, including Amazon tags, is never replaced with papalex-20 automatically.</p>}
-            <button className={button} disabled={busy || !raw.trim()} onClick={() => setPreview(parseLibraryIntake(mode, raw))}>Preview entries</button>
-            {preview && <div className="space-y-2" aria-live="polite"><strong className="text-sm">{preview.rows.length} valid entries; {preview.errors.length} errors</strong>
-              {preview.errors.slice(0, 20).map((error, i) => <p key={i} className="text-sm text-destructive">{error}</p>)}
-              <div className="max-h-52 overflow-y-auto divide-y divide-border rounded-xl border border-border">{preview.rows.slice(0, 50).map((row, i) => <div key={i} className="p-3"><strong className="text-sm">{i + 1}. {row.title}</strong><p className="truncate text-xs text-muted-foreground">{mode === "prompts" ? `${row.category} / ${row.model} / ${row.content?.length} characters` : row.url}</p></div>)}</div>
-              {preview.rows.length > 50 && <p className="text-xs">First 50 shown; all valid entries are included in the save.</p>}
-              <p className="text-xs text-muted-foreground">Preview makes no database changes. Exact duplicates are combined; existing nonempty values are preserved. Any error blocks the entire batch.</p>
-            </div>}
-            {message && <p role="alert" className="text-sm text-destructive">{message}</p>}
-          </div>
-          <div className="flex shrink-0 justify-end gap-2 border-t border-border pt-3"><button disabled={busy} className={button} onClick={() => setBulkOpen(false)}>Close</button><button className={primary} disabled={busy || !preview?.rows.length || !!preview.errors.length} onClick={importRows}>{busy ? "Saving batch..." : "Save batch"}</button></div>
-        </DialogContent>
-      </Dialog>
+      <BulkIntakeModal mode={mode} open={bulkOpen} onClose={() => setBulkOpen(false)} source={splitSource} onImport={entries => bulkAdd(table, entries as any[])} />
       <Dialog open={!!usePrompt} onOpenChange={open => { if (!open) setUsePrompt(null); }}><DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl sm:max-w-3xl"><DialogTitle>{usePrompt?.title}</DialogTitle><DialogDescription>Fill template fields locally. The saved original is not modified.</DialogDescription>
         <div className="min-h-0 space-y-3 overflow-y-auto">{promptVariables(usePrompt?.content || "").map(name => <Field key={name} label={name}><textarea className={input} value={Object.hasOwn(variables, name) ? variables[name] : ""} onChange={event => setVariables({ ...variables, [name]: event.target.value })} /></Field>)}
           <textarea aria-label="Prompt preview" readOnly className={`${input} min-h-56 font-mono`} value={renderPrompt(usePrompt?.content || "", variables)} /></div>
