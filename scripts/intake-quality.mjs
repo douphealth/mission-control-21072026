@@ -24,8 +24,8 @@ export async function runIntakeChecks(page, check, engine) {
     const box = dialog.getByRole('textbox', { name: 'Bulk library input' }); await box.fill(raw);
     await dialog.getByRole('button', { name: 'Preview entries' }).click(); await dialog.getByText('1 valid entries; 1 errors').waitFor();
     const save = dialog.getByRole('button', { name: 'Save 1 valid entries', exact: true }); assert(await save.isDisabled());
-    const details = dialog.locator('details').filter({ has: dialog.getByText('Column mapping (13 columns)', { exact: true }) });
-    if (!(await details.getAttribute('open'))) await details.locator('summary').first().click();
+    const details = dialog.locator('details').filter({ hasText: 'Column mapping (13 columns)' });
+    if (!(await details.evaluate(element => element.open))) await details.locator('summary').first().click();
     assert(await dialog.getByRole('combobox', { name: 'Column 13 mapping', exact: true }).isDisabled());
     await dialog.getByRole('checkbox', { name: /Import valid rows only/ }).check(); await save.click();
     await dialog.getByRole('status').filter({ hasText: 'Selected entries were saved' }).waitFor();
@@ -89,7 +89,7 @@ export async function runIntakeChecks(page, check, engine) {
     const content = `Prompt 1: ${title} SEO\nYou are an SEO expert.\n\nPrompt 2: ${title} Code\nAct as a Python reviewer.`;
     const id = await page.evaluate(async ({ title, content }) => (await import('/src/stores/dataStore.ts')).useDataStore.getState().addItem('notes', { title, content, kind: 'ai-prompt', category: 'General', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), pinned: false, color: 'emerald' }), { title, content });
     await go('ai-prompts'); await page.getByRole('textbox', { name: 'Search library' }).fill(title);
-    await page.getByRole('button', { name: 'Split entry', exact: true }).click();
+    await page.locator('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).getByRole('button', { name: 'Split entry', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Bulk add AI prompts' });
     await dialog.getByRole('button', { name: 'Preview entries' }).click(); await dialog.getByText('2 valid entries; 0 errors').waitFor();
     await dialog.getByRole('button', { name: 'Save batch', exact: true }).click(); await dialog.waitFor({ state: 'hidden' });

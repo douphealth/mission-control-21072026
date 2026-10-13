@@ -125,7 +125,7 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
     await check('Libraries persist across reload and fit mobile; screenshots', async () => {
       await page.reload({ waitUntil: 'domcontentloaded' }); await page.locator('#main-content').waitFor(); await go('ai-prompts');
       await page.getByRole('textbox', { name: 'Search library' }).fill(promptTitle);
-      await page.getByRole('button', { name: 'Use prompt', exact: true }).waitFor();
+      await page.locator('article').filter({ has: page.getByRole('heading', { name: promptTitle, exact: true }) }).getByRole('button', { name: 'Use prompt', exact: true }).waitFor();
       for (const width of [390, 1440]) {
         await page.setViewportSize({ width, height: 950 }); await page.waitForTimeout(200);
         const fits = await page.locator('[data-testid="library-prompts"]').evaluate(el => el.scrollWidth <= el.clientWidth + 2);
