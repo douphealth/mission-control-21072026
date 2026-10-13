@@ -14,6 +14,28 @@ describe("real-world credential clipboard formats (synthetic records only)", () 
     expect(result.rows[0].notes).toContain("Date: 22/4/2020"); expect(result.rows[0].notes).toContain("Useful description");
     expect(result.issues[0].line).toBe(11); expect(JSON.stringify(result.issues)).not.toContain("fixture-");
   });
+  it("does not discard a data-like first row as headings or show its secrets in column labels", () => {
+    const fixture = [
+      ["Ollama","Ollama","ollama.example","fixture@example.com","gmail login","","6/2/2026","","","Ollama API Key","syntheticKey_0123456789abcdef9876543210"],
+      ["Other","Other","other.example","other@example.com","gmail login","","6/2/2026","","","",""],
+    ].map(row => row.join("\t")).join("\n");
+    const safe = previewBulkIntake("credentials", fixture);
+    expect(safe.table?.hasHeader).toBe(false);
+    expect(safe.table?.needsReview).toBe(true);
+    expect(safe.rows).toHaveLength(2);
+    expect(safe.rows[0].apiKey).toBe("syntheticKey_0123456789abcdef9876543210");
+    expect(safe.rows[0].notes).not.toContain("syntheticKey_");
+    const incorrect = previewBulkIntake("credentials", fixture, { hasHeader: true });
+    expect(incorrect.table?.suspectedDataHeader).toBe(true);
+    expect(JSON.stringify(incorrect.table)).not.toContain("syntheticKey_");
+    expect(incorrect.warnings.join(" ")).toContain("Use first row as data");
+  });
+  it("rejects an unknown opaque secret field rather than silently losing it", () => {
+    const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\ta@example.com\tfixture\t\t22/4/2020\tUseful note\tsyntheticSecret_1234567890abcdef");
+    expect(result.issues).toHaveLength(1);
+    expect(result.issues[0].message).toContain("Column 9");
+    expect(JSON.stringify(result.issues)).not.toContain("syntheticSecret_");
+  });
   it("recognizes headerless dates rather than placing them in categories", () => {
     const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\tperson@example.com\tfixture\t\t22/4/2020\tUseful note");
     expect(result.rows[0]).toMatchObject({ category: "General", password: "fixture", label: "Tool" });
@@ -101,6 +123,23 @@ describe("prompt collection boundaries", () => {
     expect(result.issues).toEqual([]); expect(result.rows).toHaveLength(12);
     expect(result.rows[0].category).toBe("SEO & content"); expect(result.rows[1].category).toBe("Development");
     expect(result.rows.map(r => r.content).join("")).toBe(raw);
+  });
+  it("splits repeated standalone role-led prompts", () => {
+    const raw = Array.from({ length: 10 }, (_, i) =>
+      "You are an expert in " + (i % 2 ? "Python debugging" : "SEO planning") +
+      ".\nReview evidence carefully, recommend actionable improvements, and explain the precise steps for case " + (i + 1) + "."
+    ).join("\n\n");
+    const result = previewBulkIntake("prompts", raw);
+    expect(result.rows).toHaveLength(10);
+    expect(result.splitMethod).toBe("standalone instructions");
+    expect(result.rows.map(row => row.content).join("")).toBe(raw);
+  });
+  it("splits independent long descriptive headings without requiring role boilerplate", () => {
+    const long = "Examine evidence, identify risks, provide actionable instructions, explain reasoning and present a detailed deliverable. ".repeat(2);
+    const raw = "## SEO keyword research\n" + long + "\n\n## Python debugging checklist\n" + long;
+    const result = previewBulkIntake("prompts", raw);
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows.map(row => row.content).join("")).toBe(raw);
   });
   it("recognizes numbered titles without splitting nested numbered steps", () => {
     const raw = "1. **SEO audit**\nYou are an SEO analyst.\n1. Read.\n2. Explain.\n\n2. **Python review**\nAct as a code reviewer.\n1. Read code.\n2. Explain.";

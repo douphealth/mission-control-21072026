@@ -12,7 +12,7 @@ const internalTitle = /^(?:role|context|instructions?|steps?|requirements?|const
 
 /** Read boundaries without modifying the original instructions. Code fences are never boundaries. */
 export function splitPromptCollection(input: string, rule: PromptSplitRule = "auto") {
-  const labels: Marker[] = [], headings: Marker[] = [], numbers: Marker[] = [], separators: Marker[] = [];
+  const labels: Marker[] = [], headings: Marker[] = [], numbers: Marker[] = [], separators: Marker[] = [], standaloneInstructions: Marker[] = [];
   let offset = 0, fence = "", fenceLength = 0;
   for (const raw of input.match(/[^\r\n]*(?:\r\n|\r|\n|$)/g) || []) {
     if (!raw) continue;
@@ -21,6 +21,10 @@ export function splitPromptCollection(input: string, rule: PromptSplitRule = "au
     if (fenced) { if (!fence) { fence = fenced[1][0]; fenceLength = fenced[1].length; } else if (fenced[1][0] === fence && fenced[1].length >= fenceLength) fence = ""; continue; }
     if (fence) continue;
     const clean = cleanTitle(text.trim());
+    // Repeated role-led blocks separated by blank lines can represent distinct
+    // unlabeled prompts; preserve their complete wording and code-fence exclusion.
+    if (/^\S/.test(text) && roleStart.test(clean) && (start === 0 || /(?:\r?\n){2}\s*$/.test(input.slice(0, start))))
+      standaloneInstructions.push({ start, end: start, title: clean.slice(0, 100), level: 0 });
     if (/^---\s*PROMPT\s*---$/i.test(clean)) { separators.push({ start, end: offset, title: "", level: 0 }); continue; }
     const label = clean.replace(/^\d+[.)]\s*/, "").replace(/^\*\*/, "").match(/^(?:ai\s+)?prompt\s*(?:#?\s*(\d+)\s*(?:[:.)\-\u2013\u2014]\s*)?|[:\-\u2013\u2014]\s*)(.*)$/i);
     if (label) labels.push({ start, end: offset, title: label[2].replace(/\*\*$/, "").trim() || `Prompt ${label[1] || labels.length + 1}`, level: 0 });
@@ -33,7 +37,16 @@ export function splitPromptCollection(input: string, rule: PromptSplitRule = "au
   const bodyStartsIndependently = (marker: Marker, next?: Marker) => roleStart.test(input.slice(marker.end, next?.start ?? input.length).trimStart());
   const independent = (markers: Marker[]) => markers.length >= 2 && markers.every((marker, i) => !internalTitle.test(marker.title) && bodyStartsIndependently(marker, markers[i + 1]));
   const groups = [...new Set(headings.map(m => m.level))].sort((a, b) => a - b).map(level => headings.filter(m => m.level === level));
-  const topHeadings = groups.find(group => rule === "headings" ? group.length >= 2 : independent(group)) || [];
+  const strongHeadings = (group: Marker[]) => group.length >= 2 && group.every((m, i) => {
+    if (internalTitle.test(m.title)) return false;
+    const body = input.slice(m.end, group[i + 1]?.start ?? input.length);
+    const descriptive = m.title.length >= 8 && /[\p{L}]/u.test(m.title);
+    return bodyStartsIndependently(m, group[i + 1]) || descriptive && body.trim().length >= 140;
+  });
+  const topHeadings = groups.find(group => rule === "headings" ? group.length >= 2 : independent(group) || strongHeadings(group)) || [];
+  const standaloneCollection = standaloneInstructions.length >= 2 && standaloneInstructions.every((marker, i) =>
+    input.slice(marker.start, standaloneInstructions[i + 1]?.start ?? input.length).trim().length >= 75
+  );
   const independentNumbers = numbers.filter((marker, i) => bodyStartsIndependently(marker, numbers[i + 1]));
   const numberedTitles = rule === "numbered" ? numbers : independentNumbers;
   const partition = (markers: Marker[], removeMarkers = false) => {
@@ -51,8 +64,9 @@ export function splitPromptCollection(input: string, rule: PromptSplitRule = "au
   else if (rule !== "single") {
     if (separators.length && (rule === "auto" || rule === "separator")) { parts = partition(separators, true); method = "explicit separators"; }
     else if (labels.length >= 2 && (rule === "auto" || rule === "labels")) { parts = partition(labels); method = "prompt labels"; }
-    else if (topHeadings.length >= 2 && (rule === "headings" || rule === "auto" && independent(topHeadings))) { parts = partition(topHeadings); method = "headings"; }
+    else if (topHeadings.length >= 2 && (rule === "headings" || rule === "auto" && (independent(topHeadings) || strongHeadings(topHeadings)))) { parts = partition(topHeadings); method = "headings"; }
     else if (numberedTitles.length >= 2 && (rule === "numbered" || rule === "auto" && numberedTitles.every((m, i) => m.number === i + 1) && independent(numberedTitles))) { parts = partition(numberedTitles); method = "numbered titles"; }
+    else if (rule === "auto" && standaloneCollection) { parts = partition(standaloneInstructions); method = "standalone instructions"; }
   }
   const warnings = parts.length > 1
     ? [`Detected ${parts.length} separate prompts using ${method}. Review every title and prompt before saving.`]
