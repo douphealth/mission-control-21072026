@@ -60,7 +60,8 @@ function inferColumns(mode: BulkMode, rows: SourceRow[], width: number): string[
     set(0, "label"); if (u >= 2) set(1, "service");
     if (!columns.includes("username") && u >= 0) set(u + 1, "username");
     const account = columns.indexOf("username"); if (account >= 0) set(account + 1, "password");
-    if (u === 2 && width >= 6) { set(1, "service"); set(3, "username"); set(4, "password"); set(5, "apiKey"); for (let i = 7; i < width; i++) set(i, "notes"); }
+    if (u === 2 && width >= 6) { set(1, "service"); set(3, "username"); set(4, "password"); set(5, "apiKey"); set(7, "notes"); // Extra columns require explicit mapping; never guess secrets into notes.
+    }
   }
   return columns;
 }

@@ -131,3 +131,12 @@ describe("prompt collection boundaries", () => {
     expect(roundtrip.rows[0].content).toBe(result.rows[0].content); expect(roundtrip.rows[0].category).toBe("Writing");
   });
 });
+
+it("does not guess undeclared headerless extra fields into unencrypted notes", () => {
+  const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\tperson@example.com\tfixture\t\tGeneral\tPublic note\tprivate-extra-do-not-copy");
+  expect(result.rows).toHaveLength(1);
+  expect(result.rows[0].notes).toBe("Public note");
+  expect(JSON.stringify(result.rows)).not.toContain("private-extra-do-not-copy");
+  expect(result.table?.columns[8]).toBe("__ignore__");
+  expect(result.table?.needsReview).toBe(true);
+});
