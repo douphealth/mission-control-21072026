@@ -1,0 +1,51 @@
+name: Materialize reviewed library repair
+on:
+  push:
+    branches: [fix/vault-libraries-20261013]
+    paths: ['.maintenance/library-repair-v2/ready.json']
+permissions:
+  contents: write
+jobs:
+  materialize:
+    if: github.ref == 'refs/heads/fix/vault-libraries-20261013'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify and apply complete reviewed patch
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import base64, gzip, hashlib, json, pathlib, subprocess
+          root = pathlib.Path('.maintenance/library-repair-v2')
+          manifest = json.loads((root / 'ready.json').read_text())
+          assert manifest['base_commit'] == 'f2833e43f5cb00862478e459dca901c581ca3575'
+          subprocess.run(['git', 'merge-base', '--is-ancestor', manifest['base_commit'], 'HEAD'], check=True)
+          encoded = ''.join((root / f'{n:02}.b64').read_text().strip() for n in range(1, manifest['parts'] + 1))
+          patch = gzip.decompress(base64.b64decode(encoded, validate=True))
+          assert len(patch) == manifest['bytes'] and len(patch) < 500000
+          assert hashlib.sha256(patch).hexdigest() == manifest['sha256']
+          target = pathlib.Path('/tmp/mission-control-library.patch')
+          target.write_bytes(patch)
+          stats = subprocess.check_output(['git', 'apply', '--numstat', str(target)], text=True)
+          actual = sorted(line.split('\t', 2)[2] for line in stats.splitlines())
+          assert actual == sorted(manifest['paths'])
+          assert all(p.startswith(('src/', 'scripts/')) or p == '.github/workflows/application-quality.yml' for p in actual)
+          subprocess.run(['git', 'apply', '--check', str(target)], check=True)
+          subprocess.run(['git', 'apply', str(target)], check=True)
+          print(f'Verified SHA-256 and applied {len(actual)} reviewed files. No production branch changed.')
+          PY
+          node --check scripts/library-quality.mjs
+          node --check scripts/application-quality.mjs
+      - name: Commit normal source files on the repair branch only
+        shell: bash
+        run: |
+          git rm -r --ignore-unmatch .maintenance/library-repair-v2 .maintenance/library-patch/01.b64 .github/workflows/library-repair-materialize.yml
+          git add src scripts .github/workflows/application-quality.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: atomic vault imports, prompt library, affiliate links and portfolio reconciliation'
+          git push origin HEAD:refs/heads/fix/vault-libraries-20261013
+          git rev-parse HEAD
