@@ -30,12 +30,13 @@ async function go(section) {
     const mod = await import('/src/stores/navigationStore.ts');
     mod.useNavigationStore.getState().setActiveSection(id);
   }, section);
-  await page.waitForTimeout(600);
+  await page.waitForFunction(() => { const main = document.getElementById("main-content"); return main && main.innerText.trim().length > 20 && !/Loading Mission Control/.test(main.innerText); }, undefined, { timeout: 20000 });
+  await page.waitForTimeout(300);
 }
 try {
   await page.goto(base, { waitUntil: 'domcontentloaded', timeout: 60000 });
   await page.locator('#main-content').waitFor({ timeout: 60000 });
-  const sections = ['dashboard', 'now', 'tasks', 'calendar', 'projects', 'notes', 'focus', 'review', 'decisions', 'reminders', 'payments', 'habits', 'ideas', 'links', 'websites', 'wp-manage', 'github', 'builds', 'apps-funnels', 'seo', 'industry', 'mentions', 'audience', 'control-center', 'cloudflare', 'vercel', 'google-tasks', 'credentials', 'settings', 'demo'];
+  const sections = ['dashboard', 'now', 'tasks', 'calendar', 'projects', 'notes', 'ai-prompts', 'focus', 'review', 'decisions', 'reminders', 'payments', 'habits', 'ideas', 'links', 'websites', 'wp-manage', 'github', 'builds', 'apps-funnels', 'seo', 'industry', 'mentions', 'audience', 'control-center', 'cloudflare', 'vercel', 'google-tasks', 'credentials', 'settings', 'demo'];
   for (const section of sections) {
     await check(`Workspace renders: ${section}`, async () => {
       const before = pageErrors.length;

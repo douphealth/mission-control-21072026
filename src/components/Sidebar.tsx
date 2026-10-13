@@ -10,6 +10,7 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { usePlanStore } from "@/stores/planStore";
 import { useState } from "react";
 import {
+  BookOpen,
   Home,
   CheckSquare,
   Calendar,
@@ -61,6 +62,7 @@ const navGroups = [
       { id: "projects", label: "Projects", icon: PanelsTopLeft },
       { id: "calendar", label: "Calendar", icon: Calendar },
       { id: "notes", label: "Notes", icon: FileText },
+      { id: "ai-prompts", label: "AI Prompts", icon: BookOpen },
       { id: "demo", label: "Guided Demo", icon: WandSparkles },
     ],
   },
@@ -177,6 +179,7 @@ export default function Sidebar() {
       { id: "reminders", label: "Reminders", icon: Bell },
       { id: "habits", label: "Habits", icon: Flame },
       { id: "notes", label: "Notes", icon: FileText },
+      { id: "ai-prompts", label: "AI Prompts", icon: BookOpen },
       { id: "payments", label: "Finance", icon: DollarSign },
       { id: "ideas", label: "Ideas", icon: Lightbulb },
     ],

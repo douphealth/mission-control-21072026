@@ -65,7 +65,8 @@ export const useRepos = () => useLiveQuery(() => db.repos.toArray(), []) ?? (EMP
 export const useBuildProjects = () =>
   useLiveQuery(() => db.buildProjects.toArray(), []) ?? (EMPTY as BuildProject[]);
 export const useLinks = () => useLiveQuery(() => db.links.toArray(), []) ?? (EMPTY as LinkItem[]);
-export const useNotes = () => useLiveQuery(() => db.notes.toArray(), []) ?? (EMPTY as Note[]);
+export const useNotes = () => useLiveQuery(() => db.notes.filter(note => note.kind !== "ai-prompt").toArray(), []) ?? (EMPTY as Note[]);
+export const useAIPrompts = () => useLiveQuery(() => db.notes.filter(note => note.kind === "ai-prompt").toArray(), []) ?? (EMPTY as Note[]);
 export const usePayments = () =>
   useLiveQuery(() => db.payments.toArray(), []) ?? (EMPTY as Payment[]);
 export const useIdeas = () => useLiveQuery(() => db.ideas.toArray(), []) ?? (EMPTY as Idea[]);

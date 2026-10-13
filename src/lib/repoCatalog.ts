@@ -1,10 +1,13 @@
 import type { GitHubRepo } from "@/lib/db";
 
-export const GITHUB_REPO_CATALOG_GENERATED_AT = "2026-10-01";
+export const GITHUB_REPO_CATALOG_GENERATED_AT = "2026-10-13";
 export const GITHUB_REPO_CATALOG_COUNT = 81;
 
 /**
- * Complete snapshot of every repository currently available to the connected
+ * Account inventory checked 2026-10-13 via the connected GitHub repository list.
+ * Only size, visibility and default branch were refreshed; planning/lastUpdated
+ * fields retain their original dates and are not new technical verification.
+ * Snapshot of every repository available to the connected
  * douphealth GitHub account. Technical fields are refreshed from GitHub while
  * portfolio relationships are layered separately from the control workbook.
  */
@@ -32,7 +35,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Validate this upgrade branch, then merge/deploy after approval. Keep the repo catalog, notes editor, and mobile controls regression-tested.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 3935
+    "repoSizeKb": 4639,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "runmatch-ai-buddy-1282c193",
@@ -57,7 +61,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Validate canonical production route, conversion tracking, affiliate monetization, and the WordPress-to-app funnel.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 112686
+    "repoSizeKb": 116798,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "body-recomp-os-guru-7c1356da",
@@ -82,7 +87,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Validate canonical production domain, Stripe/conversion tracking, and the WordPress landing-page handoff.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1043
+    "repoSizeKb": 1043,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "gearuptofit",
@@ -106,7 +112,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Continue indexation recovery, restore historically valuable URLs, resolve canonical/sitemap/status-code issues, then optimize high-impression pages and monetization.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1669
+    "repoSizeKb": 1669,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "affiliatemarketingforsuccess",
@@ -130,7 +137,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Finish review-post monetization coverage, merchant/affiliate links, product boxes, and underperforming SEO pages.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2164
+    "repoSizeKb": 2164,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "frenchie-care-compass",
@@ -155,7 +163,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Verify paid conversion flow, tracking, and contextual placement on high-intent FrenchyFab pages.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 7249
+    "repoSizeKb": 6782,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "mystic-blueprint-maker",
@@ -180,7 +189,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Tighten website-to-app routing, conversion measurement, and monetization on high-intent numerology pages.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1972
+    "repoSizeKb": 1972,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "plantastichaven",
@@ -204,7 +214,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Prioritize pages already earning impressions, strengthen internal links/intent coverage, and finish trust/about improvements.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1406
+    "repoSizeKb": 1406,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "frenchyfab",
@@ -228,7 +239,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Restore verified WordPress write authentication before direct edits; complete editorial/trust pages and app-to-site monetization flow.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 436
+    "repoSizeKb": 436,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "mice-solver-pro",
@@ -253,7 +265,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Remove fragile persistence dependencies, verify paid flow, and integrate the app into the site's highest-intent pages.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1616
+    "repoSizeKb": 2482,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "micegoneguide",
@@ -277,7 +290,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Remove frozen/fragile Supabase dependency from the app path, verify Stripe flow, and connect the app cleanly to the site funnel.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1333
+    "repoSizeKb": 1334,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "mystical-digits",
@@ -301,7 +315,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Tighten the website-to-life-path-app funnel, measurement, and monetization while improving organic/AI visibility.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 405
+    "repoSizeKb": 405,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "gearuptogrow",
@@ -325,7 +340,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Verify that this repo is the canonical production source, then define the highest-value growth/revenue work instead of parallel prototypes.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1035
+    "repoSizeKb": 1035,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "grow-stack-engine-945df4aa",
@@ -350,7 +366,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm canonical production use, measurement, and the highest-value site-to-app funnel.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 648
+    "repoSizeKb": 648,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "plantastic-haven-pro-8e23ae56",
@@ -375,7 +392,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Connect the app to high-intent plant-care pages and measure conversion from organic traffic.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2027
+    "repoSizeKb": 2038,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "growthscribe-os",
@@ -399,7 +417,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Consolidate the active growth workflow, verify current data connections, and keep write actions guarded.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 746
+    "repoSizeKb": 746,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "runmatch-ai-buddy",
@@ -423,7 +442,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm the canonical repo among duplicate variants, validate production routing, and connect conversion/affiliate measurement.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2997
+    "repoSizeKb": 2997,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "nutri-match-wiz",
@@ -447,7 +467,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm canonical deployment, integrate into GearUpToFit, and add measurement/monetization before further feature expansion.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1229
+    "repoSizeKb": 1229,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "image-alchemy-pro",
@@ -471,7 +492,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production deployment and revenue path, then consolidate any duplicate/experimental image-engine repos.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 462
+    "repoSizeKb": 462,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "affiliatemarketingforsuccess-app",
@@ -495,7 +517,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 156
+    "repoSizeKb": 156,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "gearuptofit-body-recomp-os-guru",
@@ -519,7 +542,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 928
+    "repoSizeKb": 928,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "gearuptofit-homepage",
@@ -543,7 +567,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2181
+    "repoSizeKb": 2181,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "gearuptofit-runmatch-ai-buddy",
@@ -567,7 +592,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2280
+    "repoSizeKb": 2280,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "neural-prompt-coach",
@@ -592,7 +618,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm the canonical production URL, target site/funnel, monetization model, and analytics before promotion.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 792
+    "repoSizeKb": 876,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "form-beauty-studio",
@@ -617,7 +644,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm production conversion path, pricing/monetization, analytics, and canonical repository/domain alignment.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1656
+    "repoSizeKb": 1784,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "traffic-growth-engine",
@@ -641,7 +669,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 649
+    "repoSizeKb": 649,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "claw-skills-hub",
@@ -666,7 +695,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm canonical public domain, consolidate duplicate hub variants, and improve indexation/content architecture.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 4368
+    "repoSizeKb": 4404,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "surgical-seo-suite",
@@ -690,7 +720,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 379
+    "repoSizeKb": 379,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "wise-scribe-engine",
@@ -714,7 +745,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1292
+    "repoSizeKb": 1292,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "amazon-product-box",
@@ -738,7 +770,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1034
+    "repoSizeKb": 1034,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "AmzWP",
@@ -762,7 +795,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2009
+    "repoSizeKb": 2009,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "basic-app-canvas",
@@ -786,7 +820,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1612
+    "repoSizeKb": 1612,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "body-recomp-os-guru",
@@ -810,7 +845,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 777
+    "repoSizeKb": 777,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "claw-compass",
@@ -834,7 +870,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 4600
+    "repoSizeKb": 4600,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "connect-your-code",
@@ -858,7 +895,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 129
+    "repoSizeKb": 129,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "edit-ace-engine",
@@ -882,7 +920,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 435
+    "repoSizeKb": 435,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "efficientgptprompts-emergency-home",
@@ -906,7 +945,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 84
+    "repoSizeKb": 84,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "family-nutrition-os",
@@ -930,7 +970,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 65162
+    "repoSizeKb": 65240,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "gearup-flow-master",
@@ -954,7 +995,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 35458
+    "repoSizeKb": 35458,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "grow-stack-engine",
@@ -978,7 +1020,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 511
+    "repoSizeKb": 511,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "internal-link-automation",
@@ -1002,7 +1045,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 836
+    "repoSizeKb": 836,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "Lovable2WP",
@@ -1026,7 +1070,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 533
+    "repoSizeKb": 533,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "plantastic-haven-pro",
@@ -1050,7 +1095,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 857
+    "repoSizeKb": 857,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "quiz-forge-ai-pro",
@@ -1074,7 +1120,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1403
+    "repoSizeKb": 1403,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "sublime-cherish-zenith",
@@ -1098,7 +1145,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 504
+    "repoSizeKb": 504,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "wrist-wonderland-hub",
@@ -1122,7 +1170,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 3029
+    "repoSizeKb": 3029,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "alexios-hermes-control-plane",
@@ -1146,7 +1195,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm the single canonical live control plane, remove obsolete bot/process paths, and keep execution observable and reversible.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 297
+    "repoSizeKb": 297,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "hermes-agent",
@@ -1170,7 +1220,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm the exact live revision used on the VPS and remove/disable superseded Telegram/WordPress automation paths.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 323990
+    "repoSizeKb": 323990,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "hermes-config-001",
@@ -1195,7 +1246,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Reconcile live VPS configuration with this repo and remove stale/duplicate bot profiles and credentials references.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 18846
+    "repoSizeKb": 18882,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "openclaw-config",
@@ -1219,7 +1271,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 698
+    "repoSizeKb": 698,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "ai-image-engine-001-lovable",
@@ -1244,7 +1297,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 309
+    "repoSizeKb": 309,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "ai-Image-Engine-lovable",
@@ -1269,7 +1323,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 640
+    "repoSizeKb": 640,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "ai-image-engine-love",
@@ -1294,7 +1349,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 113
+    "repoSizeKb": 113,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "ai-seo-orchestrator-001",
@@ -1319,7 +1375,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 265
+    "repoSizeKb": 265,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "ai-seo-orchestrator-001-love",
@@ -1344,7 +1401,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 149
+    "repoSizeKb": 149,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "alexios-mission-control",
@@ -1369,7 +1427,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 1243
+    "repoSizeKb": 1243,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "alexios-mission-control-88d4c83b",
@@ -1394,7 +1453,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1010
+    "repoSizeKb": 1010,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "AmzWP-001",
@@ -1419,7 +1479,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1011
+    "repoSizeKb": 1011,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "AmzWP-004",
@@ -1444,7 +1505,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 623
+    "repoSizeKb": 623,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "AmzWP-006-lovable",
@@ -1469,7 +1531,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 896
+    "repoSizeKb": 896,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "AmzWP-006-love",
@@ -1494,7 +1557,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 914
+    "repoSizeKb": 914,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "body-recomp-os-guru-cb7e904e",
@@ -1519,7 +1583,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 1006
+    "repoSizeKb": 1006,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "goal-forge-ai-love",
@@ -1544,7 +1609,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 101
+    "repoSizeKb": 101,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "grow-stack-engine-4ae1d6eb",
@@ -1569,7 +1635,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 362
+    "repoSizeKb": 362,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "growthscribe-os-1",
@@ -1594,7 +1661,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 982
+    "repoSizeKb": 982,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "internal-link-auto-love",
@@ -1619,7 +1687,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 70
+    "repoSizeKb": 70,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "mission-control-center",
@@ -1644,7 +1713,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 733
+    "repoSizeKb": 733,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "mission-control-center-2d32d572",
@@ -1669,7 +1739,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1074
+    "repoSizeKb": 1074,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "my-new-mission-control-center",
@@ -1694,7 +1765,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1265
+    "repoSizeKb": 1265,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "newAmzWP-006-lovable",
@@ -1719,7 +1791,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 448
+    "repoSizeKb": 448,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "nutri-match-wiz-1eb55346",
@@ -1744,7 +1817,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 607
+    "repoSizeKb": 607,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "openclaw-config-001",
@@ -1769,7 +1843,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 1524
+    "repoSizeKb": 1524,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "runmatch-ai-buddy-c4c42964",
@@ -1794,7 +1869,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 112716
+    "repoSizeKb": 112716,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "social-media-co-pilot-love",
@@ -1819,7 +1895,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 60
+    "repoSizeKb": 60,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "sota-god-mode-003-love",
@@ -1844,7 +1921,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 2661
+    "repoSizeKb": 2661,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "sota-god-mode-014-love",
@@ -1869,7 +1947,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "codex/enhance-design-of-wordpress-content-app",
-    "repoSizeKb": 2077
+    "repoSizeKb": 2077,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "sublime-cherish-zenith-4d8c3c83",
@@ -1894,7 +1973,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 680
+    "repoSizeKb": 680,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "wise-scribe-engine-d79d3d82",
@@ -1919,7 +1999,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 900
+    "repoSizeKb": 900,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "wp-html-snippet-love",
@@ -1944,7 +2025,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 59
+    "repoSizeKb": 59,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "wp-quiz-forge-love",
@@ -1969,7 +2051,8 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "public",
     "defaultBranch": "main",
-    "repoSizeKb": 80
+    "repoSizeKb": 80,
+    "metadataCheckedAt": "2026-10-13"
   },
   {
     "name": "wrist-wonderland-hub-460cce97",
@@ -1994,6 +2077,7 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
     "visibility": "private",
     "defaultBranch": "main",
-    "repoSizeKb": 2983
+    "repoSizeKb": 3281,
+    "metadataCheckedAt": "2026-10-13"
   }
 ];

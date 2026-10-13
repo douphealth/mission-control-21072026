@@ -22,7 +22,8 @@ import type {
 } from "@/lib/db";
 import { markCloudRecordDirty, markCloudRecordsDirty, queueCloudPush } from "@/lib/cloudSync";
 
-import { isDuplicate, deduplicateItems, findDuplicateId } from "@/lib/dedup";
+import { planDeduplicatedImport, type BulkImportResult } from "@/lib/dedup";
+import { prepareCredentialImport } from "@/lib/credentialImport";
 import { markDirty as markVersionsDirty } from "@/lib/versions";
 import { logAudit } from "@/lib/audit";
 import { stripSecretsForExport } from "@/lib/secrets";
@@ -55,7 +56,7 @@ interface DataState {
   ) => Promise<void>;
   deleteItem: (table: string, id: string) => Promise<void>;
   duplicateItem: (table: string, id: string, overrides?: Record<string, any>) => Promise<string>;
-  bulkAddItems: <T extends { id: string }>(table: string, items: Omit<T, "id">[]) => Promise<void>;
+  bulkAddItems: <T extends { id: string }>(table: string, items: Omit<T, "id">[]) => Promise<BulkImportResult>;
   bulkPatch: (table: string, ids: string[], changes: Record<string, any>) => Promise<void>;
   bulkDelete: (table: string, ids: string[]) => Promise<void>;
 
@@ -155,27 +156,12 @@ export const useDataStore = create<DataState>((set, _get) => ({
     table: string,
     item: Omit<T, "id">,
   ): Promise<string> => {
-    const id = genId();
-    const tableRef = getTable(table);
-    if (!tableRef) throw new Error(`Unknown table: ${table}`);
-    // ─── Duplicate check ───────────────────────────────────────────────
-    // Never return an empty id: callers use it to navigate/select. If the
-    // record already exists we hand back the *existing* row's id.
-    if (await isDuplicate(table, item)) {
-      const existingId = await findDuplicateId(table, item);
-      console.warn(`⚠️ Duplicate detected in "${table}", reusing existing record:`, existingId);
-      if (existingId) return existingId;
+    const result = await _get().bulkAddItems(table, [item]);
+    const id = result.ids[0];
+    if (!id) throw new Error("No record was saved.");
+    if (result.created && !AUDIT_SKIP.has(table)) {
+      logAudit({ action: "create", collection: table, recordId: id, label: `${labelOf(item)} (${table})` });
     }
-    await tableRef.put({ ...item, id });
-    if (!AUDIT_SKIP.has(table))
-      logAudit({
-        action: "create",
-        collection: table,
-        recordId: id,
-        label: `${labelOf(item)} (${table})`,
-      });
-    markCloudRecordDirty(table, id);
-    schedulePush();
     return id;
   },
 
@@ -253,34 +239,35 @@ export const useDataStore = create<DataState>((set, _get) => ({
   },
 
   bulkAddItems: async <T extends { id: string }>(
-    table: string,
-    items: Omit<T, "id">[],
-  ): Promise<void> => {
+    table: string, items: Omit<T, "id">[],
+  ): Promise<BulkImportResult> => {
     const tableRef = getTable(table);
     if (!tableRef) throw new Error(`Unknown table: ${table}`);
-    // ─── Deduplicate before inserting ───────────────────────────────────
-    const unique = await deduplicateItems(table, items);
-    if (unique.length === 0) {
-      console.warn(`⚠️ All ${items.length} items in "${table}" are duplicates, skipping bulk add`);
-      return;
+    if (!Array.isArray(items) || items.length > 5000) throw new Error("Import at most 5,000 records at a time.");
+    // Web Crypto must finish BEFORE opening IndexedDB's write transaction.
+    const incoming = table === "credentials"
+      ? await prepareCredentialImport(items as any[], await tableRef.toArray()) : items;
+    notifySaveStatus("saving");
+    try {
+      const plan = await db.transaction("rw", tableRef, async () => {
+        // Re-read under the write lock: concurrent tabs/imports cannot duplicate rows.
+        const staged = planDeduplicatedImport(table, await tableRef.toArray(), incoming);
+        const writes = [...staged.creates, ...staged.updates];
+        if (writes.length) await tableRef.bulkPut(writes);
+        return staged;
+      });
+      const writes = [...plan.creates, ...plan.updates];
+      if (writes.length) {
+        markCloudRecordsDirty(table, writes.map(row => row.id));
+        schedulePush();
+      } else notifySaveStatus("saved");
+      return plan.result;
+    } catch (error) {
+      notifySaveStatus("error");
+      throw error;
     }
-    if (unique.length < items.length) {
-      console.log(
-        `🧹 Dedup: filtered out ${items.length - unique.length} duplicate(s) from "${table}" bulk add`,
-      );
-    }
-    const withIds = unique.map((item) => ({ ...item, id: genId() }));
-    await tableRef.bulkPut(withIds);
-    markCloudRecordsDirty(
-      table,
-      withIds.map((item) => item.id),
-    );
-    schedulePush();
   },
 
-  // ─── Row-level bulk mutations ─────────────────────────────────────────────
-  // Replaces the "read whole array → rewrite whole table" pattern: only the
-  // touched rows are written and only those rows are queued for cloud sync.
   bulkPatch: async (table: string, ids: string[], changes: Record<string, any>): Promise<void> => {
     const tableRef = getTable(table);
     if (!tableRef) throw new Error(`Unknown table: ${table}`);

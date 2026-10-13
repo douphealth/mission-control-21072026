@@ -331,6 +331,7 @@ export interface WorkBlock {
 }
 
 export interface GitHubRepo {
+  metadataCheckedAt?: string;
   id: string;
   name: string;
   url: string;
@@ -408,6 +409,14 @@ export interface BuildProject {
 }
 
 export interface LinkItem {
+  kind?: "standard" | "affiliate";
+  merchant?: string;
+  network?: string;
+  website?: string;
+  campaign?: string;
+  trackingId?: string;
+  commissionNotes?: string;
+  disclosure?: string;
   id: string;
   title: string;
   url: string;
@@ -421,6 +430,11 @@ export interface LinkItem {
 }
 
 export interface Note {
+  kind?: "note" | "ai-prompt";
+  category?: string;
+  model?: string;
+  variables?: string[];
+  status?: "active" | "archived";
   id: string;
   title: string;
   content: string;
