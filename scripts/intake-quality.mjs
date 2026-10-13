@@ -116,4 +116,35 @@ export async function runIntakeChecks(page, check, engine) {
     });
     assert.equal(result.valid, 441); assert.equal(result.unresolved, 5); assert(result.categories); assert(result.elapsedMs < 3000); return result;
   });
+
+  await test('Full 441-row encrypted UI import leaves five invalid rows recoverable', async () => {
+    await go('credentials'); await page.getByRole('button', { name: 'Bulk add', exact: true }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Paste many credentials at once' });
+    const batch = `QA large ${crypto.randomUUID()}`;
+    const lines = ['Account name\tDescription\tLogin URL\tEmail\tPassword\tDate\tNotes'];
+    for (let i = 0; i < 446; i++) lines.push([9, 20, 21, 30, 31].includes(i) ? '\tOnly metadata\t\t\t\t\t' : `${batch} ${i}\tFixture service\thttps://example.com/${i}\tu${i}@example.com\tsynthetic-${i}\t22/4/2020\tRetain this note`);
+    const raw = lines.join('\n');
+    await dialog.getByRole('textbox', { name: 'Bulk credential input' }).fill(raw);
+    await dialog.getByText('441 valid entries; 5 errors').waitFor();
+    const save = dialog.getByRole('button', { name: 'Save 441 valid entries', exact: true });
+    assert(await save.isDisabled());
+    await dialog.getByRole('checkbox', { name: /Import valid rows only/ }).check();
+    assert.equal(await dialog.getByRole('checkbox', { name: /Include entry/ }).count(), 20);
+    const started = Date.now();
+    await save.click();
+    await dialog.getByRole('status').filter({ hasText: 'Selected entries were saved' }).waitFor({ timeout: 120000 });
+    const duration = Date.now() - started;
+    const state = await page.evaluate(async batch => {
+      const { db } = await import('/src/lib/db.ts'); const { decryptOrNull } = await import('/src/lib/encryption.ts');
+      const rows = await db.credentials.filter(row => row.label.startsWith(batch + ' ')).toArray();
+      const first = rows.find(row => row.label === batch + ' 0');
+      return { count: rows.length, ids: new Set(rows.map(row => row.id)).size, encrypted: rows.every(row => row.password.startsWith('mcenc:v2:')), category: rows.every(row => row.category === 'General'), firstDecrypts: await decryptOrNull(first?.password || '') === 'synthetic-0' };
+    }, batch);
+    assert.deepEqual(state, { count: 441, ids: 441, encrypted: true, category: true, firstDecrypts: true });
+    assert.equal(await dialog.getByRole('textbox', { name: 'Bulk credential input' }).inputValue(), raw);
+    assert(await dialog.getByRole('button', { name: 'Selected rows saved' }).isDisabled());
+    await closeDialog(dialog);
+    return { encryptedRows: 441, retainedInvalidRows: 5, saveDurationMs: duration };
+  });
+
 }
