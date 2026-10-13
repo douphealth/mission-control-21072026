@@ -28,6 +28,7 @@ const quickAddItems = [
   { id: "reminders", label: "Reminder", emoji: "⏰" },
   { id: "habits", label: "Habit", emoji: "🔥" },
   { id: "notes", label: "Note", emoji: "📝" },
+  { id: "ai-prompts", label: "AI Prompt", emoji: "\u2728" },
   { id: "ideas", label: "Idea", emoji: "💡" },
   { id: "projects", label: "Project", emoji: "📋" },
   { id: "websites", label: "Website", emoji: "🌐" },

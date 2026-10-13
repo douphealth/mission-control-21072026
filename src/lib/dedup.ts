@@ -4,7 +4,7 @@
 // Two items are considered duplicates if their fingerprints match, regardless of
 // differing IDs (which are randomly generated).
 
-import { db } from "@/lib/db";
+import { db, genId } from "@/lib/db";
 import type {
   Website,
   Task,
@@ -22,7 +22,7 @@ import type {
 // ─── Normalization ──────────────────────────────────────────────────────────────
 
 function norm(s: string | undefined | null): string {
-  return (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+  return String(s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function normUrl(url: string | undefined | null): string {
@@ -71,11 +71,11 @@ function fpBuild(item: Partial<BuildProject>): string {
 }
 
 function fpLink(item: Partial<LinkItem>): string {
-  return `l|${normUrl(item.url)}|${norm(item.title)}`;
+  return `l|${exactLinkKey(item)}`;
 }
 
 function fpNote(item: Partial<Note>): string {
-  return `n|${norm(item.title)}|${norm(item.content)?.slice(0, 100)}`;
+  return JSON.stringify(["notes", (item as any).kind ?? "note", norm(item.title), item.content ?? ""]);
 }
 
 function fpPayment(item: Partial<Payment>): string {
@@ -87,7 +87,7 @@ function fpIdea(item: Partial<Idea>): string {
 }
 
 function fpCredential(item: Partial<CredentialVault>): string {
-  return `c|${norm(item.label)}|${norm(item.service)}|${normUrl(item.url)}`;
+  return credentialIdentity(item);
 }
 
 function fpCustomModule(item: Partial<CustomModule>): string {
@@ -137,58 +137,85 @@ export async function getExistingFingerprints(tableName: string): Promise<Set<st
   return new Set(items.map((item: any) => fp(item)));
 }
 
-/**
- * Filter out items that already exist in the given table — but instead of
- * throwing the duplicate away, fold any extra information it carries into the
- * record that's already stored. Returns only the genuinely new items.
- */
-export async function deduplicateItems<T>(tableName: string, items: T[]): Promise<T[]> {
-  const fp = FINGERPRINT_MAP[tableName];
-  if (!fp) return items; // No fingerprint function = no dedup, pass everything through
+export interface BulkImportResult {
+  created: number;
+  updated: number;
+  skipped: number;
+  ids: string[];
+}
 
-  const tableRef = getTableRef(tableName);
-  const stored: any[] = tableRef ? await tableRef.toArray() : [];
+/** Full URL identity: path case, query values, tracking IDs and fragments matter. */
+export function exactLinkKey(item: Partial<LinkItem>): string {
+  const raw = String(item.url ?? "").trim();
+  let url = raw;
+  try { url = new URL(raw).href; } catch { /* Validation is owned by intake. */ }
+  return JSON.stringify([url, norm((item as any).website)]);
+}
+
+/** Different accounts or labels are not interchangeable vault entries. */
+export function credentialIdentity(item: Partial<CredentialVault>): string {
+  return JSON.stringify(["credentials", norm(item.label), norm(item.service),
+    String(item.url ?? "").trim(), String(item.username ?? "").trim()]);
+}
+
+export function credentialSecretsConflict(a: any, b: any): boolean {
+  return ["password", "apiKey"].some(key => a[key] && b[key] && a[key] !== b[key]);
+}
+
+/** Pure O(n + m) planner. No writes, mutations, or secret values in diagnostics. */
+export function planDeduplicatedImport(
+  tableName: string,
+  stored: any[],
+  incoming: any[],
+  makeId: () => string = genId,
+) {
   const byKey = new Map<string, any>();
+  const creates = new Map<string, any>();
+  const updates = new Map<string, any>();
+  const ids: string[] = [];
   for (const row of stored) {
-    const k = identityKey(tableName, row);
-    if (k && !byKey.has(k)) byKey.set(k, row);
+    const key = identityKey(tableName, row);
+    if (key && !byKey.has(key)) byKey.set(key, row);
   }
-
-  const enriched = new Map<string, any>();
-  const unique: T[] = [];
-
-  for (const item of items) {
-    if (!hasMeaningfulFingerprint(tableName, item)) {
-      unique.push(item);
-      continue;
+  for (const [index, item] of incoming.entries()) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new Error(`Row ${index + 1} must be a record. Nothing was saved.`);
     }
-    const key = identityKey(tableName, item);
-    if (!key) {
-      unique.push(item);
-      continue;
-    }
-
-    const existing = byKey.get(key);
+    const key = hasMeaningfulFingerprint(tableName, item) ? identityKey(tableName, item) : null;
+    const existing = key ? byKey.get(key) : undefined;
     if (existing) {
-      const { merged, changed } = mergeRecords(existing, item as any);
-      if (changed) {
-        byKey.set(key, merged);
-        enriched.set(merged.id, merged);
+      if (tableName === "credentials" && credentialSecretsConflict(existing, item)) {
+        throw new Error(`Credential row ${index + 1} conflicts with an existing secret. Give separate credentials distinct labels, or edit the saved entry. Nothing was saved.`);
       }
-      continue;
+      if (typeof existing.id !== "string" || !existing.id.trim()) {
+        throw new Error("A stored record has an invalid ID. Nothing was saved; restore a verified backup.");
+      }
+      const { merged, changed } = mergeRecords(existing, item);
+      ids.push(existing.id);
+      if (changed) {
+        byKey.set(key!, merged);
+        if (creates.has(existing.id)) creates.set(existing.id, merged);
+        else updates.set(existing.id, merged);
+      }
+    } else {
+      // Allocate the key BEFORE adding a new row to the same-batch identity map.
+      const row = { ...item, id: makeId() };
+      if (!row.id || typeof row.id !== "string") throw new Error("Could not allocate a record ID.");
+      creates.set(row.id, row);
+      ids.push(row.id);
+      if (key) byKey.set(key, row);
     }
-    byKey.set(key, item);
-    unique.push(item);
   }
+  return { creates: [...creates.values()], updates: [...updates.values()],
+    result: { created: creates.size, updated: updates.size,
+      skipped: incoming.length - creates.size - updates.size, ids } satisfies BulkImportResult };
+}
 
-  if (tableRef && enriched.size > 0) {
-    await tableRef.bulkPut([...enriched.values()]);
-    console.log(
-      `🧠 Dedup: enriched ${enriched.size} existing "${tableName}" record(s) with imported details`,
-    );
-  }
-
-  return unique;
+/** Preview only. Enriched records stay in the preview until explicitly committed. */
+export async function deduplicateItems<T>(tableName: string, items: T[]): Promise<T[]> {
+  const tableRef = getTableRef(tableName);
+  const plan = planDeduplicatedImport(tableName, tableRef ? await tableRef.toArray() : [], items);
+  return [...plan.creates, ...plan.updates] as T[];
 }
 
 /**
@@ -227,7 +254,7 @@ function getTableRef(tableName: string) {
 // twice with different names stayed as two rows. Identity keys match on the one
 // thing that really identifies the record, so near-duplicates get merged.
 
-function identityKey(tableName: string, item: any): string | null {
+export function identityKey(tableName: string, item: any): string | null {
   switch (tableName) {
     case "repos": {
       const normalized = normUrl(item?.url);
@@ -243,8 +270,9 @@ function identityKey(tableName: string, item: any): string | null {
       }
       return norm(item?.name) ? `repos|${norm(item.name)}` : null;
     }
-    case "websites":
-    case "links": {
+    case "links":
+      return item?.url ? `links|${exactLinkKey(item)}` : null;
+    case "websites": {
       const host = normUrl(item?.url).split("/")[0];
       return host
         ? `${tableName}|${host}`
@@ -252,13 +280,8 @@ function identityKey(tableName: string, item: any): string | null {
           ? `${tableName}|${norm(item?.name || item?.title)}`
           : null;
     }
-    case "credentials": {
-      const host = normUrl(item?.url).split("/")[0];
-      const svc = norm(item?.service);
-      const user = norm((item as any)?.username);
-      if (host || svc) return `credentials|${host}|${svc}|${user}`;
-      return norm(item?.label) ? `credentials|${norm(item.label)}` : null;
-    }
+    case "credentials":
+      return credentialIdentity(item);
     case "buildProjects":
       return norm(item?.name) ? `buildProjects|${norm(item.name)}` : null;
     default: {
@@ -341,6 +364,8 @@ export function mergeRecords<T extends Record<string, any>>(
  * removed. Returns the number of duplicate rows folded away.
  */
 export async function deduplicateTable(tableName: string): Promise<number> {
+  // Never silently remove vault records during startup, even with matching labels.
+  if (tableName === "credentials") return 0;
   const tableRef = getTableRef(tableName);
   if (!tableRef) return 0;
 
@@ -366,9 +391,11 @@ export async function deduplicateTable(tableName: string): Promise<number> {
     toDelete.push(item.id);
   }
 
-  if (toUpdate.size > 0) await tableRef.bulkPut([...toUpdate.values()]);
+  await db.transaction("rw", tableRef, async () => {
+    if (toUpdate.size > 0) await tableRef.bulkPut([...toUpdate.values()]);
+    if (toDelete.length > 0) await tableRef.bulkDelete(toDelete);
+  });
   if (toDelete.length > 0) {
-    await tableRef.bulkDelete(toDelete);
     console.log(
       `🧹 Dedup: merged ${toDelete.length} duplicate(s) into existing "${tableName}" records`,
     );

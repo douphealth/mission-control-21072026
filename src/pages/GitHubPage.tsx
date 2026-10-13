@@ -1,4 +1,5 @@
-import { useRepos, useUpdateData, useBulkAddItems, useBulkPatch, useAddItem, useUpdateItem } from "@/hooks/useTableData";
+import { db } from "@/lib/db";
+import { useRepos, useBulkDeleteItems, useBulkAddItems, useBulkPatch, useAddItem, useUpdateItem } from "@/hooks/useTableData";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   ExternalLink,
@@ -90,7 +91,7 @@ const emptyRepo: Omit<GitHubRepo, "id"> = {
 
 export default function GitHubPage() {
   const repos = useRepos();
-  const updateData = useUpdateData();
+  const deleteRecords = useBulkDeleteItems();
   const bulkAddItems = useBulkAddItems();
   const bulkPatch = useBulkPatch();
   const addItem = useAddItem();
@@ -111,21 +112,14 @@ export default function GitHubPage() {
 
   useEffect(() => {
     if (catalogSeeded.current) return;
-    const existing = new Set(
-      repos.flatMap((r) => [r.url?.toLowerCase(), r.name?.toLowerCase()].filter(Boolean) as string[]),
-    );
-    const missing = GITHUB_REPO_CATALOG.filter(
-      (r) => !existing.has(r.url.toLowerCase()) && !existing.has(r.name.toLowerCase()),
-    );
     catalogSeeded.current = true;
-    if (missing.length > 0) {
-      void bulkAddItems("repos", missing).catch((error) => {
-        catalogSeeded.current = false;
-        console.error("Could not seed GitHub repository catalog", error);
-        toast.error("Could not load the GitHub repository catalog.");
-      });
-    }
-  }, [repos, bulkAddItems]);
+    void (async () => {
+      const stored = await db.repos.toArray();
+      const existing = new Set(stored.flatMap(repo => [repo.url?.toLowerCase(), repo.name.toLowerCase()].filter(Boolean)));
+      const missing = GITHUB_REPO_CATALOG.filter(repo => !existing.has(repo.url.toLowerCase()) && !existing.has(repo.name.toLowerCase()));
+      if (missing.length) await bulkAddItems("repos", missing);
+    })().catch(() => { catalogSeeded.current = false; toast.error("Could not load the GitHub catalog. Existing records were preserved."); });
+  }, [bulkAddItems]);
 
   useEffect(() => {
     if (catalogSynced.current || repos.length === 0) return;
@@ -135,12 +129,12 @@ export default function GitHubPage() {
     // Only technical catalog metadata is synchronized after seeding.
     // User-managed planning fields (priority, importance, done/pending, status,
     // progress) must remain editable and must never be overwritten on mount.
-    const syncFields = ["visibility", "defaultBranch", "repoSizeKb"] as const;
+    const syncFields = ["visibility", "defaultBranch", "repoSizeKb", "metadataCheckedAt"] as const;
 
     const updates = repos.flatMap((repo) => {
       const catalog =
         catalogByUrl.get(repo.url?.toLowerCase()) ?? catalogByName.get(repo.name.toLowerCase());
-      if (!catalog) return [];
+      if (!catalog || (repo.metadataCheckedAt || "") >= (catalog.metadataCheckedAt || "")) return [];
 
       const patch: Partial<GitHubRepo> = {};
       for (const field of syncFields) {
@@ -163,61 +157,15 @@ export default function GitHubPage() {
     }
   }, [repos, bulkPatch]);
 
-  useEffect(() => {
-    if (canonicalAppsRepaired.current || repos.length === 0) return;
-    const canonicalNames = new Set([
-      "runmatch-ai-buddy-1282c193",
-      "body-recomp-os-guru-7c1356da",
-      "frenchie-care-compass",
-      "mystic-blueprint-maker",
-      "mice-solver-pro",
-      "grow-stack-engine-945df4aa",
-      "plantastic-haven-pro-8e23ae56",
-      "neural-prompt-coach",
-      "form-beauty-studio",
-      "claw-skills-hub",
-    ]);
-    const catalogByName = new Map(GITHUB_REPO_CATALOG.map((item) => [item.name, item]));
-    const repairs = repos.flatMap((local) => {
-      if (!canonicalNames.has(local.name)) return [];
-      const catalog = catalogByName.get(local.name);
-      if (!catalog) return [];
-      const wasLegacyMisclassified =
-        local.priority === "low" || local.topics?.includes("canonical-review");
-      if (!wasLegacyMisclassified) return [];
-      return [{
-        id: local.id,
-        patch: {
-          priority: catalog.priority,
-          importance: catalog.importance,
-          status: catalog.status,
-          demoUrl: catalog.demoUrl,
-          description: catalog.description,
-          doneSummary: catalog.doneSummary,
-          pendingSummary: catalog.pendingSummary,
-          topics: catalog.topics,
-        } as Partial<GitHubRepo>,
-      }];
-    });
-
-    canonicalAppsRepaired.current = true;
-    if (repairs.length > 0) {
-      void Promise.all(repairs.map(({ id, patch }) => bulkPatch("repos", [id], patch))).catch(
-        (error) => {
-          canonicalAppsRepaired.current = false;
-          console.error("Could not repair canonical app repo priorities", error);
-        },
-      );
-    }
-  }, [repos, bulkPatch]);
-
   const displayRepos = useMemo(() => {
     const localByUrl = new Map(repos.map((r) => [r.url?.toLowerCase(), r]));
     const localByName = new Map(repos.map((r) => [r.name.toLowerCase(), r]));
 
-    return GITHUB_REPO_CATALOG.map((catalog, index) => {
+    const matched = new Set<string>();
+    const catalogRows = GITHUB_REPO_CATALOG.map((catalog, index) => {
       const local =
         localByUrl.get(catalog.url.toLowerCase()) ?? localByName.get(catalog.name.toLowerCase());
+      if (local) matched.add(local.id);
       return {
         id: local?.id ?? `catalog-${index}-${catalog.name}`,
         ...catalog,
@@ -229,6 +177,7 @@ export default function GitHubPage() {
         importance: local?.importance ?? catalog.importance,
       } as GitHubRepo;
     });
+    return [...catalogRows, ...repos.filter(repo => !matched.has(repo.id))];
   }, [repos]);
 
   const filtered = useMemo(() => {
@@ -364,23 +313,21 @@ export default function GitHubPage() {
     cd.confirm({
       title: `Delete ${bulk.selectedCount} Repo(s)`,
       description: `This will permanently remove ${bulk.selectedCount} repositories.`,
-      onConfirm: () => {
-        updateData({ repos: repos.filter((r) => !bulk.selectedIds.has(r.id)) });
+      onConfirm: async () => {
+        await deleteRecords("repos", repos.filter(r => bulk.selectedIds.has(r.id)).map(r => r.id));
         toast.success(`${bulk.selectedCount} repos deleted`);
         bulk.clearSelection();
       },
     });
-  }, [bulk, repos, updateData, cd]);
+  }, [bulk, repos, deleteRecords, cd]);
 
   const bulkUpdateStatus = useCallback(
-    (status: string) => {
-      updateData({
-        repos: repos.map((r) => (bulk.selectedIds.has(r.id) ? { ...r, status: status as any } : r)),
-      });
+    async (status: string) => {
+      await bulkPatch("repos", repos.filter(r => bulk.selectedIds.has(r.id)).map(r => r.id), { status });
       toast.success(`${bulk.selectedCount} repos updated`);
       bulk.clearSelection();
     },
-    [bulk, repos, updateData],
+    [bulk, repos, bulkPatch],
   );
 
   return (
@@ -396,13 +343,13 @@ export default function GitHubPage() {
               GitHub Projects
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {GITHUB_REPO_CATALOG_COUNT}/{GITHUB_REPO_CATALOG_COUNT} live-account repositories reconciled · production relationships and URLs layered from the portfolio control workbook.
+              {GITHUB_REPO_CATALOG_COUNT} catalog repositories checked on {GITHUB_REPO_CATALOG_GENERATED_AT} · production relationships and URLs layered from the portfolio control workbook.
             </p>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {[
               { label: "Repos", value: portfolioStats.total },
-              { label: "Live apps", value: portfolioStats.live },
+              { label: "App URLs", value: portfolioStats.live },
               { label: "Site core", value: portfolioStats.core },
               { label: "Origin gaps", value: portfolioStats.origin },
               { label: "Repo only", value: portfolioStats.repoOnly },
@@ -422,7 +369,7 @@ export default function GitHubPage() {
             <CheckSquare size={14} /> {bulk.bulkMode ? "Exit bulk mode" : "Bulk edit"}
           </button>
           <span className="rounded-xl border border-success/15 bg-success/8 px-3 py-2 text-[10px] font-bold text-success">
-            {GITHUB_REPO_CATALOG_COUNT}/{GITHUB_REPO_CATALOG_COUNT} LIVE ACCOUNT REPOS
+            {GITHUB_REPO_CATALOG_COUNT} SNAPSHOT REPOSITORIES
           </span>
           <span className="rounded-xl border border-border/30 bg-secondary/40 px-3 py-2 text-[10px] font-semibold text-muted-foreground">
             GitHub technical snapshot {GITHUB_REPO_CATALOG_GENERATED_AT}

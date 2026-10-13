@@ -20,6 +20,7 @@ jobs:
           node --check scripts/application-quality.mjs
           node --check scripts/version-quality.mjs
           node --check scripts/browser-reliability.mjs
+          node --check scripts/library-quality.mjs
       - name: Capture source and tested commit
         run: |
           mkdir -p quality-artifacts
@@ -38,7 +39,7 @@ jobs:
       - run: bun run build:cloudflare
       - name: Install real browsers
         run: bunx playwright install --with-deps chromium webkit
-      - name: Run isolated application, backup and editor checks
+      - name: Run isolated application, backup, editor and library checks
         shell: bash
         run: |
           bun run dev --host 127.0.0.1 --port 4173 > quality-artifacts/dev-server.log 2>&1 &
@@ -57,7 +58,9 @@ jobs:
           BACKUP_RESULT=$?
           node scripts/browser-reliability.mjs
           EDITOR_RESULT=$?
-          exit $((APP_RESULT || BACKUP_RESULT || EDITOR_RESULT))
+          node scripts/library-quality.mjs
+          LIBRARY_RESULT=$?
+          exit $((APP_RESULT || BACKUP_RESULT || EDITOR_RESULT || LIBRARY_RESULT))
       - uses: actions/upload-artifact@v4
         if: always()
         with:

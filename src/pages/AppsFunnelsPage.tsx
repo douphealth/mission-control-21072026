@@ -1,3 +1,5 @@
+import { db } from "@/lib/db";
+import { safeLibraryUrl } from "@/lib/libraryIntake";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUpRight,
@@ -17,7 +19,7 @@ import {
   Layers3,
 } from "lucide-react";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
-import { useAddItem, useBuildProjects, useUpdateItem } from "@/hooks/useTableData";
+import { useAddItem, useBuildProjects, useUpdateItem, useBulkAddItems } from "@/hooks/useTableData";
 import type { BuildProject } from "@/lib/db";
 import FormModal, {
   FormField,
@@ -38,6 +40,9 @@ const priorityRank: Record<string, number> = {
 export default function AppsFunnelsPage() {
   const buildProjects = useBuildProjects();
   const addItem = useAddItem();
+  const bulkAdd = useBulkAddItems();
+  const saveLock = useRef(false);
+  const [saving, setSaving] = useState(false);
   const updateItem = useUpdateItem();
   const seeded = useRef(false);
 
@@ -51,26 +56,13 @@ export default function AppsFunnelsPage() {
   useEffect(() => {
     if (seeded.current) return;
     seeded.current = true;
-    const existing = new Set(
-      buildProjects.flatMap((item) =>
-        [item.githubRepo?.toLowerCase(), item.name?.toLowerCase()].filter(Boolean) as string[],
-      ),
-    );
-    const missing = APP_FUNNEL_CATALOG.filter(
-      (item) =>
-        !existing.has(item.githubRepo.toLowerCase()) &&
-        !existing.has(item.name.toLowerCase()),
-    );
-    if (missing.length > 0) {
-      void Promise.all(missing.map((item) => addItem<BuildProject>("buildProjects", item))).catch(
-        (error) => {
-          seeded.current = false;
-          console.error("Could not seed app portfolio", error);
-          toast.error("Could not initialize Apps & Funnels.");
-        },
-      );
-    }
-  }, [buildProjects, addItem]);
+    void (async () => {
+      const stored = await db.buildProjects.toArray();
+      const existing = new Set(stored.flatMap(item => [item.githubRepo?.toLowerCase(), item.name.toLowerCase()].filter(Boolean)));
+      const missing = APP_FUNNEL_CATALOG.filter(item => !existing.has(item.githubRepo.toLowerCase()) && !existing.has(item.name.toLowerCase()));
+      if (missing.length) await bulkAdd<BuildProject>("buildProjects", missing);
+    })().catch(() => { seeded.current = false; toast.error("Could not initialize Apps & Funnels. Existing records were preserved."); });
+  }, [bulkAdd]);
 
   const portfolio = useMemo(() => {
     const localByRepo = new Map(
@@ -80,25 +72,19 @@ export default function AppsFunnelsPage() {
     );
     const localByName = new Map(buildProjects.map((item) => [item.name.toLowerCase(), item]));
 
-    return APP_FUNNEL_CATALOG.map((catalog) => {
+    const matched = new Set<string>();
+    const catalogRows = APP_FUNNEL_CATALOG.map((catalog) => {
       const local =
         localByRepo.get(catalog.githubRepo.toLowerCase()) ??
         localByName.get(catalog.name.toLowerCase());
+      if (local) matched.add(local.id);
       return {
         ...(catalog as BuildProject),
         ...(local ?? {}),
         id: local?.id ?? `catalog-${catalog.name}`,
-        // Canonical relationship fields always come from the catalog so stale
-        // persisted records can never resurrect retired domains or deployments.
-        githubRepo: catalog.githubRepo,
-        projectUrl: catalog.projectUrl,
-        deployedUrl: catalog.deployedUrl,
-        parentWebsite: catalog.parentWebsite,
-        landingPage: catalog.landingPage,
-        alternateUrls: catalog.alternateUrls,
-        productName: catalog.productName,
       } as BuildProject;
     });
+    return [...catalogRows, ...buildProjects.filter(item => !matched.has(item.id))];
   }, [buildProjects]);
 
   const apps = useMemo(() => {
@@ -153,29 +139,20 @@ export default function AppsFunnelsPage() {
   };
 
   const saveForm = async () => {
-    const canonical = APP_FUNNEL_CATALOG.find((item) => item.githubRepo === editRepo);
-    if (!canonical) return;
-
-    const payload: Omit<BuildProject, "id"> = {
-      ...form,
-      githubRepo: canonical.githubRepo,
-      projectUrl: canonical.projectUrl,
-      deployedUrl: canonical.deployedUrl,
-      parentWebsite: canonical.parentWebsite,
-      landingPage: canonical.landingPage,
-      alternateUrls: canonical.alternateUrls,
-      productName: canonical.productName,
-      name: form.name.trim() || canonical.name,
-      lastWorkedOn: new Date().toISOString().split("T")[0],
-    };
-
-    if (editId) {
-      await updateItem<BuildProject>("buildProjects", editId, payload);
-    } else {
-      await addItem<BuildProject>("buildProjects", payload);
-    }
-    setModalOpen(false);
-    toast.success("App portfolio updated");
+    if (saveLock.current) return;
+    saveLock.current = true; setSaving(true);
+    try {
+      if (!form.name.trim()) throw new Error("An app needs a name.");
+      const payload = { ...form, name: form.name.trim(), lastWorkedOn: new Date().toISOString().slice(0, 10) };
+      for (const field of ["projectUrl", "githubRepo", "deployedUrl", "parentWebsite", "landingPage"] as const) {
+        if (payload[field]) payload[field] = safeLibraryUrl(payload[field]);
+      }
+      payload.alternateUrls = (payload.alternateUrls || []).map(safeLibraryUrl);
+      if (editId) await updateItem<BuildProject>("buildProjects", editId, payload);
+      else await addItem<BuildProject>("buildProjects", payload);
+      setModalOpen(false); toast.success("App portfolio updated");
+    } catch (error) { toast.error("App was not saved", { description: error instanceof Error ? error.message : "Please retry. Your draft is preserved." }); }
+    finally { saveLock.current = false; setSaving(false); }
   };
 
   const uf = (field: keyof typeof form, value: unknown) =>
@@ -192,7 +169,7 @@ export default function AppsFunnelsPage() {
             Apps & Funnels
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-            Production apps mapped to their GitHub repo, live deployment, parent website, and funnel entry point.
+            Saved apps and builds mapped to their repositories, deployment URLs, websites and funnels. URLs are records, not live health or payment verification.
           </p>
         </div>
 
@@ -346,7 +323,7 @@ export default function AppsFunnelsPage() {
                     <span className="revenue-link-icon"><Route size={15} /></span>
                     <span className="revenue-link-copy">
                       <small>Funnel entry</small>
-                      <strong>{host(app.landingPage)}{new URL(app.landingPage).pathname !== "/" ? new URL(app.landingPage).pathname : ""}</strong>
+                      <strong>{host(app.landingPage)}{(() => { try { const path = new URL(app.landingPage!).pathname; return path === "/" ? "" : path; } catch { return ""; } })()}</strong>
                     </span>
                     <ArrowUpRight size={13} />
                   </a>
@@ -392,10 +369,17 @@ export default function AppsFunnelsPage() {
 
       <FormModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { if (!saveLock.current) setModalOpen(false); }}
         title="Edit App & Funnel"
         onSubmit={saveForm}
+        submitLabel={saving ? "Saving..." : "Save"}
       >
+        <FormField label="App name">
+          <FormInput value={form.name} onChange={(value) => uf("name", value)} />
+        </FormField>
+        <FormField label="GitHub repository URL">
+          <FormInput value={form.githubRepo} onChange={(value) => uf("githubRepo", value)} />
+        </FormField>
         <FormField label="Product name">
           <FormInput value={form.productName || ""} onChange={(value) => uf("productName", value)} />
         </FormField>

@@ -45,6 +45,7 @@ import {
   useBuildProjects,
   useLinks,
   useNotes,
+  useAIPrompts,
   usePayments,
   useExportAllData,
   useAddItem,
@@ -61,6 +62,7 @@ import { toast } from "sonner";
 import Fuse from "fuse.js";
 
 const sections = [
+  { id: "ai-prompts", label: "AI Prompts", icon: FileText, emoji: "\u2728", keywords: ["prompts", "templates", "ai", "library"] },
   {
     id: "dashboard",
     label: "Dashboard",
@@ -385,6 +387,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
   const buildProjects = useBuildProjects();
   const links = useLinks();
   const notes = useNotes();
+  const prompts = useAIPrompts();
   const payments = usePayments();
   const addItem = useAddItem();
   const exportAllData = useExportAllData();
@@ -695,6 +698,11 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
       }),
     );
 
+    prompts.forEach(prompt => items.push({
+      id: `prompt-${prompt.id}`, type: "data", label: prompt.title, sub: "AI Prompts",
+      action: () => { setActiveSection("ai-prompts"); onClose(); }, icon: FileText,
+      emoji: "\u2728", keywords: [...prompt.tags, prompt.category || "", prompt.model || ""], priority: 12,
+    }));
     return items;
   }, [
     query,
@@ -704,6 +712,7 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
     buildProjects,
     links,
     notes,
+    prompts,
     payments,
     addItem,
     recentSections,

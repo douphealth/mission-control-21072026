@@ -8,7 +8,7 @@ import {
   useBulkPatch,
   useBulkDeleteItems,
 } from "@/hooks/useTableData";
-import { useMemo, useState, useCallback, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   Plus,
   Search,
@@ -173,6 +173,7 @@ function BulkAddModal({
   );
   const [categoryOverride, setCategoryOverride] = useState("");
   const [importing, setImporting] = useState(false);
+  const importLock = useRef(false);
 
   useEffect(() => {
     if (!open) return;
@@ -180,6 +181,7 @@ function BulkAddModal({
   }, [raw, open]);
 
   const resetAndClose = () => {
+    if (importLock.current) return;
     setRaw("");
     setParsed(parseCredentialBatch(""));
     setCategoryOverride("");
@@ -188,17 +190,21 @@ function BulkAddModal({
   };
 
   const importNow = async () => {
-    if (!parsed.items.length || importing) return;
+    if (!parsed.items.length || parsed.errors.length || importLock.current) return;
+    importLock.current = true;
     setImporting(true);
     try {
       const items = categoryOverride
         ? parsed.items.map((item) => ({ ...item, category: categoryOverride }))
         : parsed.items;
       await onImport(items);
+      importLock.current = false;
       resetAndClose();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Bulk import failed");
       setImporting(false);
+    } finally {
+      importLock.current = false;
     }
   };
 
@@ -362,7 +368,7 @@ function BulkAddModal({
             <button
               type="button"
               onClick={() => void importNow()}
-              disabled={!parsed.items.length || importing}
+              disabled={!parsed.items.length || parsed.errors.length > 0 || importing}
               className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-primary-foreground disabled:opacity-40"
             >
               <Upload size={13} />
@@ -564,83 +570,10 @@ export default function CredentialsPage() {
   };
 
   const importCredentials = async (items: CredentialDraft[]) => {
-    const norm = (value: string | undefined) => (value || "").trim().toLowerCase();
-    const host = (value: string | undefined) =>
-      norm(value).replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
-
-    const identity = (item: Pick<CredentialVault, "label" | "service" | "url" | "username">) => {
-      const urlHost = host(item.url);
-      const service = norm(item.service);
-      const username = norm(item.username);
-      return urlHost || service
-        ? `${urlHost}|${service}|${username}`
-        : `label|${norm(item.label)}`;
-    };
-
-    const existingByIdentity = new Map(
-      credentials.map((credential) => [identity(credential), credential] as const),
-    );
-    const newItems: Omit<CredentialVault, "id">[] = [];
-    let enriched = 0;
-
-    for (const item of items) {
-      const password = item.password ? await encrypt(item.password) : "";
-      const apiKey = item.apiKey ? await encrypt(item.apiKey) : "";
-      const encrypted: Omit<CredentialVault, "id"> = { ...item, password, apiKey };
-      const existing = existingByIdentity.get(identity(encrypted));
-
-      if (!existing) {
-        newItems.push(encrypted);
-        continue;
-      }
-
-      // Existing records are enriched, never destructively overwritten by a
-      // bulk paste. Secrets are filled only when the stored field is empty.
-      const changes: Partial<CredentialVault> = {};
-      if (!existing.service && encrypted.service) changes.service = encrypted.service;
-      if (!existing.url && encrypted.url) changes.url = encrypted.url;
-      if (!existing.username && encrypted.username) changes.username = encrypted.username;
-      if (!existing.password && encrypted.password) changes.password = encrypted.password;
-      if (!existing.apiKey && encrypted.apiKey) changes.apiKey = encrypted.apiKey;
-      if ((!existing.notes || existing.notes.length < encrypted.notes.length) && encrypted.notes) {
-        changes.notes = existing.notes && !encrypted.notes.includes(existing.notes)
-          ? `${existing.notes}\n${encrypted.notes}`
-          : encrypted.notes;
-      }
-      if (
-        existing.category === "General" &&
-        encrypted.category &&
-        encrypted.category !== "General"
-      ) {
-        changes.category = encrypted.category;
-      }
-      const mergedTags = Array.from(
-        new Set([...(existing.tags || []), ...(encrypted.tags || [])]),
-      );
-      if (mergedTags.length > (existing.tags || []).length) changes.tags = mergedTags;
-
-      if (Object.keys(changes).length) {
-        await updateItem<CredentialVault>("credentials", existing.id, changes);
-        enriched++;
-      }
-    }
-
-    if (newItems.length) await bulkAddItems<CredentialVault>("credentials", newItems);
-
-    toast.success(
-      `${items.length} credential${items.length === 1 ? "" : "s"} processed securely`,
-      {
-        description: [
-          newItems.length ? `${newItems.length} added` : "",
-          enriched ? `${enriched} existing enriched` : "",
-          items.length - newItems.length - enriched > 0
-            ? `${items.length - newItems.length - enriched} unchanged`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" · "),
-      },
-    );
+    const result = await bulkAddItems<CredentialVault>("credentials", items);
+    toast.success("Credentials saved securely", {
+      description: `${result.created} added; ${result.updated} enriched; ${result.skipped} unchanged/combined.`,
+    });
   };
 
   const confirmDeleteSingle = useCallback(async () => {

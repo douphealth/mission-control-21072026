@@ -1,6 +1,7 @@
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useTasks, useDecisions } from "@/hooks/useTableData";
 import {
+  BookOpen,
   Plus,
   Search,
   Grip,
@@ -41,6 +42,7 @@ const moreItems = [
   { id: "focus", label: "Focus", icon: Timer },
   { id: "calendar", label: "Calendar", icon: Calendar },
   { id: "notes", label: "Notes", icon: FileText },
+  { id: "ai-prompts", label: "AI Prompts", icon: BookOpen },
   { id: "decisions", label: "Findings", icon: Scale },
   { id: "reminders", label: "Reminders", icon: Bell },
   { id: "control-center", label: "Captures", icon: Radar },
@@ -109,6 +111,7 @@ export default function MobileBottomNav() {
       "focus",
       "calendar",
       "notes",
+      "ai-prompts",
       "reminders",
       "payments",
       "habits",
