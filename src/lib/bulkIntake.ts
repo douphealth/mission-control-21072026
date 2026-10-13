@@ -6,7 +6,7 @@ import { splitPromptCollection, type PromptSplitRule } from "./promptSplit";
 export type BulkMode = "credentials" | "links" | "prompts";
 export type IntakeRow = Record<string, unknown>;
 export type IntakeOptions = { delimiter?: string; hasHeader?: boolean; columns?: string[]; splitRule?: PromptSplitRule };
-export type IntakeTable = { headers: string[]; columns: string[]; delimiter: string; hasHeader: boolean; needsReview: boolean };
+export type IntakeTable = { headers: string[]; columns: string[]; delimiter: string; hasHeader: boolean; needsReview: boolean; suspectedDataHeader: boolean };
 export type IntakeIssue = { line: number; message: string };
 export type BulkPreview = { rows: IntakeRow[]; issues: IntakeIssue[]; warnings: string[]; fatal: boolean; table?: IntakeTable; splitMethod?: string };
 export const INTAKE_LIMIT = 1000;
@@ -27,6 +27,10 @@ function webCell(v: string) {
   if (!v.trim() || /\s/.test(v.trim())) return false;
   try { const u = new URL(/^[a-z][\w+.-]*:/i.test(v.trim()) ? v.trim() : `https://${v.trim()}`); return /^https?:$/.test(u.protocol) && !u.username && !u.password && u.hostname.includes("."); } catch { return false; }
 }
+const secretColumnLabel = (v: string) => /\b(?:api\s*(?:key|token|secret)|access\s*token|auth\s*token|client\s*secret|private\s*key|license\s*key)\b/i.test(v);
+const opaqueCell = (v: string) => v.trim().length >= 24 && !/\s/.test(v.trim()) && /[a-z]/i.test(v) && /\d/.test(v) && /^[a-z\d_+./=:-]+$/i.test(v.trim());
+const likelyHeaderData = (v: string) => emailCell(v) || dateCell(v) || opaqueCell(v);
+
 const common: Record<string, string> = { title: "title", name: "title", category: "category", tags: "tags", tag: "tags", status: "status", pinned: "pinned", favorite: "pinned", createdat: "createdAt", updatedat: "updatedAt", dateadded: "dateAdded", color: "color" };
 const links: Record<string, string> = {
   program: "title", programname: "title", tool: "title", service: "title", product: "title", url: "url", link: "url", affiliateurl: "url", affiliatelink: "url", referralurl: "url", referrallink: "url", affiliatereferrallink: "url", affiliatereferralurl: "url", partnerlink: "url", destinationurl: "url", trackingurl: "url", kind: "kind", type: "kind", linktype: "kind", merchant: "merchant", brand: "merchant", network: "network", affiliatenetwork: "network", website: "website", websites: "website", campaign: "campaign", trackingid: "trackingId", commission: "commissionNotes", commissionnotes: "commissionNotes", disclosure: "disclosure", disclosurenotes: "disclosure", notes: "description", note: "description", description: "description", finalurl: EXTRA, affiliatedashboard: EXTRA, dashboard: EXTRA, strategystatus: EXTRA, verdict: EXTRA, http: EXTRA, trackingevidence: EXTRA,
@@ -58,10 +62,21 @@ function inferColumns(mode: BulkMode, rows: SourceRow[], width: number): string[
   if (mode === "links") { if (u > 0) set(0, "title"); return columns; }
   if (mode === "credentials") {
     set(0, "label"); if (u >= 2) set(1, "service");
-    if (!columns.includes("username") && u >= 0) set(u + 1, "username");
-    const account = columns.indexOf("username"); if (account >= 0) set(account + 1, "password");
-    if (u === 2 && width >= 6) { set(1, "service"); set(3, "username"); set(4, "password"); set(5, "apiKey"); set(7, "notes"); // Extra columns require explicit mapping; never guess secrets into notes.
+    if (!columns.includes("username") && u >= 0 && ratio(u + 1, emailCell) >= .6) set(u + 1, "username");
+    const account = columns.indexOf("username");
+    // Headerless dumps often put descriptive labels after the email, NOT a password.
+    // Never auto-assign natural-language cells to password or unencrypted notes.
+    if (account >= 0 && !columns.includes("password") && ratio(account + 1, value =>
+      !!value.trim() && !/\s/.test(value.trim()) && !webCell(value) && !emailCell(value) && !dateCell(value)) >= .6) set(account + 1, "password");
+    // Only a dedicated key label paired with a token is evidence for a key column.
+    for (let i = 1; i < width; i++) {
+      if (!columns.includes("apiKey") && ratio(i - 1, secretColumnLabel) >= .65 && ratio(i, value =>
+        value.trim().length >= 8 && !/\s/.test(value.trim()) && !webCell(value) && !emailCell(value) && !dateCell(value)) >= .65) set(i, "apiKey");
     }
+    // Preserve the established reviewable 8-column date-then-note convention.
+    if (u === 2 && width >= 8 && [EXTRA, "category"].includes(columns[6]) &&
+      ratio(7, v => /\s/.test(v.trim()) && v.trim().length <= 250 && !secretColumnLabel(v)) >= .6) set(7, "notes");
+    // Other unknown columns are never guessed into unencrypted notes.
   }
   return columns;
 }
@@ -98,16 +113,21 @@ function readTable(mode: BulkMode, input: string, options: IntakeOptions): { tab
   if (!data.length) return null;
   const firstFields = data[0].cells.map(cell => field(mode, cell));
   const realFields = firstFields.filter(f => ![IGNORE, PRIVATE, EXTRA].includes(f));
-  const hasHeader = options.hasHeader ?? (!data[0].cells.some(v => webCell(v) || emailCell(v)) && (new Set(realFields).size >= 2 || realFields.length >= 1 && firstFields.some(f => f === PRIVATE || f === EXTRA)));
+  const firstRowHasData = data[0].cells.some(v => webCell(v) || likelyHeaderData(v));
+  // Data must not be treated as eleven column headings and the first key lost.
+  const headerLikely = !firstRowHasData && new Set(realFields).size >= 2;
+  const hasHeader = options.hasHeader ?? headerLikely;
+  const suspectedDataHeader = hasHeader && (!headerLikely || firstRowHasData);
   const width = Math.min(100, data.reduce((n, r) => Math.max(n, r.cells.length), 0));
-  const headers = Array.from({ length: width }, (_, i) => hasHeader ? data[0].cells[i]?.trim() || `Column ${i + 1}` : `Column ${i + 1}`);
+  // Mask account emails, URLs and opaque secrets that were mistaken for headings.
+  const headers = Array.from({ length: width }, (_, i) => hasHeader && !suspectedDataHeader ? data[0].cells[i]?.trim() || `Column ${i + 1}` : `Column ${i + 1}`);
   const records = hasHeader ? data.slice(1) : data;
-  const suggested = hasHeader ? headers.map(h => field(mode, h)) : inferColumns(mode, records, width);
+  const suggested = hasHeader && !suspectedDataHeader ? headers.map(h => field(mode, h)) : inferColumns(mode, data, width);
   const columns = suggested.map((f, i) => f === PRIVATE ? f : options.columns?.[i] ?? f);
   const permitted = new Set<string>([...(mode === "credentials" ? CREDENTIAL_FIELDS : mode === "links" ? LINK_FIELDS : PROMPT_FIELDS).map(([f]) => f), PRIVATE, "status", "pinned", "createdAt", "updatedAt", "dateAdded", "color"]);
   if (columns.some(f => !permitted.has(f))) issues.push({ line: 0, message: "Unsupported column mapping. Select fields from the mapping controls." });
   if (records.length > INTAKE_LIMIT) issues.push({ line: 0, message: "Import at most 1,000 entries per batch." });
-  return { table: { headers, columns, delimiter, hasHeader, needsReview: !hasHeader || columns.includes(IGNORE) }, data: records, issues };
+  return { table: { headers, columns, delimiter, hasHeader, suspectedDataHeader, needsReview: suspectedDataHeader || !hasHeader || columns.includes(IGNORE) }, data: records, issues };
 }
 function mappedRecord(mode: BulkMode, cells: unknown[], headers: string[], columns: string[]) {
   const out: IntakeRow = {};
@@ -122,6 +142,21 @@ function mappedRecord(mode: BulkMode, cells: unknown[], headers: string[], colum
       if (!/^(standard|affiliate)$/i.test(str(value))) out.description = [out.description, `Type: ${str(value)}`].filter(Boolean).join("\n");
     } else if (Object.hasOwn(out, f) && str(out[f]) !== str(value)) throw new Error("Multiple columns target one field. Correct the column mapping.");
     else out[f] = value;
+  }
+  if (mode === "credentials") {
+    // Headerless dumps may include dedicated API-key labels in later columns.
+    // Encrypt per-row labelled keys rather than exposing them as plain notes.
+    for (let i = 1; i < cells.length; i++) {
+      if (columns[i] !== IGNORE || !secretColumnLabel(str(cells[i - 1]))) continue;
+      const value = str(cells[i]);
+      if (!value.trim() || webCell(value) || emailCell(value) || dateCell(value) || value.trim().length < 8) continue;
+      if (out.apiKey && out.apiKey !== value) throw new Error("More than one API key was found in this row. Split the credentials or map the keys separately.");
+      out.apiKey = value;
+    }
+    for (let i = 0; i < cells.length; i++) {
+      if (columns[i] === IGNORE && opaqueCell(str(cells[i])) && str(out.apiKey) !== str(cells[i]))
+        throw new Error(`Column ${i + 1} contains an unmapped token-like value. Map it to Password or API Key before saving.`);
+    }
   }
   return out;
 }
@@ -166,7 +201,8 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
       if (acceptedTable && table) {
         result.table = table.table;
         if (table.issues.length) return { ...result, issues: table.issues, fatal: true };
-        if (table.table.needsReview) result.warnings.push("Review the suggested column mapping, including ignored columns. Empty cells retain their positions.");
+        if (table.table.suspectedDataHeader) result.warnings.push("The first row looks like credential or link data, not headings. Choose 'Use first row as data' to keep that record and remap automatically. Saving is blocked until corrected.");
+        if (table.table.needsReview) result.warnings.push("Review the suggested column mapping, including ignored columns. Empty cells retain their positions. Never map an unknown secret into plain-text notes.");
         if (table.table.columns.includes(PRIVATE)) result.warnings.push("Recognized password, key and account columns are excluded from Links Hub. Store them in Credentials instead.");
         if (mode === "credentials" && table.table.columns.includes(EXTRA)) result.warnings.push("Dates are retained as notes, not used as categories.");
         for (const { cells, line } of table.data) {
