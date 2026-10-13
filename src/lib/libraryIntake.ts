@@ -94,7 +94,7 @@ export function parseLibraryIntake(mode: LibraryMode, input: string): IntakeResu
   const firstLine = trimmed.split(/\r?\n/, 1)[0];
   const headers = firstLine.toLowerCase().replaceAll('"', "").split(/[,\t]/).map(v => v.trim());
   try {
-    if (/^[\[{]/.test(trimmed)) {
+    if (/^(?:\[\s*(?:\{|"|\])|\{\s*")/.test(trimmed)) {
       const json = JSON.parse(trimmed);
       const entries = Array.isArray(json) ? json : json[mode] ?? json.items ?? [json];
       if (!Array.isArray(entries)) throw new Error("JSON must contain an array of records.");
