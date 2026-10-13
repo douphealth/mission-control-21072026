@@ -1,0 +1,38 @@
+name: Correct verified credential metadata loss
+on:
+  push:
+    branches: [fix/vault-libraries-20261013]
+    paths: ['.github/workflows/vault-metadata-correction.yml']
+permissions:
+  contents: write
+jobs:
+  correct:
+    if: github.ref == 'refs/heads/fix/vault-libraries-20261013'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact reviewed source corrections
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p = Path('src/lib/credentialBulk.ts')
+          assert subprocess.check_output(['git', 'hash-object', str(p)], text=True).strip() == '977df9849564eea11a13e7d6eed641b9d6adcedf'
+          s = p.read_text()
+          a = s.index('    const key = [', s.index('function dedupe('))
+          b = s.index('    if (seen.has(key))', a)
+          s = s[:a] + '    // Only discard exact rows. Metadata enrichment and account identity belong\n    // to the transactional import planner, not this side-effect-free parser.\n    const key = JSON.stringify(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)));\n' + s[b:]
+          p.write_text(s)
+          p = Path('src/components/LibraryPage.tsx')
+          assert subprocess.check_output(['git', 'hash-object', str(p)], text=True).strip() == '5e2131a6f4156c44769d593ff1d1f63c333e9d26'
+          s = p.read_text()
+          assert s.count('value={variables[name] || ""}') == 1
+          p.write_text(s.replace('value={variables[name] || ""}', 'value={Object.hasOwn(variables, name) ? variables[name] : ""}'))
+          PY
+          git add src/lib/credentialBulk.ts src/components/LibraryPage.tsx
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: preserve duplicate credential metadata and safe template field defaults'
+          git push origin HEAD:refs/heads/fix/vault-libraries-20261013
