@@ -207,7 +207,13 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
         if (mode === "credentials" && table.table.columns.includes(EXTRA)) result.warnings.push("Dates are retained as notes, not used as categories.");
         for (const { cells, line } of table.data) {
           try { entries.push({ row: mappedRecord(mode, cells, table.table.headers, table.table.columns), line }); }
-          catch { result.issues.push({ line, message: "Multiple columns target one field. Correct the column mapping." }); }
+          catch (error) {
+            // Only disclose safe structural diagnostics, never the pasted secrets.
+            const message = error instanceof Error ? error.message : "";
+            result.issues.push({ line, message: /^Column [0-9]+ contains an unmapped token-like value[.]/.test(message) ||
+              message === "More than one API key was found in this row. Split the credentials or map the keys separately."
+                ? message : "Multiple columns target one field. Correct the column mapping." });
+          }
         }
       } else if (mode === "prompts") {
         const split = splitPromptCollection(input, options.splitRule);
