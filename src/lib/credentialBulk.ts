@@ -381,14 +381,9 @@ function makeDraft(value: Partial<CredentialDraft>, fallbackLabel = ""): Credent
 function dedupe(items: CredentialDraft[]) {
   const seen = new Set<string>();
   return items.filter((item) => {
-    const key = [
-      item.label.trim().toLowerCase(),
-      item.service.trim().toLowerCase(),
-      item.url.trim().toLowerCase(),
-      item.username.trim().toLowerCase(),
-      item.password,
-      item.apiKey,
-    ].join("\u001f");
+    // Only discard exact rows. Metadata enrichment and account identity belong
+    // to the transactional import planner, not this side-effect-free parser.
+    const key = JSON.stringify(Object.entries(item).sort(([a], [b]) => a.localeCompare(b)));
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
