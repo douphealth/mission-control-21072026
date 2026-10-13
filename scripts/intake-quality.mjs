@@ -32,7 +32,7 @@ export async function runIntakeChecks(page, check, engine) {
     assert.equal(await box.inputValue(), raw);
     const stored = await page.evaluate(async url => (await import('/src/lib/db.ts')).db.links.filter(row => row.url === url).toArray(), url);
     assert.equal(stored.length, 1); assert.equal(stored[0].url, url); assert.equal(stored[0].kind, 'affiliate');
-    assert(stored[0].description.includes('Strategy status: USE NOW')); assert(!JSON.stringify(stored).includes('synthetic-private-only')); assert(!JSON.stringify(stored).includes('private@example.com'));
+    assert.equal(stored[0].strategyStatus, 'USE NOW'); assert.equal(stored[0].vertical, 'Social media'); assert(!JSON.stringify(stored).includes('synthetic-private-only')); assert(!JSON.stringify(stored).includes('private@example.com'));
     assert(await dialog.getByRole('button', { name: 'Selected rows saved' }).isDisabled());
     await closeDialog(dialog);
   });
