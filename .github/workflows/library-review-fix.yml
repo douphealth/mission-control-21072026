@@ -1,0 +1,36 @@
+name: Apply reviewed library corrections
+on:
+  push:
+    branches: [fix/vault-libraries-20261013]
+    paths: ['.github/workflows/library-review-fix.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply exact reviewed corrections with source leases
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          p = Path('src/components/LibraryPage.tsx')
+          assert subprocess.check_output(['git', 'hash-object', str(p)], text=True).strip() == '0979b5d86b90347894773bc357f02b088b89ebb3'
+          s = p.read_text()
+          assert s.count('updateItem(table, row.id,') == 2
+          p.write_text(s.replace('updateItem(table, row.id,', 'updateItem<Row>(table, row.id,'))
+          p = Path('src/lib/libraryIntake.ts')
+          assert subprocess.check_output(['git', 'hash-object', str(p)], text=True).strip() == '5ccf62db4b0fa4c042a9dc96ed09788ebb6126b6'
+          s = p.read_text()
+          old = 'if (/^[\\[{]/.test(trimmed)) {'
+          assert s.count(old) == 1
+          p.write_text(s.replace(old, 'if (/^(?:\\[\\s*(?:\\{|"|\\])|\\{\\s*")/.test(trimmed)) {'))
+          PY
+          git add src/components/LibraryPage.tsx src/lib/libraryIntake.ts
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: typed library actions and Markdown-safe intake detection'
+          git push origin HEAD:refs/heads/fix/vault-libraries-20261013
