@@ -63,8 +63,9 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
   const selection = preview?.rows.filter((_, i) => selected.has(i)) || [];
   const missingTitle = selection.some(row => !String(row[isVault ? "label" : "title"] || "").trim());
   const needsReview = !!table?.needsReview && !reviewed;
-  const needsSingleConfirmation = mode === "prompts" && preview?.splitMethod === "single" && raw.length > 1500 && options.splitRule !== "single" && !singleConfirmed;
-  const canSave = !busy && !parsing && !saved && !!preview && !preview.fatal && selection.length > 0 && !missingTitle && !needsReview && !needsSingleConfirmation && (!preview.issues.length || skipInvalid);
+  const headerUnsafe = !!table?.suspectedDataHeader;
+  const needsSingleConfirmation = mode === "prompts" && preview?.splitMethod === "single" && raw.length > 400 && options.splitRule !== "single" && !singleConfirmed;
+  const canSave = !busy && !parsing && !saved && !!preview && !preview.fatal && selection.length > 0 && !missingTitle && !needsReview && !headerUnsafe && !needsSingleConfirmation && (!preview.issues.length || skipInvalid);
   async function save() {
     if (!canSave || lock.current || !preview) return;
     lock.current = true; setBusy(true); setMessage("");
@@ -102,7 +103,8 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
         <button className={button} disabled={busy || parsing || !raw.trim()} onClick={() => void parse()}>{parsing ? "Reading input..." : "Preview entries"}</button>
         {table && <details open={table.needsReview || undefined} className="rounded-xl border border-border bg-secondary/20 p-3">
           <summary className="cursor-pointer text-sm font-semibold">Column mapping ({table.headers.length} columns)</summary>
-          <p className="my-2 text-xs text-muted-foreground">Map your spreadsheet headings. Cell values are not displayed here. Unmapped columns are ignored until assigned.</p>
+          <p className="my-2 text-xs text-muted-foreground">Check which column contains each field. Sensitive account values are never displayed as header labels. Unknown columns remain excluded unless you assign them.</p>
+          {table.suspectedDataHeader && <div role="alert" className="my-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-warning/40 bg-warning/10 p-3"><p className="min-w-0 flex-1 text-sm font-semibold">First row appears to be account data, not headings. Do not discard it.</p><button className={button} disabled={busy} onClick={() => changeOptions({ delimiter: table.delimiter, hasHeader: false })}>Use first row as data</button></div>}
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={table.hasHeader} disabled={busy} onChange={event => changeOptions({ delimiter: table.delimiter, hasHeader: event.target.checked }, true)} />First row contains headings</label>
             <label className="flex items-center gap-2 text-sm">Delimiter<select aria-label="Import delimiter" disabled={busy} className={`${input} w-auto`} value={table.delimiter} onChange={event => changeOptions({ delimiter: event.target.value }, true)}><option value={"\t"}>Tab / spreadsheet</option><option value=",">Comma / CSV</option><option value=";">Semicolon</option><option value="|">Pipe / Markdown</option></select></label>
@@ -113,9 +115,10 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
         </details>}
         {preview && <div className="space-y-3" aria-live="polite">
           <strong className="text-sm">{preview.rows.length} valid entries; {preview.issues.length} errors</strong>
+          {mode === "prompts" && <p className="text-sm font-medium">{preview.rows.length > 1 ? `${preview.rows.length} separate prompts detected (${preview.splitMethod || "structured data"}). Confirm each boundary and category below.` : "Only one prompt detected. If you pasted a collection, choose another split rule before saving."}</p>}
           {preview.warnings.map(warning => <p key={warning} className="text-xs leading-relaxed text-muted-foreground">{warning}</p>)}
           {table?.needsReview && <label className="flex items-start gap-2 rounded-xl border border-border p-3 text-sm"><input type="checkbox" className="mt-1" checked={reviewed} disabled={busy || saved} onChange={event => setReviewed(event.target.checked)} />I checked the column mapping, including ignored columns.</label>}
-          {!!preview.issues.length && <div className="space-y-3 rounded-xl border border-warning/40 bg-warning/5 p-3"><details open><summary className="cursor-pointer text-sm font-semibold">{preview.issues.length} rows need attention</summary><div className="mt-2 max-h-36 space-y-2 overflow-y-auto">{preview.issues.map((issue, i) => <p key={i} className="text-xs">{issue.line ? `Row ${issue.line}: ` : ""}{issue.message}</p>)}</div></details>
+          {!!preview.issues.length && <div className="space-y-3 rounded-xl border border-warning/40 bg-warning/5 p-3"><details open><summary className="cursor-pointer text-sm font-semibold">{preview.issues.length} rows need attention</summary><div className="mt-2 max-h-36 space-y-2 overflow-y-auto">{preview.issues.slice(0, 20).map((issue, i) => <p key={i} className="text-xs">{issue.line ? `Row ${issue.line}: ` : ""}{issue.message}</p>)}{preview.issues.length > 20 && <p className="text-xs">...and {preview.issues.length - 20} more. Correct the column mapping to resolve repeated errors.</p>}</div></details>
             {!preview.fatal && !!preview.rows.length && <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={skipInvalid} disabled={busy || saved} onChange={event => setSkipInvalid(event.target.checked)} />Import valid rows only; leave {preview.issues.length} unresolved rows out. Keep my original paste for correction.</label>}
           </div>}
           {isVault && <label className="block text-sm">Category override<select aria-label="Credential category override" className={`${input} mt-1`} disabled={busy || saved} value={category} onChange={event => setCategory(event.target.value)}><option value="">Keep detected categories</option>{CREDENTIAL_CATEGORIES.map(value => <option key={value}>{value}</option>)}</select></label>}
