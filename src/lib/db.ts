@@ -417,6 +417,14 @@ export interface LinkItem {
   trackingId?: string;
   commissionNotes?: string;
   disclosure?: string;
+  vertical?: string;
+  linkType?: string;
+  strategyStatus?: string;
+  verdict?: string;
+  httpStatus?: string;
+  finalUrl?: string;
+  trackingEvidence?: string;
+  affiliateDashboard?: string;
   id: string;
   title: string;
   url: string;

@@ -41,11 +41,36 @@ export function inferredLinkKind(row: Partial<LinkItem>): "affiliate" | "standar
   } catch { /* Old malformed records remain editable. */ }
   return "standard";
 }
+export function inferAffiliateVertical(value: string): string {
+  const v = value.toLowerCase();
+  if (/hosting|cloudways|bluehost|digitalocean|domain|server|vps/.test(v)) return "Hosting & infrastructure";
+  if (/seo|keyword|search|rank|backlink/.test(v)) return "SEO & analytics";
+  if (/ai tool|chatgpt|claude|copywriter|automation/.test(v)) return "AI & content tools";
+  if (/email marketing|newsletter|convertkit|aweber|mailchimp/.test(v)) return "Email marketing";
+  if (/social media|socialbee|publer|tiktok|instagram/.test(v)) return "Social media";
+  if (/freelanc|fiverr|marketplace/.test(v)) return "Freelance & services";
+  if (/fitness|running|health/.test(v)) return "Fitness & health";
+  if (/garden|plant|home/.test(v)) return "Home & garden";
+  if (/marketing|affiliate|referral/.test(v)) return "Affiliate marketing";
+  return "Other";
+}
+export function inferredPromptCategory(content: string): string {
+  const signals: Array<[string, RegExp]> = [
+    ["SEO & content", /\b(seo|keyword research|serp|indexation|canonical|backlinks?|search console|organic traffic|content audit|schema markup|geo\/aeo)\b/i],
+    ["Development", /\b(typescript|javascript|python|debug|code review|bug fix|github|repository|pull request|api endpoint|software architecture|supabase)\b/i],
+    ["Automation", /\b(automation|workflow|telegram bot|scheduled task|agent orchestration|n8n|zapier|webhook)\b/i],
+    ["Marketing", /\b(affiliate|advertising|conversion|email marketing|marketing campaign|sales funnel|copywriting|social media)\b/i],
+    ["Research", /\b(deep research|literature review|fact.check|source evaluation|competitor analysis|market research)\b/i],
+    ["Design", /\b(ui\/ux|interface design|typography|visual identity|brand design|dashboard theme)\b/i],
+    ["Writing", /\b(write an article|rewrite|edit this draft|proofread|storytelling|tone of voice)\b/i],
+    ["Productivity", /\b(task management|productivity|weekly plan|prioritiz|time management)\b/i],
+  ];
+  const scores = signals.map(([name, regex]) => ({ name, score: [...content.matchAll(new RegExp(regex.source, "gi"))].length }));
+  scores.sort((a, b) => b.score - a.score);
+  return scores[0]?.score ? scores[0].name : "Uncategorized";
+}
 function inferredCategory(content: string): string {
-  if (/\b(seo|keyword|serp|indexation)\b/i.test(content)) return "SEO & content";
-  if (/\b(code|typescript|python|debug|function|repository)\b/i.test(content)) return "Development";
-  if (/\b(email|campaign|marketing|affiliate)\b/i.test(content)) return "Marketing";
-  return "General";
+  return inferredPromptCategory(content);
 }
 export function normalizeLibraryRecord(mode: LibraryMode, value: unknown): LibraryRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Each entry must be a record.");
@@ -61,25 +86,44 @@ export function normalizeLibraryRecord(mode: LibraryMode, value: unknown): Libra
     if (content.length > 200_000) throw new Error("A prompt can contain at most 200,000 characters.");
     return {
       kind: "ai-prompt", title: title || content.split(/\r?\n/).find(line => line.trim())!.replace(/^#+\s*/, "").trim().slice(0, 100),
-      content, category: text(item.category).trim() || inferredCategory(content),
+      content, category: text(item.category).trim() || inferredCategory([title, content].filter(Boolean).join("\n")),
       model: text(item.model).trim() || "Any model", tags, variables: promptVariables(content),
       pinned, status, color: text(item.color) || "emerald",
       createdAt: text(item.createdAt) || now, updatedAt: now,
     };
   }
   const url = safeLibraryUrl(item.url ?? item.link ?? item.affiliateUrl);
+  const legacy = text(item.description ?? item.notes);
+  const audits: Record<string, string> = {};
+  const retained = legacy.split(/\r?\n/).filter(line => {
+    const match = line.match(/^(Strategy status|Verdict|HTTP|Final URL|Tracking evidence|Affiliate Dashboard|Type):\s*(.*)$/i);
+    if (!match) return true;
+    const mapping: Record<string, string> = { "strategy status":"strategyStatus",verdict:"verdict",http:"httpStatus","final url":"finalUrl","tracking evidence":"trackingEvidence","affiliate dashboard":"affiliateDashboard",type:"linkType" };
+    const name = mapping[match[1].toLowerCase()];
+    if (!name || text(item[name]).trim()) return true;
+    audits[name] = match[2];
+    return false;
+  });
   const parsed = new URL(url);
   const kind = inferredLinkKind({ ...item, url } as Partial<LinkItem>);
   const amazon = /^(?:[^.]+\.)?amazon\.(?:com|co\.uk|de|fr|it|es|ca|com\.au|co\.jp|in)$/.test(parsed.hostname) || parsed.hostname === "amzn.to";
   return {
     title: title || parsed.hostname, url, kind, category: text(item.category).trim() || (kind === "affiliate" ? "Affiliate" : "Tools"),
-    description: text(item.description ?? item.notes), tags, pinned, status,
+    description: retained.join("\n"), tags, pinned, status,
     merchant: text(item.merchant).trim() || (amazon ? "Amazon" : ""),
     network: text(item.network).trim() || (amazon ? "Amazon Associates" : ""),
     website: text(item.website).trim(), campaign: text(item.campaign).trim(),
     trackingId: text(item.trackingId).trim() || parsed.searchParams.get("tag") || parsed.searchParams.get("aff_id") || "",
     commissionNotes: text(item.commissionNotes), disclosure: text(item.disclosure),
     dateAdded: text(item.dateAdded) || now.slice(0, 10),
+    vertical: text(item.vertical).trim() || inferAffiliateVertical([title, item.category, item.merchant, item.network, url].map(text).join(" ")),
+    linkType: text(item.linkType).trim() || audits.linkType || "",
+    strategyStatus: text(item.strategyStatus).trim() || audits.strategyStatus || "",
+    verdict: text(item.verdict).trim() || audits.verdict || "",
+    httpStatus: text(item.httpStatus).trim() || audits.httpStatus || "",
+    finalUrl: text(item.finalUrl).trim() || audits.finalUrl || "",
+    trackingEvidence: text(item.trackingEvidence).trim() || audits.trackingEvidence || "",
+    affiliateDashboard: text(item.affiliateDashboard).trim() || audits.affiliateDashboard || "",
   };
 }
 
