@@ -30,11 +30,12 @@ describe("real-world credential clipboard formats (synthetic records only)", () 
     expect(JSON.stringify(incorrect.table)).not.toContain("syntheticKey_");
     expect(incorrect.warnings.join(" ")).toContain("Use first row as data");
   });
-  it("rejects an unknown opaque secret field rather than silently losing it", () => {
+  it("preserves one unknown opaque secret as a key requiring review", () => {
     const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\ta@example.com\tfixture\t\t22/4/2020\tUseful note\tsyntheticSecret_1234567890abcdef");
-    expect(result.issues).toHaveLength(1);
-    expect(result.issues[0].message).toContain("Column 9");
-    expect(JSON.stringify(result.issues)).not.toContain("syntheticSecret_");
+    expect(result.issues).toHaveLength(0);
+    expect(result.rows[0].apiKey).toBe("syntheticSecret_1234567890abcdef");
+    expect(result.table?.needsReview).toBe(true);
+    expect(result.rows[0].notes).not.toContain("syntheticSecret_");
   });
   it("recognizes headerless dates rather than placing them in categories", () => {
     const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\tperson@example.com\tfixture\t\t22/4/2020\tUseful note");
@@ -79,7 +80,7 @@ describe("affiliate tables and privacy", () => {
     const result = previewBulkIntake("links", [headers.join(delimiter), partner.join(delimiter)].join("\n"));
     expect(result.issues).toEqual([]); expect(result.rows).toHaveLength(1);
     expect(result.rows[0]).toMatchObject({ title: "Example Partner", category: "Social Media", kind: "affiliate", url: partner[3] });
-    expect(result.rows[0].description).toContain("Strategy status: USE NOW"); expect(result.rows[0].description).toContain("Final URL: https://example.com/");
+    expect(result.rows[0].strategyStatus).toBe("USE NOW"); expect(result.rows[0].finalUrl).toBe("https://example.com/");
     expect(JSON.stringify(result.rows)).not.toContain("synthetic-private-value"); expect(JSON.stringify(result.rows)).not.toContain("private@example.com");
     expect(result.table?.columns.slice(-2)).toEqual([PRIVATE, PRIVATE]);
   });
