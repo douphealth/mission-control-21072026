@@ -16,7 +16,7 @@ export const PRIVATE = "__private__";
 export const EXTRA = "__extra__";
 export const CREDENTIAL_CATEGORIES = ["General", "Infrastructure", "Hosting", "Development", "Payments", "Social", "Email", "Analytics", "AI Tools", "Security", "Other"];
 export const CREDENTIAL_FIELDS = [["label", "Account label"], ["service", "Service"], ["url", "Login URL"], ["username", "Username / email"], ["password", "Password (encrypted)"], ["apiKey", "API / license key (encrypted)"], ["category", "Category"], ["notes", "Notes"], ["tags", "Tags"], [EXTRA, "Date / extra metadata"], [IGNORE, "Ignore column"]] as const;
-export const LINK_FIELDS = [["title", "Title / program"], ["url", "Link / affiliate URL"], ["kind", "Link type"], ["category", "Category"], ["merchant", "Merchant"], ["network", "Affiliate network"], ["website", "Website / brand"], ["campaign", "Campaign"], ["trackingId", "Tracking ID"], ["description", "Description / notes"], ["tags", "Tags"], ["commissionNotes", "Commission notes"], ["disclosure", "Disclosure"], [EXTRA, "Extra metadata in notes"], [IGNORE, "Ignore column"]] as const;
+export const LINK_FIELDS = [["title", "Title / program"], ["url", "Link / affiliate URL"], ["kind", "Link type"], ["category", "Category"], ["merchant", "Merchant"], ["network", "Affiliate network"], ["website", "Website / brand"], ["campaign", "Campaign"], ["trackingId", "Tracking ID"], ["description", "Description / notes"], ["tags", "Tags"], ["commissionNotes", "Commission notes"], ["disclosure", "Disclosure"], ["vertical", "Industry group"], ["linkType", "Affiliate relationship type"], ["strategyStatus", "Strategy status (reported)"], ["verdict", "Review verdict (reported)"], ["httpStatus", "HTTP status (reported)"], ["finalUrl", "Final URL (reported)"], ["trackingEvidence", "Tracking evidence (reported)"], ["affiliateDashboard", "Affiliate dashboard URL"], [EXTRA, "Extra metadata in notes"], [IGNORE, "Ignore column"]] as const;
 export const PROMPT_FIELDS = [["title", "Title"], ["content", "Prompt content"], ["category", "Category"], ["model", "Model / platform"], ["tags", "Tags"], [IGNORE, "Ignore column"]] as const;
 const str = (v: unknown): string => typeof v === "string" ? v : v == null ? "" : String(v);
 const key = (v: string) => v.replace(/^\uFEFF/, "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
@@ -33,7 +33,7 @@ const likelyHeaderData = (v: string) => emailCell(v) || dateCell(v) || opaqueCel
 
 const common: Record<string, string> = { title: "title", name: "title", category: "category", tags: "tags", tag: "tags", status: "status", pinned: "pinned", favorite: "pinned", createdat: "createdAt", updatedat: "updatedAt", dateadded: "dateAdded", color: "color" };
 const links: Record<string, string> = {
-  program: "title", programname: "title", tool: "title", service: "title", product: "title", url: "url", link: "url", affiliateurl: "url", affiliatelink: "url", referralurl: "url", referrallink: "url", affiliatereferrallink: "url", affiliatereferralurl: "url", partnerlink: "url", destinationurl: "url", trackingurl: "url", kind: "kind", type: "kind", linktype: "kind", merchant: "merchant", brand: "merchant", network: "network", affiliatenetwork: "network", website: "website", websites: "website", campaign: "campaign", trackingid: "trackingId", commission: "commissionNotes", commissionnotes: "commissionNotes", disclosure: "disclosure", disclosurenotes: "disclosure", notes: "description", note: "description", description: "description", finalurl: EXTRA, affiliatedashboard: EXTRA, dashboard: EXTRA, strategystatus: EXTRA, verdict: EXTRA, http: EXTRA, trackingevidence: EXTRA,
+  program: "title", programname: "title", tool: "title", service: "title", product: "title", url: "url", link: "url", affiliateurl: "url", affiliatelink: "url", referralurl: "url", referrallink: "url", affiliatereferrallink: "url", affiliatereferralurl: "url", partnerlink: "url", destinationurl: "url", trackingurl: "url", kind: "kind", type: "kind", linktype: "kind", merchant: "merchant", brand: "merchant", network: "network", affiliatenetwork: "network", website: "website", websites: "website", campaign: "campaign", trackingid: "trackingId", commission: "commissionNotes", commissionnotes: "commissionNotes", disclosure: "disclosure", disclosurenotes: "disclosure", notes: "description", note: "description", description: "description", finalurl: "finalUrl", affiliatedashboard: "affiliateDashboard", dashboard: "affiliateDashboard", strategystatus: "strategyStatus", verdict: "verdict", http: "httpStatus", httpstatus: "httpStatus", trackingevidence: "trackingEvidence", vertical: "vertical", industry: "vertical", linkvertical: "vertical", relationshiptype: "linkType",
 };
 const prompts: Record<string, string> = { prompt: "content", aiprompt: "content", prompttext: "content", promptcontent: "content", content: "content", body: "content", text: "content", instructions: "content", prompttitle: "title", promptname: "title", model: "model", platform: "model", kind: IGNORE, variables: IGNORE, id: IGNORE };
 const credentials: Record<string, string> = {
@@ -139,7 +139,7 @@ function mappedRecord(mode: BulkMode, cells: unknown[], headers: string[], colum
     } else if (f === "kind") {
       if (/affiliate|referral|ambassador|partner/i.test(str(value))) out.kind = "affiliate";
       else if (/^standard$/i.test(str(value))) out.kind = "standard";
-      if (!/^(standard|affiliate)$/i.test(str(value))) out.description = [out.description, `Type: ${str(value)}`].filter(Boolean).join("\n");
+      if (!/^(standard|affiliate)$/i.test(str(value))) out.linkType = str(value);
     } else if (Object.hasOwn(out, f) && str(out[f]) !== str(value)) throw new Error("Multiple columns target one field. Correct the column mapping.");
     else out[f] = value;
   }
@@ -153,9 +153,18 @@ function mappedRecord(mode: BulkMode, cells: unknown[], headers: string[], colum
       if (out.apiKey && out.apiKey !== value) throw new Error("More than one API key was found in this row. Split the credentials or map the keys separately.");
       out.apiKey = value;
     }
-    for (let i = 0; i < cells.length; i++) {
-      if (columns[i] === IGNORE && opaqueCell(str(cells[i])) && str(out.apiKey) !== str(cells[i]))
-        throw new Error(`Column ${i + 1} contains an unmapped token-like value. Map it to Password or API Key before saving.`);
+    const unmapped = cells.map((value, i) => ({ value: str(value), i }))
+      .filter(({ value, i }) => columns[i] === IGNORE && opaqueCell(value) &&
+        value !== str(out.apiKey) && value !== str(out.password));
+    // One unlabelled token can be preserved in the encrypted key field.
+    // More than one unique unknown token must be mapped explicitly: never discard or
+    // concatenate secrets into unencrypted notes.
+    const unique = [...new Set(unmapped.map(({ value }) => value))];
+    if (unique.length === 1 && !out.apiKey) {
+      out.apiKey = unique[0];
+      out.__reviewInferredSecret = true; // stripped during credential normalization
+    } else if (unique.length) {
+      throw new Error(`Column ${unmapped[0].i + 1} contains an unmapped token-like value. Multiple secrets require explicit mapping; no values were discarded.`);
     }
   }
   return out;
@@ -168,9 +177,9 @@ function normalize(mode: BulkMode, value: unknown): IntakeRow {
     return normalizeLibraryRecord(mode, row) as IntakeRow;
   }
   if (dateCell(str(row.category))) { row.notes = [row.notes, `Imported date: ${str(row.category)}`].filter(Boolean).join("\n"); row.category = "General"; }
-  const result = legacyCredentials(JSON.stringify([row]));
+  const result = legacyCredentials(JSON.stringify([{ ...row, __reviewInferredSecret: undefined }]));
   if (!result.items.length) throw new Error("No account, URL, password or key in the mapped fields. Correct the mapping or leave this row out.");
-  return result.items[0] as unknown as IntakeRow;
+  return { ...result.items[0], ...(row.__reviewInferredSecret ? { __reviewInferredSecret: true } : {}) } as IntakeRow;
 }
 
 /** Pure, local preview. No network calls, logging, storage writes or secret-valued errors. */
@@ -233,7 +242,7 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
     }
     if (entries.length + result.issues.length > INTAKE_LIMIT) return fail("Import at most 1,000 entries per batch.");
     for (const { row, line } of entries) {
-      try { result.rows.push(normalize(mode, row)); }
+      try { const parsed = normalize(mode, row); if (mode === "credentials" && parsed.__reviewInferredSecret) { result.warnings.push("An unlabelled token was preserved as an encrypted API key. Review those entries and their column mappings before saving."); delete parsed.__reviewInferredSecret; if (result.table) result.table.needsReview = true; } result.rows.push(parsed); }
       catch (error) { result.issues.push({ line, message: error instanceof Error ? error.message : "Invalid entry; correct the input." }); }
     }
   } catch { return fail("Input structure could not be read. Check JSON, quotes and delimiters. No rows were saved."); }
