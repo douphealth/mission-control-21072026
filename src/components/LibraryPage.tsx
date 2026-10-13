@@ -173,7 +173,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <textarea aria-label="Prompt preview" readOnly className={`${input} min-h-56 font-mono`} value={renderPrompt(usePrompt?.content || "", variables)} /></div>
         <button className={primary} onClick={() => void copy(renderPrompt(usePrompt?.content || "", variables))}><Copy size={16} />Copy prompt</button></DialogContent></Dialog>
       <Dialog open={bulkDeleteOpen} onOpenChange={open => { if (!lock.current) { setBulkDeleteOpen(open); if (!open) setBulkDeleteConfirm(""); } }}><DialogContent>
-        <DialogTitle>Delete {selectedIds.length} selected ${noun}{selectedIds.length === 1 ? "" : "s"}?</DialogTitle>
+        <DialogTitle>Delete {selectedIds.length} selected {noun}{selectedIds.length === 1 ? "" : "s"}?</DialogTitle>
         <DialogDescription>This permanently deletes the selected records across the current selection (not just the page). Archiving is reversible. Export your records before deletion. Type DELETE to confirm.</DialogDescription>
         <input aria-label="Type DELETE to confirm" className={input} autoComplete="off" value={bulkDeleteConfirm} disabled={busy} onChange={event => setBulkDeleteConfirm(event.target.value)} />
         <div className="flex justify-end gap-2"><button className={button} disabled={busy} onClick={() => setBulkDeleteOpen(false)}>Cancel</button>
