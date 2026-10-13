@@ -1,0 +1,40 @@
+name: Scope bulk intake browser assertions
+on:
+  push:
+    branches: [fix/bulk-import-formats-20261013]
+    paths: ['.github/workflows/intake-test-locators.yml']
+permissions:
+  contents: write
+jobs:
+  correct:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Correct scoped locators without weakening assertions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/intake-quality.mjs'); s = p.read_text()
+          old = "const details = dialog.locator('details').filter({ has: dialog.getByText('Column mapping (13 columns)', { exact: true }) });"
+          assert s.count(old) == 1
+          s = s.replace(old, "const details = dialog.locator('details').filter({ hasText: 'Column mapping (13 columns)' });")
+          s = s.replace("if (!(await details.getAttribute('open')))", "if (!(await details.evaluate(element => element.open)))")
+          old = "await page.getByRole('button', { name: 'Split entry', exact: true }).click();"
+          assert s.count(old) == 1
+          s = s.replace(old, "await page.locator('article').filter({ has: page.getByRole('heading', { name: title, exact: true }) }).getByRole('button', { name: 'Split entry', exact: true }).click();")
+          p.write_text(s)
+          p = Path('scripts/library-quality.mjs'); s = p.read_text()
+          old = "await page.getByRole('button', { name: 'Use prompt', exact: true }).waitFor();"
+          assert s.count(old) == 1
+          s = s.replace(old, "await page.locator('article').filter({ has: page.getByRole('heading', { name: promptTitle, exact: true }) }).getByRole('button', { name: 'Use prompt', exact: true }).waitFor();")
+          p.write_text(s)
+          PY
+          node --check scripts/intake-quality.mjs
+          node --check scripts/library-quality.mjs
+          git diff --check
+          git add scripts/intake-quality.mjs scripts/library-quality.mjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'test: distinguish deferred-search results and relative dialog locators'
+          git push origin HEAD:refs/heads/fix/bulk-import-formats-20261013
