@@ -54,11 +54,23 @@ export function inferAffiliateVertical(value: string): string {
   if (/marketing|affiliate|referral/.test(v)) return "Affiliate marketing";
   return "Other";
 }
+export function inferredPromptCategory(content: string): string {
+  const signals: Array<[string, RegExp]> = [
+    ["SEO & content", /\b(seo|keyword research|serp|indexation|canonical|backlinks?|search console|organic traffic|content audit|schema markup|geo\/aeo)\b/i],
+    ["Development", /\b(typescript|javascript|python|debug|code review|bug fix|github|repository|pull request|api endpoint|software architecture|supabase)\b/i],
+    ["Automation", /\b(automation|workflow|telegram bot|scheduled task|agent orchestration|n8n|zapier|webhook)\b/i],
+    ["Marketing", /\b(affiliate|advertising|conversion|email marketing|marketing campaign|sales funnel|copywriting|social media)\b/i],
+    ["Research", /\b(deep research|literature review|fact.check|source evaluation|competitor analysis|market research)\b/i],
+    ["Design", /\b(ui\/ux|interface design|typography|visual identity|brand design|dashboard theme)\b/i],
+    ["Writing", /\b(write an article|rewrite|edit this draft|proofread|storytelling|tone of voice)\b/i],
+    ["Productivity", /\b(task management|productivity|weekly plan|prioritiz|time management)\b/i],
+  ];
+  const scores = signals.map(([name, regex]) => ({ name, score: [...content.matchAll(new RegExp(regex.source, "gi"))].length }));
+  scores.sort((a, b) => b.score - a.score);
+  return scores[0]?.score ? scores[0].name : "Uncategorized";
+}
 function inferredCategory(content: string): string {
-  if (/\b(seo|keyword|serp|indexation)\b/i.test(content)) return "SEO & content";
-  if (/\b(code|typescript|python|debug|function|repository)\b/i.test(content)) return "Development";
-  if (/\b(email|campaign|marketing|affiliate)\b/i.test(content)) return "Marketing";
-  return "General";
+  return inferredPromptCategory(content);
 }
 export function normalizeLibraryRecord(mode: LibraryMode, value: unknown): LibraryRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Each entry must be a record.");
@@ -74,7 +86,7 @@ export function normalizeLibraryRecord(mode: LibraryMode, value: unknown): Libra
     if (content.length > 200_000) throw new Error("A prompt can contain at most 200,000 characters.");
     return {
       kind: "ai-prompt", title: title || content.split(/\r?\n/).find(line => line.trim())!.replace(/^#+\s*/, "").trim().slice(0, 100),
-      content, category: text(item.category).trim() || inferredCategory(content),
+      content, category: text(item.category).trim() || inferredCategory([title, content].filter(Boolean).join("\n")),
       model: text(item.model).trim() || "Any model", tags, variables: promptVariables(content),
       pinned, status, color: text(item.color) || "emerald",
       createdAt: text(item.createdAt) || now, updatedAt: now,
