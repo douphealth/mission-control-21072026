@@ -2,10 +2,10 @@ import BulkIntakeModal from "./BulkIntakeModal";
 import { useDeferredValue, useMemo, useRef, useState, type ReactNode } from "react";
 import { BookOpen, Link2, Plus, Upload, Download, Search, Copy, Pin, Archive, Edit2, Trash2, ArrowUpRight, CheckSquare } from "lucide-react";
 import { toast } from "sonner";
-import { useAIPrompts, useLinks, useAddItem, useUpdateItem, useDeleteItem, useBulkAddItems, useBulkPatch } from "@/hooks/useTableData";
+import { useAIPrompts, useLinks, useAddItem, useUpdateItem, useDeleteItem, useBulkAddItems, useBulkPatch, useBulkDeleteItems } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { inferredLinkKind, libraryTags, normalizeLibraryRecord, promptVariables, renderPrompt, safeLibraryUrl, type LibraryMode, type LibraryRecord } from "@/lib/libraryIntake";
+import { inferredLinkKind, libraryTags, normalizeLibraryRecord, inferAffiliateVertical, promptVariables, renderPrompt, safeLibraryUrl, type LibraryMode, type LibraryRecord } from "@/lib/libraryIntake";
 
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-secondary disabled:opacity-50";
 const primary = `${button} bg-primary text-primary-foreground hover:opacity-90`;
@@ -22,7 +22,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
   const prompts = useAIPrompts();
   const links = useLinks();
   const addItem = useAddItem(); const updateItem = useUpdateItem(); const deleteItem = useDeleteItem();
-  const bulkAdd = useBulkAddItems(); const bulkPatch = useBulkPatch();
+  const bulkAdd = useBulkAddItems(); const bulkPatch = useBulkPatch(); const bulkDelete = useBulkDeleteItems();
   const table = mode === "prompts" ? "notes" : "links";
   const title = mode === "prompts" ? "AI Prompts" : "Links Hub";
   const noun = mode === "prompts" ? "prompt" : "link";
@@ -40,24 +40,29 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
   const [usePrompt, setUsePrompt] = useState<Row | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState("");
+  const [vertical, setVertical] = useState("");
   const filters = useMemo(() => ({
     categories: [...new Set(rows.map(row => row.category).filter(Boolean))].sort() as string[],
     tags: [...new Set(rows.flatMap(row => row.tags || []))].sort(),
     networks: [...new Set(rows.map(row => row.network).filter(Boolean))].sort() as string[],
     websites: [...new Set(rows.map(row => row.website).filter(Boolean))].sort() as string[],
+    verticals: [...new Set(rows.map(row => row.vertical || (mode === "links" ? inferAffiliateVertical([row.title,row.category,row.merchant].join(" ")) : "")).filter(Boolean))].sort() as string[],
   }), [rows]);
   const filtered = useMemo(() => rows.filter(row => {
     if (status !== "all" && (row.status || "active") !== status) return false;
     if (kind === "pinned" && !row.pinned) return false;
     if (mode === "links" && ["affiliate", "standard"].includes(kind) && inferredLinkKind(row as any) !== kind) return false;
+    if (vertical && (row.vertical || inferAffiliateVertical([row.title,row.category,row.merchant].join(" "))) !== vertical) return false;
     if (category && row.category !== category || tag && !row.tags?.includes(tag) || network && row.network !== network || website && row.website !== website) return false;
     return !search || [row.title, row.content, row.url, row.description, row.category, row.model, row.merchant, row.network, row.website, row.campaign, row.trackingId, ...(row.tags || [])].join("\n").toLocaleLowerCase().includes(search);
-  }).sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (b.updatedAt || b.dateAdded || "").localeCompare(a.updatedAt || a.dateAdded || "") || a.title.localeCompare(b.title)), [rows, status, kind, mode, category, tag, network, website, search]);
+  }).sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned) || (b.updatedAt || b.dateAdded || "").localeCompare(a.updatedAt || a.dateAdded || "") || a.title.localeCompare(b.title)), [rows, status, kind, mode, category, tag, network, website, vertical, search]);
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages - 1);
   const visible = filtered.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
   const selectedIds = rows.filter(row => selected.has(row.id)).map(row => row.id);
-  const clearFilters = () => { setQuery(""); setKind("all"); setStatus("active"); setCategory(""); setTag(""); setNetwork(""); setWebsite(""); setPage(0); };
+  const clearFilters = () => { setQuery(""); setKind("all"); setStatus("active"); setCategory(""); setTag(""); setNetwork(""); setWebsite(""); setVertical(""); setPage(0); };
   async function operation(action: () => Promise<void>) {
     if (lock.current) return;
     lock.current = true; setBusy(true); setMessage("");
@@ -115,7 +120,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <label className="flex min-w-48 flex-1 items-center gap-2 rounded-xl border border-border px-3"><Search size={17} /><input aria-label="Search library" className="min-h-11 w-full min-w-0 bg-transparent text-sm outline-none" value={query} onChange={event => { setQuery(event.target.value); setPage(0); }} placeholder="Search text, tags, merchant, model..." /></label>
         </div>
         <div className="flex flex-wrap gap-2">{filterSelect("Categories", category, setCategory, filters.categories)}{filterSelect("Tags", tag, setTag, filters.tags)}
-          {mode === "links" && <>{filterSelect("Networks", network, setNetwork, filters.networks)}{filterSelect("Websites", website, setWebsite, filters.websites)}</>}
+          {mode === "links" && <>{filterSelect("Industries", vertical, setVertical, filters.verticals)}{filterSelect("Networks", network, setNetwork, filters.networks)}{filterSelect("Websites", website, setWebsite, filters.websites)}</>}
           <select className={`${input} sm:w-auto`} aria-label="Status" value={status} onChange={event => { setStatus(event.target.value); setPage(0); }}><option value="active">Active</option><option value="archived">Archived</option><option value="all">All statuses</option></select>
           <button className={button} onClick={clearFilters}>Reset</button>
         </div>
@@ -123,6 +128,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
       {selectedIds.length > 0 && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3" role="region" aria-label="Selected entries">
         <strong className="mr-auto text-sm">{selectedIds.length} selected</strong><button disabled={busy} className={button} onClick={() => patchSelected({ pinned: true })}>Favorite</button>
         <button disabled={busy} className={button} onClick={() => patchSelected({ status: "archived" })}>Archive</button><button disabled={busy} className={button} onClick={() => patchSelected({ status: "active" })}>Restore</button>
+        <button disabled={busy} className={button} onClick={() => { setBulkDeleteConfirm(""); setBulkDeleteOpen(true); }}><Trash2 size={15} />Delete selected</button>
         <button className={button} onClick={() => setSelected(new Set())}>Clear selection</button></div>}
       {message && !editor && !bulkOpen && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
       <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span aria-live="polite">{filtered.length} matching / {rows.length} saved</span>
@@ -130,10 +136,10 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
       {filtered.length === 0 ? <section className="rounded-2xl border border-dashed border-border bg-card p-10 text-center"><h2 className="text-xl font-semibold">{rows.length ? "No matching entries" : `Your ${mode === "prompts" ? "prompt" : "link"} library starts here`}</h2><p className="mt-2 text-sm text-muted-foreground">{rows.length ? "Clear the filters or try another search." : "Add one entry or paste a whole collection with Bulk add. Nothing is sent to an AI provider."}</p></section>
         : <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">{visible.map(row => <article key={row.id} className="min-w-0 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/40">
           <div className="flex items-start gap-3"><label className="grid h-11 w-11 shrink-0 place-items-center"><input type="checkbox" className="h-5 w-5" aria-label={`Select ${row.title}`} checked={selected.has(row.id)} onChange={event => setSelected(previous => { const next = new Set(previous); if (event.target.checked) next.add(row.id); else next.delete(row.id); return next; })} /></label>
-            <div className="min-w-0 flex-1"><h2 className="break-words text-base font-bold">{row.title}</h2><p className="mt-1 text-xs text-muted-foreground">{row.category || "General"}{mode === "prompts" ? ` / ${row.model || "Any model"}` : ` / ${inferredLinkKind(row as any) === "affiliate" ? "Affiliate (check attribution)" : "Standard"}`}</p></div>
+            <div className="min-w-0 flex-1"><h2 className="break-words text-base font-bold">{row.title}</h2><p className="mt-1 text-xs text-muted-foreground">{mode === "links" ? row.vertical || inferAffiliateVertical([row.title,row.category,row.merchant].join(" ")) : row.category || "General"}{mode === "prompts" ? ` / ${row.model || "Any model"}` : ` / ${inferredLinkKind(row as any) === "affiliate" ? "Affiliate (check attribution)" : "Standard"}`}</p></div>
             <button className={button} disabled={busy} aria-label={`Favorite ${row.title}`} aria-pressed={!!row.pinned} onClick={() => void operation(async () => { await updateItem<Row>(table, row.id, { pinned: !row.pinned }); })}><Pin size={16} className={row.pinned ? "fill-current text-primary" : ""} /></button>
           </div>
-          {mode === "prompts" ? <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{row.content}</p> : <><p className="mt-3 truncate text-sm text-primary" title={row.url}>{row.url}</p><p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{[row.merchant, row.network, row.website, row.campaign].filter(Boolean).join(" / ") || row.description}</p></>}
+          {mode === "prompts" ? <p className="mt-3 line-clamp-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">{row.content}</p> : <><p className="mt-3 truncate text-sm text-primary" title={row.url}>{row.url}</p><p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{[row.merchant, row.network, row.website, row.campaign].filter(Boolean).join(" / ") || row.description}</p>{(row.strategyStatus || row.verdict || row.httpStatus) && <p className="mt-2 flex flex-wrap gap-1 text-xs text-muted-foreground">{[row.strategyStatus && `Status: ${row.strategyStatus}`, row.verdict && `Review: ${row.verdict}`, row.httpStatus && `HTTP: ${row.httpStatus}`].filter(Boolean).join(" · ")}</p>}</>}
           <div className="mt-3 flex flex-wrap gap-1.5">{(row.tags || []).slice(0, 8).map(value => <button key={value} className="rounded-lg bg-secondary px-2 py-1 text-xs" onClick={() => { setTag(value); setPage(0); }}>{value}</button>)}</div>
           <div className="mt-4 flex flex-wrap gap-2">
             <button className={primary} onClick={() => mode === "prompts" ? (setVariables({}), setUsePrompt(row)) : void copy(row.url || "")}><Copy size={15} />{mode === "prompts" ? "Use prompt" : "Copy URL"}</button>
@@ -154,7 +160,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
             {editorField("title", "Title (optional; suggested from content)")}
             {mode === "prompts" ? <>{editorField("content", "Prompt content", true)}{editorField("model", "Model / platform (optional)")}</> : <>{editorField("url", "URL")}
               <Field label="Link type"><select disabled={busy} className={input} value={editor?.kind === "affiliate" ? "affiliate" : "standard"} onChange={event => setEditor({ ...editor, kind: event.target.value as "affiliate" | "standard" })}><option value="standard">Standard</option><option value="affiliate">Affiliate</option></select></Field>
-              {editorField("description", "Description", true)}{isAffiliate && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{editorField("merchant", "Merchant")}{editorField("network", "Affiliate network")}{editorField("website", "Website / brand")}{editorField("campaign", "Campaign")}{editorField("trackingId", "Tracking ID (metadata only)")}{editorField("commissionNotes", "Commission / terms notes (unverified)")}{editorField("disclosure", "Disclosure notes")}</div>}</>}
+              {editorField("description", "Description", true)}{isAffiliate && <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{editorField("vertical", "Industry group")}{editorField("linkType", "Relationship type")}{editorField("strategyStatus", "Strategy status (reported)")}{editorField("verdict", "Review verdict (reported)")}{editorField("httpStatus", "HTTP status (reported)")}{editorField("trackingEvidence", "Tracking evidence (reported)")}{editorField("finalUrl", "Final URL (reported)")}{editorField("affiliateDashboard", "Affiliate dashboard URL")}{editorField("merchant", "Merchant")}{editorField("network", "Affiliate network")}{editorField("website", "Website / brand")}{editorField("campaign", "Campaign")}{editorField("trackingId", "Tracking ID (metadata only)")}{editorField("commissionNotes", "Commission / terms notes (unverified)")}{editorField("disclosure", "Disclosure notes")}</div>}</>}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">{editorField("category", "Category (optional)")}<Field label="Tags (comma-separated)"><input disabled={busy} className={input} value={Array.isArray(editor?.tags) ? editor.tags.join(", ") : String(editor?.tags || "")} onChange={event => setEditor({ ...editor, tags: event.target.value as any })} /></Field></div>
             {message && <p role="alert" className="text-sm text-destructive">{message}</p>}
           </div>
@@ -166,6 +172,13 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
         <div className="min-h-0 space-y-3 overflow-y-auto">{promptVariables(usePrompt?.content || "").map(name => <Field key={name} label={name}><textarea className={input} value={Object.hasOwn(variables, name) ? variables[name] : ""} onChange={event => setVariables({ ...variables, [name]: event.target.value })} /></Field>)}
           <textarea aria-label="Prompt preview" readOnly className={`${input} min-h-56 font-mono`} value={renderPrompt(usePrompt?.content || "", variables)} /></div>
         <button className={primary} onClick={() => void copy(renderPrompt(usePrompt?.content || "", variables))}><Copy size={16} />Copy prompt</button></DialogContent></Dialog>
+      <Dialog open={bulkDeleteOpen} onOpenChange={open => { if (!lock.current) { setBulkDeleteOpen(open); if (!open) setBulkDeleteConfirm(""); } }}><DialogContent>
+        <DialogTitle>Delete {selectedIds.length} selected ${noun}{selectedIds.length === 1 ? "" : "s"}?</DialogTitle>
+        <DialogDescription>This permanently deletes the selected records across the current selection (not just the page). Archiving is reversible. Export your records before deletion. Type DELETE to confirm.</DialogDescription>
+        <input aria-label="Type DELETE to confirm" className={input} autoComplete="off" value={bulkDeleteConfirm} disabled={busy} onChange={event => setBulkDeleteConfirm(event.target.value)} />
+        <div className="flex justify-end gap-2"><button className={button} disabled={busy} onClick={() => setBulkDeleteOpen(false)}>Cancel</button>
+          <button className={button} disabled={busy || bulkDeleteConfirm !== "DELETE" || !selectedIds.length} onClick={() => void operation(async () => { await bulkDelete(table, selectedIds); setSelected(new Set()); setBulkDeleteOpen(false); setBulkDeleteConfirm(""); toast.success("Selected records deleted"); })}>Delete {selectedIds.length} records</button>
+        </div></DialogContent></Dialog>
       <Dialog open={!!deleteTarget} onOpenChange={open => { if (!lock.current && !open) setDeleteTarget(null); }}><DialogContent><DialogTitle>Delete this {noun}?</DialogTitle><DialogDescription>Delete "{deleteTarget?.title}" from the library. Archiving is reversible; deletion is not.</DialogDescription>
         {message && <p role="alert" className="text-destructive">{message}</p>}<div className="flex justify-end gap-2"><button className={button} disabled={busy} onClick={() => setDeleteTarget(null)}>Cancel</button><button className={button} disabled={busy} onClick={() => void operation(async () => { if (deleteTarget) await deleteItem(table, deleteTarget.id); setDeleteTarget(null); })}>Delete entry</button></div></DialogContent></Dialog>
     </div>
