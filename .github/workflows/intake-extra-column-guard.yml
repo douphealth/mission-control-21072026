@@ -1,0 +1,43 @@
+name: Guard undeclared intake columns
+on:
+  push:
+    branches: [fix/bulk-import-formats-20261013]
+    paths: ['.github/workflows/intake-extra-column-guard.yml']
+permissions:
+  contents: write
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve explicit mapping for extra headerless fields
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('src/lib/bulkIntake.ts'); s = p.read_text()
+          old = 'for (let i = 7; i < width; i++) set(i, "notes");'
+          assert s.count(old) == 1
+          s = s.replace(old, 'set(7, "notes"); // Extra columns require explicit mapping; never guess secrets into notes.')
+          # Keep the block terminator outside the inline comment.
+          s = s.replace('// Extra columns require explicit mapping; never guess secrets into notes. }', '// Extra columns require explicit mapping; never guess secrets into notes.\n    }')
+          p.write_text(s)
+          p = Path('src/lib/__tests__/bulk-intake-formats.test.ts'); s = p.read_text()
+          s += r'''
+          it("does not guess undeclared headerless extra fields into unencrypted notes", () => {
+            const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\tperson@example.com\tfixture\t\tGeneral\tPublic note\tprivate-extra-do-not-copy");
+            expect(result.rows).toHaveLength(1);
+            expect(result.rows[0].notes).toBe("Public note");
+            expect(JSON.stringify(result.rows)).not.toContain("private-extra-do-not-copy");
+            expect(result.table?.columns[8]).toBe("__ignore__");
+            expect(result.table?.needsReview).toBe(true);
+          });
+          '''
+          p.write_text(s)
+          PY
+          git diff --check
+          git add src/lib/bulkIntake.ts src/lib/__tests__/bulk-intake-formats.test.ts
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix: require explicit mapping for extra headerless credential columns'
+          git push origin HEAD:refs/heads/fix/bulk-import-formats-20261013
