@@ -26,7 +26,16 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
   const table = mode === "prompts" ? "notes" : "links";
   const title = mode === "prompts" ? "AI Prompts" : "Links Hub";
   const noun = mode === "prompts" ? "prompt" : "link";
-  const rows = useMemo(() => (mode === "prompts" ? prompts : links).map(row => ({ ...row, title: String(row.title || "Untitled"), tags: libraryTags(row.tags) })) as Row[], [mode, prompts, links]);
+  const rows = useMemo(() => (mode === "prompts" ? prompts : links).map(row => {
+    // Project legacy audit lines into structured display fields without
+    // rewriting or mutating the actual stored records.
+    let projected = row;
+    if (mode === "links") {
+      try { projected = { ...row, ...normalizeLibraryRecord("links", row) }; }
+      catch { /* Malformed legacy links remain recoverable via Edit. */ }
+    }
+    return { ...projected, id: row.id, title: String(projected.title || "Untitled"), tags: libraryTags(projected.tags) };
+  }) as Row[], [mode, prompts, links]);
   const [query, setQuery] = useState(""); const search = useDeferredValue(query.toLocaleLowerCase());
   const [kind, setKind] = useState("all"); const [status, setStatus] = useState("active");
   const [category, setCategory] = useState(""); const [tag, setTag] = useState("");
