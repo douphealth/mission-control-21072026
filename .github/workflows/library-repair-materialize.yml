@@ -2,7 +2,7 @@ name: Materialize reviewed library repair
 on:
   push:
     branches: [fix/vault-libraries-20261013]
-    paths: ['.maintenance/library-repair-v2/ready.json']
+    paths: ['.maintenance/library-repair-v2/ready.json', '.github/workflows/library-repair-materialize.yml']
 permissions:
   contents: write
 jobs:
@@ -39,11 +39,12 @@ jobs:
           PY
           node --check scripts/library-quality.mjs
           node --check scripts/application-quality.mjs
-      - name: Commit normal source files on the repair branch only
+      - name: Commit source files only; workflow edits use the authorized connector separately
         shell: bash
         run: |
-          git rm -r --ignore-unmatch .maintenance/library-repair-v2 .maintenance/library-patch/01.b64 .github/workflows/library-repair-materialize.yml
-          git add src scripts .github/workflows/application-quality.yml
+          git restore .github/workflows/application-quality.yml
+          git rm -r --ignore-unmatch .maintenance/library-repair-v2 .maintenance/library-patch/01.b64
+          git add src scripts
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'fix: atomic vault imports, prompt library, affiliate links and portfolio reconciliation'
