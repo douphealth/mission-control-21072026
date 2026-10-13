@@ -80,6 +80,23 @@ describe("local library intake", () => {
     const result = parseLibraryIntake("links", JSON.stringify({ links: [original] }));
     expect(result.errors).toEqual([]); expect(result.rows[0]).toMatchObject(original);
   });
+  it("projects imported affiliate audit fields into structured data without losing URL attribution", () => {
+    const link = "https://example.com/ref?aff=fixture123#tracking";
+    const entry = normalizeLibraryRecord("links", {
+      title: "Hosting Provider", url: link, category: "Web Hosting", kind: "affiliate",
+      description: "Strategy status: USE NOW\nVerdict: APPROVED - public link resolves\nHTTP: 200\nFinal URL: https://example.com/landing\nTracking evidence: ref=fixture123\nAffiliate Dashboard: https://example.com/login\nCustom notes untouched",
+    });
+    expect(entry).toMatchObject({ url: link, vertical: "Hosting & infrastructure", strategyStatus: "USE NOW", httpStatus: "200", finalUrl: "https://example.com/landing", trackingEvidence: "ref=fixture123", affiliateDashboard: "https://example.com/login", description: "Custom notes untouched" });
+  });
+  it("preserves recognized audit fields and existing custom notes during normalization", () => {
+    const entry = normalizeLibraryRecord("links", { title: "SEO Partner", url: "https://example.com/?ref=test", kind: "affiliate", strategyStatus: "REVIEW", description: "Strategy status: OLD\nOriginal note" });
+    expect(entry.strategyStatus).toBe("REVIEW");
+    expect(entry.description).toContain("Strategy status: OLD");
+  });
+  it("uses specific prompt classifications and flags uncertain prompts", () => {
+    expect(normalizeLibraryRecord("prompts", { title: "SEO ranking recovery", content: "Investigate canonical, indexation, backlinks and Search Console." }).category).toBe("SEO & content");
+    expect(normalizeLibraryRecord("prompts", { title: "Mystery instructions", content: "Inspect and summarize the document carefully." }).category).toBe("Uncategorized");
+  });
   it("detects Amazon attribution without replacing the original tag", () => {
     const row = normalizeLibraryRecord("links", { url: "https://www.amazon.com/dp/B000?tag=other-20" });
     expect(row).toMatchObject({ trackingId: "other-20", kind: "affiliate", merchant: "Amazon" });
