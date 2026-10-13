@@ -41,6 +41,19 @@ export function inferredLinkKind(row: Partial<LinkItem>): "affiliate" | "standar
   } catch { /* Old malformed records remain editable. */ }
   return "standard";
 }
+export function inferAffiliateVertical(value: string): string {
+  const v = value.toLowerCase();
+  if (/hosting|cloudways|bluehost|digitalocean|domain|server|vps/.test(v)) return "Hosting & infrastructure";
+  if (/seo|keyword|search|rank|backlink/.test(v)) return "SEO & analytics";
+  if (/ai tool|chatgpt|claude|copywriter|automation/.test(v)) return "AI & content tools";
+  if (/email marketing|newsletter|convertkit|aweber|mailchimp/.test(v)) return "Email marketing";
+  if (/social media|socialbee|publer|tiktok|instagram/.test(v)) return "Social media";
+  if (/freelanc|fiverr|marketplace/.test(v)) return "Freelance & services";
+  if (/fitness|running|health/.test(v)) return "Fitness & health";
+  if (/garden|plant|home/.test(v)) return "Home & garden";
+  if (/marketing|affiliate|referral/.test(v)) return "Affiliate marketing";
+  return "Other";
+}
 function inferredCategory(content: string): string {
   if (/\b(seo|keyword|serp|indexation)\b/i.test(content)) return "SEO & content";
   if (/\b(code|typescript|python|debug|function|repository)\b/i.test(content)) return "Development";
@@ -68,18 +81,37 @@ export function normalizeLibraryRecord(mode: LibraryMode, value: unknown): Libra
     };
   }
   const url = safeLibraryUrl(item.url ?? item.link ?? item.affiliateUrl);
+  const legacy = text(item.description ?? item.notes);
+  const audits: Record<string, string> = {};
+  const retained = legacy.split(/\r?\n/).filter(line => {
+    const match = line.match(/^(Strategy status|Verdict|HTTP|Final URL|Tracking evidence|Affiliate Dashboard|Type):\s*(.*)$/i);
+    if (!match) return true;
+    const mapping: Record<string, string> = { "strategy status":"strategyStatus",verdict:"verdict",http:"httpStatus","final url":"finalUrl","tracking evidence":"trackingEvidence","affiliate dashboard":"affiliateDashboard",type:"linkType" };
+    const name = mapping[match[1].toLowerCase()];
+    if (!name || text(item[name]).trim()) return true;
+    audits[name] = match[2];
+    return false;
+  });
   const parsed = new URL(url);
   const kind = inferredLinkKind({ ...item, url } as Partial<LinkItem>);
   const amazon = /^(?:[^.]+\.)?amazon\.(?:com|co\.uk|de|fr|it|es|ca|com\.au|co\.jp|in)$/.test(parsed.hostname) || parsed.hostname === "amzn.to";
   return {
     title: title || parsed.hostname, url, kind, category: text(item.category).trim() || (kind === "affiliate" ? "Affiliate" : "Tools"),
-    description: text(item.description ?? item.notes), tags, pinned, status,
+    description: retained.join("\n"), tags, pinned, status,
     merchant: text(item.merchant).trim() || (amazon ? "Amazon" : ""),
     network: text(item.network).trim() || (amazon ? "Amazon Associates" : ""),
     website: text(item.website).trim(), campaign: text(item.campaign).trim(),
     trackingId: text(item.trackingId).trim() || parsed.searchParams.get("tag") || parsed.searchParams.get("aff_id") || "",
     commissionNotes: text(item.commissionNotes), disclosure: text(item.disclosure),
     dateAdded: text(item.dateAdded) || now.slice(0, 10),
+    vertical: text(item.vertical).trim() || inferAffiliateVertical([title, item.category, item.merchant, item.network, url].map(text).join(" ")),
+    linkType: text(item.linkType).trim() || audits.linkType || "",
+    strategyStatus: text(item.strategyStatus).trim() || audits.strategyStatus || "",
+    verdict: text(item.verdict).trim() || audits.verdict || "",
+    httpStatus: text(item.httpStatus).trim() || audits.httpStatus || "",
+    finalUrl: text(item.finalUrl).trim() || audits.finalUrl || "",
+    trackingEvidence: text(item.trackingEvidence).trim() || audits.trackingEvidence || "",
+    affiliateDashboard: text(item.affiliateDashboard).trim() || audits.affiliateDashboard || "",
   };
 }
 
