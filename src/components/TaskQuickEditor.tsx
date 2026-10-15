@@ -47,6 +47,7 @@ export default function TaskQuickEditor({
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
   const [newSubtask, setNewSubtask] = useState("");
+  const [bulkSubtasks, setBulkSubtasks] = useState("");
   const [saving, setSaving] = useState(false);
   const [category, setCategory] = useState(task?.category || "");
   const [project, setProject] = useState(task?.linkedProject || "");
@@ -105,6 +106,18 @@ export default function TaskQuickEditor({
       subtasks: [...(task.subtasks ?? []), { id: genId(), title: nextTitle, done: false }],
     });
     setNewSubtask("");
+  };
+
+  const addSubtaskList = async () => {
+    const titles = [...new Set(bulkSubtasks.split(/\\r?\\n|;|,(?=\\s)/).map(value => value.replace(/^\\s*(?:[-*•]|\\d+[.)])\\s*/, "").trim()).filter(Boolean))];
+    if (!titles.length) return;
+    const existing = new Set((task.subtasks ?? []).map(item => item.title.trim().toLocaleLowerCase()));
+    const additions = titles.filter(value => !existing.has(value.toLocaleLowerCase()))
+      .map(title => ({ id: genId(), title, done: false }));
+    if (!additions.length) { toast.info("These checklist items already exist"); return; }
+    await patch({ subtasks: [...(task.subtasks ?? []), ...additions] });
+    setBulkSubtasks("");
+    toast.success(`Added ${additions.length} checklist items`);
   };
 
   return (
@@ -335,6 +348,17 @@ export default function TaskQuickEditor({
               </div>
             ))}
           </div>
+          <details className="mt-3 rounded-xl border border-border/50 bg-secondary/20 p-3">
+            <summary className="cursor-pointer text-xs font-semibold">Paste a checklist / shopping list</summary>
+            <p className="mt-2 text-xs text-muted-foreground">One item per line. Duplicate items are skipped. Each item becomes a checkable subtask.</p>
+            <textarea aria-label="Paste checklist items" value={bulkSubtasks} onChange={e => setBulkSubtasks(e.target.value)}
+              placeholder={"Milk\\nEggs\\nBread"} rows={4}
+              className="mt-2 w-full rounded-xl border border-border/50 bg-background px-3 py-2 text-sm outline-none focus:border-primary/60" />
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setBulkSubtasks("Milk\\nEggs\\nBread\\nFruit\\nVegetables\\nYogurt\\nChicken\\nRice")}>Shopping starter list</Button>
+              <Button type="button" size="sm" disabled={!bulkSubtasks.trim()} onClick={() => void addSubtaskList()}>Add checklist items</Button>
+            </div>
+          </details>
           <div className="mt-1.5 flex gap-1.5">
             <input
               value={newSubtask}
