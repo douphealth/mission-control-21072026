@@ -117,6 +117,20 @@ describe("affiliate tables and privacy", () => {
   });
 });
 
+describe("improved header aliases and custom prompt categories", () => {
+  it("recognizes credential key headings in mixed export formats", () => {
+    const raw = "Account Name\tLogin URL\tEmail\tOllama API Key\nOllama\thttps://ollama.example\tfixture@example.com\tsynthetic_key_0123456789abcdef";
+    const result = previewBulkIntake("credentials", raw);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ label: "Ollama", url: "https://ollama.example", username: "fixture@example.com", apiKey: "synthetic_key_0123456789abcdef" });
+    expect(JSON.stringify(result.issues)).not.toContain("synthetic_key_");
+  });
+  it("maps affiliate partner URLs and program/network aliases", () => {
+    const result = previewBulkIntake("links", "Account Name\tAffiliate Program\tPartner URL\tWebsite\tStrategy Status\nExample\tExample Network\thttps://example.com/?ref=fixture\tMy Site\tUSE NOW");
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ title: "Example", network: "Example Network", url: "https://example.com/?ref=fixture", website: "My Site", strategyStatus: "USE NOW" });
+  });
+});
 describe("prompt collection boundaries", () => {
   it("recognizes twelve labeled prompts, individually categorized, with original text intact", () => {
     const raw = Array.from({ length: 12 }, (_, i) => `## Prompt ${i + 1}: ${i % 2 ? "Python debugging" : "SEO audit"}\nYou are a specialist.\n1. Read input.\n2. Explain.\n`).join("\n");
