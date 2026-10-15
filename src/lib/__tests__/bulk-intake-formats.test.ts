@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { previewBulkIntake, PRIVATE } from "@/lib/bulkIntake";
 import { splitPromptCollection } from "@/lib/promptSplit";
+import { parseChecklistItems } from "@/lib/taskChecklist";
 const headers = ["Program", "Category", "Type", "Affiliate/referral link", "Strategy status", "Verdict", "HTTP", "Final URL", "Tracking evidence", "Notes", "Affiliate Dashboard", "Username", "Password"];
 const partner = ["Example Partner", "Social Media", "Ambassador/referral", "https://example.com/Alex?sig=A%2Bb&ref=case#Offer", "USE NOW", "APPROVED", "200", "https://example.com/", "Existing referral", "User supplied notes", "https://example.com/dashboard", "private@example.com", "synthetic-private-value"];
 
@@ -117,8 +118,18 @@ describe("affiliate tables and privacy", () => {
   });
 });
 
-describe("improved header aliases and custom prompt categories", () => {
-  it("recognizes credential key headings in mixed export formats", () => {
+describe("shared checklist parsing", () => {
+  it("supports pasted multiline and delimited items, numbered lists and deduplication", () => {
+    expect(parseChecklistItems("- Milk\\n2. Eggs\\nBread; Milk, Fruit")).toEqual(["Milk", "Eggs", "Bread", "Fruit"]);
+  });
+  it("rejects oversized or excessively long checklist items", () => {
+    expect(() => parseChecklistItems("x".repeat(241))).toThrow(/240 characters/);
+    expect(() => parseChecklistItems(Array(252).fill("item").join("\\n"))).toThrow(/250 checklist items/);
+  });
+});
+
+describe("improved header aliases", () => {
+  it("recognizes provider-specific credential key headings in mixed export formats", () => {
     const raw = "Account Name\tLogin URL\tEmail\tOllama API Key\nOllama\thttps://ollama.example\tfixture@example.com\tsynthetic_key_0123456789abcdef";
     const result = previewBulkIntake("credentials", raw);
     expect(result.rows).toHaveLength(1);
