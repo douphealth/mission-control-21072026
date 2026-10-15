@@ -52,6 +52,7 @@ import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { softDeleteTasks } from "@/lib/taskActions";
 import { estimateOf, fmtMinutes, isPlannedToday } from "@/lib/planning";
 import { useNavigationStore } from "@/stores/navigationStore";
+import { parseChecklistItems } from "@/lib/taskChecklist";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -196,9 +197,12 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
     setNewSub("");
   };
   const addBulkSubs = () => {
-    const titles = [...new Set(bulkSubtasks.split(/\\r?\\n|;|,(?=\\s)/).map(value => value.replace(/^\\s*(?:[-*•]|\\d+[.)])\\s*/, "").trim()).filter(Boolean))];
+    let titles: string[];
+    try { titles = parseChecklistItems(bulkSubtasks); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Invalid checklist"); return; }
     const existing = new Set(form.subtasks.map(item => item.title.trim().toLocaleLowerCase()));
-    const additions = titles.filter(value => !existing.has(value.toLocaleLowerCase())).map(title => ({ id: crypto.randomUUID(), title, done: false }));
+    const additions = titles.filter(value => !existing.has(value.toLocaleLowerCase()))
+      .map(title => ({ id: crypto.randomUUID(), title, done: false }));
     if (!additions.length) { toast.info("No new checklist items to add"); return; }
     uf("subtasks", [...form.subtasks, ...additions]);
     setBulkSubtasks("");
@@ -755,9 +759,9 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
                   <summary className="cursor-pointer text-xs font-semibold">Paste checklist / shopping list</summary>
                   <p className="mt-2 text-xs text-muted-foreground">One item per line. Duplicates are skipped; each item becomes a checkable subtask.</p>
                   <textarea aria-label="Paste checklist items" rows={4} value={bulkSubtasks} onChange={e => setBulkSubtasks(e.target.value)}
-                    placeholder={"Milk\\nEggs\\nBread"} className="mt-2 w-full rounded-xl border border-border/50 bg-background px-3 py-2 text-sm" />
+                    placeholder={"Milk\nEggs\nBread"} className="mt-2 w-full rounded-xl border border-border/50 bg-background px-3 py-2 text-sm" />
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setBulkSubtasks("Milk\\nEggs\\nBread\\nFruit\\nVegetables\\nYogurt\\nChicken\\nRice")} className="rounded-lg bg-secondary px-3 py-2 text-xs">Shopping starter list</button>
+                    <button type="button" onClick={() => setBulkSubtasks("Milk\nEggs\nBread\nFruit\nVegetables\nYogurt\nChicken\nRice")} className="rounded-lg bg-secondary px-3 py-2 text-xs">Shopping starter list</button>
                     <button type="button" disabled={!bulkSubtasks.trim()} onClick={addBulkSubs} className="rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary disabled:opacity-50">Add checklist items</button>
                   </div>
                 </details>
