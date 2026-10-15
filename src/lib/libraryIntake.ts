@@ -61,6 +61,10 @@ export function suggestPromptTitle(content: string): string {
     .replace(/^#{1,4}\s+/, "").replace(/^\*\*|\*\*$/g, "").replace(/^\d+[.)]\s*/, "").trim();
   return candidate.slice(0, 100);
 }
+export function inferredPromptCategory(content: string): string {
+  return suggestPromptCategory(content);
+}
+
 export function suggestPromptCategory(content: string, title = ""): string {
   const signals: Array<[string, RegExp]> = [
     ["SEO & content", /\b(seo|keyword research|serp|indexation|canonical|backlinks?|search console|organic traffic|content audit|schema markup|geo\/aeo)\b/i],
@@ -77,7 +81,7 @@ export function suggestPromptCategory(content: string, title = ""): string {
   scores.sort((a, b) => b.score - a.score);
   if (scores[0]?.score) return scores[0].name;
   const words = (title || content.split(/\r?\n/).find(line => line.trim()) || "").replace(/^#+\s*/, "").trim().split(/\s+/).slice(0, 4).join(" ");
-  return words.length >= 3 ? `Custom: ${words.slice(0, 42)}` : "Uncategorized";
+  return "Uncategorized";
 }
 function inferredCategory(content: string, title = ""): string {
   return suggestPromptCategory(content, title);
