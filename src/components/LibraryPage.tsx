@@ -135,11 +135,11 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <button className={button} onClick={clearFilters}>Reset</button>
         </div>
       </section>
-      {selectedIds.length > 0 && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3" role="region" aria-label="Selected entries">
+      {(selectedIds.length > 0 || (mode === "prompts" && filtered.length > 0)) && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3" role="region" aria-label="Selected entries">
         <strong className="mr-auto text-sm">{selectedIds.length} selected</strong><button disabled={busy} className={button} onClick={() => patchSelected({ pinned: true })}>Favorite</button>
         <button disabled={busy} className={button} onClick={() => patchSelected({ status: "archived" })}>Archive</button><button disabled={busy} className={button} onClick={() => patchSelected({ status: "active" })}>Restore</button>
         <button disabled={busy} className={button} onClick={() => { setBulkDeleteScope("selected"); setBulkDeleteConfirm(""); setBulkDeleteOpen(true); }}><Trash2 size={15} />Delete selected</button>
-        {mode === "prompts" && <button disabled={busy || !filtered.length} className={button} onClick={() => { setBulkDeleteScope("filtered"); setBulkDeleteConfirm(""); setBulkDeleteOpen(true); }}><Trash2 size={15} />Delete filtered prompts</button>}
+        {mode === "prompts" && <button disabled={busy || !filtered.length} className={button} onClick={() => { setBulkDeleteScope("filtered"); setBulkDeleteConfirm(""); setBulkDeleteOpen(true); }}><Trash2 size={15} />Delete {filtered.length} filtered prompts</button>}
         <button className={button} onClick={() => setSelected(new Set())}>Clear selection</button></div>}
       {message && !editor && !bulkOpen && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
       <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span aria-live="polite">{filtered.length} matching / {rows.length} saved</span>
