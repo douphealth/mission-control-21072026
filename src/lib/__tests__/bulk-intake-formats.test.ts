@@ -124,7 +124,7 @@ describe("shared checklist parsing", () => {
   });
   it("rejects oversized or excessively long checklist items", () => {
     expect(() => parseChecklistItems("x".repeat(241))).toThrow(/240 characters/);
-    expect(() => parseChecklistItems(Array(252).fill("item").join("\n"))).toThrow(/250 checklist items/);
+    expect(() => parseChecklistItems(Array.from({ length: 252 }, (_, index) => `item ${index}`).join("\n"))).toThrow(/250 checklist items/);
   });
 });
 
