@@ -120,11 +120,11 @@ describe("affiliate tables and privacy", () => {
 
 describe("shared checklist parsing", () => {
   it("supports pasted multiline and delimited items, numbered lists and deduplication", () => {
-    expect(parseChecklistItems("- Milk\\n2. Eggs\\nBread; Milk, Fruit")).toEqual(["Milk", "Eggs", "Bread", "Fruit"]);
+    expect(parseChecklistItems("- Milk\n2. Eggs\nBread; Milk, Fruit")).toEqual(["Milk", "Eggs", "Bread", "Fruit"]);
   });
   it("rejects oversized or excessively long checklist items", () => {
     expect(() => parseChecklistItems("x".repeat(241))).toThrow(/240 characters/);
-    expect(() => parseChecklistItems(Array(252).fill("item").join("\\n"))).toThrow(/250 checklist items/);
+    expect(() => parseChecklistItems(Array(252).fill("item").join("\n"))).toThrow(/250 checklist items/);
   });
 });
 
