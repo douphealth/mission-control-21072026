@@ -41,7 +41,12 @@ const credentials: Record<string, string> = {
 };
 function field(mode: BulkMode, header: string): string {
   const k = key(header);
-  if (mode === "credentials") return own(credentials, k) || (/^(?:apikey|apitoken|accesstoken|token|secret|password|passwd|pwd|key|licensekey|clientsecret|privatetoken)$/.test(k) ? "apiKey" : IGNORE);
+  if (mode === "credentials") {
+    const known = own(credentials, k);
+    if (known) return known;
+    if (/(?:api|access|auth|client|private|secret|license|service|personal|bearer).*(?:key|token|secret)|(?:key|token|secret).*(?:api|access|auth|client|private|license|service|personal|bearer)/.test(k)) return "apiKey";
+    return IGNORE;
+  }
   if (mode === "links" && /(?:password|passphrase|secret|apikey|apitoken|accesstoken|bearertoken|username|userid|email|licensekey|productkey|recoverycode)|^(?:pass|pwd|key|token|login)$/.test(k)) return PRIVATE;
   return own(mode === "links" ? links : prompts, k) || own(common, k) || IGNORE;
 }
