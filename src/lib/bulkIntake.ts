@@ -33,7 +33,7 @@ const likelyHeaderData = (v: string) => emailCell(v) || dateCell(v) || opaqueCel
 
 const common: Record<string, string> = { title: "title", name: "title", category: "category", tags: "tags", tag: "tags", status: "status", pinned: "pinned", favorite: "pinned", createdat: "createdAt", updatedat: "updatedAt", dateadded: "dateAdded", color: "color" };
 const links: Record<string, string> = {
-  program: "title", programname: "title", tool: "title", service: "title", product: "title", url: "url", link: "url", affiliateurl: "url", affiliatelink: "url", referralurl: "url", referrallink: "url", affiliatereferrallink: "url", affiliatereferralurl: "url", partnerlink: "url", destinationurl: "url", trackingurl: "url", kind: "kind", type: "kind", linktype: "kind", merchant: "merchant", brand: "merchant", network: "network", affiliatenetwork: "network", website: "website", websites: "website", campaign: "campaign", trackingid: "trackingId", commission: "commissionNotes", commissionnotes: "commissionNotes", disclosure: "disclosure", disclosurenotes: "disclosure", notes: "description", note: "description", description: "description", finalurl: "finalUrl", affiliatedashboard: "affiliateDashboard", dashboard: "affiliateDashboard", strategystatus: "strategyStatus", verdict: "verdict", http: "httpStatus", httpstatus: "httpStatus", trackingevidence: "trackingEvidence", vertical: "vertical", industry: "vertical", linkvertical: "vertical", relationshiptype: "linkType",
+  program: "title", programname: "title", tool: "title", service: "title", product: "title", name: "title", account: "title", accountname: "title", accountlabel: "title", label: "title", url: "url", link: "url", affiliateurl: "url", affiliatelink: "url", affiliatereferrallink: "url", affiliatereferralurl: "url", referralurl: "url", referrallink: "url", partnerurl: "url", partnerlink: "url", referrallink: "url", affiliatereferrallink: "url", affiliatereferralurl: "url", partnerlink: "url", destinationurl: "url", trackingurl: "url", kind: "kind", type: "kind", linktype: "kind", merchant: "merchant", brand: "merchant", network: "network", affiliatenetwork: "network", affiliateprogram: "network", programnetwork: "network", website: "website", websites: "website", sitename: "website", brandwebsite: "website", campaign: "campaign", campaignname: "campaign", trackingid: "trackingId", affiliateid: "trackingId", commission: "commissionNotes", commissionnotes: "commissionNotes", disclosure: "disclosure", disclosurenotes: "disclosure", notes: "description", note: "description", description: "description", finalurl: "finalUrl", affiliatedashboard: "affiliateDashboard", dashboard: "affiliateDashboard", strategystatus: "strategyStatus", verdict: "verdict", http: "httpStatus", httpstatus: "httpStatus", trackingevidence: "trackingEvidence", vertical: "vertical", industry: "vertical", linkvertical: "vertical", relationshiptype: "linkType",
 };
 const prompts: Record<string, string> = { prompt: "content", aiprompt: "content", prompttext: "content", promptcontent: "content", content: "content", body: "content", text: "content", instructions: "content", prompttitle: "title", promptname: "title", model: "model", platform: "model", kind: IGNORE, variables: IGNORE, id: IGNORE };
 const credentials: Record<string, string> = {
@@ -41,7 +41,7 @@ const credentials: Record<string, string> = {
 };
 function field(mode: BulkMode, header: string): string {
   const k = key(header);
-  if (mode === "credentials") return own(credentials, k) || IGNORE;
+  if (mode === "credentials") return own(credentials, k) || (/^(?:apikey|apitoken|accesstoken|token|secret|password|passwd|pwd|key|licensekey|clientsecret|privatetoken)$/.test(k) ? "apiKey" : IGNORE);
   if (mode === "links" && /(?:password|passphrase|secret|apikey|apitoken|accesstoken|bearertoken|username|userid|email|licensekey|productkey|recoverycode)|^(?:pass|pwd|key|token|login)$/.test(k)) return PRIVATE;
   return own(mode === "links" ? links : prompts, k) || own(common, k) || IGNORE;
 }
@@ -113,7 +113,7 @@ function readTable(mode: BulkMode, input: string, options: IntakeOptions): { tab
   if (!data.length) return null;
   const firstFields = data[0].cells.map(cell => field(mode, cell));
   const realFields = firstFields.filter(f => ![IGNORE, PRIVATE, EXTRA].includes(f));
-  const firstRowHasData = data[0].cells.some(v => webCell(v) || likelyHeaderData(v));
+  const firstRowHasData = data[0].cells.some(v => webCell(v) || likelyHeaderData(v)) || (mode === "credentials" && data[0].cells.some(v => emailCell(v) || dateCell(v)));
   // Data must not be treated as eleven column headings and the first key lost.
   const headerLikely = !firstRowHasData && new Set(realFields).size >= 2;
   const hasHeader = options.hasHeader ?? headerLikely;
