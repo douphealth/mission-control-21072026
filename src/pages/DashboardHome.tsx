@@ -1,3 +1,4 @@
+import FamilyScheduleToday from "@/components/dashboard/FamilyScheduleToday";
 // ─── Mission Control — Editorial Dashboard ────────────────────────────────────
 // First viewport: greeting hero, stat tiles, plan + timeline.
 // Capture is one keystroke away. Everything staggers in beautifully.
@@ -175,6 +176,7 @@ export default function DashboardHome() {
 
   return (
     <div className="mc16-dashboard mc38-today-page flex flex-col gap-4 pb-8 sm:gap-5">
+      <FamilyScheduleToday />
       <div className="mc-home-toolbar ultra-fade">
         <div className="mc37-today-brand flex min-w-0 items-center gap-3">
           <span className="mc37-today-sun" aria-hidden="true"><Sunrise size={20} /></span>

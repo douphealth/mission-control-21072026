@@ -62,6 +62,7 @@ import { toast } from "sonner";
 import Fuse from "fuse.js";
 
 const sections = [
+  { id: "family-schedule", label: "Family Timetable", icon: Calendar, emoji: "", keywords: ["schedule", "routine", "weekly", "yearly", "family", "lessons", "practice"] },
   { id: "ai-prompts", label: "AI Prompts", icon: FileText, emoji: "\u2728", keywords: ["prompts", "templates", "ai", "library"] },
   {
     id: "dashboard",

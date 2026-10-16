@@ -1,3 +1,4 @@
+import CollectorStatusPanel from "@/components/controlcenter/CollectorStatusPanel";
 import { isOwnedDomainCoverage } from "@/lib/intelligenceRunQuality";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -92,7 +93,12 @@ export default function MentionsPage() {
   }, [enabledTerms]);
 
   const addTerm = async () => {
-    const clean = term.trim();
+    let clean = term.trim();
+    if (type === "domain" && clean) {
+      try { const parsed = new URL(/^https?:\/\//i.test(clean) ? clean : `https://${clean}`); if (!parsed.hostname.includes(".") || parsed.username || parsed.password) throw new Error(); clean = parsed.hostname.toLowerCase().replace(/^www\./, ""); }
+      catch { toast.error("Enter a valid domain, such as example.com."); return; }
+    }
+    if (type === "handle" && clean) clean = "@" + clean.replace(/^@+/, "");
     if (!clean) return;
 
     const anchorList = anchors
@@ -168,6 +174,7 @@ export default function MentionsPage() {
           </button>
         }
       />
+      <CollectorStatusPanel kind="mentions" />
 
       {report && <Panel>
         <div role="status" className="text-sm font-bold">{report.checked}/{report.total} terms checked · {report.matched} matches · {report.added} new</div>

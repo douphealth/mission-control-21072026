@@ -1,3 +1,4 @@
+import CollectorStatusPanel from "@/components/controlcenter/CollectorStatusPanel";
 import { audienceProfile } from "@/lib/audienceEvidence";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -17,7 +18,7 @@ import { useAudienceAccounts, useAudienceReadings, genId } from "@/hooks/useTabl
 import { db, type AudiencePlatform, type AudienceReading } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { runAudienceCollector } from "@/lib/controlCenter";
-import { isTrustedAudienceReading } from "@/lib/intelligenceQuality";
+import { isTrustedAudienceReading, isRecentIso } from "@/lib/intelligenceQuality";
 import { CCHeader, EmptyState, Panel, relTime } from "@/components/controlcenter/ui";
 
 const PLATFORMS: {
@@ -107,7 +108,7 @@ export default function AudiencePage() {
     (reading) => reading.method === "official-api",
   ).length;
   const freshVerified = [...latestValid.values()].filter(
-    (reading) => Date.now() - new Date(reading.capturedAt).getTime() < 24 * 3_600_000,
+    (reading) => isRecentIso(reading.capturedAt, 1),
   ).length;
   const unavailable = accounts.filter(
     (account) => account.lastStatus === "limited" || account.lastStatus === "unavailable",
@@ -206,6 +207,7 @@ export default function AudiencePage() {
           </button>
         }
       />
+      <CollectorStatusPanel kind="audience" />
 
       <section className="grid gap-2 sm:grid-cols-4">
         {[
@@ -315,6 +317,8 @@ export default function AudiencePage() {
                     (reading) =>
                       reading.method === latest.method &&
                       reading.provider === latest.provider &&
+                      reading.providerAccountId === latest.providerAccountId &&
+                      reading.metricSemantics === latest.metricSemantics &&
                       Boolean(reading.approximate) === Boolean(latest.approximate),
                   )
               : undefined;

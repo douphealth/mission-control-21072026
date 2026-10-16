@@ -1,3 +1,4 @@
+import TaskChecklistEditor from "@/components/tasks/TaskChecklistEditor";
 import TaskDialogFrame from "@/components/TaskDialogFrame";
 import TaskCommandBar from "@/components/tasks/TaskCommandBar";
 import { useTasks, useAddItem, useUpdateItem, useDuplicateItem } from "@/hooks/useTableData";
@@ -52,7 +53,7 @@ import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { softDeleteTasks } from "@/lib/taskActions";
 import { estimateOf, fmtMinutes, isPlannedToday } from "@/lib/planning";
 import { useNavigationStore } from "@/stores/navigationStore";
-import { parseChecklistItems } from "@/lib/taskChecklist";
+import { appendChecklistItems } from "@/lib/taskChecklist";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -177,7 +178,6 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
   const [form, setForm] = useState<Omit<Task, "id">>(() =>
     task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" },
   );
-  const [newSub, setNewSub] = useState("");
   const [bulkSubtasks, setBulkSubtasks] = useState("");
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
@@ -186,43 +186,9 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
   // Reset modal state when the selected task changes.
   useEffect(() => {
     setForm(task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" });
+    setBulkSubtasks("");
   }, [task?.id, open, defaultStatus]);
 
-  const addSub = () => {
-    if (!newSub.trim()) return;
-    uf("subtasks", [
-      ...form.subtasks,
-      { id: `s-${Date.now()}`, title: newSub.trim(), done: false } as Subtask,
-    ]);
-    setNewSub("");
-  };
-  const addBulkSubs = () => {
-    let titles: string[];
-    try { titles = parseChecklistItems(bulkSubtasks); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Invalid checklist"); return; }
-    const existing = new Set(form.subtasks.map(item => item.title.trim().toLocaleLowerCase()));
-    const additions = titles.filter(value => !existing.has(value.toLocaleLowerCase()))
-      .map(title => ({ id: crypto.randomUUID(), title, done: false }));
-    if (!additions.length) { toast.info("No new checklist items to add"); return; }
-    uf("subtasks", [...form.subtasks, ...additions]);
-    setBulkSubtasks("");
-    toast.success(`Added ${additions.length} checklist items`);
-  };
-  const removeSub = (id: string) =>
-    uf(
-      "subtasks",
-      form.subtasks.filter((s: Subtask) => s.id !== id),
-    );
-  const toggleSub = (id: string) =>
-    uf(
-      "subtasks",
-      form.subtasks.map((s: Subtask) => (s.id === id ? { ...s, done: !s.done } : s)),
-    );
-  const updateSub = (id: string, changes: Partial<Subtask>) =>
-    uf(
-      "subtasks",
-      form.subtasks.map((s: Subtask) => (s.id === id ? { ...s, ...changes } : s)),
-    );
 
   const save = async () => {
     if (saveLock.current) return;
@@ -230,7 +196,7 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
     saveLock.current = true;
     setSaving(true);
     try {
-      const subtasks = newSub.trim() ? [...form.subtasks, { id: crypto.randomUUID(), title: newSub.trim(), done: false }] : form.subtasks;
+      const subtasks = appendChecklistItems(form.subtasks || [], bulkSubtasks);
       await onSave({ ...form, title: form.title.trim(), subtasks, ...(task?.id ? { id: task.id } : {}) });
       onClose();
     } catch (error) {
@@ -687,106 +653,7 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
                 />
               </div>
 
-              {/* Subtasks */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide block mb-2">
-                  Subtasks{" "}
-                  {form.subtasks.length > 0 && (
-                    <span className="text-primary">
-                      ({form.subtasks.filter((s: Subtask) => s.done).length}/{form.subtasks.length})
-                    </span>
-                  )}
-                </label>
-                <div className="space-y-1.5 mb-2">
-                  {form.subtasks.map((sub: Subtask) => (
-                    <div
-                      key={sub.id}
-                      className="flex items-start gap-2 px-3 py-2 rounded-xl bg-secondary/50 group"
-                    >
-                      <button
-                        type="button"
-                        onClick={() => toggleSub(sub.id)}
-                        className={`shrink-0 mt-0.5 transition-colors ${sub.done ? "text-emerald-500" : "text-muted-foreground hover:text-primary"}`}
-                      >
-                        {sub.done ? <CheckCircle2 size={14} /> : <Circle size={14} />}
-                      </button>
-                      <div className="flex-1 min-w-0">
-                        <span
-                          className={`text-sm block ${sub.done ? "line-through text-muted-foreground" : "text-foreground"}`}
-                        >
-                          {sub.title}
-                        </span>
-                        {/* Subtask date/time — inline, minimal */}
-                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                          <input
-                            type="date"
-                            value={sub.dueDate || ""}
-                            onChange={(e) => updateSub(sub.id, { dueDate: e.target.value })}
-                            className="px-2 py-0.5 rounded-lg bg-card text-[10px] text-muted-foreground outline-none focus:ring-1 focus:ring-primary/30 w-[120px]"
-                            title="Subtask date"
-                          />
-                          <input
-                            type="time"
-                            value={sub.dueTime || ""}
-                            onChange={(e) => updateSub(sub.id, { dueTime: e.target.value })}
-                            className="px-2 py-0.5 rounded-lg bg-card text-[10px] text-muted-foreground outline-none focus:ring-1 focus:ring-primary/30 w-[85px]"
-                            title="Subtask time"
-                          />
-                          {(sub.dueDate || sub.dueTime) && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateSub(sub.id, { dueDate: undefined, dueTime: undefined })
-                              }
-                              className="text-muted-foreground/50 hover:text-destructive text-[9px]"
-                            >
-                              clear
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeSub(sub.id)}
-                        className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-0.5 mt-0.5"
-                      >
-                        <X size={11} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <details className="mb-3 rounded-xl border border-border/40 bg-secondary/20 p-3">
-                  <summary className="cursor-pointer text-xs font-semibold">Paste checklist / shopping list</summary>
-                  <p className="mt-2 text-xs text-muted-foreground">One item per line. Duplicates are skipped; each item becomes a checkable subtask.</p>
-                  <textarea aria-label="Paste checklist items" rows={4} value={bulkSubtasks} onChange={e => setBulkSubtasks(e.target.value)}
-                    placeholder={"Milk\nEggs\nBread"} className="mt-2 w-full rounded-xl border border-border/50 bg-background px-3 py-2 text-sm" />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" onClick={() => setBulkSubtasks("Milk\nEggs\nBread\nFruit\nVegetables\nYogurt\nChicken\nRice")} className="rounded-lg bg-secondary px-3 py-2 text-xs">Shopping starter list</button>
-                    <button type="button" disabled={!bulkSubtasks.trim()} onClick={addBulkSubs} className="rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary disabled:opacity-50">Add checklist items</button>
-                  </div>
-                </details>
-                <div className="flex items-center gap-2">
-                  <input
-                    value={newSub}
-                    onChange={(e) => setNewSub(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addSub();
-                      }
-                    }}
-                    placeholder="Add subtask... (Enter to add)"
-                    className="flex-1 px-3 py-2 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 placeholder:text-muted-foreground/50"
-                  />
-                  <button
-                    type="button"
-                    onClick={addSub}
-                    className="px-3 py-2 rounded-xl bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-sm font-medium"
-                  >
-                    <Plus size={14} />
-                  </button>
-                </div>
-              </div>
+              <TaskChecklistEditor key={`${task?.id || "new"}-${open}`} items={form.subtasks || []} onChange={items => setForm(previous => ({ ...previous, subtasks: items }))} draft={bulkSubtasks} onDraftChange={setBulkSubtasks} disabled={saving} />
             </div>
 
       {task && onDelete && <button type="button" disabled={saving} onClick={async () => {

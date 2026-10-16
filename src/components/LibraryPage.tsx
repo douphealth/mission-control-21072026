@@ -178,7 +178,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <div className="flex shrink-0 justify-end gap-2 border-t border-border pt-3"><button disabled={busy} className={button} onClick={() => setEditor(null)}>Cancel</button><button disabled={busy} className={primary} onClick={saveEditor}>{busy ? "Saving..." : `Save ${noun}`}</button></div>
         </DialogContent>
       </Dialog>
-      <BulkIntakeModal mode={mode} open={bulkOpen} onClose={() => setBulkOpen(false)} source={splitSource} onImport={entries => bulkAdd(table, entries as any[])} />
+      <BulkIntakeModal existingCategories={filters.categories} mode={mode} open={bulkOpen} onClose={() => setBulkOpen(false)} source={splitSource} onImport={entries => bulkAdd(table, entries as any[])} />
       <Dialog open={!!usePrompt} onOpenChange={open => { if (!open) setUsePrompt(null); }}><DialogContent className="flex max-h-[90dvh] w-[calc(100%-1rem)] flex-col overflow-hidden rounded-2xl sm:max-w-3xl"><DialogTitle>{usePrompt?.title}</DialogTitle><DialogDescription>Fill template fields locally. The saved original is not modified.</DialogDescription>
         <div className="min-h-0 space-y-3 overflow-y-auto">{promptVariables(usePrompt?.content || "").map(name => <Field key={name} label={name}><textarea className={input} value={Object.hasOwn(variables, name) ? variables[name] : ""} onChange={event => setVariables({ ...variables, [name]: event.target.value })} /></Field>)}
           <textarea aria-label="Prompt preview" readOnly className={`${input} min-h-56 font-mono`} value={renderPrompt(usePrompt?.content || "", variables)} /></div>

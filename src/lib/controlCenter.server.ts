@@ -11,62 +11,8 @@ export interface RawItem {
   sourceUrl?: string;
 }
 
-const UA = "Mozilla/5.0 (compatible; MissionControl/1.0)";
-
-export async function httpGet(
-  url: string,
-  timeoutMs = 12_000,
-  retries = 1,
-): Promise<string> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt <= retries; attempt += 1) {
-    const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
-    try {
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": UA,
-          Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml, text/html;q=0.9, */*;q=0.5",
-          "Accept-Language": "en-US,en;q=0.9,el;q=0.8",
-          "Cache-Control": "no-cache",
-        },
-        signal: ctrl.signal,
-        redirect: "follow",
-      });
-
-      if (res.ok) return await res.text();
-
-      const retryable = [408, 425, 429, 500, 502, 503, 504].includes(res.status);
-      const retryAfterRaw = res.headers.get("retry-after");
-      const retryAfterSeconds = retryAfterRaw ? Number(retryAfterRaw) : NaN;
-      lastError = new Error(`HTTP ${res.status}`);
-
-      if (!retryable || attempt >= retries) throw lastError;
-
-      const delayMs = Number.isFinite(retryAfterSeconds)
-        ? Math.min(5_000, Math.max(250, retryAfterSeconds * 1_000))
-        : Math.min(2_500, 300 * 2 ** attempt);
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-    } catch (error) {
-      lastError = error;
-      const name = error instanceof Error ? error.name : "";
-      const message = error instanceof Error ? error.message : String(error);
-      const retryable =
-        name === "AbortError" ||
-        /HTTP (408|425|429|500|502|503|504)\b/.test(message);
-
-      if (!retryable || attempt >= retries) throw error;
-      await new Promise((resolve) =>
-        setTimeout(resolve, Math.min(2_500, 300 * 2 ** attempt)),
-      );
-    } finally {
-      clearTimeout(timeout);
-    }
-  }
-
-  throw lastError instanceof Error ? lastError : new Error("Request failed");
-}
+import { fetchPublicFeed, publicFeedUrl } from "./publicFeedFetch.server";
+export const httpGet = fetchPublicFeed;
 
 function decodeEntities(s: string): string {
   return s
@@ -132,16 +78,16 @@ export function parseFeed(xml: string): RawItem[] {
 
 /** Find a feed URL from a homepage: <link rel=alternate> then common paths. */
 export async function discoverFeed(pageUrl: string): Promise<string | null> {
-  const base = new URL(pageUrl);
+  const base = publicFeedUrl(pageUrl);
   try {
-    const html = await httpGet(base.toString());
+    const html = await httpGet(base.toString(), 6000, 0);
     if (/<(rss|feed)[\s>]/i.test(html.slice(0, 2000))) return base.toString();
     const links = html.match(/<link[^>]+>/gi) ?? [];
     for (const l of links) {
       if (!/rel=["']?alternate/i.test(l)) continue;
       if (!/type=["'][^"']*(rss|atom)\+xml/i.test(l)) continue;
       const href = l.match(/href=["']([^"']+)["']/i);
-      if (href) return new URL(decodeEntities(href[1]), base).toString();
+      if (href) return publicFeedUrl(new URL(decodeEntities(href[1]), base).toString()).toString();
     }
   } catch {
     /* homepage may be blocked — fall through to common paths */
@@ -151,14 +97,12 @@ export async function discoverFeed(pageUrl: string): Promise<string | null> {
     "/rss",
     "/rss.xml",
     "/feed.xml",
-    "/atom.xml",
-    "/index.xml",
-    "/blog/feed",
+
   ];
   for (const path of candidates) {
     try {
       const url = new URL(path, base).toString();
-      const body = await httpGet(url, 8000);
+      const body = await httpGet(url, 4500, 0);
       if (/<(rss|feed)[\s>]/i.test(body.slice(0, 2000))) return url;
     } catch {
       /* try next */

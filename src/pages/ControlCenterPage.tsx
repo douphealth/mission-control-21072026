@@ -1,3 +1,5 @@
+import CollectorStatusPanel from "@/components/controlcenter/CollectorStatusPanel";
+import { isTrustedAudienceReading, isRecentIso } from "@/lib/intelligenceQuality";
 import { useMemo, useState } from "react";
 import { RefreshCw, Newspaper, AtSign, Users, Bell, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +10,7 @@ import {
   useReminders,
   useStreamItems,
   useWatchTerms,
+  useTasks,
 } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { lastCollectorRun, runAllCollectors } from "@/lib/controlCenter";
@@ -29,11 +32,13 @@ export default function ControlCenterPage() {
   const accounts = useAudienceAccounts();
   const readings = useAudienceReadings();
   const reminders = useReminders();
+  const tasks = useTasks();
+  const captures = tasks.filter(t => t.inbox && !t.archived && !t.deletedAt && t.status !== "done");
   const { setActiveSection } = useNavigationStore();
   const [busy, setBusy] = useState(false);
   const [lastRun, setLastRun] = useState<string | null>(() => lastCollectorRun());
 
-  const active = useMemo(() => items.filter((i) => i.status === "active"), [items]);
+  const active = useMemo(() => items.filter((i) => i.status === "active" && i.dateBasis === "published" && isRecentIso(i.publishedAt, 30)), [items]);
   const topStories = useMemo(
     () =>
       active
@@ -57,8 +62,7 @@ export default function ControlCenterPage() {
           (r) =>
             r.status !== "done" && new Date(r.remindAt).getTime() <= Date.now() + 24 * 3_600_000,
         )
-        .sort((a, b) => a.remindAt.localeCompare(b.remindAt))
-        .slice(0, 5),
+        .sort((a, b) => a.remindAt.localeCompare(b.remindAt)),
     [reminders],
   );
   const audienceTotals = useMemo(() => {
@@ -66,7 +70,7 @@ export default function ControlCenterPage() {
     let observedAccounts = 0;
     accounts.forEach((a) => {
       const latest = readings
-        .filter((r) => r.accountId === a.id && r.followers !== null)
+        .filter((r) => r.accountId === a.id && isTrustedAudienceReading(r) && isRecentIso(r.capturedAt, 1))
         .sort((x, y) => y.capturedAt.localeCompare(x.capturedAt))[0];
       if (latest && latest.followers !== null) {
         followers += latest.followers;
@@ -80,10 +84,11 @@ export default function ControlCenterPage() {
     setBusy(true);
     try {
       const res = await runAllCollectors();
-      setLastRun(new Date().toISOString());
-      toast.success("Control Center refreshed", {
-        description: `${res.industry.added} stories · ${res.mentions.added} mentions · ${res.audience.updated} profiles`,
-      });
+      setLastRun(res.attemptedAt);
+      const description = `${res.industry.added} stories; ${res.mentions.added} mentions; ${res.audience.succeeded} verified audience updates. ${res.errors.slice(0, 2).join("; ")}`;
+      if (res.outcome === "complete") toast.success("Refresh complete", { description });
+      else if (res.outcome === "not-configured") toast.info("Add enabled sources or profiles before refreshing");
+      else toast.warning(res.outcome === "partial" ? "Refresh partially completed" : "Refresh unavailable", { description });
     } catch (e: any) {
       toast.error("Refresh failed", { description: String(e?.message ?? e) });
     } finally {
@@ -91,7 +96,7 @@ export default function ControlCenterPage() {
     }
   };
 
-  const nothingConfigured = !sources.length && !terms.length && !accounts.length;
+  const nothingConfigured = !sources.some(s => s.enabled) && !terms.some(t => t.enabled) && !accounts.length;
 
   return (
     <div className="space-y-6">
@@ -99,7 +104,7 @@ export default function ControlCenterPage() {
         title="Control Center"
         subtitle={
           lastRun
-            ? `Last refreshed ${relTime(lastRun)}`
+            ? `Last refresh attempt ${relTime(lastRun)} - source status below`
             : "Industry news, brand mentions, audience and reminders in one place."
         }
         actions={
@@ -115,27 +120,29 @@ export default function ControlCenterPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatTile
-          label="Stories"
+          label="Stories (30 days)"
           value={active.filter((i) => i.kind === "industry").length}
-          hint={`${sources.length} sources`}
+          hint={`${sources.filter(s => s.enabled).length} enabled sources`}
         />
         <StatTile
-          label="Mentions"
+          label="Mentions (30 days)"
           value={active.filter((i) => i.kind === "mention").length}
-          hint={`${terms.length} watched terms`}
+          hint={`${terms.filter(t => t.enabled).length} enabled terms`}
         />
         <StatTile
-          label="Followers"
+          label="Followers (fresh <24h)"
           value={audienceTotals.observedAccounts ? nf.format(audienceTotals.followers) : "—"}
           hint={`${audienceTotals.observedAccounts}/${accounts.length} profiles observed`}
         />
         <StatTile label="Reminders due" value={dueReminders.length} hint="next 24 hours" />
       </div>
 
+      <CollectorStatusPanel kind="all" />
+      <Panel><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">Captured tasks awaiting a decision <span className="text-primary">{captures.length}</span></h2><button className="min-h-11 rounded-xl border border-border px-3 text-sm" onClick={() => setActiveSection("tasks")}>Open Tasks</button></div>{captures.length ? <div className="mt-3 space-y-2">{captures.slice(0, 5).map(t => <div key={t.id} className="rounded-xl bg-secondary/50 px-3 py-2 text-sm">{t.title}</div>)}</div> : <p className="mt-2 text-sm text-muted-foreground">No saved tasks are waiting in the capture inbox.</p>}</Panel>
       {nothingConfigured ? (
         <EmptyState
           title="Set up your Control Center"
-          hint="Add news sources in Industry, watch terms in Mentions, and profiles in Audience. Everything runs on free public feeds — no API key needed."
+          hint="Add news sources in Industry, watch terms in Mentions, and profiles in Audience. Public feeds need no key; restricted audience networks require official API access."
         />
       ) : (
         <div className="grid gap-4 xl:grid-cols-2">
@@ -198,7 +205,7 @@ export default function ControlCenterPage() {
               </div>
               {dueReminders.length ? (
                 <div className="space-y-2">
-                  {dueReminders.map((r) => (
+                  {dueReminders.slice(0, 5).map((r) => (
                     <div key={r.id} className="flex items-center justify-between gap-3 text-sm">
                       <span className="truncate font-medium text-foreground">{r.title}</span>
                       <span className="text-[11px] text-muted-foreground shrink-0">
@@ -228,7 +235,7 @@ export default function ControlCenterPage() {
                 {audienceTotals.observedAccounts ? nf.format(audienceTotals.followers) : "—"}
               </p>
               <p className="text-[11px] text-muted-foreground">
-                total observed followers across {audienceTotals.observedAccounts}/{accounts.length} tracked profiles
+                fresh verified follower observations across {audienceTotals.observedAccounts}/{accounts.length} tracked profiles
               </p>
             </Panel>
           </div>
