@@ -34,7 +34,7 @@ export async function runPremiumChecks(page, check, engine) {
   });
   await test('Yearly timetable survives reload, honors excluded dates and fits mobile', async () => {
     await go('family-schedule'); await page.getByTestId('family-schedule').waitFor(); await page.getByRole('button', { name: 'Add activity', exact: true }).click(); const dialog = page.getByRole('dialog', { name: 'New activity' }), title = `QA lesson ${crypto.randomUUID()}`;
-    await dialog.getByRole('textbox', { name: 'Family member', exact: true }).fill('Synthetic member'); await dialog.getByRole('textbox', { name: 'Activity', exact: true }).fill(title);
+    await dialog.getByRole('combobox', { name: 'Family member', exact: true }).fill('Synthetic member'); await dialog.getByRole('textbox', { name: 'Activity', exact: true }).fill(title);
     for (const [i, name] of ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].entries()) await dialog.getByRole('checkbox', { name, exact: true }).setChecked(i === 0);
     await dialog.getByLabel('Activity first date', { exact: true }).fill('2026-09-01'); await dialog.getByLabel('Activity last date', { exact: true }).fill('2027-06-30'); await dialog.getByLabel('Activity start time', { exact: true }).fill('17:00'); await dialog.getByLabel('Activity end time', { exact: true }).fill('19:00'); await dialog.getByRole('textbox', { name: 'Excluded dates', exact: true }).fill('2026-10-19, 2026-12-28');
     await dialog.getByRole('button', { name: 'Save activity', exact: true }).click(); await dialog.waitFor({ state: 'hidden' }); await page.getByLabel('Timetable date', { exact: true }).fill('2026-10-26'); await page.locator('.fs-day-grid').getByRole('heading', { name: title, exact: true }).waitFor();
