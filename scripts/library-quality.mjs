@@ -122,6 +122,7 @@ for (const [engine, type] of [['chromium', chromium], ['webkit', webkit]]) {
       await dialog.getByRole('button', { name: 'Close', exact: true }).first().click();
     });
     await (await import('./intake-quality.mjs')).runIntakeChecks(page, check, engine);
+    await (await import('./premium-quality.mjs')).runPremiumChecks(page, check, engine);
     await check('Libraries persist across reload and fit mobile; screenshots', async () => {
       await page.reload({ waitUntil: 'domcontentloaded' }); await page.locator('#main-content').waitFor(); await go('ai-prompts');
       await page.getByRole('textbox', { name: 'Search library' }).fill(promptTitle);
