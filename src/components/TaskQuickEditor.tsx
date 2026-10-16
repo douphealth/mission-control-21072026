@@ -1,3 +1,4 @@
+import TaskChecklistEditor from "@/components/tasks/TaskChecklistEditor";
 import TaskDialogFrame from "@/components/TaskDialogFrame";
 // ─── Task quick editor ───────────────────────────────────────────────────────
 // A single, reusable editing surface for a task. Every change is written to
@@ -24,7 +25,7 @@ import WorkBlocksEditor from "@/components/WorkBlocksEditor";
 import { todayISO } from "@/lib/overdue";
 import { addDaysISO } from "@/lib/triage";
 import { Button } from "@/components/ui/button";
-import { parseChecklistItems } from "@/lib/taskChecklist";
+import { appendChecklistItems } from "@/lib/taskChecklist";
 
 const PRIORITIES: Task["priority"][] = ["critical", "high", "medium", "low"];
 const STATUSES: Task["status"][] = ["todo", "in-progress", "blocked", "done"];
@@ -47,7 +48,7 @@ export default function TaskQuickEditor({
   const today = todayISO();
   const [title, setTitle] = useState(task?.title ?? "");
   const [description, setDescription] = useState(task?.description ?? "");
-  const [newSubtask, setNewSubtask] = useState("");
+  const [checklist, setChecklist] = useState(task?.subtasks || []);
   const [bulkSubtasks, setBulkSubtasks] = useState("");
   const [saving, setSaving] = useState(false);
   const [category, setCategory] = useState(task?.category || "");
@@ -62,6 +63,7 @@ export default function TaskQuickEditor({
     setCategory(task?.category || "");
     setProject(task?.linkedProject || "");
     pendingFields.current = {};
+    setChecklist(task?.subtasks || []); setBulkSubtasks("");
   }, [task?.id]);
 
   if (!task) return null;
@@ -83,7 +85,7 @@ export default function TaskQuickEditor({
 
   const archived = (task as any).archived === true;
 
-  const saveDraft = async () => {
+  const saveDraft = async (extra: Partial<Task> = {}) => {
     if (saveLock.current) return;
     if (!title.trim()) { toast.error("Task title is required"); return; }
     saveLock.current = true;
@@ -91,7 +93,7 @@ export default function TaskQuickEditor({
     try {
       await pendingWrites.current;
       await updateItem<Task>("tasks", task.id, { ...pendingFields.current, title: title.trim(),
-        description, category, linkedProject: project, touchedAt: today });
+        description, category, linkedProject: project, subtasks: appendChecklistItems(checklist, bulkSubtasks), touchedAt: today, ...extra });
       pendingFields.current = {};
       toast.success("Task saved on this device", { description: "The synchronization bar shows when the cloud confirms the change." });
       onClose();
@@ -100,32 +102,7 @@ export default function TaskQuickEditor({
     } finally { saveLock.current = false; setSaving(false); }
   };
 
-  const addSubtask = async () => {
-    const nextTitle = newSubtask.trim();
-    if (!nextTitle) return;
-    await patch({
-      subtasks: [...(task.subtasks ?? []), { id: genId(), title: nextTitle, done: false }],
-    });
-    setNewSubtask("");
-  };
 
-  const addSubtaskList = async () => {
-    let titles: string[];
-    try { titles = parseChecklistItems(bulkSubtasks); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Invalid checklist"); return; }
-    if (!titles.length) return;
-    const existing = new Set((task.subtasks ?? []).map(item => item.title.trim().toLocaleLowerCase()));
-    const additions = titles.filter(value => !existing.has(value.toLocaleLowerCase()))
-      .map(title => ({ id: genId(), title, done: false }));
-    if (!additions.length) { toast.info("These checklist items already exist"); return; }
-    try {
-      await patch({ subtasks: [...(task.subtasks ?? []), ...additions] });
-      setBulkSubtasks("");
-      toast.success(`Added ${additions.length} checklist items`);
-    } catch {
-      toast.error("Checklist was not saved. Your pasted items are retained; retry Save changes.");
-    }
-  };
 
   return (
     <TaskDialogFrame title="Edit task" onClose={() => { if (!saveLock.current) onClose(); }} action={
@@ -302,100 +279,13 @@ export default function TaskQuickEditor({
           </div>
         </div>
 
-        {/* Subtasks */}
-        <div className="mt-3">
-          <div className="mb-1.5 flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
-            <span>Subtasks</span>
-            <span>
-              {task.subtasks?.filter((st) => st.done).length ?? 0}/{task.subtasks?.length ?? 0}
-            </span>
-          </div>
-          <div className="space-y-1">
-            {(task.subtasks ?? []).map((st) => (
-              <div
-                key={st.id}
-                className="flex w-full items-center gap-2 rounded-xl bg-secondary/40 px-2.5 py-2 text-[12px]"
-              >
-                <GripVertical size={12} className="shrink-0 text-muted-foreground/50" />
-                <button
-                  aria-label={st.done ? "Reopen subtask" : "Complete subtask"}
-                  onClick={() =>
-                    void patch({
-                      subtasks: task.subtasks.map((x) =>
-                        x.id === st.id ? { ...x, done: !x.done } : x,
-                      ),
-                    })
-                  }
-                >
-                  <CheckCircle2
-                    size={14}
-                    className={st.done ? "text-emerald-500" : "text-muted-foreground"}
-                  />
-                </button>
-                <input
-                  defaultValue={st.title}
-                  onBlur={(e) =>
-                    void patch({
-                      subtasks: task.subtasks.map((x) =>
-                        x.id === st.id ? { ...x, title: e.target.value.trim() || x.title } : x,
-                      ),
-                    })
-                  }
-                  className={`min-w-0 flex-1 bg-transparent outline-none ${st.done ? "text-muted-foreground line-through" : "text-foreground"}`}
-                />
-                <button
-                  aria-label="Delete subtask"
-                  onClick={() =>
-                    void patch({ subtasks: task.subtasks.filter((x) => x.id !== st.id) })
-                  }
-                  className="text-muted-foreground hover:text-destructive"
-                >
-                  <X size={13} />
-                </button>
-              </div>
-            ))}
-          </div>
-          <details className="mt-3 rounded-xl border border-border/50 bg-secondary/20 p-3">
-            <summary className="cursor-pointer text-xs font-semibold">Paste a checklist / shopping list</summary>
-            <p className="mt-2 text-xs text-muted-foreground">One item per line. Duplicate items are skipped. Each item becomes a checkable subtask.</p>
-            <textarea aria-label="Paste checklist items" value={bulkSubtasks} onChange={e => setBulkSubtasks(e.target.value)}
-              placeholder={"Milk\nEggs\nBread"} rows={4}
-              className="mt-2 w-full rounded-xl border border-border/50 bg-background px-3 py-2 text-sm outline-none focus:border-primary/60" />
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setBulkSubtasks("Milk\nEggs\nBread\nFruit\nVegetables\nYogurt\nChicken\nRice")}>Shopping starter list</Button>
-              <Button type="button" size="sm" disabled={!bulkSubtasks.trim()} onClick={() => void addSubtaskList()}>Add checklist items</Button>
-            </div>
-          </details>
-          <div className="mt-1.5 flex gap-1.5">
-            <input
-              value={newSubtask}
-              onChange={(e) => setNewSubtask(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void addSubtask();
-              }}
-              className="min-w-0 flex-1 rounded-xl border border-border/50 bg-secondary/30 px-3 py-2 text-xs text-foreground outline-none focus:border-primary/60"
-              placeholder="Add a next step…"
-            />
-            <Button
-              aria-label="Add subtask"
-              title="Add subtask"
-              variant="secondary"
-              size="icon"
-              onClick={() => void addSubtask()}
-              className="h-9 w-9 rounded-xl"
-            >
-              <Plus size={14} />
-            </Button>
-          </div>
-        </div>
+        <div className="mt-4"><TaskChecklistEditor key={task.id} items={checklist} onChange={setChecklist} draft={bulkSubtasks} onDraftChange={setBulkSubtasks} disabled={saving} /></div>
 
         {/* Footer actions */}
         <div className="-mx-4 mt-5 flex flex-wrap items-center gap-1.5 border-t border-border/50 bg-card/95 px-4 pb-[max(0.25rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-xl sm:-mx-5 sm:px-5">
           <button
             onClick={async () => {
-              await patch({ status: "done", completedAt: new Date().toISOString() });
-              toast.success("Closed ✓");
-              onClose();
+              await saveDraft({ status: "done", completedAt: new Date().toISOString() });
             }}
             className="flex items-center gap-1.5 rounded-xl bg-emerald-500/10 px-3 py-2 text-[12px] font-semibold text-emerald-500 transition hover:bg-emerald-500/20"
           >
@@ -414,9 +304,7 @@ export default function TaskQuickEditor({
           ) : (
             <button
               onClick={async () => {
-                await patch({ archived: true, archivedAt: today } as Partial<Task>);
-                toast.success("Archived");
-                onClose();
+                await saveDraft({ archived: true, archivedAt: today });
               }}
               className="flex items-center gap-1.5 rounded-xl bg-secondary px-3 py-2 text-[12px] font-semibold text-muted-foreground transition hover:text-foreground"
             >

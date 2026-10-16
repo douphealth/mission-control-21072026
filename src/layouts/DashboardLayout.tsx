@@ -31,6 +31,7 @@ const AIPromptsPage = lazy(() => import("@/pages/AIPromptsPage"));
 const LinksPage = lazy(() => import("@/pages/LinksPage"));
 const NotesPage = lazy(() => import("@/pages/NotesPage"));
 const FocusPage = lazy(() => import("@/pages/FocusPage"));
+const FamilySchedulePage = lazy(() => import("@/pages/FamilySchedulePage"));
 const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
@@ -68,6 +69,7 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   notes: NotesPage,
   focus: FocusPage,
   calendar: CalendarPage,
+  "family-schedule": FamilySchedulePage,
   projects: ProjectsPage,
   settings: SettingsPage,
   payments: PaymentsPage,

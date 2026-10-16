@@ -1,3 +1,5 @@
+import { clipboardTableTSV } from "@/lib/clipboardTable";
+import { organizePromptBatch } from "@/lib/promptOrganization";
 import { useEffect, useRef, useState } from "react";
 import { Upload, Shield } from "lucide-react";
 import { toast } from "sonner";
@@ -12,8 +14,9 @@ type Props = {
   mode: BulkMode; open: boolean; onClose: () => void;
   onImport: (rows: IntakeRow[]) => Promise<void | { created: number; updated: number; skipped: number }>;
   source?: { title: string; content?: string } | null;
+  existingCategories?: string[];
 };
-export default function BulkIntakeModal({ mode, open, onClose, onImport, source }: Props) {
+export default function BulkIntakeModal({ mode, open, onClose, onImport, source, existingCategories = [] }: Props) {
   const [raw, setRaw] = useState("");
   const [options, setOptions] = useState<IntakeOptions>({});
   const [preview, setPreview] = useState<BulkPreview | null>(null);
@@ -34,7 +37,7 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
   const table = preview?.table;
   function invalidate() { revision.current++; setPreview(null); setSelected(new Set()); setReviewed(false); setSkipInvalid(false); setSingleConfirmed(false); setSaved(false); setMessage(""); setParsing(false); setPage(0); }
   function changeRaw(value: string) { fileRevision.current++; setRaw(value); setOptions({}); invalidate(); }
-  function applyPreview(result: BulkPreview) { setPreview(result); setSelected(new Set(result.rows.map((_, i) => i))); setPage(0); setParsing(false); setReviewed(false); setSkipInvalid(false); setSingleConfirmed(false); setSaved(false); }
+  function applyPreview(result: BulkPreview) { if (mode === "prompts") result.rows = organizePromptBatch(result.rows, existingCategories); setPreview(result); setSelected(new Set(result.rows.map((_, i) => i))); setPage(0); setParsing(false); setReviewed(false); setSkipInvalid(false); setSingleConfirmed(false); setSaved(false); }
   useEffect(() => {
     if (open && source) { setRaw(source.content || ""); setOptions({}); setPreview(null); setSaved(false); setMessage(""); setSelected(new Set()); setReviewed(false); setSingleConfirmed(false); setSkipInvalid(false); revision.current++; }
   }, [open, source]);
@@ -62,7 +65,7 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
   }
   const selection = preview?.rows.filter((_, i) => selected.has(i)) || [];
   const missingTitle = selection.some(row => !String(row[isVault ? "label" : "title"] || "").trim());
-  const needsReview = !!table?.needsReview && !reviewed;
+  const needsReview = (!!table?.needsReview || !!preview?.needsSecretReview) && !reviewed;
   const headerUnsafe = !!table?.suspectedDataHeader;
   const needsSingleConfirmation = mode === "prompts" && preview?.splitMethod === "single" && raw.length > 400 && options.splitRule !== "single" && !singleConfirmed;
   const canSave = !busy && !parsing && !saved && !!preview && !preview.fatal && selection.length > 0 && !missingTitle && !needsReview && !headerUnsafe && !needsSingleConfirmation && (!preview.issues.length || skipInvalid);
@@ -98,7 +101,8 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
           void file.text().then(value => { if (stamp === fileRevision.current) changeRaw(value); }).catch(() => setMessage("Could not read the file; your draft was kept."));
         }} />
         <button className={button} disabled={busy} onClick={() => fileRef.current?.click()}><Upload size={15} />Choose file</button>
-        <textarea aria-label={isVault ? "Bulk credential input" : "Bulk library input"} className={`${input} min-h-44 font-mono`} value={raw} disabled={busy} autoComplete="off" spellCheck={false} onChange={event => changeRaw(event.target.value)} />
+        <textarea aria-label={isVault ? "Bulk credential input" : "Bulk library input"} className={`${input} min-h-44 font-mono`} value={raw} disabled={busy} autoComplete="off" spellCheck={false} onPaste={event => { const table = clipboardTableTSV(event.clipboardData.getData("text/html")); if (table !== null) { event.preventDefault(); changeRaw(table); } }} onChange={event => changeRaw(event.target.value)} />
+        {mode === "prompts" && <label className="block text-sm font-semibold">Spreadsheet layout<select aria-label="Prompt spreadsheet layout" className={input} disabled={busy} value={options.layout || "auto"} onChange={event => changeOptions({ ...options, layout: event.target.value as IntakeOptions["layout"] }, true)}><option value="auto">Auto: title cell + prompt cell per row</option><option value="prompt-pairs">Two columns: title and full prompt</option><option value="prompt-cells">Each spreadsheet cell is a complete prompt</option></select></label>}
         {mode === "prompts" && <label className="block text-sm font-semibold">Split prompts by<select aria-label="Prompt split rule" disabled={busy} className={`${input} mt-1`} value={options.splitRule || "auto"} onChange={event => changeOptions({ ...options, splitRule: event.target.value as PromptSplitRule })}>{PROMPT_SPLIT_RULES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>}
         <button className={button} disabled={busy || parsing || !raw.trim()} onClick={() => void parse()}>{parsing ? "Reading input..." : "Preview entries"}</button>
         {table && <details open={table.needsReview || undefined} className="rounded-xl border border-border bg-secondary/20 p-3">
@@ -116,8 +120,9 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
         {preview && <div className="space-y-3" aria-live="polite">
           <strong className="text-sm">{preview.rows.length} valid entries; {preview.issues.length} errors</strong>
           {mode === "prompts" && <p className="text-sm font-medium">{preview.rows.length > 1 ? `${preview.rows.length} separate prompts detected (${preview.splitMethod || "structured data"}). Confirm each boundary and category below.` : "Only one prompt detected. If you pasted a collection, choose another split rule before saving."}</p>}
+          {mode === "prompts" && <div aria-label="Detected categories" className="flex flex-wrap gap-2">{[...new Set(preview.rows.map(row => String(row.category || "Uncategorized")))].map(value => <span key={value} className="rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs">{value} <strong>{preview.rows.filter(row => row.category === value).length}</strong></span>)}</div>}
           {preview.warnings.map(warning => <p key={warning} className="text-xs leading-relaxed text-muted-foreground">{warning}</p>)}
-          {table?.needsReview && <label className="flex items-start gap-2 rounded-xl border border-border p-3 text-sm"><input type="checkbox" className="mt-1" checked={reviewed} disabled={busy || saved} onChange={event => setReviewed(event.target.checked)} />I checked the column mapping, including ignored columns.</label>}
+          {(table?.needsReview || preview.needsSecretReview) && <label className="flex items-start gap-2 rounded-xl border border-border p-3 text-sm"><input type="checkbox" className="mt-1" checked={reviewed} disabled={busy || saved} onChange={event => setReviewed(event.target.checked)} />I checked the column mapping, including ignored columns.</label>}
           {!!preview.issues.length && <div className="space-y-3 rounded-xl border border-warning/40 bg-warning/5 p-3"><details open><summary className="cursor-pointer text-sm font-semibold">{preview.issues.length} rows need attention</summary><div className="mt-2 max-h-36 space-y-2 overflow-y-auto">{preview.issues.slice(0, 20).map((issue, i) => <p key={i} className="text-xs">{issue.line ? `Row ${issue.line}: ` : ""}{issue.message}</p>)}{preview.issues.length > 20 && <p className="text-xs">...and {preview.issues.length - 20} more. Correct the column mapping to resolve repeated errors.</p>}</div></details>
             {!preview.fatal && !!preview.rows.length && <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={skipInvalid} disabled={busy || saved} onChange={event => setSkipInvalid(event.target.checked)} />Import valid rows only; leave {preview.issues.length} unresolved rows out. Keep my original paste for correction.</label>}
           </div>}
@@ -126,6 +131,7 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source 
             <div className="flex flex-wrap items-center gap-2 text-sm"><strong>{selection.length} selected</strong><button className={button} disabled={busy || saved} onClick={() => setSelected(new Set(preview.rows.map((_, i) => i)))}>Select all</button><button className={button} disabled={busy || saved} onClick={() => setSelected(new Set())}>Clear selection</button></div>
             <div className="divide-y divide-border rounded-xl border border-border">{preview.rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE).map((row, n) => { const index = page * PAGE_SIZE + n; return <div key={index} className="space-y-2 p-3">
               <label className="flex items-start gap-2 text-sm font-semibold"><input type="checkbox" className="mt-1" aria-label={`Include entry ${index + 1}`} checked={selected.has(index)} disabled={busy || saved} onChange={event => { const next = new Set(selected); if (event.target.checked) next.add(index); else next.delete(index); setSelected(next); }} />{index + 1}. {String(row[isVault ? "label" : "title"] || "Untitled")}</label>
+              {preview.sourceLines?.[index] && <p className="text-xs text-muted-foreground">Source row {preview.sourceLines[index]}</p>}
               {mode === "links" ? <p className="break-all text-xs text-muted-foreground">{String(row.kind)} / {String(row.url)}</p> : isVault ? <p className="text-xs text-muted-foreground">{[row.username && "Account present", row.password && "Password present", row.apiKey && "Key present", row.url && "URL present"].filter(Boolean).join(" / ")}</p> : <details><summary className="cursor-pointer text-xs text-muted-foreground">{String(row.category)} / {String(row.content || "").length} characters - review full prompt</summary><pre className="mt-2 max-h-64 overflow-y-auto whitespace-pre-wrap break-words rounded-lg bg-secondary p-3 text-xs">{String(row.content)}</pre></details>}
               <div className="grid gap-2 sm:grid-cols-2"><input aria-label={`Entry ${index + 1} title`} className={input} disabled={busy || saved} value={String(row[isVault ? "label" : "title"] || "")} onChange={event => editRow(index, isVault ? "label" : "title", event.target.value)} /><input aria-label={`Entry ${index + 1} category`} className={input} disabled={busy || saved} value={String(row.category || "")} onChange={event => editRow(index, "category", event.target.value)} /></div>
             </div>; })}</div>
