@@ -52,6 +52,7 @@ import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { softDeleteTasks } from "@/lib/taskActions";
 import { estimateOf, fmtMinutes, isPlannedToday } from "@/lib/planning";
 import { useNavigationStore } from "@/stores/navigationStore";
+import { parseChecklistItems } from "@/lib/taskChecklist";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -177,6 +178,7 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
     task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" },
   );
   const [newSub, setNewSub] = useState("");
+  const [bulkSubtasks, setBulkSubtasks] = useState("");
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
   const uf = (k: keyof typeof form, v: any) => setForm((f) => ({ ...f, [k]: v }));
@@ -193,6 +195,18 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
       { id: `s-${Date.now()}`, title: newSub.trim(), done: false } as Subtask,
     ]);
     setNewSub("");
+  };
+  const addBulkSubs = () => {
+    let titles: string[];
+    try { titles = parseChecklistItems(bulkSubtasks); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Invalid checklist"); return; }
+    const existing = new Set(form.subtasks.map(item => item.title.trim().toLocaleLowerCase()));
+    const additions = titles.filter(value => !existing.has(value.toLocaleLowerCase()))
+      .map(title => ({ id: crypto.randomUUID(), title, done: false }));
+    if (!additions.length) { toast.info("No new checklist items to add"); return; }
+    uf("subtasks", [...form.subtasks, ...additions]);
+    setBulkSubtasks("");
+    toast.success(`Added ${additions.length} checklist items`);
   };
   const removeSub = (id: string) =>
     uf(
@@ -741,6 +755,16 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
                     </div>
                   ))}
                 </div>
+                <details className="mb-3 rounded-xl border border-border/40 bg-secondary/20 p-3">
+                  <summary className="cursor-pointer text-xs font-semibold">Paste checklist / shopping list</summary>
+                  <p className="mt-2 text-xs text-muted-foreground">One item per line. Duplicates are skipped; each item becomes a checkable subtask.</p>
+                  <textarea aria-label="Paste checklist items" rows={4} value={bulkSubtasks} onChange={e => setBulkSubtasks(e.target.value)}
+                    placeholder={"Milk\nEggs\nBread"} className="mt-2 w-full rounded-xl border border-border/50 bg-background px-3 py-2 text-sm" />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => setBulkSubtasks("Milk\nEggs\nBread\nFruit\nVegetables\nYogurt\nChicken\nRice")} className="rounded-lg bg-secondary px-3 py-2 text-xs">Shopping starter list</button>
+                    <button type="button" disabled={!bulkSubtasks.trim()} onClick={addBulkSubs} className="rounded-lg bg-primary/10 px-3 py-2 text-xs font-semibold text-primary disabled:opacity-50">Add checklist items</button>
+                  </div>
+                </details>
                 <div className="flex items-center gap-2">
                   <input
                     value={newSub}

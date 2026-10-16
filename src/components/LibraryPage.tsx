@@ -51,6 +51,7 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState("");
+  const [bulkDeleteScope, setBulkDeleteScope] = useState<"selected" | "filtered">("selected");
   const [vertical, setVertical] = useState("");
   const filters = useMemo(() => ({
     categories: [...new Set(rows.map(row => row.category).filter(Boolean))].sort() as string[],
@@ -134,10 +135,11 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <button className={button} onClick={clearFilters}>Reset</button>
         </div>
       </section>
-      {selectedIds.length > 0 && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3" role="region" aria-label="Selected entries">
+      {(selectedIds.length > 0 || (mode === "prompts" && filtered.length > 0)) && <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-primary/5 p-3" role="region" aria-label="Selected entries">
         <strong className="mr-auto text-sm">{selectedIds.length} selected</strong><button disabled={busy} className={button} onClick={() => patchSelected({ pinned: true })}>Favorite</button>
         <button disabled={busy} className={button} onClick={() => patchSelected({ status: "archived" })}>Archive</button><button disabled={busy} className={button} onClick={() => patchSelected({ status: "active" })}>Restore</button>
-        <button disabled={busy} className={button} onClick={() => { setBulkDeleteConfirm(""); setBulkDeleteOpen(true); }}><Trash2 size={15} />Delete selected</button>
+        <button disabled={busy} className={button} onClick={() => { setBulkDeleteScope("selected"); setBulkDeleteConfirm(""); setBulkDeleteOpen(true); }}><Trash2 size={15} />Delete selected</button>
+        {mode === "prompts" && <button disabled={busy || !filtered.length} className={button} onClick={() => { setBulkDeleteScope("filtered"); setBulkDeleteConfirm(""); setBulkDeleteOpen(true); }}><Trash2 size={15} />Delete {filtered.length} filtered prompts</button>}
         <button className={button} onClick={() => setSelected(new Set())}>Clear selection</button></div>}
       {message && !editor && !bulkOpen && <p role="alert" className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{message}</p>}
       <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground"><span aria-live="polite">{filtered.length} matching / {rows.length} saved</span>
@@ -182,11 +184,11 @@ export default function LibraryPage({ mode }: { mode: LibraryMode }) {
           <textarea aria-label="Prompt preview" readOnly className={`${input} min-h-56 font-mono`} value={renderPrompt(usePrompt?.content || "", variables)} /></div>
         <button className={primary} onClick={() => void copy(renderPrompt(usePrompt?.content || "", variables))}><Copy size={16} />Copy prompt</button></DialogContent></Dialog>
       <Dialog open={bulkDeleteOpen} onOpenChange={open => { if (!lock.current) { setBulkDeleteOpen(open); if (!open) setBulkDeleteConfirm(""); } }}><DialogContent>
-        <DialogTitle>Delete {selectedIds.length} selected {noun}{selectedIds.length === 1 ? "" : "s"}?</DialogTitle>
-        <DialogDescription>This permanently deletes the selected records across the current selection (not just the page). Archiving is reversible. Export your records before deletion. Type DELETE to confirm.</DialogDescription>
+        <DialogTitle>Delete {bulkDeleteScope === "filtered" ? filtered.length : selectedIds.length} {bulkDeleteScope === "filtered" ? "filtered prompts" : `selected ${noun}${selectedIds.length === 1 ? "" : "s"}`}?</DialogTitle>
+        <DialogDescription>This permanently deletes {bulkDeleteScope === "filtered" ? "all currently filtered prompts, across every page" : "all selected records, across every page"}. Archiving is reversible. Export your records before deletion. Type DELETE to confirm.</DialogDescription>
         <input aria-label="Type DELETE to confirm" className={input} autoComplete="off" value={bulkDeleteConfirm} disabled={busy} onChange={event => setBulkDeleteConfirm(event.target.value)} />
         <div className="flex justify-end gap-2"><button className={button} disabled={busy} onClick={() => setBulkDeleteOpen(false)}>Cancel</button>
-          <button className={button} disabled={busy || bulkDeleteConfirm !== "DELETE" || !selectedIds.length} onClick={() => void operation(async () => { await bulkDelete(table, selectedIds); setSelected(new Set()); setBulkDeleteOpen(false); setBulkDeleteConfirm(""); toast.success("Selected records deleted"); })}>Delete {selectedIds.length} records</button>
+          <button className={button} disabled={busy || bulkDeleteConfirm !== "DELETE" || !(bulkDeleteScope === "filtered" ? filtered.length : selectedIds.length)} onClick={() => void operation(async () => { const ids = bulkDeleteScope === "filtered" ? filtered.map(row => row.id) : selectedIds; await bulkDelete(table, ids); setSelected(new Set()); setBulkDeleteOpen(false); setBulkDeleteConfirm(""); toast.success("Selected records deleted"); })}>Delete {bulkDeleteScope === "filtered" ? filtered.length : selectedIds.length} records</button>
         </div></DialogContent></Dialog>
       <Dialog open={!!deleteTarget} onOpenChange={open => { if (!lock.current && !open) setDeleteTarget(null); }}><DialogContent><DialogTitle>Delete this {noun}?</DialogTitle><DialogDescription>Delete "{deleteTarget?.title}" from the library. Archiving is reversible; deletion is not.</DialogDescription>
         {message && <p role="alert" className="text-destructive">{message}</p>}<div className="flex justify-end gap-2"><button className={button} disabled={busy} onClick={() => setDeleteTarget(null)}>Cancel</button><button className={button} disabled={busy} onClick={() => void operation(async () => { if (deleteTarget) await deleteItem(table, deleteTarget.id); setDeleteTarget(null); })}>Delete entry</button></div></DialogContent></Dialog>

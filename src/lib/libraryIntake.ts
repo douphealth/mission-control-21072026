@@ -54,7 +54,18 @@ export function inferAffiliateVertical(value: string): string {
   if (/marketing|affiliate|referral/.test(v)) return "Affiliate marketing";
   return "Other";
 }
+export function suggestPromptTitle(content: string): string {
+  const lines = content.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const heading = lines.find(line => /^#{1,4}\s+/.test(line) || /^\*\*[^*]{4,100}\*\*$/.test(line));
+  const candidate = (heading || lines.find(line => line.length >= 12) || lines[0] || "Untitled prompt")
+    .replace(/^#{1,4}\s+/, "").replace(/^\*\*|\*\*$/g, "").replace(/^\d+[.)]\s*/, "").trim();
+  return candidate.slice(0, 100);
+}
 export function inferredPromptCategory(content: string): string {
+  return suggestPromptCategory(content);
+}
+
+export function suggestPromptCategory(content: string, title = ""): string {
   const signals: Array<[string, RegExp]> = [
     ["SEO & content", /\b(seo|keyword research|serp|indexation|canonical|backlinks?|search console|organic traffic|content audit|schema markup|geo\/aeo)\b/i],
     ["Development", /\b(typescript|javascript|python|debug|code review|bug fix|github|repository|pull request|api endpoint|software architecture|supabase)\b/i],
@@ -65,12 +76,15 @@ export function inferredPromptCategory(content: string): string {
     ["Writing", /\b(write an article|rewrite|edit this draft|proofread|storytelling|tone of voice)\b/i],
     ["Productivity", /\b(task management|productivity|weekly plan|prioritiz|time management)\b/i],
   ];
-  const scores = signals.map(([name, regex]) => ({ name, score: [...content.matchAll(new RegExp(regex.source, "gi"))].length }));
+  const searchable = title + "\n" + content;
+  const scores = signals.map(([name, regex]) => ({ name, score: [...searchable.matchAll(new RegExp(regex.source, "gi"))].length }));
   scores.sort((a, b) => b.score - a.score);
-  return scores[0]?.score ? scores[0].name : "Uncategorized";
+  if (scores[0]?.score) return scores[0].name;
+  const words = (title || content.split(/\r?\n/).find(line => line.trim()) || "").replace(/^#+\s*/, "").trim().split(/\s+/).slice(0, 4).join(" ");
+  return "Uncategorized";
 }
-function inferredCategory(content: string): string {
-  return inferredPromptCategory(content);
+function inferredCategory(content: string, title = ""): string {
+  return suggestPromptCategory(content, title);
 }
 export function normalizeLibraryRecord(mode: LibraryMode, value: unknown): LibraryRecord {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Each entry must be a record.");
@@ -85,8 +99,8 @@ export function normalizeLibraryRecord(mode: LibraryMode, value: unknown): Libra
     if (!content.trim()) throw new Error("A prompt needs content.");
     if (content.length > 200_000) throw new Error("A prompt can contain at most 200,000 characters.");
     return {
-      kind: "ai-prompt", title: title || content.split(/\r?\n/).find(line => line.trim())!.replace(/^#+\s*/, "").trim().slice(0, 100),
-      content, category: text(item.category).trim() || inferredCategory([title, content].filter(Boolean).join("\n")),
+      kind: "ai-prompt", title: title || suggestPromptTitle(content),
+      content, category: text(item.category).trim() || inferredCategory(content, title || suggestPromptTitle(content)),
       model: text(item.model).trim() || "Any model", tags, variables: promptVariables(content),
       pinned, status, color: text(item.color) || "emerald",
       createdAt: text(item.createdAt) || now, updatedAt: now,

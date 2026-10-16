@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { previewBulkIntake, PRIVATE } from "@/lib/bulkIntake";
 import { splitPromptCollection } from "@/lib/promptSplit";
+import { parseChecklistItems } from "@/lib/taskChecklist";
 const headers = ["Program", "Category", "Type", "Affiliate/referral link", "Strategy status", "Verdict", "HTTP", "Final URL", "Tracking evidence", "Notes", "Affiliate Dashboard", "Username", "Password"];
 const partner = ["Example Partner", "Social Media", "Ambassador/referral", "https://example.com/Alex?sig=A%2Bb&ref=case#Offer", "USE NOW", "APPROVED", "200", "https://example.com/", "Existing referral", "User supplied notes", "https://example.com/dashboard", "private@example.com", "synthetic-private-value"];
 
@@ -117,6 +118,30 @@ describe("affiliate tables and privacy", () => {
   });
 });
 
+describe("shared checklist parsing", () => {
+  it("supports pasted multiline and delimited items, numbered lists and deduplication", () => {
+    expect(parseChecklistItems("- Milk\n2. Eggs\nBread; Milk, Fruit")).toEqual(["Milk", "Eggs", "Bread", "Fruit"]);
+  });
+  it("rejects oversized or excessively long checklist items", () => {
+    expect(() => parseChecklistItems("x".repeat(241))).toThrow(/240 characters/);
+    expect(() => parseChecklistItems(Array.from({ length: 252 }, (_, index) => `item ${index}`).join("\n"))).toThrow(/250 checklist items/);
+  });
+});
+
+describe("improved header aliases", () => {
+  it("recognizes provider-specific credential key headings in mixed export formats", () => {
+    const raw = "Account Name\tLogin URL\tEmail\tOllama API Key\nOllama\thttps://ollama.example\tfixture@example.com\tsynthetic_key_0123456789abcdef";
+    const result = previewBulkIntake("credentials", raw);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ label: "Ollama", url: "https://ollama.example", username: "fixture@example.com", apiKey: "synthetic_key_0123456789abcdef" });
+    expect(JSON.stringify(result.issues)).not.toContain("synthetic_key_");
+  });
+  it("maps affiliate partner URLs and program/network aliases", () => {
+    const result = previewBulkIntake("links", "Account Name\tAffiliate Program\tPartner URL\tWebsite\tStrategy Status\nExample\tExample Network\thttps://example.com/?ref=fixture\tMy Site\tUSE NOW");
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({ title: "Example", network: "Example Network", url: "https://example.com/?ref=fixture", website: "My Site", strategyStatus: "USE NOW" });
+  });
+});
 describe("prompt collection boundaries", () => {
   it("recognizes twelve labeled prompts, individually categorized, with original text intact", () => {
     const raw = Array.from({ length: 12 }, (_, i) => `## Prompt ${i + 1}: ${i % 2 ? "Python debugging" : "SEO audit"}\nYou are a specialist.\n1. Read input.\n2. Explain.\n`).join("\n");
