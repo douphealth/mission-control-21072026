@@ -1,3 +1,5 @@
+import { assertFeedDocument } from "./publicFeedFetch.server";
+import { audienceCapabilities } from "./audienceProviders.server";
 import { collectMentionCoverage, collectAudienceMetrics } from "./intelligenceCollectors.server";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
@@ -63,7 +65,7 @@ const SourceSchema = z.object({
 });
 
 export const collectIndustry = createServerFn({ method: "POST" })
-  .inputValidator((d) => z.object({ sources: z.array(SourceSchema).max(30) }).parse(d))
+  .inputValidator((d) => z.object({ sources: z.array(SourceSchema).max(4) }).parse(d))
   .handler(async ({ data }) => {
     const results = await Promise.all(
       data.sources.map(async (src) => {
@@ -78,6 +80,7 @@ export const collectIndustry = createServerFn({ method: "POST" })
             };
           }
           const xml = await httpGet(feedUrl);
+          assertFeedDocument(xml);
           const items = parseFeed(xml)
             .slice(0, 40)
             .map((i) => ({
@@ -105,7 +108,7 @@ export const collectIndustry = createServerFn({ method: "POST" })
           .map((t) => t.trim())
           .filter(Boolean),
       ),
-    ].slice(0, 8);
+    ].slice(0, 2);
     const topicResults = await Promise.all(
       topics.map(async (topic) => {
         const coverage = await searchNewsCoverage(`"${topic}"`, 7);
@@ -142,7 +145,8 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
       return {
         query,
         days: data.days,
-        fetchedAt: new Date().toISOString(),
+        fetchedAt: coverage.fetchedAt,
+        cached: coverage.cached,
         items: [] as Array<
           NewsCoverageItem & {
             corroborationCount: number;
@@ -203,7 +207,8 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
     return {
       query,
       days: data.days,
-      fetchedAt: new Date().toISOString(),
+      fetchedAt: coverage.fetchedAt,
+        cached: coverage.cached,
       items: enriched,
       providers: coverage.providers,
       degraded: coverage.degraded,
@@ -278,7 +283,7 @@ export const rankStories = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     if (!data.stories.length)
       return { ranked: [] as { id: string; score: number; summary: string }[] };
-    if (!isAnthropicAvailable())
+    if (process.env.MC_ALLOW_PAID_INTELLIGENCE !== "true" || !isAnthropicAvailable())
       return { ranked: [] as { id: string; score: number; summary: string }[] };
 
     const systemPrompt =
@@ -308,3 +313,9 @@ export const rankStories = createServerFn({ method: "POST" })
       return { ranked: [] as { id: string; score: number; summary: string }[] };
     }
   });
+
+/** Capability flags only. Does not expose credentials or call paid services. */
+export const intelligenceCapabilities = createServerFn({ method: "GET" }).handler(async () => ({
+  audience: audienceCapabilities(), paidEnabled: process.env.MC_ALLOW_PAID_INTELLIGENCE === "true",
+  inspectedAt: new Date().toISOString(),
+}));

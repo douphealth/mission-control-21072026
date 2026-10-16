@@ -1,3 +1,4 @@
+import CollectorStatusPanel from "@/components/controlcenter/CollectorStatusPanel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -46,6 +47,10 @@ export default function IndustryPage() {
   const [days, setDays] = useState(7);
   const [searching, setSearching] = useState(false);
   const [searchedAt, setSearchedAt] = useState("");
+  const [resolvedQuery, setResolvedQuery] = useState("");
+  const [lookupStatus, setLookupStatus] = useState("");
+  const [cachedResult, setCachedResult] = useState(false);
+  const searchLock = useRef(false);
   const [searchStories, setSearchStories] = useState<SearchStory[]>([]);
   const [evidenceFilter, setEvidenceFilter] = useState<"all" | "medium" | "high">("medium");
   const autoRefreshStarted = useRef(false);
@@ -143,12 +148,13 @@ export default function IndustryPage() {
   };
 
   const searchLatest = async () => {
+    if (searchLock.current) return;
     const clean = query.trim();
     if (clean.length < 2) {
       toast.error("Enter a subject to search");
       return;
     }
-    setSearching(true);
+    searchLock.current = true; setSearching(true); setLookupStatus("");
     try {
       const response = await searchIndustryTopic({ data: { query: clean, days } });
       const minTime = Date.now() - days * 86_400_000;
@@ -192,7 +198,7 @@ export default function IndustryPage() {
       );
 
       setSearchStories(combined);
-      setSearchedAt(response.fetchedAt);
+      setSearchedAt(response.fetchedAt); setResolvedQuery(clean); setCachedResult(response.cached); setLookupStatus(response.error || (response.degraded ? "Some providers failed. Coverage is incomplete; results are from remaining sources." : ""));
 
       const providerSummary = (response.providers ?? [])
         .filter((provider) => provider.configured && provider.ok)
@@ -233,9 +239,10 @@ export default function IndustryPage() {
         );
       }
     } catch (error: any) {
+      setLookupStatus("The latest search failed. Previous results keep their original query and retrieval date.");
       toast.error("Live topic search failed", { description: String(error?.message ?? error) });
     } finally {
-      setSearching(false);
+      setSearching(false); searchLock.current = false;
     }
   };
 
@@ -255,6 +262,7 @@ export default function IndustryPage() {
           </button>
         }
       />
+      <CollectorStatusPanel kind="feeds" />
 
       <section className="cc-intel-search">
         <div className="cc-intel-search-glow" />
@@ -306,13 +314,14 @@ export default function IndustryPage() {
         </div>
       </section>
 
+      {lookupStatus && <p role="status" className="rounded-xl border border-border bg-card p-3 text-sm">{lookupStatus}</p>}
       {searchedAt && (
         <Panel>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <div className="text-sm font-extrabold text-foreground">Live search results</div>
+              <div className="text-sm font-extrabold text-foreground">{cachedResult ? "Recent cached search results" : "Search results"}</div>
               <div className="mt-1 text-[10px] text-muted-foreground">
-                “{query.trim()}” · {searchStories.length} evidence-qualified results · fetched {relTime(searchedAt)}
+                “{resolvedQuery}” · {searchStories.length} evidence-qualified results · fetched {relTime(searchedAt)}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {(["medium", "high", "all"] as const).map((level) => (

@@ -1,3 +1,4 @@
+import { assertFeedDocument } from "./publicFeedFetch.server";
 import {
   googleNewsUrl,
   hostOf,
@@ -26,6 +27,8 @@ export interface NewsCoverageResult {
   providers: NewsProviderStatus[];
   degraded: boolean;
   allFailed: boolean;
+  fetchedAt: string;
+  cached: boolean;
 }
 
 const RETRYABLE = new Set([408, 425, 429, 500, 502, 503, 504]);
@@ -114,6 +117,7 @@ function flattenDataForSeoItems(value: unknown, out: Array<Record<string, unknow
 }
 
 function dataForSeoCredentials(): { login: string; password: string } | null {
+  if (process.env.MC_ALLOW_PAID_INTELLIGENCE !== "true") return null;
   const login = process.env.DATAFORSEO_LOGIN?.trim();
   const password = process.env.DATAFORSEO_PASSWORD?.trim();
   return login && password ? { login, password } : null;
@@ -223,12 +227,14 @@ function withinDays(item: RawItem, days: number, now = Date.now()): boolean {
 }
 
 async function googleNews(query: string, days: number): Promise<RawItem[]> {
-  const xml = await httpGet(googleNewsUrl(`${query} when:${days}d`), 10_000, 2);
+  const xml = await httpGet(googleNewsUrl(`${query} when:${days}d`), 10_000, 0);
+  assertFeedDocument(xml);
   return parseFeed(xml).filter((item) => withinDays(item, days));
 }
 
 async function bingNews(query: string, days: number): Promise<RawItem[]> {
-  const xml = await httpGet(bingNewsUrl(query), 10_000, 2);
+  const xml = await httpGet(bingNewsUrl(query), 10_000, 0);
+  assertFeedDocument(xml);
   return parseFeed(xml).filter((item) => withinDays(item, days));
 }
 
@@ -333,7 +339,7 @@ async function searchNewsCoverageUncached(query: string, days: number): Promise<
         ok: false,
         itemCount: 0,
         configured: false,
-        error: "DataForSEO not configured",
+        error: "DataForSEO disabled or unconfigured (paid calls require explicit opt-in)",
       },
     });
   }
@@ -345,6 +351,8 @@ async function searchNewsCoverageUncached(query: string, days: number): Promise<
     providers: settled.map((entry) => entry.status),
     degraded: settled.some((entry) => entry.status.configured && !entry.status.ok),
     allFailed: active.length > 0 && successful.length === 0,
+    fetchedAt: new Date().toISOString(),
+    cached: false,
   };
 }
 
@@ -355,7 +363,7 @@ const coveragePending = new Map<string, Promise<NewsCoverageResult>>();
 export async function searchNewsCoverage(query: string, days: number): Promise<NewsCoverageResult> {
   const key = `${query.trim().toLocaleLowerCase()}::${days}`;
   const cached = coverageCache.get(key);
-  if (cached && cached.expires > Date.now()) return cached.value;
+  if (cached && cached.expires > Date.now()) return { ...cached.value, cached: true };
 
   const inflight = coveragePending.get(key);
   if (inflight) return inflight;

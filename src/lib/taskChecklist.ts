@@ -11,8 +11,8 @@ export function parseChecklistItems(input: string): string[] {
   const seen = new Set<string>();
   const items: string[] = [];
 
-  for (const raw of input.split(/\r?\n|[;,]/)) {
-    const title = raw.replace(/^\s*(?:[-*•]\s+|\d+[.)]\s+)/u, "").trim();
+  for (const raw of input.split(/\r\n|\r|\n|;|,(?=\s+[^\d])/u)) {
+    const title = raw.replace(/^\s*(?:(?:[-*•]\s+)?\[[ xX]\]\s*|[-*•]\s+|\d+[.)]\s+)/u, "").trim();
     if (!title) continue;
     if (title.length > MAX_CHECKLIST_ITEM_LENGTH) {
       throw new Error(`Each checklist item must be ${MAX_CHECKLIST_ITEM_LENGTH} characters or fewer.`);
@@ -29,4 +29,13 @@ export function parseChecklistItems(input: string): string[] {
   }
 
   return items;
+}
+
+/** Preserve identity and checked state; never drop pending pasted items on Save. */
+export function appendChecklistItems<T extends { id: string; title: string; done: boolean }>(existing: T[], text: string): Array<T | { id: string; title: string; done: boolean }> {
+  if (existing.some(item => !item.title.trim())) throw new Error("Give each checklist item a name or remove the empty item.");
+  const seen = new Set(existing.map(item => item.title.trim().normalize("NFC").toLocaleLowerCase()));
+  const additions = parseChecklistItems(text).filter(title => { const key = title.normalize("NFC").toLocaleLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; }).map(title => ({ id: crypto.randomUUID(), title, done: false }));
+  if (existing.length + additions.length > MAX_CHECKLIST_ITEMS) throw new Error(`A task can contain at most ${MAX_CHECKLIST_ITEMS} checklist items.`);
+  return [...existing, ...additions];
 }

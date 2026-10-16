@@ -136,15 +136,21 @@ async function aiRerank(kind: StreamKind, context?: string) {
   }
 }
 
-export async function runIndustryCollector(useAi = true) {
+let industryFlight: Promise<Awaited<ReturnType<typeof collectIndustryOnce>>> | null = null;
+export function runIndustryCollector(useAi = false) {
+  if (!industryFlight) industryFlight = collectIndustryOnce(useAi).finally(() => { industryFlight = null; });
+  return industryFlight;
+}
+async function collectIndustryOnce(useAi: boolean) {
   const sources = (await db.feedSources.toArray()).filter((s) => s.enabled);
   if (!sources.length) {
     await writeCollectorHealth("feeds", "Trends", "not-configured", "No enabled trend sources.");
     queueCloudPush();
-    return { added: 0, errors: [] as string[] };
+    return { added: 0, errors: [] as string[], checked: 0, total: 0 };
   }
   const results: Awaited<ReturnType<typeof collectIndustry>>["results"] = [];
-  for (const batch of chunksOf(sources, 30)) {
+  for (const batch of chunksOf(sources, 4)) {
+    try {
     const response = await collectIndustry({
       data: {
         sources: batch.map((source) => ({
@@ -157,6 +163,7 @@ export async function runIndustryCollector(useAi = true) {
       },
     });
     results.push(...response.results);
+    } catch { for (const source of batch) results.push({ sourceId: source.id, feedUrl: null, items: [], error: "Feed service unavailable. Other batches can still refresh." }); }
   }
 
   const allTopics = sources.flatMap((s) => s.topics ?? []);
@@ -173,8 +180,9 @@ export async function runIndustryCollector(useAi = true) {
         lastError: r.error ?? undefined,
       });
       markCloudRecordDirty("feedSources", src.id);
-      if (r.error) errors.push(`${src.name}: ${r.error}`);
+
     }
+    if (r.error) errors.push(`${src?.name || r.sourceId}: ${r.error}`);
     for (const item of r.items) {
       const sourcePublishedAt = item.publishedAt;
       const publishedAt = sourcePublishedAt ?? now;
@@ -205,19 +213,20 @@ export async function runIndustryCollector(useAi = true) {
 
   const added = await persistItems("industry", payload);
   if (useAi && added) await aiRerank("industry");
+  const checked = results.filter(r => !r.error && sources.some(s => s.id === r.sourceId)).length;
   await writeCollectorHealth(
     "feeds",
     "Trends",
-    errors.length === sources.length ? "error" : errors.length ? "stale" : "ok",
-    `${sources.length} enabled source${sources.length === 1 ? "" : "s"} checked.`,
+    !checked ? "error" : errors.length ? "stale" : "ok",
+    `${checked}/${sources.length} enabled feeds returned readable data; ${added} new stories.`,
     errors.length ? errors.slice(0, 3).join(" · ") : undefined,
   );
   queueCloudPush();
-  return { added, errors };
+  return { added, errors, checked, total: sources.length };
 }
 
 let mentionFlight: Promise<Awaited<ReturnType<typeof collectMentionsOnce>>> | null = null;
-export function runMentionCollector(useAi = true) {
+export function runMentionCollector(useAi = false) {
   if (!mentionFlight) mentionFlight = collectMentionsOnce(useAi).finally(() => { mentionFlight = null; });
   return mentionFlight;
 }
@@ -280,10 +289,12 @@ async function collectAudienceOnce() {
   const accounts = await db.audienceAccounts.toArray();
   const readings: Awaited<ReturnType<typeof collectAudience>>["readings"] = [];
   let capabilities: Awaited<ReturnType<typeof collectAudience>>["capabilities"] | null = null;
-  for (const batch of chunksOf(accounts, 6)) {
+  for (const batch of chunksOf(accounts, 3)) {
+    try {
     const response = await collectAudience({ data: { accounts: batch.map(a => ({ id: a.id, platform: a.platform, url: a.url })) } });
     readings.push(...response.readings);
     capabilities = response.capabilities;
+    } catch { for (const account of batch) readings.push({ accountId: account.id, followers: null, posts: null, status: "unavailable", method: "none", provider: "Audience service", confidence: "low", evidence: "Audience service did not respond. Previous verified readings are retained.", action: "Retry and inspect provider configuration.", errorCode: "service-unavailable", approximate: false, identityVerified: false, capturedAt: new Date().toISOString(), sourceUrl: account.url, metricSemantics: "unavailable" }); }
   }
   let succeeded = 0;
   for (const reading of readings) {
@@ -292,7 +303,7 @@ async function collectAudienceOnce() {
     if (trusted) {
       succeeded++;
       const prior = await db.audienceReadings.where("accountId").equals(reading.accountId).toArray();
-      const recent = prior.filter(p => isTrustedAudienceReading(p) && Date.parse(reading.capturedAt) - Date.parse(p.capturedAt) < 12 * 3_600_000).sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
+      const recent = prior.filter(p => isTrustedAudienceReading(p) && p.provider === reading.provider && p.providerAccountId === reading.providerAccountId && p.metricSemantics === reading.metricSemantics && Date.parse(reading.capturedAt) >= Date.parse(p.capturedAt) && Date.parse(reading.capturedAt) - Date.parse(p.capturedAt) < 12 * 3_600_000).sort((a, b) => b.capturedAt.localeCompare(a.capturedAt))[0];
       const record = { ...reading, id: recent?.id || genId() };
       await db.audienceReadings.put(record);
       markCloudRecordDirty("audienceReadings", record.id);
@@ -311,18 +322,19 @@ async function collectAudienceOnce() {
   return { updated: readings.length, succeeded, unavailable, details, capabilities };
 }
 
-export async function runAllCollectors(useAi = true) {
+export async function runAllCollectors(useAi = false) {
   const [industry, mentions, audience] = await Promise.all([
-    runIndustryCollector(useAi).catch(() => ({ added: 0, errors: ["Industry collector failed"] })),
-    runMentionCollector(useAi).catch(() => ({ added: 0, errors: ["Mention collector failed"] })),
-    runAudienceCollector().catch(() => ({ updated: 0 })),
+    runIndustryCollector(useAi).catch(() => ({ added: 0, errors: ["Industry collector failed"], checked: 0, total: 0 })),
+    runMentionCollector(useAi).catch(() => ({ added: 0, errors: ["Mention collector failed"], checked: 0, total: 0, failed: 0 })),
+    runAudienceCollector().catch(() => ({ updated: 0, succeeded: 0, unavailable: 0, error: "Audience collector failed" })),
   ]);
-  try {
-    localStorage.setItem(LAST_RUN_KEY, new Date().toISOString());
-  } catch {
-    /* ignore */
-  }
-  return { industry, mentions, audience };
+  const checked = industry.checked + mentions.checked + audience.succeeded;
+  const total = industry.total + mentions.total + audience.updated;
+  const errors = [...industry.errors, ...mentions.errors, ...("error" in audience ? [audience.error] : []), ...(audience.unavailable ? [`${audience.unavailable} audience profiles unavailable`] : [])];
+  const outcome = errors.length ? checked > 0 ? "partial" : "unavailable" : total ? "complete" : "not-configured";
+  const attemptedAt = new Date().toISOString();
+  try { localStorage.setItem(LAST_RUN_KEY, attemptedAt); } catch { /* Optional last-attempt display only. */ }
+  return { industry, mentions, audience, errors, outcome, attemptedAt };
 }
 
 export function lastCollectorRun(): string | null {

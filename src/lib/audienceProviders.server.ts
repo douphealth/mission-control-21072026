@@ -88,7 +88,7 @@ async function get(
   headers: Record<string, string> = {},
 ): Promise<any> {
   let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12_000);
     try {
@@ -104,10 +104,10 @@ async function get(
       });
 
       if (!response.ok) {
-        const retryable = [408, 425, 429, 500, 502, 503, 504].includes(response.status);
+        const retryable = [408, 500, 502, 503, 504].includes(response.status);
         const retryAfter = Number(response.headers.get('retry-after') || '');
         lastError = new Error(`Provider HTTP ${response.status}`);
-        if (!retryable || attempt === 2) throw lastError;
+        if (!retryable || attempt === 1) throw lastError;
         const wait = Number.isFinite(retryAfter)
           ? Math.min(4_000, Math.max(300, retryAfter * 1_000))
           : 350 * 2 ** attempt;
@@ -130,8 +130,8 @@ async function get(
       const message = error instanceof Error ? error.message : String(error);
       const retryable =
         (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
-        /Provider HTTP (408|425|429|500|502|503|504)\b/.test(message);
-      if (!retryable || attempt === 2) throw error;
+        /Provider HTTP (408|500|502|503|504)\b/.test(message);
+      if (!retryable || attempt === 1) throw error;
       await new Promise(resolve => setTimeout(resolve, 350 * 2 ** attempt));
     } finally {
       clearTimeout(timer);

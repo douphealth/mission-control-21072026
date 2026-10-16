@@ -80,7 +80,7 @@ export async function searchExternalMentions(query: string): Promise<MentionCove
   if (cached && cached.expires > Date.now()) return { ...cached.value, cached: true };
   if (pending.has(query)) return pending.get(query)!;
   const operation = (async () => {
-    const hasOrganicApi = Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
+    const hasOrganicApi = Boolean(process.env.MC_ALLOW_PAID_INTELLIGENCE === "true" && process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD);
     const sources = [
       ...(hasOrganicApi ? [{
         name: 'DataForSEO web search',

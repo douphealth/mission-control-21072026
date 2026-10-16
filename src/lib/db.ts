@@ -438,7 +438,7 @@ export interface LinkItem {
 }
 
 export interface Note {
-  kind?: "note" | "ai-prompt";
+  kind?: "note" | "ai-prompt" | "family-schedule";
   category?: string;
   model?: string;
   variables?: string[];
