@@ -104,7 +104,7 @@ async function get(
       });
 
       if (!response.ok) {
-        const retryable = [408, 500, 502, 504].includes(response.status);
+        const retryable = [408, 500, 502, 503, 504].includes(response.status);
         const retryAfter = Number(response.headers.get('retry-after') || '');
         lastError = new Error(`Provider HTTP ${response.status}`);
         if (!retryable || attempt === 1) throw lastError;
@@ -130,7 +130,7 @@ async function get(
       const message = error instanceof Error ? error.message : String(error);
       const retryable =
         (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError') ||
-        /Provider HTTP (408|500|502|504)\b/.test(message);
+        /Provider HTTP (408|500|502|503|504)\b/.test(message);
       if (!retryable || attempt === 1) throw error;
       await new Promise(resolve => setTimeout(resolve, 350 * 2 ** attempt));
     } finally {
