@@ -1,0 +1,41 @@
+name: Apply verified premium source
+on:
+  push:
+    branches: [feat/premium-family-intake-20261016]
+    paths: [.maintenance/premium/READY]
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/feat/premium-family-intake-20261016'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/premium-family-intake-20261016
+          fetch-depth: 0
+      - name: Validate every base and resulting file hash before writing source
+        run: python .maintenance/premium/apply.py
+      - name: Commit source on the isolated feature branch only
+        run: |
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -rf .maintenance/premium
+          git add src scripts .maintenance
+          git commit -m 'feat: premium checklists, spreadsheet intake, repository cards, truthful intelligence and yearly timetable'
+          git push origin HEAD:feat/premium-family-intake-20261016
+          git rev-parse HEAD
+      - name: Export applied source for review and validation
+        if: always()
+        run: |
+          mkdir -p /tmp/premium-source
+          git rev-parse HEAD > /tmp/premium-source/commit.txt
+          git archive HEAD | gzip > /tmp/premium-source/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: premium-applied-source
+          path: /tmp/premium-source
+          retention-days: 3
