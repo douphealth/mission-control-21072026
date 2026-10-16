@@ -39,7 +39,7 @@ export function parseScheduleImport(input: string, defaults: ScheduleRule) {
   if (new TextEncoder().encode(input).length > 1_000_000) return { rows, errors: ["Import at most 1 MB."] };
   try {
     let records: Record<string, unknown>[];
-    if (/^\s*[\[{]/.test(input)) { const json = JSON.parse(input); records = Array.isArray(json) ? json : json.activities; }
+    if (/^\s*[[{]/.test(input)) { const json = JSON.parse(input); records = Array.isArray(json) ? json : json.activities; }
     else {
       const aliases: Record<string, string> = { member: "member", person: "member", name: "member", activity: "title", title: "title", day: "weekdays", days: "weekdays", weekday: "weekdays", weekdays: "weekdays", start: "startTime", starttime: "startTime", end: "endTime", endtime: "endTime", from: "fromDate", fromdate: "fromDate", until: "untilDate", untildate: "untilDate", location: "location", notes: "notes", timezone: "timezone", color: "color", exceptions: "exceptions", conditional: "conditional" };
       const result = Papa.parse<Record<string, string>>(input, { header: true, delimiter: input.split(/\r?\n/)[0].includes("\t") ? "\t" : "", skipEmptyLines: "greedy", transformHeader: name => aliases[key(name)] || name });
