@@ -5,7 +5,7 @@ import { organizePromptBatch } from "@/lib/promptOrganization";
 import { appendChecklistItems, parseChecklistItems } from "@/lib/taskChecklist";
 
 describe("Google Sheets prompt pairs", () => {
-  const pairs = Array.from({ length: 24 }, (_, i) => [i % 2 ? `Python debugging ${i}` : `SEO audit ${i}`, `You are a specialist for case ${i}.\n\n# Context\nKeep commas, quotes \"yes\" and tabs\tinside cells.\n1. Inspect.\n2. Explain.`]);
+  const pairs = Array.from({ length: 24 }, (_, i) => [i % 2 ? `Python debugging ${i}` : `SEO audit ${i}`, `You are a specialist for case ${i}.\n\n# Context\nKeep commas, quotes "yes" and tabs\tinside cells.\n1. Inspect.\n2. Explain.`]);
   it("reads headerless title/body rows and preserves every character of multiline prompts", () => {
     const result = previewBulkIntake("prompts", Papa.unparse(pairs, { delimiter: "\t", newline: "\n" }));
     expect(result.issues).toEqual([]); expect(result.rows).toHaveLength(24); expect(result.table?.hasHeader).toBe(false);
