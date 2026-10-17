@@ -1,4 +1,5 @@
 import CrossDeviceSyncBar from "@/components/CrossDeviceSyncBar";
+import PrintToolbar, { PrintDocumentFooter } from "@/components/PrintToolbar";
 import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 import StatusBar from "@/components/StatusBar";
@@ -172,23 +173,25 @@ export default function DashboardLayout() {
           tabIndex={-1}
           className="mc13-main mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain"
         >
-          <div className="mc13-page max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9">
+          <div className="mc13-page max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9" data-print-section={activeSection}>
+            <PrintToolbar section={activeSection} />
             {(activeSection === "tasks" ||
               activeSection === "focus" ||
               activeSection === "review") && <DailyBriefingBanner />}
 
             {activeSection !== "dashboard" && <WorkspacePulseBar />}
 
-            <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
-              <Suspense fallback={<LoadingSkeleton />}>
-                <div
-                  key={activeSection}
-                  className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
-                >
-                  <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />
-                </div>
-              </Suspense>
-            </RouteErrorBoundary>
+            {activeSection === "credentials" && <p className="mc-print-only mc-print-credential-notice">Credential inventory is restricted in printed reports for security. Passwords, API keys, tokens and account secrets are intentionally excluded. Open the encrypted vault on an authorized device to manage records.</p>}
+            <div className="mc-print-section-content">
+              <RouteErrorBoundary sectionName={activeSection} key={activeSection}>
+                <Suspense fallback={<LoadingSkeleton />}>
+                  <div key={activeSection} className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200">
+                    <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />
+                  </div>
+                </Suspense>
+              </RouteErrorBoundary>
+            </div>
+            <PrintDocumentFooter section={activeSection} />
           </div>
         </main>
         {!isMobile && <StatusBar />}
