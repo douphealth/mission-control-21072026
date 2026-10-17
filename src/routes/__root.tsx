@@ -17,6 +17,7 @@ import midnightAuroraCss from "../midnight-aurora.css?url";
 import todayWowCss from "../today-wow.css?url";
 import todayLuxCss from "../today-lux.css?url";
 import mcDesignSystemCss from "../mc-design-system.css?url";
+import printCss from "../print.css?url";
 
 function NotFoundComponent() {
   return (
@@ -122,6 +123,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: todayLuxCss,
       },
+      { rel: "stylesheet", href: printCss },
       {
         rel: "stylesheet",
         href: mcDesignSystemCss,

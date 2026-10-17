@@ -617,6 +617,7 @@ export default function WebsitesPage() {
 
   return (
     <div className="pf-root space-y-6">
+      <section className="mc-print-data" aria-label="Printable website portfolio"><h2>Website portfolio</h2><p className="mc-print-meta">{filtered.length} matching websites · Planning metadata, not a live technical audit</p><table><thead><tr><th>Website</th><th>Status / priority</th><th>Hosting</th><th>Purpose / next work</th></tr></thead><tbody>{filtered.map(site=><tr key={site.id}><td><strong>{site.name}</strong><small className="mc-print-url">{site.url}</small></td><td>{site.status}<small>{site.priority||"—"}</small></td><td>{site.hostingProvider||"—"}</td><td>{site.primaryGoal||"—"}</td></tr>)}</tbody></table></section>
       {/* Hero */}
       <section className="pf-hero" aria-labelledby="pf-title">
         <div className="pf-orb pf-orb--a" aria-hidden />
