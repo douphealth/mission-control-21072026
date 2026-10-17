@@ -255,7 +255,10 @@ async function collectMentionsOnce(_useAi: boolean) {
     for (const item of result.items) payload.push({ ...item, source: item.source || "Publisher unavailable",
       sourceId: result.termId, matchedTerm: result.term, publishedAt: item.publishedAt || result.fetchedAt,
       dateBasis: item.publishedAt ? "published" : "discovered", score: localScore({ ...item, publishedAt: item.publishedAt || result.fetchedAt }),
-      evidenceType: "multi-news" });
+      evidenceType: item.retrievalProviders?.length > 1 ? "multi-news"
+        : item.retrievalProviders?.includes("Google News RSS") ? "google-news"
+        : item.retrievalProviders?.includes("DataForSEO web search") ? "dataforseo"
+        : undefined });
   }
   const cutoff = Date.now() - 30 * 86_400_000;
   const stories = (await db.streamItems.where("kind").equals("industry").toArray()).filter(i => i.status === "active" && i.evidenceType === "direct-feed" && i.dateBasis === "published" && Date.parse(i.publishedAt) >= cutoff);

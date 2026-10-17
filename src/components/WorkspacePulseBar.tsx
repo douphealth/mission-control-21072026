@@ -232,8 +232,9 @@ export default function WorkspacePulseBar() {
       subtitle: "One intake surface for trends, verified mentions, audience observations and reminders.",
       icon: Radar,
       stats: [
-        { label: "Fresh 7d", value: freshStories.length, tone: "info" },
-        { label: "Mentions", value: activeMentions.length, tone: "violet" },
+        { label: "Published <24h", value: freshStories.length, tone: "info" },
+        { label: "Verified mentions 7d", value: freshVerifiedMentions.length, tone: "violet" },
+        { label: "Audience <24h", value: freshAudienceAccounts.size, tone: "success" },
         { label: "Due reminders", value: dueReminders.length, tone: dueReminders.length ? "warning" : "success" },
       ],
       related: [
@@ -241,7 +242,7 @@ export default function WorkspacePulseBar() {
         { label: "Mentions", section: "mentions" },
         { label: "Audience", section: "audience" },
       ],
-      truth: "Collector output is shown only when actually observed.",
+      truth: "Only dated publications, identity-verified mentions and fresh source-backed audience readings count as current. Collector health reports outages separately.",
     },
     reminders: {
       group: "Operate",

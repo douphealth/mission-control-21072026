@@ -135,10 +135,13 @@ export default function IndustryPage() {
   const refresh = async () => {
     setBusy(true);
     try {
-      const { added, errors } = await runIndustryCollector();
-      toast[errors.length && !added ? "warning" : "success"](
-        added ? `${added} new ${added === 1 ? "story" : "stories"}` : "No new feed stories",
-        { description: errors.slice(0, 2).join(" · ") || undefined },
+      const { added, errors, checked, total } = await runIndustryCollector();
+      const unavailable = total > 0 && checked === 0;
+      toast[unavailable || errors.length ? "warning" : "success"](
+        unavailable ? "Tracked feeds unavailable — no fresh coverage verified"
+          : added ? `${added} new ${added === 1 ? "story" : "stories"}`
+          : "Feed refresh finished — no new published stories",
+        { description: [`${checked}/${total} feeds checked successfully`, ...errors.slice(0, 2)].join(" · ") },
       );
     } catch (error: any) {
       toast.error("Feed refresh failed", { description: String(error?.message ?? error) });
