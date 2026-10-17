@@ -868,7 +868,7 @@ export default function CalendarPage() {
       <section className="mc-print-data" aria-label="Printable calendar"><h2>{headerLabel}</h2><p className="mc-print-meta">Events, tasks and connected Google entries available in this calendar period.</p>
         {Object.entries(filteredEvents.filter(e => view === "month" ? e.date.slice(0,7) === fmtDate(new Date(year,month,1)).slice(0,7) : view === "week" ? e.date >= fmtDate(weekDates[0]) && e.date <= fmtDate(weekDates[6]) : e.date >= today).sort((a,b)=>a.date.localeCompare(b.date)||(a.startTime||"").localeCompare(b.startTime||"")).reduce<Record<string, CalEvent[]>>((acc, ev) => { (acc[ev.date] ||= []).push(ev); return acc; }, {})).map(([date, group]) => <div className="mc-print-day" key={date}><h3>{date}</h3><ol>{group.map(ev=><li key={ev.id}><span>{ev.allDay ? "All day" : ev.startTime || "—"}{ev.endTime ? "–"+ev.endTime : ""}</span><span><strong>{ev.title}</strong>{ev.description && <small>{ev.description}</small>}</span><span>{ev.category || (ev.isTask ? "Task" : "Event")}</span></li>)}</ol></div>)}
       </section>
-      {/* ── Main Calendar ─── */
+      {/* ── Main Calendar ─── */}
       <div className="flex-1 flex flex-col space-y-3 sm:space-y-4 min-w-0 overflow-auto">
         {/* Google Calendar Sync Bar */}
         {gcal.connected ? (
