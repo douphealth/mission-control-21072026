@@ -27,8 +27,6 @@ import type {
 } from "@/lib/db";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { useDataStore } from "@/stores/dataStore";
-import { deduplicateAll } from "@/lib/dedup";
-import { restoreLatestNonEmptyVersion } from "@/lib/versions";
 import { startCloudSync } from "@/lib/cloudSync";
 import { ensurePortfolioBootstrap } from "@/lib/portfolioBootstrap";
 import { ensureWorkspaceBootstrap } from "@/lib/workspaceBootstrap";
@@ -52,6 +50,8 @@ export type {
 
 interface DashboardContextValue {
   isLoading: boolean;
+  loadingSlow: boolean;
+  bootError: string | null;
 }
 
 const DashboardContext = createContext<DashboardContextValue | null>(null);
@@ -82,6 +82,8 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
   const setIsLoadingStore = useDataStore((s) => s.setIsLoading);
   const setDashboardLayout = useDataStore((s) => s.setDashboardLayout);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingSlow, setLoadingSlow] = useState(false);
+  const [bootError, setBootError] = useState<string | null>(null);
 
   const initialized = useRef(false);
 
@@ -89,44 +91,56 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
     if (initialized.current) return;
     initialized.current = true;
 
-    (async () => {
+    // Keep local storage readiness separate from cloud access and portfolio maintenance.
+    // Neither a slow Google API nor an old snapshot should hold the mobile app hostage.
+    const slowTimer = window.setTimeout(() => setLoadingSlow(true), 10_000);
+    let localReady = false;
+    void (async () => {
       try {
         await migrateFromLocalStorage();
-
-        const [t, w, r, b] = await Promise.all([
-          db.tasks.count(),
-          db.websites.count(),
-          db.repos.count(),
-          db.buildProjects.count(),
-        ]);
-        if (t + w + r + b === 0) {
-          await restoreLatestNonEmptyVersion();
-        }
-
         await ensureSettingsRow();
-        await ensurePortfolioBootstrap();
-        await ensureWorkspaceBootstrap();
-        await deduplicateAll();
         await loadSettings();
-
         const settings = await db.settings.get("default");
         if (settings?.dashboardLayout) setDashboardLayout(settings.dashboardLayout);
-        // Pre-load the app's Google identity so "Connect Google" is one click.
-        void import("@/lib/googleDirectAuth").then((m) => m.ensureGoogleClientId());
-        await startCloudSync();
-        // Keep tasks in step with Google Tasks and Calendar for as long as the app is open.
-        void import("@/lib/googleSync").then((m) => m.startGoogleAutoSync());
-      } catch (e) {
-        console.error("DB init error:", e);
+        localReady = true;
+      } catch (error) {
+        console.error("Local database startup failed:", error);
+        setBootError(error instanceof Error ? `${error.name}: ${error.message}` : "Device storage could not be opened.");
       } finally {
+        window.clearTimeout(slowTimer);
         setIsLoading(false);
         setIsLoadingStore(false);
       }
-    })();
+    })().then(() => {
+      // Only launch background work when the local DB has actually opened.
+      // A failed local initialization must never be mistaken for an empty account.
+      if (!localReady) return;
+      // Run after the initial paint; neither cloud hydration nor catalog seeding
+      // blocks the user from opening tasks and family schedules.
+      window.setTimeout(() => {
+        void import("@/lib/googleDirectAuth")
+          .then(module => module.ensureGoogleClientId())
+          .catch(error => console.warn("Google connection setup unavailable", error));
+
+        const cloud = startCloudSync().catch(error => {
+          console.warn("Cloud initialization deferred; local records kept", error);
+        });
+        // Prefer restoring cloud records before seeding reference catalogs.
+        // A timeout ensures optional starter data eventually appears if Google hangs.
+        void Promise.race([cloud, new Promise(resolve => window.setTimeout(resolve, 8_000))])
+          .then(async () => {
+            await ensurePortfolioBootstrap();
+            await ensureWorkspaceBootstrap();
+          })
+          .catch(error => console.warn("Optional catalog bootstrap unavailable", error));
+      }, 75);
+    });
   }, [loadSettings, setIsLoadingStore, setDashboardLayout]);
 
-  // Stable context value — only changes when bootstrap finishes
-  const value = React.useMemo<DashboardContextValue>(() => ({ isLoading }), [isLoading]);
+  const value = React.useMemo<DashboardContextValue>(
+    () => ({ isLoading, loadingSlow, bootError }),
+    [isLoading, loadingSlow, bootError],
+  );
 
   return <DashboardContext.Provider value={value}>{children}</DashboardContext.Provider>;
 }

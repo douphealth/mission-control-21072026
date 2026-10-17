@@ -67,18 +67,26 @@ export default function CrossDeviceSyncBar() {
     setBusy(true);
     try {
       if (connect) await signInToCloud();
-      else if (reconnectGoogle) {
-        const { signIn } = await import('@/lib/googleTasks');
-        await signIn();
-      } else {
+      else {
+        if (reconnectGoogle) {
+          const { signIn } = await import('@/lib/googleTasks');
+          await signIn();
+        }
         const result = await forceCloudSync();
-        if (!result.ok) throw new Error(result.error);
+        if (!result.ok) throw new Error(result.error || 'Drive synchronization was not confirmed.');
       }
-      // Tasks and Calendar are synced in the same press, so one button brings everything up to date.
-      await requestGoogleSync({ reason: 'manual' });
-      toast.success('Everything is up to date', {
-        description: 'Use this same Google account and app on your other device.',
+      toast.success('Mission Control records confirmed in Google Drive', {
+        description: 'On your other device, connect the same Google account and press Sync now.',
       });
+      // Tasks/Calendar are separate services; their failures must not be reported
+      // as a failure of a successfully verified Drive backup.
+      try {
+        await requestGoogleSync({ reason: 'manual' });
+      } catch (googleError) {
+        toast.warning('Google Tasks / Calendar needs attention', {
+          description: googleError instanceof Error ? googleError.message : 'See Google Tasks status for details.',
+        });
+      }
     } catch (error) { toast.error('Synchronization needs attention', { description: error instanceof Error ? error.message : 'Your local tasks have been preserved.' }); }
     finally { setBusy(false); setSync(snapshot()); }
   };
