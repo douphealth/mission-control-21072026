@@ -267,17 +267,26 @@ async function writeRemote(fileId: string | undefined, backup: RemoteBackup, acc
   remoteCache.delete(saved.id);
   return saved.id;
 }
-async function seedMissingRecords(remote: RemoteRecords) {
+/**
+ * Build initial cloud backfill in memory from durable IndexedDB records. If a
+ * transfer fails it is reconstructed on retry. Never copy thousands of existing
+ * records into the small localStorage mutation journal just to seed a new device.
+ * Explicit local edits still use the durable mutation journal.
+ */
+async function seedMissingRecords(remote: RemoteRecords): Promise<DirtyRecordMap> {
+  const dirty = readDirty();
+  if (journalReadError || journalError) throw new Error('Pending local changes could not be read. Cloud backfill paused.');
+  const missing: DirtyRecordMap = {};
   for (const [collection, table] of Object.entries(COLLECTIONS)) {
+    if (JOURNAL_EXCLUDED.has(collection)) continue;
     const rows = await table.toArray();
-    const dirty = { ...readDirty() };
     for (const row of rows) {
-      if (!row?.id) continue;
-      const recordKey = key(collection, String(row.id));
-      if (!dirty[recordKey] && !remote[recordKey]) dirty[recordKey] = newChange('put');
+      if (typeof row?.id !== 'string' || !row.id) continue;
+      const recordKey = key(collection, row.id);
+      if (!dirty[recordKey] && !remote[recordKey]) missing[recordKey] = newChange('put');
     }
-    if (!writeDirty(dirty)) throw new Error('Sync queue storage failed. Pending changes have not been acknowledged.');
   }
+  return missing;
 }
 function clearRetry() {
   if (retryTimer) clearTimeout(retryTimer);
@@ -299,8 +308,9 @@ async function syncCycle(): Promise<SyncResult> {
     await bindIdentity(token.access_token, currentEpoch);
     await repairStaleCloudJournal();
     const remote = await readRemote(token.access_token, currentEpoch);
-    if (!localSeedChecked) await seedMissingRecords(remote.records);
-    const captured = { ...readDirty() };
+    const initialSeeds = !localSeedChecked ? await seedMissingRecords(remote.records) : {};
+    // Explicit user edits take precedence over inferred initial backfill.
+    const captured = { ...initialSeeds, ...readDirty() };
     const merged = mergeRemoteRecords(remote.records);
     const repairedQueueEntries = new Set<string>();
     const outboundKeys: string[] = [];

@@ -126,23 +126,31 @@ export default function DashboardLayout() {
     );
   }
 
-  const { isLoading } = dashboard;
+  const { isLoading, loadingSlow, bootError } = dashboard;
   const Section = activeSection.startsWith("custom-")
     ? CustomModulePage
     : sectionMap[activeSection] || DashboardHome;
 
-  if (isLoading) {
+  if (isLoading || bootError) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <div className="mx-auto h-14 w-14 overflow-hidden rounded-2xl shadow-[var(--shadow-primary)] animate-in zoom-in-75 fade-in duration-400">
-            <img src="/mission-control-mark.svg" alt="" className="h-full w-full" />
-          </div>
-          <div className="text-sm text-muted-foreground animate-in fade-in slide-in-from-bottom-1 duration-300 delay-200 fill-mode-both">
-            Loading Mission Control...
-          </div>
-        </div>
-      </div>
+      <main className="flex min-h-dvh items-center justify-center bg-background p-5">
+        <section className="w-full max-w-sm space-y-4 rounded-3xl border border-border bg-card p-6 text-center shadow-lg" role={bootError ? "alert" : "status"}>
+          <img src="/mission-control-mark.svg" alt="" className="mx-auto h-16 w-16 rounded-2xl" />
+          <h1 className="text-lg font-bold">{bootError ? "Device storage needs attention" : "Opening Mission Control"}</h1>
+          <p className="text-sm text-muted-foreground">
+            {bootError
+              ? "Your saved data has not been cleared. The browser could not finish opening local storage."
+              : loadingSlow
+                ? "This is taking longer than expected. Another open tab or device storage may be holding a database operation."
+                : "Reading your saved work on this device..."}
+          </p>
+          {bootError && <p className="break-words rounded-xl bg-secondary p-3 text-left text-xs" data-testid="bootstrap-error">{bootError}</p>}
+          {(loadingSlow || bootError) && <>
+            <p className="text-xs text-muted-foreground">Do not clear website data or uninstall the app. Close other Mission Control tabs, then retry.</p>
+            <button type="button" className="min-h-11 w-full rounded-xl bg-primary px-4 font-semibold text-primary-foreground" onClick={() => window.location.reload()}>Try loading again</button>
+          </>}
+        </section>
+      </main>
     );
   }
 
