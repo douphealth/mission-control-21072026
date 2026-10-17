@@ -1,6 +1,6 @@
 import { organizePromptBatch } from "./promptOrganization";
 import Papa from "papaparse";
-import { parseCredentialBatch as legacyCredentials } from "./credentialBulk";
+import { looksLikeCredentialPairs, parseCredentialBatch as legacyCredentials } from "./credentialBulk";
 import { normalizeLibraryRecord } from "./libraryIntake";
 import { splitPromptCollection, type PromptSplitRule } from "./promptSplit";
 
@@ -150,6 +150,33 @@ function readTable(mode: BulkMode, input: string, options: IntakeOptions): { tab
   if (records.length > INTAKE_LIMIT) issues.push({ line: 0, message: "Import at most 1,000 entries per batch." });
   return { table: { headers, columns, delimiter, hasHeader, suspectedDataHeader, needsReview: suspectedDataHeader || !hasHeader || columns.includes(IGNORE) }, data: records, issues };
 }
+/**
+ * Google Sheets sometimes puts a heading in one spreadsheet row and its prompt in the
+ * next row (the other column). Join only unambiguous adjacent complements; never
+ * split prompt bodies, infer a new heading from numbered instructions, or discard text.
+ */
+function pairAdjacentPromptRows(data: SourceRow[], columns: string[]): { data: SourceRow[]; paired: number } {
+  const title = columns.indexOf("title"), body = columns.indexOf("content");
+  if (title < 0 || body < 0) return { data, paired: 0 };
+  const pairedRows: SourceRow[] = [];
+  let paired = 0;
+  for (let i = 0; i < data.length; i++) {
+    const first = data[i], second = data[i + 1];
+    const titleOnly = !!first.cells[title]?.trim() && !first.cells[body]?.trim();
+    const bodyOnly = !!second?.cells[body]?.trim() && !second.cells[title]?.trim();
+    // Do not silently discard populated category/model/other spreadsheet columns.
+    const safeToJoin = second && second.cells.every((value, index) => !value.trim() || index === body || !first.cells[index]?.trim());
+    if (titleOnly && bodyOnly && safeToJoin) {
+      const cells = Array.from({ length: Math.max(first.cells.length, second.cells.length) }, (_, index) =>
+        first.cells[index] || second.cells[index] || "");
+      pairedRows.push({ cells, line: first.line });
+      i++; paired++; continue;
+    }
+    pairedRows.push(first);
+  }
+  return { data: pairedRows, paired };
+}
+
 function mappedRecord(mode: BulkMode, cells: unknown[], headers: string[], columns: string[]) {
   const out: IntakeRow = {};
   const notesField = mode === "credentials" ? "notes" : "description";
@@ -219,6 +246,16 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
         } else result.issues.push({ line: i + 1, message: "Provide a record with named fields." });
       });
     } else {
+      // Field/value spreadsheet blocks are not conventional column tables. Routing
+      // through the dedicated parser retains one encrypted vault entry per account.
+      if (mode === "credentials" && looksLikeCredentialPairs(input)) {
+        const credentials = legacyCredentials(input);
+        result.rows = credentials.items as unknown as IntakeRow[];
+        result.issues = credentials.errors.map((message, index) => ({ line: index + 1, message }));
+        result.needsSecretReview = true;
+        result.warnings.push("Detected vertical credential field/value blocks. Review each account and secret before saving.");
+        return result;
+      }
       const table = readTable(mode, input, options);
       const acceptedTable = table !== null;
       if (acceptedTable && table) {
@@ -228,7 +265,14 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
         if (table.table.needsReview) result.warnings.push("Review the suggested column mapping, including ignored columns. Empty cells retain their positions. Never map an unknown secret into plain-text notes.");
         if (table.table.columns.includes(PRIVATE)) result.warnings.push("Recognized password, key and account columns are excluded from Links Hub. Store them in Credentials instead.");
         if (mode === "credentials" && table.table.columns.includes(EXTRA)) result.warnings.push("Dates are retained as notes, not used as categories.");
-        for (const { cells, line } of table.data) {
+        const promptRows = mode === "prompts" && options.layout !== "prompt-cells"
+          ? pairAdjacentPromptRows(table.data, table.table.columns)
+          : { data: table.data, paired: 0 };
+        if (promptRows.paired) {
+          result.splitMethod = "paired spreadsheet rows";
+          result.warnings.push(`Combined ${promptRows.paired} heading/body pairs from adjacent spreadsheet rows. Review boundaries before saving.`);
+        }
+        for (const { cells, line } of promptRows.data) {
           if (table.table.hasHeader && cells.length === table.table.headers.length && cells.every((cell, i) => key(cell) === key(table.table.headers[i]))) continue;
           try { entries.push({ row: mappedRecord(mode, cells, table.table.headers, table.table.columns), line }); }
           catch (error) {

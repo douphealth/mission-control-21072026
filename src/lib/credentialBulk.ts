@@ -1,5 +1,6 @@
 import type { CredentialVault } from "@/lib/db";
 import { parseCredentialsDump } from "@/lib/parseCredentialsDump";
+import Papa from "papaparse";
 import { todayISO } from "@/lib/overdue";
 
 export type CredentialDraft = Omit<CredentialVault, "id">;
@@ -548,11 +549,64 @@ function parseDelimited(text: string): CredentialBatchParseResult | null {
   return { items: dedupe(items), errors, format: "lines" };
 }
 
+/** Repeated labels delimit accounts even without blank lines from a sheet export. */
+function splitCredentialBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  let lines: string[] = [], fields = new Set<string>();
+  const flush = () => { if (lines.some(line => line.trim())) blocks.push(lines.join("\n").trim()); lines = []; fields = new Set(); };
+  for (const line of text.replace(/\r\n?/g, "\n").split("\n")) {
+    if (!line.trim() || /^\s*---+\s*$/.test(line)) { flush(); continue; }
+    const match = line.match(/^\s*([^:=]{2,48})\s*[:=]\s*(.*)$/);
+    const field = match ? fieldForLabel(match[1]) : undefined;
+    if ((field === "label" && fields.has("label")) ||
+        (field === "service" && fields.has("service") && ["username", "password", "apiKey", "url"].some(key => fields.has(key)))) flush();
+    lines.push(line);
+    if (field) fields.add(field);
+  }
+  flush();
+  return blocks;
+}
+
+/** An exact two-column Key/Value table must not be mistaken for one account per row. */
+export function looksLikeCredentialPairs(text: string): boolean {
+  if (!text.includes("\t")) return false;
+  const rows = Papa.parse<string[]>(text, { delimiter: "\t", header: false, skipEmptyLines: "greedy" });
+  if (rows.errors.length || rows.data.length < 3 || rows.data.length > 1000) return false;
+  const fields = rows.data.map(row => row.length === 2 ? fieldForLabel(row[0]) : undefined);
+  const recognized = fields.filter(Boolean).length;
+  return recognized >= 3 && recognized >= Math.ceil(rows.data.length * .75) &&
+    fields.some(field => field === "label" || field === "service") &&
+    fields.some(field => field === "username" || field === "password" || field === "apiKey" || field === "url");
+}
+
+function parseVerticalCredentialPairs(text: string): CredentialBatchParseResult | null {
+  if (!looksLikeCredentialPairs(text)) return null;
+  const rows = Papa.parse<string[]>(text, { delimiter: "\t", header: false, skipEmptyLines: "greedy" }).data;
+  const items: CredentialDraft[] = [], errors: string[] = [];
+  let record: Partial<CredentialDraft> = {}, seen = new Set<string>(), index = 0;
+  const flush = () => {
+    if (!Object.keys(record).length) return;
+    const draft = makeDraft(record);
+    if (draft) items.push(draft);
+    else errors.push(`Block ${index + 1}: missing a usable account or credential value.`);
+    record = {}; seen = new Set(); index++;
+  };
+  for (const [label, value] of rows) {
+    const field = fieldForLabel(label);
+    if (!field || !value.trim()) continue;
+    if (field === "label" && seen.has("label") ||
+        field === "service" && seen.has("service") && ["username", "password", "apiKey", "url"].some(name => seen.has(name))) flush();
+    if (field === "tags") record.tags = normalizeTags(value);
+    else if (field === "notes" && record.notes) record.notes += "\n" + value;
+    else (record as Record<string, unknown>)[field] = value;
+    seen.add(field);
+  }
+  flush();
+  return { items: dedupe(items), errors, format: "key-value" };
+}
+
 function parseKeyValue(text: string): CredentialBatchParseResult | null {
-  const blocks = text
-    .split(/\n\s*\n|\n\s*---+\s*\n/g)
-    .map((block) => block.trim())
-    .filter(Boolean);
+  const blocks = splitCredentialBlocks(text);
 
   const items: CredentialDraft[] = [];
   const errors: string[] = [];
@@ -688,6 +742,7 @@ export function parseCredentialBatch(text: string): CredentialBatchParseResult {
 
   return (
     parseJson(trimmed) ||
+    parseVerticalCredentialPairs(trimmed) ||
     parseDelimited(trimmed) ||
     parseKeyValue(trimmed) ||
     parseLooseApiLines(trimmed) || {

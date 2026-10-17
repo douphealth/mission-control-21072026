@@ -7,7 +7,8 @@ export interface MentionTerm { id: string; term: string; type: 'name' | 'brand' 
 export interface MatchedMention extends RawItem {
   matchedAnchors: string[]; verification: 'exact-domain' | 'exact-handle' | 'anchored-name' | 'exact-brand';
   verificationReason: string; confidence: 'high' | 'medium'; corroborationCount: number;
-  retrievalProvider: 'multi-news';
+  retrievalProviders: string[];
+
 }
 export async function collectMentionCoverage(terms: MentionTerm[]) {
   const results = await mapLimited(terms, 2, async term => {
@@ -44,7 +45,7 @@ export async function collectMentionCoverage(terms: MentionTerm[]) {
             'Search-provider agreement confirms discoverability only; it is not independent factual verification of the article.',
           ].join(' '),
           corroborationCount: 0,
-          retrievalProvider: 'multi-news',
+          retrievalProviders: item.retrievalProviders || [],
         });
       }
       return { ...empty, checked, items, candidates: coverage.items.length, excludedOwned, rejected, partial: failed.length > 0,
