@@ -1948,7 +1948,11 @@ export default function TasksPage() {
 
   return (
     <div className="mc21-tasks-page space-y-4">
-      {/* ── Focused task command center ── */}
+      <section className="mc-print-data" aria-label="Printable tasks"><h2>Task register</h2><p className="mc-print-meta">{listTasks.length} tasks · {preset} view · {filtered.length} matching filters · {stats.overdue} overdue</p>
+        <table><thead><tr><th style={{width:"8%"}}>Done</th><th>Task / notes</th><th style={{width:"13%"}}>Priority</th><th style={{width:"16%"}}>Due date</th><th style={{width:"16%"}}>Status</th></tr></thead><tbody>{listTasks.map(task => <tr key={task.id}><td>{task.status === "done" ? "✓" : "□"}</td><td><strong>{task.title}</strong>{task.description && <small>{task.description}</small>}{task.category && <small>{task.category}</small>}{task.subtasks?.length ? <small>{task.subtasks.map(item => (item.done ? "✓ " : "□ ") + item.title).join(" · ")}</small> : null}</td><td>{task.priority || "—"}</td><td>{task.dueDate || task.scheduledAt || "—"}</td><td>{task.status}</td></tr>)}</tbody></table>
+        {!listTasks.length && <p className="mc-print-empty">No tasks match the current view and filters.</p>}
+      </section>
+      {/* ── Focused task command center ── */
       <header className="mc21-tasks-head">
         <div className="min-w-0">
           <div className="mc21-tasks-eyebrow">

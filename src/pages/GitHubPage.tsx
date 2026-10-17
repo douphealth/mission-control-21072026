@@ -334,7 +334,7 @@ export default function GitHubPage() {
   );
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-4 sm:space-y-5 mc-print-github-page">
       <section className="relative overflow-hidden rounded-[28px] border border-border/40 bg-card/80 p-4 shadow-sm backdrop-blur-xl sm:p-5">
         <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
         <div className="relative flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -466,6 +466,7 @@ export default function GitHubPage() {
         ))}
       </div>
 
+      <section className="mc-print-data" aria-label="Printable GitHub repositories"><h2>Repository register</h2><p className="mc-print-meta">{filtered.length} matching repositories · All matching records included (not limited to the current card page)</p><table><thead><tr><th>Repository / URL</th><th>Priority</th><th>Status</th><th>Progress</th><th>Next action</th></tr></thead><tbody>{filtered.map(repo=><tr key={repo.id}><td><strong>{repo.name}</strong><small className="mc-print-url">{repo.url}</small>{repo.description && <small>{repo.description}</small>}</td><td>{repo.priority||"—"}</td><td>{repo.status}</td><td>{Number.isFinite(repo.progress) ? repo.progress+"%" : "—"}</td><td>{repo.pendingSummary || "Not recorded"}</td></tr>)}</tbody></table></section>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="GitHub repository cards">{filtered.slice(Math.min(page, Math.max(0, Math.ceil(filtered.length / 12) - 1)) * 12, (Math.min(page, Math.max(0, Math.ceil(filtered.length / 12) - 1)) + 1) * 12).map(repo => <RepoCommandCard key={repo.id} repo={repo} compact={compactView} bulkMode={bulk.bulkMode} selected={bulk.isSelected(repo.id)} onSelect={() => bulk.toggleSelect(repo.id)} onEdit={() => openEdit(repo)} />)}</div>
       {!filtered.length && <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm">No repositories match these filters.</div>}
       <div className="flex items-center justify-between text-sm"><span>{filtered.length} repositories / page {Math.min(page + 1, Math.max(1, Math.ceil(filtered.length / 12)))} of {Math.max(1, Math.ceil(filtered.length / 12))}</span><div className="flex gap-2"><button className="min-h-11 rounded-xl border border-border px-3 disabled:opacity-40" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Previous</button><button className="min-h-11 rounded-xl border border-border px-3 disabled:opacity-40" disabled={(page + 1) * 12 >= filtered.length} onClick={() => setPage(value => value + 1)}>Next</button></div></div>

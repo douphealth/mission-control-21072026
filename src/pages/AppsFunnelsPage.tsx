@@ -159,7 +159,7 @@ export default function AppsFunnelsPage() {
     setForm((current) => ({ ...current, [field]: value }));
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="space-y-4 sm:space-y-5 mc-print-apps-page">
       <header className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
@@ -223,6 +223,7 @@ export default function AppsFunnelsPage() {
         </div>
       </div>
 
+      <section className="mc-print-data" aria-label="Printable apps and funnels"><h2>Applications and funnels</h2><p className="mc-print-meta">{apps.length} matching products · Saved statuses are not live health checks</p><table><thead><tr><th>Product</th><th>Priority / status</th><th>Links</th><th>Next step</th></tr></thead><tbody>{apps.map(app=><tr key={app.id}><td><strong>{app.productName||app.name}</strong>{app.description&&<small>{app.description}</small>}</td><td>{app.priority||"—"}<small>{app.status}</small></td><td><span className="mc-print-url">{app.deployedUrl||"No production URL"}</span><small className="mc-print-url">{app.githubRepo}</small></td><td>{app.nextSteps||"Not recorded"}</td></tr>)}</tbody></table></section>
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
         {apps.map((app, index) => {
           const live = app.status === "deployed" && Boolean(app.deployedUrl);

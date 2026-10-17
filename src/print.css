@@ -174,3 +174,12 @@
   /* Browsers still show their native printer controls for margins and page count. */
   .mc-print-document-footer { break-before: auto; }
 }
+
+@media print {
+  [data-print-section="calendar"] .mc-print-section-content > div > div > :not(.mc-print-data) { display: none !important; }
+  [data-print-section="github"] .mc-print-github-page > :not(.mc-print-data) { display: none !important; }
+  [data-print-section="tasks"] .mc21-tasks-page > :not(.mc-print-data) { display: none !important; }
+  [data-print-section="apps-funnels"] .mc-print-apps-page > :not(.mc-print-data) { display: none !important; }
+  [data-print-section="websites"] .pf-root > :not(.mc-print-data) { display: none !important; }
+  [data-print-section="family-schedule"] .fs-page > :not(.mc-print-data) { display: none !important; }
+}
