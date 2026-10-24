@@ -38,12 +38,13 @@ import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "sonner";
 import {
   GITHUB_REPO_CATALOG,
-  GITHUB_REPO_CATALOG_COUNT,
   GITHUB_REPO_CATALOG_GENERATED_AT,
 } from "@/lib/repoCatalog";
 import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
+import PrivateGitHubInventory from "@/components/github/PrivateGitHubInventory";
+import { UNIFIED_PUBLIC_GITHUB_CATALOG, UNIFIED_PUBLIC_GITHUB_COUNT, getGitHubRepoKey, getGitHubRepoOwner, mergeUnifiedGitHubRows } from "@/lib/unifiedGitHubCatalog";
 
 const langColors: Record<string, string> = {
   TypeScript: "bg-blue-500",
@@ -101,6 +102,7 @@ export default function GitHubPage() {
   const catalogSynced = useRef(false);
   const canonicalAppsRepaired = useRef(false);
   const [search, setSearch] = useState("");
+  const [accountFilter, setAccountFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState<"all" | "critical" | "high" | "medium" | "low">("all");
   const [portfolioFilter, setPortfolioFilter] = useState<"all" | "live" | "core" | "origin" | "repo-only">("all");
   const [compactView, setCompactView] = useState(false);
@@ -117,8 +119,8 @@ export default function GitHubPage() {
     catalogSeeded.current = true;
     void (async () => {
       const stored = await db.repos.toArray();
-      const existing = new Set(stored.flatMap(repo => [repo.url?.toLowerCase(), repo.name.toLowerCase()].filter(Boolean)));
-      const missing = GITHUB_REPO_CATALOG.filter(repo => !existing.has(repo.url.toLowerCase()) && !existing.has(repo.name.toLowerCase()));
+      const existing = new Set(stored.map(repo => getGitHubRepoKey(repo.url)).filter(Boolean));
+      const missing = GITHUB_REPO_CATALOG.filter(repo => !existing.has(getGitHubRepoKey(repo.url)));
       if (missing.length) await bulkAddItems("repos", missing);
     })().catch(() => { catalogSeeded.current = false; toast.error("Could not load the GitHub catalog. Existing records were preserved."); });
   }, [bulkAddItems]);
@@ -126,16 +128,14 @@ export default function GitHubPage() {
   useEffect(() => {
     if (catalogSynced.current || repos.length === 0) return;
 
-    const catalogByUrl = new Map(GITHUB_REPO_CATALOG.map((r) => [r.url.toLowerCase(), r]));
-    const catalogByName = new Map(GITHUB_REPO_CATALOG.map((r) => [r.name.toLowerCase(), r]));
+    const catalogByUrl = new Map(GITHUB_REPO_CATALOG.map((r) => [getGitHubRepoKey(r.url), r]));
     // Only technical catalog metadata is synchronized after seeding.
     // User-managed planning fields (priority, importance, done/pending, status,
     // progress) must remain editable and must never be overwritten on mount.
     const syncFields = ["visibility", "defaultBranch", "repoSizeKb", "metadataCheckedAt"] as const;
 
     const updates = repos.flatMap((repo) => {
-      const catalog =
-        catalogByUrl.get(repo.url?.toLowerCase()) ?? catalogByName.get(repo.name.toLowerCase());
+      const catalog = catalogByUrl.get(getGitHubRepoKey(repo.url));
       if (!catalog || (repo.metadataCheckedAt || "") >= (catalog.metadataCheckedAt || "")) return [];
 
       const patch: Partial<GitHubRepo> = {};
@@ -159,37 +159,17 @@ export default function GitHubPage() {
     }
   }, [repos, bulkPatch]);
 
-  const displayRepos = useMemo(() => {
-    const localByUrl = new Map(repos.map((r) => [r.url?.toLowerCase(), r]));
-    const localByName = new Map(repos.map((r) => [r.name.toLowerCase(), r]));
-
-    const matched = new Set<string>();
-    const catalogRows = GITHUB_REPO_CATALOG.map((catalog, index) => {
-      const local =
-        localByUrl.get(catalog.url.toLowerCase()) ?? localByName.get(catalog.name.toLowerCase());
-      if (local) matched.add(local.id);
-      return {
-        id: local?.id ?? `catalog-${index}-${catalog.name}`,
-        ...catalog,
-        ...(local ?? {}),
-        // Canonical identity must never be inherited from a stale/corrupt local row.
-        name: catalog.name,
-        url: catalog.url,
-        priority: local?.priority ?? catalog.priority,
-        importance: local?.importance ?? catalog.importance,
-      } as GitHubRepo;
-    });
-    return [...catalogRows, ...repos.filter(repo => !matched.has(repo.id))];
-  }, [repos]);
+  const displayRepos = useMemo(() => mergeUnifiedGitHubRows(repos), [repos]);
 
   const filtered = useMemo(() => {
     const priorityRank: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const q = search.trim().toLowerCase();
     return displayRepos
       .filter((r) => {
-        const meta = REPO_PORTFOLIO_META[r.name];
-        const master = REPO_MASTER_LINKS[r.name];
-        const relationships = REPO_RELATIONSHIPS[r.name] || [];
+        const account = getGitHubRepoOwner(r.url);
+        const meta = account === "douphealth" ? REPO_PORTFOLIO_META[r.name] : undefined;
+        const master = account === "douphealth" ? REPO_MASTER_LINKS[r.name] : undefined;
+        const relationships = account === "douphealth" ? REPO_RELATIONSHIPS[r.name] || [] : [];
         const state = meta?.portfolioState || master?.s || "REPO ONLY / NOT PROVEN LIVE";
         const portfolioMatch =
           portfolioFilter === "all" ||
@@ -200,6 +180,8 @@ export default function GitHubPage() {
 
         const haystack = [
           r.name,
+          r.url,
+          account,
           r.description,
           r.doneSummary,
           r.pendingSummary,
@@ -242,6 +224,7 @@ export default function GitHubPage() {
 
         return (
           (priorityFilter === "all" || (r.priority || "medium") === priorityFilter) &&
+          (accountFilter === "all" || account === accountFilter) &&
           portfolioMatch &&
           (!q || haystack.includes(q))
         );
@@ -253,12 +236,13 @@ export default function GitHubPage() {
           (b.importance || 0) - (a.importance || 0) ||
           a.name.localeCompare(b.name),
       );
-  }, [displayRepos, search, priorityFilter, portfolioFilter]);
+  }, [displayRepos, search, priorityFilter, accountFilter, portfolioFilter]);
 
   const portfolioStats = useMemo(() => {
     const states = displayRepos.map((repo) => {
-      const meta = REPO_PORTFOLIO_META[repo.name];
-      const master = REPO_MASTER_LINKS[repo.name];
+      const curated = getGitHubRepoOwner(repo.url) === "douphealth";
+      const meta = curated ? REPO_PORTFOLIO_META[repo.name] : undefined;
+      const master = curated ? REPO_MASTER_LINKS[repo.name] : undefined;
       return {
         direct: !!meta?.directWebsiteApp,
         state: meta?.portfolioState || master?.s || "REPO ONLY / NOT PROVEN LIVE",
@@ -281,11 +265,7 @@ export default function GitHubPage() {
   }, [displayRepos]);
 
   const openEdit = (r: GitHubRepo) => {
-    const persisted = repos.find(
-      (local) =>
-        local.url?.toLowerCase() === r.url.toLowerCase() ||
-        local.name.toLowerCase() === r.name.toLowerCase(),
-    );
+    const persisted = repos.find(local => getGitHubRepoKey(local.url) === getGitHubRepoKey(r.url) && Boolean(getGitHubRepoKey(r.url)));
     setEditId(persisted?.id ?? null);
     setEditCatalogName(r.name);
     const { id, ...rest } = r;
@@ -311,27 +291,43 @@ export default function GitHubPage() {
   };
   const uf = (field: keyof typeof form, val: any) => setForm((f) => ({ ...f, [field]: val }));
 
+  const publicKeys = useMemo(() => new Set(UNIFIED_PUBLIC_GITHUB_CATALOG.map(r => getGitHubRepoKey(r.url))), []);
   const bulkDelete = useCallback(() => {
-    if (bulk.selectedCount === 0) return;
+    if (!bulk.selectedCount) return;
+    const selected = displayRepos.filter(r => bulk.selectedIds.has(r.id));
+    if (selected.some(r => publicKeys.has(getGitHubRepoKey(r.url)))) {
+      toast.error("Catalog repositories cannot be deleted: they remain in the public snapshot.");
+      return;
+    }
+    const ids = repos.filter(r => bulk.selectedIds.has(r.id)).map(r => r.id);
+    if (!ids.length) return;
     cd.confirm({
-      title: `Delete ${bulk.selectedCount} Repo(s)`,
-      description: `This removes ${bulk.selectedCount} saved portfolio records from this app. It does not delete repositories on GitHub.`,
+      title: "Delete " + ids.length + " saved records",
+      description: "Removes only saved planning records, not GitHub repositories.",
       onConfirm: async () => {
-        await deleteRecords("repos", repos.filter(r => bulk.selectedIds.has(r.id)).map(r => r.id));
-        toast.success(`${bulk.selectedCount} repos deleted`);
+        await deleteRecords("repos", ids);
         bulk.clearSelection();
+        toast.success("Saved records removed");
       },
     });
-  }, [bulk, repos, deleteRecords, cd]);
+  }, [bulk, repos, displayRepos, publicKeys, deleteRecords, cd]);
 
-  const bulkUpdateStatus = useCallback(
-    async (status: string) => {
-      await bulkPatch("repos", repos.filter(r => bulk.selectedIds.has(r.id)).map(r => r.id), { status });
-      toast.success(`${bulk.selectedCount} repos updated`);
+  const bulkUpdateStatus = useCallback(async (status: string) => {
+    const selected = displayRepos.filter(r => bulk.selectedIds.has(r.id));
+    const savedIds = new Set(repos.map(r => r.id));
+    const newRows = selected.filter(r => !savedIds.has(r.id)).map(({id: _id, ...repo}) => ({
+      ...repo, status: status as GitHubRepo["status"],
+    }));
+    const existing = selected.filter(r => savedIds.has(r.id)).map(r => r.id);
+    try {
+      if (newRows.length) await bulkAddItems<GitHubRepo>("repos", newRows);
+      if (existing.length) await bulkPatch("repos", existing, { status });
       bulk.clearSelection();
-    },
-    [bulk, repos, bulkPatch],
-  );
+      toast.success(selected.length + " repository plans updated");
+    } catch {
+      toast.error("Bulk update did not complete; refresh before retrying.");
+    }
+  }, [bulk, displayRepos, repos, bulkAddItems, bulkPatch]);
 
   return (
     <div className="space-y-4 sm:space-y-5 mc-print-github-page">
@@ -346,7 +342,7 @@ export default function GitHubPage() {
               GitHub Projects
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {GITHUB_REPO_CATALOG_COUNT} catalog repositories checked on {GITHUB_REPO_CATALOG_GENERATED_AT} · production relationships and URLs layered from the portfolio control workbook.
+              {UNIFIED_PUBLIC_GITHUB_COUNT} public repos in three-account snapshot ({GITHUB_REPO_CATALOG_GENERATED_AT}) · 76 curated douphealth planning records. Not a live GitHub API connection.
             </p>
             <a href="/portfolio-atlas" className="mt-3 inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/15">
               View all three GitHub accounts in Portfolio Atlas ↗
@@ -375,13 +371,13 @@ export default function GitHubPage() {
             <CheckSquare size={14} /> {bulk.bulkMode ? "Exit bulk mode" : "Bulk edit"}
           </button>
           <span className="rounded-xl border border-success/15 bg-success/8 px-3 py-2 text-[10px] font-bold text-success">
-            {GITHUB_REPO_CATALOG_COUNT} SNAPSHOT REPOSITORIES
+            {UNIFIED_PUBLIC_GITHUB_COUNT} PUBLIC REPOSITORIES
           </span>
           <span className="rounded-xl border border-border/30 bg-secondary/40 px-3 py-2 text-[10px] font-semibold text-muted-foreground">
             GitHub technical snapshot {GITHUB_REPO_CATALOG_GENERATED_AT}
           </span>
           <span className="rounded-xl border border-blue-500/15 bg-blue-500/8 px-3 py-2 text-[10px] font-semibold text-blue-600 dark:text-blue-300">
-            GitHub = technical truth · Mission Control = editable planning truth
+            Dated public GitHub snapshot · Mission Control planning is editable
           </span>
         </div>
       </section>
@@ -408,16 +404,18 @@ export default function GitHubPage() {
         />
       )}
 
+      <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Load private GitHub repositories (authenticated)</summary><PrivateGitHubInventory /></details>
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 w-full lg:max-w-sm">
           <Search size={14} className="text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Search 81 repositories..."
+            placeholder={"Search " + displayRepos.length + " repositories..."}
             className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
           />
         </div>
+        <select aria-label="Filter GitHub account" value={accountFilter} onChange={e => { setAccountFilter(e.target.value); setPage(0); }} className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm text-foreground"><option value="all">All GitHub accounts</option><option value="douphealth">douphealth</option><option value="Papalexios">Papalexios</option><option value="papalexios001-wq">papalexios001-wq</option><option value="other">Other / manual</option></select>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <button
             type="button"
@@ -473,7 +471,7 @@ export default function GitHubPage() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2" aria-label="GitHub repository cards">{filtered.slice(Math.min(page, Math.max(0, Math.ceil(filtered.length / 12) - 1)) * 12, (Math.min(page, Math.max(0, Math.ceil(filtered.length / 12) - 1)) + 1) * 12).map(repo => <RepoCommandCard key={repo.id} repo={repo} compact={compactView} bulkMode={bulk.bulkMode} selected={bulk.isSelected(repo.id)} onSelect={() => bulk.toggleSelect(repo.id)} onEdit={() => openEdit(repo)} />)}</div>
       {!filtered.length && <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm">No repositories match these filters.</div>}
       <div className="flex items-center justify-between text-sm"><span>{filtered.length} repositories / page {Math.min(page + 1, Math.max(1, Math.ceil(filtered.length / 12)))} of {Math.max(1, Math.ceil(filtered.length / 12))}</span><div className="flex gap-2"><button className="min-h-11 rounded-xl border border-border px-3 disabled:opacity-40" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Previous</button><button className="min-h-11 rounded-xl border border-border px-3 disabled:opacity-40" disabled={(page + 1) * 12 >= filtered.length} onClick={() => setPage(value => value + 1)}>Next</button></div></div>
-      <p className="text-xs text-muted-foreground">Plan status and app URLs are saved references, not live health checks. Refresh queries public GitHub metadata for that repository only; no code is changed. Private repositories need your GitHub account.</p>
+      <p className="text-xs text-muted-foreground">The 229 public URLs are a dated snapshot, not live API sync. Unsaved repositories have unassessed plans. Private repositories are only fetched through authenticated server-side GitHub access.</p>
 
       <FormModal
         open={modalOpen}
