@@ -1,10 +1,10 @@
 import type { GitHubRepo } from "@/lib/db";
 
-export const GITHUB_REPO_CATALOG_GENERATED_AT = "2026-10-13";
-export const GITHUB_REPO_CATALOG_COUNT = 81;
+export const GITHUB_REPO_CATALOG_GENERATED_AT = "2026-10-24";
+export const GITHUB_REPO_CATALOG_COUNT = 87;
 
 /**
- * Account inventory checked 2026-10-13 via the connected GitHub repository list.
+ * Account inventory updated 2026-10-24 via the connected GitHub repository list.
  * Only size, visibility and default branch were refreshed; planning/lastUpdated
  * fields retain their original dates and are not new technical verification.
  * Snapshot of every repository available to the connected
@@ -2079,5 +2079,161 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "defaultBranch": "main",
     "repoSizeKb": 3281,
     "metadataCheckedAt": "2026-10-13"
+  },
+  {
+    "name": "backlink-command-center",
+    "url": "https://github.com/douphealth/backlink-command-center",
+    "description": "backlink-command-center repository tracked in Mission Control.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "high",
+      "canonical-review"
+    ],
+    "lastUpdated": "2026-10-24",
+    "priority": "high",
+    "importance": 75,
+    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (public); functionality and deployment not independently verified.",
+    "pendingSummary": "Verify current production mapping, integration, functionality and next actions.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 5675,
+    "metadataCheckedAt": "2026-10-24"
+  },
+  {
+    "name": "index-engine",
+    "url": "https://github.com/douphealth/index-engine",
+    "description": "index-engine repository tracked in Mission Control.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "",
+    "progress": 0,
+    "topics": [
+      "github",
+      "private",
+      "high",
+      "canonical-review"
+    ],
+    "lastUpdated": "2026-10-24",
+    "priority": "high",
+    "importance": 75,
+    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (private); functionality and deployment not independently verified.",
+    "pendingSummary": "Verify current production mapping, integration, functionality and next actions.",
+    "visibility": "private",
+    "defaultBranch": "main",
+    "repoSizeKb": 254,
+    "metadataCheckedAt": "2026-10-24"
+  },
+  {
+    "name": "foodscan",
+    "url": "https://github.com/douphealth/foodscan",
+    "description": "FoodScan source repository; production FoodScan 33 is maintained separately and must not be inferred from this repository.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "medium",
+      "canonical-review"
+    ],
+    "lastUpdated": "2026-10-24",
+    "priority": "medium",
+    "importance": 55,
+    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (public); functionality and deployment not independently verified.",
+    "pendingSummary": "Use FoodScan 33 uploaded application files as authoritative source; audit and verify before deployment.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 1460,
+    "metadataCheckedAt": "2026-10-24"
+  },
+  {
+    "name": "daily-table-nutrition",
+    "url": "https://github.com/douphealth/daily-table-nutrition",
+    "description": "daily-table-nutrition repository tracked in Mission Control.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "medium",
+      "canonical-review"
+    ],
+    "lastUpdated": "2026-10-24",
+    "priority": "medium",
+    "importance": 55,
+    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (public); functionality and deployment not independently verified.",
+    "pendingSummary": "Verify current production mapping, integration, functionality and next actions.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 51664,
+    "metadataCheckedAt": "2026-10-24"
+  },
+  {
+    "name": "awesome-spiritual-calculators",
+    "url": "https://github.com/douphealth/awesome-spiritual-calculators",
+    "description": "awesome-spiritual-calculators repository tracked in Mission Control.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "",
+    "progress": 0,
+    "topics": [
+      "github",
+      "public",
+      "medium",
+      "canonical-review"
+    ],
+    "lastUpdated": "2026-10-24",
+    "priority": "medium",
+    "importance": 55,
+    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (public); functionality and deployment not independently verified.",
+    "pendingSummary": "Verify current production mapping, integration, functionality and next actions.",
+    "visibility": "public",
+    "defaultBranch": "main",
+    "repoSizeKb": 13,
+    "metadataCheckedAt": "2026-10-24"
+  },
+  {
+    "name": "social-harbor-compass",
+    "url": "https://github.com/douphealth/social-harbor-compass",
+    "description": "Social Harbor Compass: Facebook and Instagram outreach campaign workflow; integration status needs validation.",
+    "language": "Unknown",
+    "stars": 0,
+    "forks": 0,
+    "status": "active",
+    "demoUrl": "",
+    "progress": 0,
+    "topics": [
+      "github",
+      "private",
+      "high",
+      "canonical-review"
+    ],
+    "lastUpdated": "2026-10-24",
+    "priority": "high",
+    "importance": 75,
+    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (private); functionality and deployment not independently verified.",
+    "pendingSummary": "Verify current production mapping, integration, functionality and next actions.",
+    "visibility": "private",
+    "defaultBranch": "main",
+    "repoSizeKb": 0,
+    "metadataCheckedAt": "2026-10-24"
   }
 ];
