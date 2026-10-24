@@ -212,7 +212,7 @@ async function accountInventory(accountId: string, token: string) {
     errors.push("Zone inventory unavailable for account " + accountId.slice(-6));
   } else {
     const ids = zones.value.map(asObject).map(z => asString(z.id))
-      .filter((id): id is string => Boolean(id) && ACCOUNT_ID.test(id));
+      .filter((id): id is string => typeof id === "string" && ACCOUNT_ID.test(id));
     const routeResults = await parallelMap(ids, id =>
       cloudflareGet<Envelope>("/zones/" + id + "/workers/routes", token));
     routeResults.forEach(result => {
