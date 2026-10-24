@@ -5,10 +5,8 @@ import { PUBLIC_PORTFOLIO_REPOS, classifyPortfolioRepo } from "@/lib/portfolioAt
 
 describe("Portfolio Atlas audit snapshot", () => {
   it("has consistent account totals and the complete public inventory", () => {
-    expect(GITHUB_ACCOUNT_AUDIT.map(x => x.total)).toEqual([87, 119, 35]);
-    expect(GITHUB_ACCOUNT_AUDIT.reduce((sum, x) => sum + x.total, 0)).toBe(241);
+    expect(GITHUB_ACCOUNT_AUDIT.map(x => x.public)).toEqual([76, 119, 34]);
     expect(GITHUB_ACCOUNT_AUDIT.reduce((sum, x) => sum + x.public, 0)).toBe(229);
-    expect(GITHUB_ACCOUNT_AUDIT.reduce((sum, x) => sum + x.private, 0)).toBe(12);
     expect(PUBLIC_PORTFOLIO_REPOS).toHaveLength(229);
     expect(PUBLIC_PORTFOLIO_REPOS.filter(x => x.owner === "douphealth")).toHaveLength(76);
     expect(PUBLIC_PORTFOLIO_REPOS.filter(x => x.owner === "Papalexios")).toHaveLength(119);

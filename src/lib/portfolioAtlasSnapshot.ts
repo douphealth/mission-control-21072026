@@ -166,25 +166,10 @@ export const PAPALEXIOS001_PUBLIC_REPO_NAMES = [
   "wp-quiz-forge"
 ] as const;
 
-/** API-audited account counts; private repository names must never be bundled here. */
+/** Public snapshot totals only. Private counts belong to authenticated API. */
 export const GITHUB_ACCOUNT_AUDIT_DATE = "2026-10-24";
 export const GITHUB_ACCOUNT_AUDIT = [
-  {
-    "owner": "douphealth",
-    "total": 87,
-    "public": 76,
-    "private": 11
-  },
-  {
-    "owner": "Papalexios",
-    "total": 119,
-    "public": 119,
-    "private": 0
-  },
-  {
-    "owner": "papalexios001-wq",
-    "total": 35,
-    "public": 34,
-    "private": 1
-  }
+  { owner: "douphealth", public: 76 },
+  { owner: "Papalexios", public: 119 },
+  { owner: "papalexios001-wq", public: 34 },
 ] as const;

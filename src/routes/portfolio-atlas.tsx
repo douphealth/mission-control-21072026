@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
+import PrivateGitHubInventory from "@/components/github/PrivateGitHubInventory";
 import {
   PUBLIC_PORTFOLIO_REPOS,
   PORTFOLIO_CATEGORIES,
@@ -14,14 +15,7 @@ export const Route = createFileRoute("/portfolio-atlas")({
   component: PortfolioAtlas,
 });
 
-const totals = GITHUB_ACCOUNT_AUDIT.reduce(
-  (acc, a) => ({
-    all: acc.all + a.total,
-    public: acc.public + a.public,
-    private: acc.private + a.private,
-  }),
-  { all: 0, public: 0, private: 0 },
-);
+const publicTotal = GITHUB_ACCOUNT_AUDIT.reduce((sum, a) => sum + a.public, 0);
 
 function PortfolioAtlas() {
   const [query, setQuery] = useState("");
@@ -59,9 +53,9 @@ function PortfolioAtlas() {
 
         <div className="mt-6 grid grid-cols-3 gap-3" aria-label="Inventory totals">
           {[
-            { label: "Repositories audited", value: totals.all },
-            { label: "Public searchable", value: totals.public },
-            { label: "Private protected", value: totals.private },
+            { label: "GitHub accounts", value: GITHUB_ACCOUNT_AUDIT.length },
+            { label: "Public searchable", value: publicTotal },
+            { label: "Private inventory", value: "Secure API" },
           ].map(item => (
             <div key={item.label} className="rounded-2xl border border-slate-700 bg-slate-900/80 p-3 sm:p-5">
               <p className="text-2xl font-extrabold tabular-nums sm:text-3xl">{item.value}</p>
@@ -73,13 +67,13 @@ function PortfolioAtlas() {
           {GITHUB_ACCOUNT_AUDIT.map(a => (
             <div key={a.owner} className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
               <p className="break-all text-sm font-semibold">{a.owner}</p>
-              <p className="mt-1 text-xs text-slate-400">{a.total} audited · {a.public} public · {a.private} private</p>
+              <p className="mt-1 text-xs text-slate-400">{a.public} public repositories in the dated snapshot</p>
             </div>
           ))}
         </div>
 
         <div className="mt-6 rounded-xl border border-amber-700/40 bg-amber-950/20 p-4 text-sm text-amber-100" role="note">
-          Private repository identifiers are intentionally excluded from this client-side view.
+          Private repository identifiers and counts are intentionally excluded from this client-side snapshot.
           This snapshot is not a GitHub OAuth connection inside Mission Control. Full private
           inventory requires authenticated server-side access. Cloudflare deployment is not verified.
         </div>
@@ -161,6 +155,7 @@ function PortfolioAtlas() {
             </button>
           </div>
         )}
+        <PrivateGitHubInventory />
       </div>
     </main>
   );
