@@ -237,26 +237,18 @@ async function accountInventory(accountId: string, token: string) {
     } else {
       const normalizedScripts = scripts.value.result.filter((s: any) =>
         SCRIPT_NAME.test(asString(s?.id) || ""));
-      const active = await parallelMap(normalizedScripts, async (raw: any) => {
-        const name = String(raw.id);
-        const data = await cloudflareGet<Envelope>(
-          "/accounts/" + accountId + "/workers/scripts/" + encodeURIComponent(name) +
-          "/deployments?page=1&per_page=1", token);
-        return Array.isArray(data.result?.deployments)
-          ? data.result.deployments[0] : null;
-      });
-      active.forEach((state, i) => {
+      // Worker deployments are loaded only when History is opened. Fetching
+      // each script's deployment during the inventory listing is an N+1
+      // request pattern and does not scale to large Cloudflare accounts.
+      normalizedScripts.forEach((script: any) => {
         const row = normalizeWorkerScript(
           accountId,
-          { ...normalizedScripts[i], routes: (routesByScript.get(String(normalizedScripts[i].id)) || [])
-              .map(pattern => ({ pattern, script: normalizedScripts[i].id })) },
+          { ...script, routes: (routesByScript.get(String(script.id)) || [])
+              .map(pattern => ({ pattern, script: script.id })) },
           workerDomains,
-          state.status === "fulfilled" ? state.value : undefined);
+        );
         if (row) rows.push(row);
       });
-      const failures = active.filter(r => r.status === "rejected").length;
-      if (failures) errors.push("Worker deployment details unavailable for " + failures +
-        " script(s) in account " + accountId.slice(-6));
     }
   } else errors.push("Worker scripts unavailable for account " + accountId.slice(-6));
   return { rows, errors };
