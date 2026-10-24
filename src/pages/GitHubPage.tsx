@@ -348,6 +348,9 @@ export default function GitHubPage() {
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
               {GITHUB_REPO_CATALOG_COUNT} catalog repositories checked on {GITHUB_REPO_CATALOG_GENERATED_AT} · production relationships and URLs layered from the portfolio control workbook.
             </p>
+            <a href="/portfolio-atlas" className="mt-3 inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/15">
+              View all three GitHub accounts in Portfolio Atlas ↗
+            </a>
           </div>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
             {[
