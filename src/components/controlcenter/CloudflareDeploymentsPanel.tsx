@@ -71,6 +71,7 @@ export default function CloudflareDeploymentsPanel() {
   const totalPages = inventory?.rows.filter(row => row.kind === "pages").length || 0;
   const totalWorkers = inventory?.rows.filter(row => row.kind === "worker").length || 0;
   const mapped = inventory?.rows.filter(row => Boolean(row.repoUrl)).length || 0;
+  const accountName = (id: string) => inventory?.accountDetails.find(a => a.accountId === id)?.label || "Account …" + shorten(id);
 
   const requestHistory = async (row: CloudflareDeploymentRow, page = 1) => {
     setSelected(row);
@@ -139,6 +140,7 @@ export default function CloudflareDeploymentsPanel() {
               <p className="text-xs text-muted-foreground">{stat.label}</p>
             </div>)}
           </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{inventory.accountDetails.map(a => <div key={a.accountId} className="rounded-xl border border-border p-3 text-xs"><p className="font-semibold break-all">{a.label}</p><p className="mt-1 text-muted-foreground">{a.truthState.toUpperCase()} · {a.pagesCount} Pages · {a.workersCount} Workers · {a.zonesCount} zones</p>{a.errors.length > 0 && <p className="mt-1 text-amber-500">{a.errors.length} sync issue(s)</p>}</div>)}</div>
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_11rem_13rem]">
             <label className="relative">
               <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
@@ -158,7 +160,7 @@ export default function CloudflareDeploymentsPanel() {
               onChange={e => { setAccount(e.target.value); setVisible(48); }}
               className="rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
               <option value="all">All Cloudflare accounts</option>
-              {inventory.accounts.map(id => <option value={id} key={id}>Account …{shorten(id)}</option>)}
+              {inventory.accounts.map(id => <option value={id} key={id}>{accountName(id)}</option>)}
             </select>
           </div>
           <p className="text-xs text-muted-foreground" aria-live="polite">
@@ -171,7 +173,7 @@ export default function CloudflareDeploymentsPanel() {
               return <article key={row.key} className="card-elevated min-w-0 rounded-xl p-4">
                 <div className="flex items-center justify-between gap-2">
                   <span className="badge badge-muted">{row.kind === "pages" ? "Pages project" : "Worker script"}</span>
-                  <span className="text-[11px] text-muted-foreground">Account …{shorten(row.accountId)}</span>
+                  <span className="text-[11px] text-muted-foreground">{accountName(row.accountId)}</span>
                 </div>
                 <h3 className="mt-2 break-all text-base font-semibold">{row.name}</h3>
                 <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
