@@ -87,12 +87,13 @@ export function normalizePagesProject(accountId: string, raw: unknown): Cloudfla
   return {
     key: "pages:" + accountId + ":" + name,
     kind: "pages", accountId, name,
-    projectUrl: "https://dash.cloudflare.com/?to=/:" + "account/pages/view/" + encodeURIComponent(name),
+    projectUrl: "https://dash.cloudflare.com/" + accountId + "/pages/view/" + encodeURIComponent(name),
     publicUrl: customDomains.length ? validHttps(customDomains[0]) : canonical,
     domains: customDomains, routes: [],
     repoUrl: githubSource(source),
-    branch: asString(asObject(source.config).production_branch) || asString(deployment.production_branch),
-    commit: asString(asObject(deployment.deployment_trigger).metadata?.commit_hash),
+    branch: asString(asObject(source.config).production_branch) ||
+      asString(asObject(asObject(deployment.deployment_trigger).metadata).branch) || asString(deployment.production_branch),
+    commit: asString(asObject(asObject(deployment.deployment_trigger).metadata).commit_hash),
     deploymentId: asString(deployment.id),
     deployedAt: asString(deployment.created_on),
     status: Object.keys(deployment).length ? deploymentStatus(deployment) : "unknown",

@@ -40,8 +40,8 @@ export const WEBSITE_PORTFOLIO: WebsiteSeed[] = [
     githubRepos: [
       "https://github.com/douphealth/runmatch-ai-buddy-1282c193",
       "https://github.com/douphealth/body-recomp-os-guru-7c1356da",
-      "https://github.com/douphealth/wrist-wonderland-hub-460cce97",
-      "https://github.com/douphealth/nutri-match-wiz-1eb55346"
+
+
     ]
   },
   {

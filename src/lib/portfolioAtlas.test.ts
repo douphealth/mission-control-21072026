@@ -21,7 +21,7 @@ describe("Portfolio Atlas audit snapshot", () => {
     for (const r of GITHUB_REPO_CATALOG.filter(x => x.visibility === "private")) {
       expect(urls.has(r.url.toLocaleLowerCase())).toBe(false);
     }
-    expect(PUBLIC_PORTFOLIO_REPOS.some(r => r.name === "seo-hub" && r.owner === "papalexios001-wq")).toBe(false);
+    expect(GITHUB_REPO_CATALOG.every(r => r.visibility === "public")).toBe(true);
   });
 
   it("classifies priority outreach and indexing projects without asserting deployment", () => {
