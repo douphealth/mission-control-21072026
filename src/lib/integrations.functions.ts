@@ -46,21 +46,34 @@ export const getCloudflareZones = createServerFn({ method: "GET" }).handler(asyn
     };
   }
   try {
-    const data = await json("https://api.cloudflare.com/client/v4/zones?per_page=50", token);
-    if (data?.success === false) {
-      throw new Error(
-        (data.errors ?? []).map((e: any) => e.message).join("; ") ||
-          "Cloudflare rejected the token",
-      );
+    const zones: CloudflareZoneRow[] = [];
+    let completed = false;
+    // All pages of the zone listing are required: the old implementation
+    // silently truncated accounts with more than 50 zones.
+    for (let page = 1; page <= 100; page++) {
+      const data = await json(
+        "https://api.cloudflare.com/client/v4/zones?page=" + page + "&per_page=50", token);
+      if (data?.success === false || !Array.isArray(data?.result)) {
+        throw new Error("Cloudflare zone listing failed");
+      }
+      zones.push(...data.result.map((z: any) => ({
+        id: String(z.id),
+        name: String(z.name),
+        status: String(z.status ?? "unknown"),
+        plan: String(z.plan?.name ?? "Unknown"),
+        nameservers: Array.isArray(z.name_servers) ? z.name_servers.map(String) : [],
+        modifiedAt: z.modified_on ?? null,
+      })));
+      if (data?.result_info?.total_pages > 100) {
+        throw new Error("Cloudflare zones exceed the configured page limit");
+      }
+      if (data?.result_info?.total_pages
+        ? page >= data.result_info.total_pages : data.result.length < 50) {
+        completed = true;
+        break;
+      }
     }
-    const zones: CloudflareZoneRow[] = (data?.result ?? []).map((z: any) => ({
-      id: String(z.id),
-      name: String(z.name),
-      status: String(z.status ?? "unknown"),
-      plan: String(z.plan?.name ?? "Unknown"),
-      nameservers: Array.isArray(z.name_servers) ? z.name_servers.map(String) : [],
-      modifiedAt: z.modified_on ?? null,
-    }));
+    if (!completed) throw new Error("Cloudflare zone pagination limit reached");
     return {
       truthState: "live" as TruthState,
       source: "Cloudflare API",
@@ -144,7 +157,20 @@ export const probeEndpoint = createServerFn({ method: "POST" })
     const checkedAt = nowIso();
     const started = Date.now();
     try {
-      const res = await fetch(data.url, { method: "GET", redirect: "follow" });
+      const parsed = new URL(data.url);
+      // Deny direct localhost/IP/intranet access and redirect-following to
+      // prevent the API becoming a trivial internal-network SSRF primitive.
+      if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
+          parsed.port || !/^[a-z0-9.-]+$/i.test(parsed.hostname) ||
+          !parsed.hostname.includes(".") ||
+          /(^|\.)(localhost|local|internal|test|invalid)$/.test(parsed.hostname) ||
+          /^(\d+\.){3}\d+$/.test(parsed.hostname) ||
+          parsed.hostname.includes("..")) {
+        throw new Error("Only public HTTPS domain endpoints may be probed");
+      }
+      const res = await fetch(parsed.toString(), {
+        method: "GET", redirect: "manual", signal: AbortSignal.timeout(8000),
+      });
       return {
         url: data.url,
         checkedAt,
