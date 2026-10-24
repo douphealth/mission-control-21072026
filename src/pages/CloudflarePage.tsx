@@ -7,6 +7,7 @@ import { TruthBadge, ConnectorEmpty, ConnectorError } from "@/components/TruthUI
 import type { TruthMeta } from "@/lib/truth";
 import { db } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
+import CloudflareDeploymentsPanel from "@/components/controlcenter/CloudflareDeploymentsPanel";
 
 const cfTools = [
   {
@@ -204,6 +205,8 @@ export default function CloudflarePage() {
           </a>
         </div>
       </div>
+
+      <CloudflareDeploymentsPanel />
 
       {meta.truthState === "live" && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
