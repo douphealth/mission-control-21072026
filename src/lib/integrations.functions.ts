@@ -15,7 +15,7 @@ async function json(url: string, token: string) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
   });
   const body = await res.text();
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}: ${body.slice(0, 240)}`);
+  if (!res.ok) throw new Error(`External API returned HTTP ${res.status}`);
   try {
     return JSON.parse(body);
   } catch {
@@ -91,6 +91,7 @@ export interface VercelProjectRow {
 }
 
 export const getVercelProjects = createServerFn({ method: "GET" }).handler(async () => {
+  await requireCloudflareViewer(getRequest());
   const token = process.env["VERCEL_API_TOKEN"];
   const fetchedAt = nowIso();
   if (!token) {
@@ -139,6 +140,7 @@ export const getVercelProjects = createServerFn({ method: "GET" }).handler(async
 export const probeEndpoint = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ url: z.string().url() }).parse(d))
   .handler(async ({ data }) => {
+    await requireCloudflareViewer(getRequest());
     const checkedAt = nowIso();
     const started = Date.now();
     try {

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequest } from "@tanstack/react-start/server";
+import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireCloudflareViewer } from "@/lib/cloudflareAccess.server";
 import { collectCloudflareInventory, loadDeploymentHistory } from "@/lib/cloudflareInventory.server";
@@ -10,6 +10,7 @@ export type { CloudflareDeploymentRow, CloudflareInventory, DeploymentHistoryIte
 export const getCloudflareInventory = createServerFn({ method: "GET" })
   .handler(async () => {
     await requireCloudflareViewer(getRequest());
+    setResponseHeader("Cache-Control", "private, no-store");
     return await collectCloudflareInventory();
   });
 
@@ -22,5 +23,6 @@ export const getCloudflareDeploymentHistory = createServerFn({ method: "POST" })
   }).parse(data))
   .handler(async ({ data }) => {
     await requireCloudflareViewer(getRequest());
+    setResponseHeader("Cache-Control", "private, no-store");
     return await loadDeploymentHistory(data);
   });

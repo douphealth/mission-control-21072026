@@ -155,12 +155,12 @@ async function cloudflareGet<T>(path: string, token: string): Promise<T> {
   return data as T;
 }
 type Envelope = { result: any; result_info?: { total_pages?: number } };
-async function allPages(path: string, token: string): Promise<unknown[]> {
+async function allPages(path: string, token: string, perPage = 100): Promise<unknown[]> {
   const entries: unknown[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const glue = path.includes("?") ? "&" : "?";
     const envelope = await cloudflareGet<Envelope>(
-      path + glue + "page=" + page + "&per_page=100", token);
+      path + glue + "page=" + page + "&per_page=" + perPage, token);
     const rows = envelope.result;
     if (!Array.isArray(rows)) throw new Error("Invalid Cloudflare pagination payload");
     entries.push(...rows);
@@ -168,7 +168,7 @@ async function allPages(path: string, token: string): Promise<unknown[]> {
       throw new Error("Cloudflare inventory exceeds the configured page limit");
     }
     if (envelope.result_info?.total_pages
-      ? page >= envelope.result_info.total_pages : rows.length < 100) return entries;
+      ? page >= envelope.result_info.total_pages : rows.length < perPage) return entries;
   }
   throw new Error("Cloudflare inventory page limit reached");
 }
@@ -189,10 +189,12 @@ async function parallelMap<T, U>(
 async function accountInventory(accountId: string, token: string) {
   const rows: CloudflareDeploymentRow[] = [];
   const errors: string[] = [];
-  const [pages, scripts, domains] = await Promise.allSettled([
+  const [pages, scripts, domains, zones] = await Promise.allSettled([
     allPages("/accounts/" + accountId + "/pages/projects", token),
     cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token),
     allPages("/accounts/" + accountId + "/workers/domains", token),
+    // Cloudflare Zone list caps per_page at 50 (unlike Pages).
+    allPages("/zones?account.id=" + encodeURIComponent(accountId), token, 50),
   ]);
   if (pages.status === "fulfilled") {
     for (const raw of pages.value) {
@@ -202,6 +204,33 @@ async function accountInventory(accountId: string, token: string) {
   } else errors.push("Pages inventory unavailable for account " + accountId.slice(-6));
   const workerDomains = domains.status === "fulfilled" ? domains.value : [];
   if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6));
+
+  // Worker routes are zone-scoped, not fields on a script. Discover all zones
+  // of this account and map real route patterns back to Worker script names.
+  const routesByScript = new Map<string, string[]>();
+  if (zones.status === "rejected") {
+    errors.push("Zone inventory unavailable for account " + accountId.slice(-6));
+  } else {
+    const ids = zones.value.map(asObject).map(z => asString(z.id))
+      .filter((id): id is string => Boolean(id) && ACCOUNT_ID.test(id));
+    const routeResults = await parallelMap(ids, id =>
+      cloudflareGet<Envelope>("/zones/" + id + "/workers/routes", token));
+    routeResults.forEach(result => {
+      if (result.status !== "fulfilled" || !Array.isArray(result.value.result)) return;
+      for (const raw of result.value.result) {
+        const route = asObject(raw);
+        const name = asString(route.script);
+        const pattern = asString(route.pattern);
+        if (name && pattern) {
+          routesByScript.set(name, [...(routesByScript.get(name) || []), pattern]);
+        }
+      }
+    });
+    const failures = routeResults.filter(r => r.status === "rejected" ||
+      r.status === "fulfilled" && !Array.isArray(r.value.result)).length;
+    if (failures) errors.push("Worker route inventory unavailable in " + failures +
+      " zone(s) for account " + accountId.slice(-6));
+  }
   if (scripts.status === "fulfilled") {
     if (!Array.isArray(scripts.value.result)) {
       errors.push("Unexpected Workers API response for account " + accountId.slice(-6));
@@ -218,7 +247,10 @@ async function accountInventory(accountId: string, token: string) {
       });
       active.forEach((state, i) => {
         const row = normalizeWorkerScript(
-          accountId, normalizedScripts[i], workerDomains,
+          accountId,
+          { ...normalizedScripts[i], routes: (routesByScript.get(String(normalizedScripts[i].id)) || [])
+              .map(pattern => ({ pattern, script: normalizedScripts[i].id })) },
+          workerDomains,
           state.status === "fulfilled" ? state.value : undefined);
         if (row) rows.push(row);
       });
