@@ -116,7 +116,7 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
         result_info:{total_pages:1}}),{status:200});
     }));
     const inventory = await collectCloudflareInventory();
-    expect(inventory.truthState).toBe("live");
+    expect(inventory.truthState, JSON.stringify({ paths, errors: inventory.errors, accountCount: configuredAccounts().length, tokenConfigured: Boolean(process.env["CLOUDFLARE_API_TOKEN"]) })).toBe("live");
     expect(inventory.errors).toHaveLength(0);
     expect(inventory.rows).toHaveLength(2);
     const pages = inventory.rows.find(row=>row.kind==="pages");
