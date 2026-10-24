@@ -109,14 +109,15 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
     };
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input));
-      paths.push(url.pathname);
-      const payload = responses[url.pathname];
+      const path = url.pathname.replace(/^\/client\/v4(?=\/)/, "");
+      paths.push(path);
+      const payload = responses[path];
       if (!payload) return new Response(JSON.stringify({success:false}), {status:404});
       return new Response(JSON.stringify({success:true,result:payload,
         result_info:{total_pages:1}}),{status:200});
     }));
     const inventory = await collectCloudflareInventory();
-    expect(inventory.truthState, JSON.stringify({ paths, errors: inventory.errors, accountCount: configuredAccounts().length, tokenConfigured: Boolean(process.env["CLOUDFLARE_API_TOKEN"]) })).toBe("live");
+    expect(inventory.truthState).toBe("live");
     expect(inventory.errors).toHaveLength(0);
     expect(inventory.rows).toHaveLength(2);
     const pages = inventory.rows.find(row=>row.kind==="pages");
