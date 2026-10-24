@@ -90,20 +90,20 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
     vi.stubEnv("CLOUDFLARE_ACCOUNT_IDS", ACCOUNT);
     vi.stubEnv("CLOUDFLARE_API_TOKEN", "synthetic-read-token-only");
     const responses: Record<string, unknown> = {
-      "/accounts/" + ACCOUNT + "/pages/projects": [{
+      ["/accounts/" + ACCOUNT + "/pages/projects"]: [{
         name: "example-app", subdomain:"example-app.pages.dev",
         source: { type:"github", config:{owner:"example-org",repo_name:"app",production_branch:"main"}},
         canonical_deployment: { id:"depl-prod",latest_stage:{status:"success"} },
       }],
-      "/accounts/" + ACCOUNT + "/workers/scripts": [{id:"api-worker"}],
-      "/accounts/" + ACCOUNT + "/workers/domains": [{
+      ["/accounts/" + ACCOUNT + "/workers/scripts"]: [{id:"api-worker"}],
+      ["/accounts/" + ACCOUNT + "/workers/domains"]: [{
         service:"api-worker",hostname:"api.example.com",enabled:true,
       }],
       "/zones": [{id:ACCOUNT,name:"example.com"}],
-      "/zones/" + ACCOUNT + "/workers/routes": [
+      ["/zones/" + ACCOUNT + "/workers/routes"]: [
         {script:"api-worker",pattern:"example.com/api/*"},
       ],
-      "/accounts/" + ACCOUNT + "/workers/scripts/api-worker/deployments": {
+      ["/accounts/" + ACCOUNT + "/workers/scripts/api-worker/deployments"]: {
         deployments:[{id:"worker-001",created_on:"2026-10-24T10:00:00Z"}],
       },
     };
