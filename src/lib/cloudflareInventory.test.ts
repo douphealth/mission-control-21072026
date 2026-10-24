@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  configuredAccounts, normalizePagesProject, normalizeWorkerScript,
+  configuredAccounts, collectCloudflareInventory, loadDeploymentHistory,
+  normalizePagesProject, normalizeWorkerScript,
 } from "@/lib/cloudflareInventory.server";
 import { CloudflareAccessError, requireCloudflareViewer } from "@/lib/cloudflareAccess.server";
 
@@ -77,5 +78,61 @@ describe("infrastructure security", () => {
   });
   it("uses Cloudflare specific denial errors", () => {
     expect(new CloudflareAccessError("unauthorized").name).toBe("CloudflareAccessError");
+  });
+});
+
+
+describe("real Cloudflare API inventory with synthetic responses", () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
+
+  it("collects Pages, Workers, routes and domains without N+1 Worker history requests", async () => {
+    const paths: string[] = [];
+    vi.stubEnv("CLOUDFLARE_ACCOUNT_IDS", ACCOUNT);
+    vi.stubEnv("CLOUDFLARE_API_TOKEN", "synthetic-read-token-only");
+    const responses: Record<string, unknown> = {
+      "/accounts/" + ACCOUNT + "/pages/projects": [{
+        name: "example-app", subdomain:"example-app.pages.dev",
+        source: { type:"github", config:{owner:"example-org",repo_name:"app",production_branch:"main"}},
+        canonical_deployment: { id:"depl-prod",latest_stage:{status:"success"} },
+      }],
+      "/accounts/" + ACCOUNT + "/workers/scripts": [{id:"api-worker"}],
+      "/accounts/" + ACCOUNT + "/workers/domains": [{
+        service:"api-worker",hostname:"api.example.com",enabled:true,
+      }],
+      "/zones": [{id:ACCOUNT,name:"example.com"}],
+      "/zones/" + ACCOUNT + "/workers/routes": [
+        {script:"api-worker",pattern:"example.com/api/*"},
+      ],
+      "/accounts/" + ACCOUNT + "/workers/scripts/api-worker/deployments": {
+        deployments:[{id:"worker-001",created_on:"2026-10-24T10:00:00Z"}],
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      paths.push(url.pathname);
+      const payload = responses[url.pathname];
+      if (!payload) return new Response(JSON.stringify({success:false}), {status:404});
+      return new Response(JSON.stringify({success:true,result:payload,
+        result_info:{total_pages:1}}),{status:200});
+    }));
+    const inventory = await collectCloudflareInventory();
+    expect(inventory.truthState).toBe("live");
+    expect(inventory.errors).toHaveLength(0);
+    expect(inventory.rows).toHaveLength(2);
+    const pages = inventory.rows.find(row=>row.kind==="pages");
+    expect(pages?.repoUrl).toBe("https://github.com/example-org/app");
+    expect(pages?.status).toBe("success");
+    const worker = inventory.rows.find(row=>row.kind==="worker");
+    expect(worker?.routes).toEqual(["example.com/api/*"]);
+    expect(worker?.domains).toEqual(["api.example.com"]);
+    expect(worker?.statusSource).toBe("unavailable");
+    expect(paths.some(path=>path.includes("/deployments"))).toBe(false);
+    const history = await loadDeploymentHistory({
+      accountId:ACCOUNT,kind:"worker",name:"api-worker",page:1,
+    });
+    expect(history.rows).toHaveLength(1);
+    expect(history.rows[0].id).toBe("worker-001");
+    expect(paths.filter(path=>path.includes("/deployments"))).toHaveLength(1);
+    expect(JSON.stringify(inventory)).not.toContain("synthetic-read-token-only");
   });
 });
