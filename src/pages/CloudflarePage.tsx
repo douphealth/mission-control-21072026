@@ -108,7 +108,7 @@ export default function CloudflarePage() {
       const r = await getCloudflareZones();
       setZones(r.zones);
       setMeta({
-        truthState: r.truthState,
+        truthState: r.truthState === "partial" ? "error" : r.truthState,
         source: r.source,
         fetchedAt: r.fetchedAt,
         error: r.error,
@@ -178,7 +178,7 @@ export default function CloudflarePage() {
           </h1>
           <div className="mt-1 flex items-center gap-2">
             <p className="text-sm text-muted-foreground">
-              DNS, security and CDN — read live from your account
+              DNS, security and CDN across configured Cloudflare accounts
             </p>
             <TruthBadge meta={meta} />
           </div>
@@ -278,7 +278,7 @@ export default function CloudflarePage() {
 
           {!loading && meta.truthState === "live" && zones.length === 0 && (
             <div className="card-glass p-6 text-center text-sm text-muted-foreground">
-              Connected — this Cloudflare account has no zones.
+              No zones returned from configured Cloudflare accounts.
             </div>
           )}
 
@@ -309,13 +309,14 @@ export default function CloudflarePage() {
                   )}
                 </div>
                 <a
-                  href={`https://dash.cloudflare.com/?to=/:account/${zone.name}`}
+                  href={zone.dashboardUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="shrink-0 text-muted-foreground/40 transition-colors hover:text-primary"
                 >
                   <ExternalLink size={13} />
                 </a>
+                <a href={zone.dnsUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs font-semibold text-primary">DNS records</a>
               </div>
             ))}
           </div>
