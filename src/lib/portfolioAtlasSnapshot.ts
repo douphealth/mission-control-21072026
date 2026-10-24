@@ -126,3 +126,65 @@ export const PAPALEXIOS_PUBLIC_REPO_NAMES = [
   "wp-optimizer-pro-test-05",
   "wp-optimizer-pro-test-06"
 ] as const;
+
+
+/** Read-only public inventory, obtained from the linked third GitHub account. */
+export const PAPALEXIOS001_PUBLIC_REPO_NAMES = [
+  "ai-image-engine",
+  "ai-seo-orchestrator",
+  "amzpilot-ai",
+  "AmzWP-Automator",
+  "AmzWP-Automator-001",
+  "ImageForge",
+  "internal-link-auto",
+  "neuralmesh-seo",
+  "neurolinker-ai",
+  "page-perfector",
+  "page-perfector-001",
+  "page-perfector-002",
+  "seo-orchestrator",
+  "sitemap-indexer-pro",
+  "social-media-co-pilot",
+  "sota-god-mode",
+  "sota-god-mode-005",
+  "sota-god-mode-006",
+  "sota-god-mode-antigravity",
+  "sota-god-mode-antigravity-001",
+  "sota-god-mode-antigravity-002",
+  "sota-god-mode-antigravity-003",
+  "wp-content-optimizer-pro",
+  "wp-html-snippet",
+  "wp-image-engine",
+  "wp-optimizer-pro",
+  "wp-optimizer-pro-test",
+  "wp-optimizer-pro-test-01",
+  "wp-optimizer-pro-test-02",
+  "wp-optimizer-pro-test-03",
+  "wp-optimizer-pro-test-04",
+  "wp-optimizer-pro-test-05",
+  "wp-optimizer-pro-test-06",
+  "wp-quiz-forge"
+] as const;
+
+/** API-audited account counts; private repository names must never be bundled here. */
+export const GITHUB_ACCOUNT_AUDIT_DATE = "2026-10-24";
+export const GITHUB_ACCOUNT_AUDIT = [
+  {
+    "owner": "douphealth",
+    "total": 87,
+    "public": 76,
+    "private": 11
+  },
+  {
+    "owner": "Papalexios",
+    "total": 119,
+    "public": 119,
+    "private": 0
+  },
+  {
+    "owner": "papalexios001-wq",
+    "total": 35,
+    "public": 34,
+    "private": 1
+  }
+] as const;
