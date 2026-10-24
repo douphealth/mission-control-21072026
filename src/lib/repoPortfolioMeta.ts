@@ -195,25 +195,6 @@ export const REPO_PORTFOLIO_ROWS: RepoPortfolioMeta[] = [
     "verifiedAsOf": "2026-09-18"
   },
   {
-    "name": "gearup-flow-master",
-    "portfolioState": "WEBSITE CORE / RELATED",
-    "directWebsiteApp": false,
-    "parentWebsites": [
-      "gearuptofit.com"
-    ],
-    "productionUrls": [
-      "https://gearuptofit.com/"
-    ],
-    "pagesUrls": [],
-    "githubPagesUrls": [],
-    "candidateUrls": [],
-    "category": "Website Core / Edge",
-    "portfolioPriority": "P1",
-    "nextAction": "Keep exact production-origin evidence current; do not confuse core site repo with app subdomain repos.",
-    "evidence": "Current connected GitHub inventory 2026-09-18 | Existing portfolio/site mapping",
-    "verifiedAsOf": "2026-09-18"
-  },
-  {
     "name": "gearuptofit",
     "portfolioState": "WEBSITE CORE / RELATED",
     "directWebsiteApp": false,
@@ -372,26 +353,6 @@ export const REPO_PORTFOLIO_ROWS: RepoPortfolioMeta[] = [
     "verifiedAsOf": "2026-09-29"
   },
   {
-    "name": "nutri-match-wiz-1eb55346",
-    "portfolioState": "DIRECT WEBSITE APP",
-    "directWebsiteApp": true,
-    "parentWebsites": [
-      "gearuptofit.com"
-    ],
-    "productionUrls": [
-      "https://gearuptofit-supplement-match.papalexios.workers.dev/",
-      "https://gearuptofit.com/supplement-match/"
-    ],
-    "pagesUrls": [],
-    "githubPagesUrls": [],
-    "candidateUrls": [],
-    "category": "Production Website App",
-    "portfolioPriority": "P0",
-    "nextAction": "Treat the Worker as the live app and /supplement-match/ as the funnel entry; measure quiz completion and outbound supplement revenue.",
-    "evidence": "User-confirmed canonical production mapping 2026-09-29 | Connected GitHub repository verified",
-    "verifiedAsOf": "2026-09-29"
-  },
-  {
     "name": "plantastic-haven-pro-8e23ae56",
     "portfolioState": "DIRECT WEBSITE APP",
     "directWebsiteApp": true,
@@ -491,26 +452,6 @@ export const REPO_PORTFOLIO_ROWS: RepoPortfolioMeta[] = [
     "nextAction": "Resolve the origin-proof task before any destructive or production change.",
     "evidence": "Current connected GitHub inventory 2026-09-18 | Origin Proof Required candidate only",
     "verifiedAsOf": "2026-09-18"
-  },
-  {
-    "name": "wrist-wonderland-hub-460cce97",
-    "portfolioState": "DIRECT WEBSITE APP",
-    "directWebsiteApp": true,
-    "parentWebsites": [
-      "gearuptofit.com"
-    ],
-    "productionUrls": [
-      "https://gearuptofit-watch-match.papalexios.workers.dev/",
-      "https://gearuptofit.com/watch-match/"
-    ],
-    "pagesUrls": [],
-    "githubPagesUrls": [],
-    "candidateUrls": [],
-    "category": "Production Website App",
-    "portfolioPriority": "P0",
-    "nextAction": "Treat the Worker as the live app and /watch-match/ as the funnel entry; measure quiz completion, product clicks, and affiliate revenue.",
-    "evidence": "User-confirmed canonical production mapping 2026-09-29 | Connected GitHub repository verified",
-    "verifiedAsOf": "2026-09-29"
   }
 ];
 

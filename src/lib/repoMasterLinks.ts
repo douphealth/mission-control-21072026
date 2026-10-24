@@ -245,25 +245,6 @@ export const REPO_MASTER_LINK_ROWS: RepoMasterLinkMeta[] = [
     "a": "Document production origin/branch and add a deploy marker if not already present; otherwise no urgent inventory action."
   },
   {
-    "n": "gearup-flow-master",
-    "s": "Website/app linked — needs origin proof",
-    "u": [
-      "https://gearuptofit.com/",
-      "http://gearuptofit.com/"
-    ],
-    "p": [
-      "https://gearup-flow-master.pages.dev/"
-    ],
-    "c": [],
-    "l": [
-      "https://gearup-flow-master.lovable.app/"
-    ],
-    "h": "WordPress / routed app shell; GearUpToFit / Cloudflare routed app",
-    "z": [],
-    "m": "Verified",
-    "a": "Confirm live URL → repo origin using DNS/Worker/GitHub Pages/source-commit evidence; then upgrade confidence."
-  },
-  {
     "n": "gearuptofit",
     "s": "Deployed / domain linked — verified",
     "u": [

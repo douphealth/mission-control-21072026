@@ -1,13 +1,13 @@
 import type { GitHubRepo } from "@/lib/db";
 
 export const GITHUB_REPO_CATALOG_GENERATED_AT = "2026-10-24";
-export const GITHUB_REPO_CATALOG_COUNT = 87;
+export const GITHUB_REPO_CATALOG_COUNT = 76;
 
 /**
- * Account inventory updated 2026-10-24 via the connected GitHub repository list.
+ * Public-only account inventory updated 2026-10-24 via the connected GitHub repository list.
  * Only size, visibility and default branch were refreshed; planning/lastUpdated
  * fields retain their original dates and are not new technical verification.
- * Snapshot of every repository available to the connected
+ * PUBLIC snapshot of repositories available to the connected
  * douphealth GitHub account. Technical fields are refreshed from GitHub while
  * portfolio relationships are layered separately from the control workbook.
  */
@@ -874,31 +874,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "metadataCheckedAt": "2026-10-13"
   },
   {
-    "name": "connect-your-code",
-    "url": "https://github.com/douphealth/connect-your-code",
-    "description": "Connect Your Code repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "stable",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "medium"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "medium",
-    "importance": 50,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 129,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
     "name": "edit-ace-engine",
     "url": "https://github.com/douphealth/edit-ace-engine",
     "description": "Edit Ace Engine repository tracked in Mission Control.",
@@ -971,31 +946,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 65240,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
-    "name": "gearup-flow-master",
-    "url": "https://github.com/douphealth/gearup-flow-master",
-    "description": "Gearup Flow Master repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "stable",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "medium"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "medium",
-    "importance": 50,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm current production use, deployment URL, owner, and next concrete milestone. Pause or archive the repo if it is no longer part of the active portfolio.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 35458,
     "metadataCheckedAt": "2026-10-13"
   },
   {
@@ -1224,32 +1174,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "metadataCheckedAt": "2026-10-13"
   },
   {
-    "name": "hermes-config-001",
-    "url": "https://github.com/douphealth/hermes-config-001",
-    "description": "Private Hermes configuration repository for live automation setup.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "critical",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "medium",
-    "importance": 43,
-    "doneSummary": "Private live configuration repository exists and is connected.",
-    "pendingSummary": "Reconcile live VPS configuration with this repo and remove stale/duplicate bot profiles and credentials references.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 18882,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
     "name": "openclaw-config",
     "url": "https://github.com/douphealth/openclaw-config",
     "description": "Openclaw Config repository tracked in Mission Control.",
@@ -1405,32 +1329,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "metadataCheckedAt": "2026-10-13"
   },
   {
-    "name": "alexios-mission-control",
-    "url": "https://github.com/douphealth/alexios-mission-control",
-    "description": "Alexios Mission Control repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 1243,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
     "name": "alexios-mission-control-88d4c83b",
     "url": "https://github.com/douphealth/alexios-mission-control-88d4c83b",
     "description": "Alexios Mission Control 88d4c83b repository tracked in Mission Control.",
@@ -1561,32 +1459,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "metadataCheckedAt": "2026-10-13"
   },
   {
-    "name": "body-recomp-os-guru-cb7e904e",
-    "url": "https://github.com/douphealth/body-recomp-os-guru-cb7e904e",
-    "description": "Body Recomp Os Guru Cb7e904e repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 1006,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
     "name": "goal-forge-ai-love",
     "url": "https://github.com/douphealth/goal-forge-ai-love",
     "description": "Goal Forge Ai Love repository tracked in Mission Control.",
@@ -1610,32 +1482,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 101,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
-    "name": "grow-stack-engine-4ae1d6eb",
-    "url": "https://github.com/douphealth/grow-stack-engine-4ae1d6eb",
-    "description": "Grow Stack Engine 4ae1d6eb repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 362,
     "metadataCheckedAt": "2026-10-13"
   },
   {
@@ -1795,32 +1641,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "metadataCheckedAt": "2026-10-13"
   },
   {
-    "name": "nutri-match-wiz-1eb55346",
-    "url": "https://github.com/douphealth/nutri-match-wiz-1eb55346",
-    "description": "Nutri Match Wiz 1eb55346 repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 607,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
     "name": "openclaw-config-001",
     "url": "https://github.com/douphealth/openclaw-config-001",
     "description": "Openclaw Config 001 repository tracked in Mission Control.",
@@ -1951,32 +1771,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "metadataCheckedAt": "2026-10-13"
   },
   {
-    "name": "sublime-cherish-zenith-4d8c3c83",
-    "url": "https://github.com/douphealth/sublime-cherish-zenith-4d8c3c83",
-    "description": "Sublime Cherish Zenith 4d8c3c83 repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-01",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 680,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
     "name": "wise-scribe-engine-d79d3d82",
     "url": "https://github.com/douphealth/wise-scribe-engine-d79d3d82",
     "description": "Wise Scribe Engine D79d3d82 repository tracked in Mission Control.",
@@ -2055,32 +1849,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "metadataCheckedAt": "2026-10-13"
   },
   {
-    "name": "wrist-wonderland-hub-460cce97",
-    "url": "https://github.com/douphealth/wrist-wonderland-hub-460cce97",
-    "description": "Wrist Wonderland Hub 460cce97 repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "paused",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "low",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-09-28",
-    "priority": "low",
-    "importance": 25,
-    "doneSummary": "Repository is connected in GitHub (private); default branch is main.",
-    "pendingSummary": "Confirm whether this is the canonical repository. If superseded, consolidate useful changes into the canonical repo and archive/stop using the duplicate.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 3281,
-    "metadataCheckedAt": "2026-10-13"
-  },
-  {
     "name": "backlink-command-center",
     "url": "https://github.com/douphealth/backlink-command-center",
     "description": "backlink-command-center repository tracked in Mission Control.",
@@ -2104,32 +1872,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 5675,
-    "metadataCheckedAt": "2026-10-24"
-  },
-  {
-    "name": "index-engine",
-    "url": "https://github.com/douphealth/index-engine",
-    "description": "index-engine repository tracked in Mission Control.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "active",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "high",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-24",
-    "priority": "high",
-    "importance": 75,
-    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (private); functionality and deployment not independently verified.",
-    "pendingSummary": "Verify current production mapping, integration, functionality and next actions.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 254,
     "metadataCheckedAt": "2026-10-24"
   },
   {
@@ -2208,32 +1950,6 @@ export const GITHUB_REPO_CATALOG: Array<Omit<GitHubRepo, "id">> = [
     "visibility": "public",
     "defaultBranch": "main",
     "repoSizeKb": 13,
-    "metadataCheckedAt": "2026-10-24"
-  },
-  {
-    "name": "social-harbor-compass",
-    "url": "https://github.com/douphealth/social-harbor-compass",
-    "description": "Social Harbor Compass: Facebook and Instagram outreach campaign workflow; integration status needs validation.",
-    "language": "Unknown",
-    "stars": 0,
-    "forks": 0,
-    "status": "active",
-    "demoUrl": "",
-    "progress": 0,
-    "topics": [
-      "github",
-      "private",
-      "high",
-      "canonical-review"
-    ],
-    "lastUpdated": "2026-10-24",
-    "priority": "high",
-    "importance": 75,
-    "doneSummary": "GitHub repository inventory confirmed on 2026-10-24 (private); functionality and deployment not independently verified.",
-    "pendingSummary": "Verify current production mapping, integration, functionality and next actions.",
-    "visibility": "private",
-    "defaultBranch": "main",
-    "repoSizeKb": 0,
     "metadataCheckedAt": "2026-10-24"
   }
 ];
