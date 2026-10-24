@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { getRequest } from "@tanstack/react-start/server";
+import { requireCloudflareViewer } from "@/lib/cloudflareAccess.server";
 
 // ─── Real infrastructure connectors ────────────────────────────────────────────
 // These never fabricate data. Missing token → not_connected. API error → error.
@@ -31,6 +33,7 @@ export interface CloudflareZoneRow {
 }
 
 export const getCloudflareZones = createServerFn({ method: "GET" }).handler(async () => {
+  await requireCloudflareViewer(getRequest());
   const token = process.env["CLOUDFLARE_API_TOKEN"];
   const fetchedAt = nowIso();
   if (!token) {
