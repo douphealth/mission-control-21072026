@@ -129,8 +129,7 @@ export function normalizeWorkerScript(
   const script = asObject(raw);
   const name = asString(script.id);
   if (!name || !SCRIPT_NAME.test(name)) return null;
-  // Cloudflare Worker Domain API returns service + hostname, but does not
-  // provide an `enabled` property for normal attached domains.
+  // The Worker Domain API provides enabled; only routable domains can be active links.
   const customDomains = domains.map(asObject).filter(d => d.service === name && d.enabled !== false)
     .map(d => asString(d.hostname)).filter((x): x is string => Boolean(x));
   const routes = Array.isArray(script.routes)
