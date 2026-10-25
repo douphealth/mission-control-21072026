@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Cloud, ExternalLink, GitBranch, History, RefreshCw, Search, Server, ShieldCheck } from "lucide-react";
 import {
-  getCloudflareInventory,
   getCloudflareDeploymentHistory,
   type CloudflareDeploymentRow,
   type CloudflareInventory,
@@ -9,18 +8,15 @@ import {
 } from "@/lib/cloudflareInventory.functions";
 import { PUBLIC_PORTFOLIO_REPOS } from "@/lib/portfolioAtlas";
 import { ConnectorEmpty, ConnectorError, TruthBadge } from "@/components/TruthUI";
-import { freshness, type TruthState } from "@/lib/truth";
+import { freshness } from "@/lib/truth";
+import { cloudflareTruthState, type CloudflareControlStatus } from "@/lib/cloudflareControlState";
 
 type Filter = "all" | "pages" | "worker";
 const shorten = (id: string) => id.slice(-6);
 const date = (value: string | null) =>
   value && !Number.isNaN(Date.parse(value))
     ? new Date(value).toLocaleString() : "Unverified";
-function stateFor(value: CloudflareInventory | null): TruthState {
-  if (!value) return "unavailable";
-  if (value.truthState === "partial" || value.truthState === "error") return "error";
-  return value.truthState;
-}
+
 const exactRepoNames = new Map<string, string[]>();
 for (const repo of PUBLIC_PORTFOLIO_REPOS) {
   const key = repo.name.toLowerCase();
@@ -32,10 +28,15 @@ function repoRelationship(row: CloudflareDeploymentRow) {
   return matches.length === 1 ? { url: matches[0], verified: false } : null;
 }
 
-export default function CloudflareDeploymentsPanel() {
-  const [inventory, setInventory] = useState<CloudflareInventory | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failure, setFailure] = useState<string | null>(null);
+export default function CloudflareDeploymentsPanel({
+  inventory, status, loading, failure, onRefresh,
+}: {
+  inventory: CloudflareInventory | null;
+  status: CloudflareControlStatus | null;
+  loading: boolean;
+  failure: string | null;
+  onRefresh: () => Promise<void>;
+}) {
   const [filter, setFilter] = useState<Filter>("all");
   const [account, setAccount] = useState("all");
   const [query, setQuery] = useState("");
@@ -45,21 +46,6 @@ export default function CloudflareDeploymentsPanel() {
   const [historyPage, setHistoryPage] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setFailure(null);
-    try {
-      const payload = await getCloudflareInventory();
-      setInventory(payload);
-    } catch {
-      // Do not reflect upstream error bodies or access-policy internals.
-      setFailure("Secure Cloudflare API request denied or unavailable. Check Access policy, server environment and deployment logs.");
-      setInventory(null);
-    } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void refresh(); }, [refresh]);
 
   const rows = useMemo(() => (inventory?.rows || []).filter(row => {
     if (filter !== "all" && row.kind !== filter) return false;
@@ -99,22 +85,22 @@ export default function CloudflareDeploymentsPanel() {
             Management links open Cloudflare; no production changes are initiated here.
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <TruthBadge meta={{ truthState: stateFor(inventory), source: "Cloudflare API", fetchedAt: inventory?.fetchedAt }} />
+            <TruthBadge meta={{ truthState: status ? cloudflareTruthState(status) : "unavailable", source: "Cloudflare API", fetchedAt: inventory?.fetchedAt }} />
             {inventory?.fetchedAt && <span className="text-xs text-muted-foreground">Fetched {freshness(inventory.fetchedAt) || inventory.fetchedAt}</span>}
           </div>
         </div>
-        <button className="btn-secondary text-xs" type="button" disabled={loading} onClick={() => void refresh()}>
+        <button className="btn-secondary text-xs" type="button" disabled={loading} onClick={() => void onRefresh()}>
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh deployments
         </button>
       </div>
       {loading && <p role="status" className="card-glass p-4 text-sm text-muted-foreground">Loading authenticated Cloudflare infrastructure…</p>}
-      {failure && <ConnectorError message={failure} onRetry={() => void refresh()} />}
-      {!loading && inventory?.truthState === "not_connected" && (
+      {failure && <ConnectorError message={failure} onRetry={() => void onRefresh()} />}
+      {!loading && (status === "not_connected" || status === "access_not_configured" || status === "login_required") && (
         <ConnectorEmpty
-          title="Cloudflare account configuration missing"
-          description="Configure server-side Cloudflare account IDs and API read tokens, and protect the application with Cloudflare Access. No sample deployments are shown."
+          title={status === "login_required" ? "Cloudflare Access sign-in required" : "Cloudflare backend connection needs configuration"}
+          description="Verify Cloudflare Access protection and encrypted runtime account credentials. Browser vault entries are not API credentials."
           docsUrl="https://developers.cloudflare.com/api/"
-          onRetry={() => void refresh()}
+          onRetry={() => void onRefresh()}
         />
       )}
       {!loading && inventory?.errors.length ? (
