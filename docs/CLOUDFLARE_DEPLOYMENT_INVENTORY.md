@@ -40,3 +40,20 @@ Never commit tokens, account-token JSON, Cloudflare Access JWTs, response dumps 
 ## Rollback
 
 Rollback is source-controlled: restore the previous known-good commit in a new PR or revert the approved merge commit; never force-push main. Restore a known-good Cloudflare deployment only after confirming origin, commit, DNS mapping and production health. Do not revoke tokens until any service depending on them has been migrated.
+
+## Multi-account configuration (October 2026)
+
+For each actual Cloudflare account, obtain the **32-character account ID** in its Cloudflare dashboard. An email login is not an account ID and one email may have access to multiple accounts. Do not assume that `papalexios@gmail.com` and `papalexios001@gmail.com` each map to exactly one Cloudflare account.
+
+Set the following **server runtime secrets**, not client-visible variables:
+
+- `CLOUDFLARE_ACCOUNT_IDS`: comma-separated IDs for every account to monitor.
+- `CLOUDFLARE_ACCOUNT_TOKENS_JSON`: a JSON object keyed by each account ID with a **read-scoped** Cloudflare API token per account. The old `CLOUDFLARE_API_TOKEN` is supported as fallback, but should not silently be treated as access to every account.
+- `CLOUDFLARE_ACCOUNT_LABELS_JSON`: optional JSON object keyed by account ID to a display label (e.g. `"Personal Cloudflare A"` and `"Personal Cloudflare B"`). Account display names are labels; labels do **not** prove identity.
+- `CLOUDFLARE_ACCESS_TEAM_DOMAIN`, `CLOUDFLARE_ACCESS_AUD`: required Cloudflare Access verification. Set explicit Access identity/team policies and protect all production and preview app/API entry points.
+
+The main Cloudflare dashboard now gathers Pages, Workers, routes, custom domains and zones from the same multi-account collector, with per-account partial/unavailable status. DNS zone links use the owning account and zone name. Worker domain data uses Cloudflare's documented `enabled` property: only explicitly enabled custom domains are presented as active links. Use an authenticated worker response and compare against the actual Cloudflare dashboard to prove inventory coverage.
+
+**Operational limitations:** Mission Control currently provides read-only inventory, deployment history and Cloudflare management-console links. It does **not** possess authority to deploy, delete, change DNS, or roll back resources from within the dashboard. Such writes require least-privilege write tokens, RBAC, explicit confirmation, an audit log and independent staging checks. No changes are performed to the two live Cloudflare accounts simply by merging this PR.
+
+**Release gate:** verify the Cloudflare Pages server runtime (not a static-only asset upload) executes authenticated server functions and receives the configuration. Check 401/403 denial for unauthorized calls, reconcile all two-account resource counts, and test links before production promotion. Do not expose account tokens in source control, logs or the browser.

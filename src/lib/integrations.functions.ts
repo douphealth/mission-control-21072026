@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getRequest } from "@tanstack/react-start/server";
 import { requireCloudflareViewer } from "@/lib/cloudflareAccess.server";
+import { collectCloudflareInventory } from "@/lib/cloudflareInventory.server";
 
 // ─── Real infrastructure connectors ────────────────────────────────────────────
 // These never fabricate data. Missing token → not_connected. API error → error.
@@ -30,66 +31,23 @@ export interface CloudflareZoneRow {
   plan: string;
   nameservers: string[];
   modifiedAt: string | null;
+  accountId: string;
+  dashboardUrl: string;
+  dnsUrl: string;
 }
 
 export const getCloudflareZones = createServerFn({ method: "GET" }).handler(async () => {
   await requireCloudflareViewer(getRequest());
-  const token = process.env["CLOUDFLARE_API_TOKEN"];
-  const fetchedAt = nowIso();
-  if (!token) {
-    return {
-      truthState: "not_connected" as TruthState,
-      source: "Cloudflare API",
-      fetchedAt,
-      error: null,
-      zones: [] as CloudflareZoneRow[],
-    };
-  }
-  try {
-    const zones: CloudflareZoneRow[] = [];
-    let completed = false;
-    // All pages of the zone listing are required: the old implementation
-    // silently truncated accounts with more than 50 zones.
-    for (let page = 1; page <= 100; page++) {
-      const data = await json(
-        "https://api.cloudflare.com/client/v4/zones?page=" + page + "&per_page=50", token);
-      if (data?.success === false || !Array.isArray(data?.result)) {
-        throw new Error("Cloudflare zone listing failed");
-      }
-      zones.push(...data.result.map((z: any) => ({
-        id: String(z.id),
-        name: String(z.name),
-        status: String(z.status ?? "unknown"),
-        plan: String(z.plan?.name ?? "Unknown"),
-        nameservers: Array.isArray(z.name_servers) ? z.name_servers.map(String) : [],
-        modifiedAt: z.modified_on ?? null,
-      })));
-      if (data?.result_info?.total_pages > 100) {
-        throw new Error("Cloudflare zones exceed the configured page limit");
-      }
-      if (data?.result_info?.total_pages
-        ? page >= data.result_info.total_pages : data.result.length < 50) {
-        completed = true;
-        break;
-      }
-    }
-    if (!completed) throw new Error("Cloudflare zone pagination limit reached");
-    return {
-      truthState: "live" as TruthState,
-      source: "Cloudflare API",
-      fetchedAt,
-      error: null,
-      zones,
-    };
-  } catch (e: any) {
-    return {
-      truthState: "error" as TruthState,
-      source: "Cloudflare API",
-      fetchedAt,
-      error: String(e?.message ?? e).slice(0, 300),
-      zones: [] as CloudflareZoneRow[],
-    };
-  }
+  const inventory = await collectCloudflareInventory();
+  return {
+    truthState: inventory.truthState,
+    source: "Cloudflare API",
+    fetchedAt: inventory.fetchedAt,
+    error: inventory.errors.length ? inventory.errors.join("; ").slice(0,300) : null,
+    zones: inventory.zones.map(({id,name,status,plan,nameservers,modifiedAt,accountId,dashboardUrl,dnsUrl}) => ({
+      id,name,status,plan,nameservers,modifiedAt,accountId,dashboardUrl,dnsUrl,
+    })) as CloudflareZoneRow[],
+  };
 });
 
 export interface VercelProjectRow {

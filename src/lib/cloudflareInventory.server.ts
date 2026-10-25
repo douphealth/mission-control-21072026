@@ -30,7 +30,30 @@ export interface DeploymentHistoryItem {
   commit: string | null;
   url: string | null;
 }
+export interface CloudflareZone {
+  id: string;
+  accountId: string;
+  name: string;
+  status: string;
+  plan: string;
+  nameservers: string[];
+  modifiedAt: string | null;
+  dashboardUrl: string;
+  dnsUrl: string;
+}
+export interface CloudflareAccountSummary {
+  accountId: string;
+  label: string;
+  truthState: InfraTruth;
+  configuredToken: boolean;
+  pagesCount: number;
+  workersCount: number;
+  zonesCount: number;
+  errors: string[];
+}
 export interface CloudflareInventory {
+  zones: CloudflareZone[];
+  accountDetails: CloudflareAccountSummary[];
   truthState: InfraTruth;
   source: "Cloudflare API";
   fetchedAt: string;
@@ -106,6 +129,7 @@ export function normalizeWorkerScript(
   const script = asObject(raw);
   const name = asString(script.id);
   if (!name || !SCRIPT_NAME.test(name)) return null;
+  // Only explicitly enabled Worker domains may be displayed as active URLs.
   const customDomains = domains.map(asObject).filter(d => d.service === name && d.enabled === true)
     .map(d => asString(d.hostname)).filter((x): x is string => Boolean(x));
   const routes = Array.isArray(script.routes)
@@ -133,7 +157,7 @@ export function configuredAccounts(env: Record<string, string | undefined> = pro
   return [...new Set((env["CLOUDFLARE_ACCOUNT_IDS"] || "").split(",").map(s => s.trim()).filter(Boolean))]
     .filter(id => ACCOUNT_ID.test(id));
 }
-function apiTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+export function apiTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
   // Optional per-account tokens are server-side secrets only; never echo them.
   try {
     const map: unknown = JSON.parse(env["CLOUDFLARE_ACCOUNT_TOKENS_JSON"] || "{}");
@@ -142,7 +166,7 @@ function apiTokenFor(accountId: string, env: Record<string, string | undefined> 
   } catch { /* invalid configuration falls back to a shared token */ }
   return asString(env["CLOUDFLARE_API_TOKEN"]);
 }
-async function cloudflareGet<T>(path: string, token: string): Promise<T> {
+export async function cloudflareGet<T>(path: string, token: string): Promise<T> {
   const response = await fetch(API + path, {
     method: "GET",
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
@@ -155,7 +179,7 @@ async function cloudflareGet<T>(path: string, token: string): Promise<T> {
   return data as T;
 }
 type Envelope = { result: any; result_info?: { total_pages?: number } };
-async function allPages(path: string, token: string, perPage = 100): Promise<unknown[]> {
+export async function allPages(path: string, token: string, perPage = 100): Promise<unknown[]> {
   const entries: unknown[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const glue = path.includes("?") ? "&" : "?";
@@ -186,8 +210,41 @@ async function parallelMap<T, U>(
   }));
   return result;
 }
+export function configuredAccountLabels(
+  env: Record<string, string | undefined> = process.env,
+): Record<string, string> {
+  try {
+    const input: unknown = JSON.parse(env["CLOUDFLARE_ACCOUNT_LABELS_JSON"] || "{}");
+    const raw = asObject(input);
+    const labels: Record<string, string> = {};
+    for (const [id, label] of Object.entries(raw)) {
+      if (ACCOUNT_ID.test(id) && typeof label === "string" && label.trim().length <= 120) {
+        labels[id] = label.trim();
+      }
+    }
+    return labels;
+  } catch { return {}; }
+}
+function normalizeZone(accountId: string, raw: unknown): CloudflareZone | null {
+  const zone = asObject(raw);
+  const id = asString(zone.id);
+  const name = asString(zone.name);
+  if (!id || !ACCOUNT_ID.test(id) || !name || !/^[a-z0-9.-]+$/i.test(name)) return null;
+  const prefix = "https://dash.cloudflare.com/" + accountId + "/" + encodeURIComponent(name);
+  return {
+    id, accountId, name,
+    status: asString(zone.status) || "unknown",
+    plan: asString(asObject(zone.plan).name) || "Unknown",
+    nameservers: Array.isArray(zone.name_servers)
+      ? zone.name_servers.map(asString).filter((v): v is string => Boolean(v)) : [],
+    modifiedAt: asString(zone.modified_on),
+    dashboardUrl: prefix,
+    dnsUrl: prefix + "/dns/records",
+  };
+}
 async function accountInventory(accountId: string, token: string) {
   const rows: CloudflareDeploymentRow[] = [];
+  const zoneRows: CloudflareZone[] = [];
   const errors: string[] = [];
   const [pages, scripts, domains, zones] = await Promise.allSettled([
     allPages("/accounts/" + accountId + "/pages/projects", token),
@@ -211,6 +268,10 @@ async function accountInventory(accountId: string, token: string) {
   if (zones.status === "rejected") {
     errors.push("Zone inventory unavailable for account " + accountId.slice(-6));
   } else {
+    for (const raw of zones.value) {
+      const zone = normalizeZone(accountId, raw);
+      if (zone) zoneRows.push(zone);
+    }
     const ids = zones.value.map(asObject).map(z => asString(z.id))
       .filter((id): id is string => typeof id === "string" && ACCOUNT_ID.test(id));
     const routeResults = await parallelMap(ids, id =>
@@ -251,29 +312,76 @@ async function accountInventory(accountId: string, token: string) {
       });
     }
   } else errors.push("Worker scripts unavailable for account " + accountId.slice(-6));
-  return { rows, errors };
+  return { rows, zones: zoneRows, errors };
 }
 /** Caller must pass Cloudflare Access authorization before invoking. */
-export async function collectCloudflareInventory(): Promise<CloudflareInventory> {
+export async function collectCloudflareInventory(
+  environment: Record<string, string | undefined> = process.env,
+): Promise<CloudflareInventory> {
   const fetchedAt = new Date().toISOString();
-  const accounts = configuredAccounts();
-  if (!accounts.length || !accounts.every(id => Boolean(apiTokenFor(id)))) {
-    return { truthState: "not_connected", source: "Cloudflare API", fetchedAt,
-      rows: [], accounts, errors: [] };
-  }
-  const results = await Promise.allSettled(accounts.map(id => accountInventory(id, apiTokenFor(id)!)));
+  const accounts = configuredAccounts(environment);
+  const labels = configuredAccountLabels(environment);
   const rows: CloudflareDeploymentRow[] = [];
+  const zones: CloudflareZone[] = [];
   const errors: string[] = [];
-  results.forEach((entry, i) => {
-    if (entry.status === "fulfilled") {
-      rows.push(...entry.value.rows); errors.push(...entry.value.errors);
-    } else errors.push("Cloudflare account " + accounts[i].slice(-6) + " unavailable");
+  const accountDetails: CloudflareAccountSummary[] = [];
+  // Never claim a partially configured portfolio is fully disconnected.
+  if (!accounts.length) {
+    return { truthState: "not_connected", source: "Cloudflare API", fetchedAt,
+      rows, zones, accounts, accountDetails, errors };
+  }
+  // Cap simultaneous account inventories to prevent API request bursts.
+  const results = await parallelMap(accounts, async id => {
+    const token = apiTokenFor(id, environment);
+    return token ? await accountInventory(id, token) : null;
+  }, 2);
+  results.forEach((entry, index) => {
+    const id = accounts[index];
+    const configuredToken = Boolean(apiTokenFor(id, environment));
+    const label = labels[id] || "Account …" + id.slice(-6);
+    if (!configuredToken) {
+      const reason = "API token is not configured for " + label;
+      errors.push(reason);
+      accountDetails.push({accountId:id,label,truthState:"not_connected",
+        configuredToken:false,pagesCount:0,workersCount:0,zonesCount:0,
+        errors:[reason]});
+      return;
+    }
+    if (entry.status === "rejected" || !entry.value) {
+      const reason = "Cloudflare account " + label + " could not be queried";
+      errors.push(reason);
+      accountDetails.push({accountId:id,label,truthState:"error",
+        configuredToken:true,pagesCount:0,workersCount:0,zonesCount:0,
+        errors:[reason]});
+      return;
+    }
+    const result = entry.value;
+    rows.push(...result.rows);
+    zones.push(...result.zones);
+    errors.push(...result.errors);
+    accountDetails.push({
+      accountId:id,label,configuredToken:true,
+      pagesCount:result.rows.filter(row=>row.kind==="pages").length,
+      workersCount:result.rows.filter(row=>row.kind==="worker").length,
+      zonesCount:result.zones.length,
+      truthState: result.errors.length
+        ? result.rows.length || result.zones.length ? "partial" : "error"
+        : "live",
+      errors: result.errors,
+    });
   });
   const unique = new Map(rows.map(row => [row.key, row]));
-  const truthState = errors.length
-    ? unique.size ? "partial" : "error" : "live";
-  return { truthState, source: "Cloudflare API", fetchedAt,
-    rows: [...unique.values()].sort((a, b) => a.name.localeCompare(b.name)), accounts, errors };
+  const uniqueZones = new Map(zones.map(zone => [zone.accountId+":"+zone.id, zone]));
+  const connected = accountDetails.some(a=>a.truthState==="live" || a.truthState==="partial");
+  const truthState: InfraTruth = errors.length
+    ? connected ? "partial" : accountDetails.every(a=>a.truthState==="not_connected")
+      ? "not_connected" : "error"
+    : "live";
+  return {
+    truthState, source:"Cloudflare API", fetchedAt, accounts, accountDetails, errors,
+    rows:[...unique.values()].sort((a,b)=>a.name.localeCompare(b.name)),
+    zones:[...uniqueZones.values()].sort((a,b)=>a.name.localeCompare(b.name)),
+  };
 }
 export async function loadDeploymentHistory(input: {
   accountId: string;

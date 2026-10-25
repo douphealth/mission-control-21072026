@@ -35,7 +35,10 @@ describe("production truth gate", () => {
 
   it("infrastructure connectors never invent data without a token", () => {
     const src = readFileSync("src/lib/integrations.functions.ts", "utf8");
-    expect(src).toMatch(/process\.env\[(['"])CLOUDFLARE_API_TOKEN\1\]/);
+    const cloudflare = readFileSync("src/lib/cloudflareInventory.server.ts", "utf8");
+    expect(cloudflare).toContain("CLOUDFLARE_API_TOKEN");
+    expect(cloudflare).toContain("CLOUDFLARE_ACCOUNT_TOKENS_JSON");
+    expect(cloudflare).toContain("not_connected");
     expect(src).toMatch(/process\.env\[(['"])VERCEL_API_TOKEN\1\]/);
     expect(src).toMatch(/truthState: ['"]not_connected['"]/);
   });
