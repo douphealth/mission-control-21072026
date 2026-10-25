@@ -61,9 +61,10 @@ describe("Cloudflare production inventory normalization", () => {
   it("labels only valid configured account identifiers", () => {
     expect(configuredAccountLabels({CLOUDFLARE_ACCOUNT_LABELS_JSON: JSON.stringify({["a".repeat(32)]:"Cloudflare A",wrong:"Ignore"})})).toEqual({["a".repeat(32)]:"Cloudflare A"});
   });
-  it("accepts normal Worker domains without optional enabled flag", () => {
+  it("never treats a missing enabled flag as proof a Worker domain is live", () => {
     const row = normalizeWorkerScript(ACCOUNT,{id:"worker-a"},[{service:"worker-a",hostname:"app.example.com"}]);
-    expect(row?.domains).toEqual(["app.example.com"]);
+    expect(row?.domains).toEqual([]);
+    expect(row?.publicUrl).toBeNull();
   });
   it("deduplicates and validates account identifiers without leaking secrets", () => {
     expect(configuredAccounts({ CLOUDFLARE_ACCOUNT_IDS:
