@@ -2,7 +2,9 @@ import { useCredentials } from "@/hooks/useTableData";
 import { useCallback, useEffect, useState } from "react";
 import { Cloud, Globe, Zap, ExternalLink, Copy, RefreshCw, Lock, Activity } from "lucide-react";
 import { toast } from "sonner";
-import { getCloudflareZones, type CloudflareZoneRow } from "@/lib/integrations.functions";
+import { getCloudflareControl } from "@/lib/cloudflareControl.functions";
+import { cloudflareTruthState, type CloudflareControlSnapshot } from "@/lib/cloudflareControlState";
+import type { CloudflareZone } from "@/lib/cloudflareInventory.server";
 import { TruthBadge, ConnectorEmpty, ConnectorError } from "@/components/TruthUI";
 import type { TruthMeta } from "@/lib/truth";
 import { db } from "@/lib/db";
@@ -18,55 +20,55 @@ const cfTools = [
   },
   {
     label: "DNS Management",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/dns/records",
+    url: "https://dash.cloudflare.com/",
     icon: "🌐",
     desc: "Manage DNS records",
   },
   {
     label: "SSL/TLS Settings",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/ssl-tls",
+    url: "https://dash.cloudflare.com/",
     icon: "🔒",
     desc: "HTTPS & certificate config",
   },
   {
     label: "Firewall Rules",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/security/waf",
+    url: "https://dash.cloudflare.com/",
     icon: "🛡️",
     desc: "Firewall & security rules",
   },
   {
     label: "Page Rules",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/rules/page-rules",
+    url: "https://dash.cloudflare.com/",
     icon: "📋",
     desc: "URL redirects & caching",
   },
   {
     label: "Analytics",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/analytics",
+    url: "https://dash.cloudflare.com/",
     icon: "📊",
     desc: "Traffic & bandwidth stats",
   },
   {
     label: "Workers",
-    url: "https://dash.cloudflare.com/?to=/:account/workers",
+    url: "https://dash.cloudflare.com/",
     icon: "⚡",
     desc: "Edge computing & serverless",
   },
   {
     label: "Pages",
-    url: "https://dash.cloudflare.com/?to=/:account/pages",
+    url: "https://dash.cloudflare.com/",
     icon: "🚀",
     desc: "Static site deployments",
   },
   {
     label: "R2 Storage",
-    url: "https://dash.cloudflare.com/?to=/:account/r2",
+    url: "https://dash.cloudflare.com/",
     icon: "📦",
     desc: "Object storage, S3-compatible",
   },
   {
     label: "Turnstile",
-    url: "https://dash.cloudflare.com/?to=/:account/turnstile",
+    url: "https://dash.cloudflare.com/",
     icon: "🤖",
     desc: "CAPTCHA alternative",
   },
@@ -95,7 +97,8 @@ const dotFor = (status: string) =>
 
 export default function CloudflarePage() {
   const credentials = useCredentials();
-  const [zones, setZones] = useState<CloudflareZoneRow[]>([]);
+  const [zones, setZones] = useState<CloudflareZone[]>([]);
+  const [control, setControl] = useState<CloudflareControlSnapshot | null>(null);
   const [meta, setMeta] = useState<TruthMeta>({
     truthState: "unavailable",
     source: "Cloudflare API",
@@ -105,53 +108,46 @@ export default function CloudflarePage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await getCloudflareZones();
-      setZones(r.zones);
+      // One authenticated request replaces separate duplicate zone/deployment
+      // inventory calls. Access failure is a connection state, not API data.
+      const result = await getCloudflareControl();
+      setControl(result);
+      setZones(result.inventory?.zones ?? []);
+      const truthState = cloudflareTruthState(result.status);
       setMeta({
-        truthState: r.truthState === "partial" ? "error" : r.truthState,
-        source: r.source,
-        fetchedAt: r.fetchedAt,
-        error: r.error,
-      });
-      await db.syncHealth.put({
-        id: "cloudflare",
-        label: "Cloudflare",
-        status:
-          r.truthState === "live"
-            ? "ok"
-            : r.truthState === "error"
-              ? "error"
-              : "not-configured",
-        lastAttemptAt: r.fetchedAt || new Date().toISOString(),
-        lastSuccessAt: r.truthState === "live" ? r.fetchedAt : undefined,
-        error: r.error || undefined,
-        detail: "Cloudflare zones API truth state.",
-      });
-      markCloudRecordDirty("syncHealth", "cloudflare");
-      queueCloudPush();
-    } catch (e: any) {
-      setZones([]);
-      const fetchedAt = new Date().toISOString();
-      const message = String(e?.message ?? e);
-      setMeta({
-        truthState: "error",
+        truthState,
         source: "Cloudflare API",
-        fetchedAt,
-        error: message,
+        fetchedAt: result.fetchedAt,
+        error: result.message,
       });
-      await db.syncHealth.put({
-        id: "cloudflare",
-        label: "Cloudflare",
-        status: "error",
-        lastAttemptAt: fetchedAt,
-        error: message,
-        detail: "Cloudflare zones API truth state.",
+      // Local IndexedDB quota/sync errors must never turn a successful
+      // Cloudflare API result into a false "connector failed" screen.
+      try {
+        await db.syncHealth.put({
+          id: "cloudflare",
+          label: "Cloudflare",
+          status: result.status === "live" ? "ok"
+            : result.status === "partial" || result.status === "error"
+              ? "error" : "not-configured",
+          lastAttemptAt: result.fetchedAt,
+          lastSuccessAt: result.status === "live" ? result.fetchedAt : undefined,
+          error: result.message ?? undefined,
+          detail: "Cloudflare account-level API inventory state.",
+        });
+        markCloudRecordDirty("syncHealth", "cloudflare");
+        queueCloudPush();
+      } catch {
+        // Account data remains visible even if the local planning store fails.
+      }
+    } catch {
+      setControl(null);
+      setZones([]);
+      setMeta({
+        truthState: "unavailable", source: "Cloudflare API",
+        fetchedAt: new Date().toISOString(),
+        error: "Cloudflare server endpoint was unreachable. Verify that Cloudflare Pages deployed its server Worker and inspect runtime logs.",
       });
-      markCloudRecordDirty("syncHealth", "cloudflare");
-      queueCloudPush();
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   }, []);
 
   useEffect(() => {
@@ -206,9 +202,29 @@ export default function CloudflarePage() {
         </div>
       </div>
 
-      <CloudflareDeploymentsPanel />
+      {control?.status === "access_not_configured" && (
+        <div className="card-glass space-y-2 border-amber-500/30 p-4 text-sm" role="status">
+          <h2 className="font-semibold">Cloudflare Access setup required on the deployed runtime</h2>
+          <p className="text-xs text-muted-foreground">
+            This is a configuration issue, not a Cloudflare outage. Protect this Pages application and all its API/preview hostnames using Cloudflare Zero Trust Access. Set the server variables
+            <code className="mx-1">CLOUDFLARE_ACCESS_TEAM_DOMAIN</code> and
+            <code className="mx-1">CLOUDFLARE_ACCESS_AUD</code> from that Access application.
+            Account IDs and API tokens must be encrypted runtime secrets, never browser vault entries.
+          </p>
+          <a className="inline-flex items-center gap-1 text-xs font-semibold text-primary"
+            href="https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/"
+            target="_blank" rel="noopener noreferrer">Cloudflare Access setup guide <ExternalLink size={12}/></a>
+        </div>
+      )}
+      <CloudflareDeploymentsPanel
+        inventory={control?.inventory ?? null}
+        status={control?.status ?? null}
+        loading={loading}
+        failure={control ? null : meta.error ?? null}
+        onRefresh={load}
+      />
 
-      {meta.truthState === "live" && (
+      {(control?.status === "live" || control?.status === "partial") && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             {
@@ -224,7 +240,7 @@ export default function CloudflarePage() {
               color: "text-amber-500 bg-amber-500/10",
             },
             {
-              label: "Saved Credentials",
+              label: "Manual vault references",
               value: cfCreds.length,
               icon: Lock,
               color: "text-violet-500 bg-violet-500/10",
@@ -263,20 +279,26 @@ export default function CloudflarePage() {
             </div>
           )}
 
-          {!loading && meta.truthState === "not_connected" && (
+          {!loading && (control?.status === "not_connected" || control?.status === "access_not_configured") && (
             <ConnectorEmpty
-              title="Cloudflare is not connected"
-              description="Add a Cloudflare API token with Zone:Read permission to this project and your real zones will appear here. Until then this page shows nothing — no sample domains."
+              title="DNS inventory needs secure Cloudflare connection"
+              description="Configure Cloudflare Access and encrypted server-side account tokens. The browser Credential Vault does not authorize API requests; no sample domains are displayed."
               docsUrl="https://developers.cloudflare.com/fundamentals/api/get-started/create-token/"
               onRetry={() => void load()}
             />
           )}
 
-          {!loading && meta.truthState === "error" && (
+          {!loading && (meta.truthState === "error" || (meta.truthState === "unavailable" && control?.status !== "login_required")) && (
             <ConnectorError message={meta.error ?? "Unknown error"} onRetry={() => void load()} />
           )}
 
-          {!loading && meta.truthState === "live" && zones.length === 0 && (
+          {!loading && control?.status === "login_required" && (
+            <ConnectorEmpty title="Sign in through Cloudflare Access"
+              description="Use the hostname protected by the configured Access application. Preview hostnames and server endpoints must also be protected."
+              docsUrl="https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/"
+              onRetry={() => void load()} />
+          )}
+          {!loading && (control?.status === "live" || control?.status === "partial") && zones.length === 0 && (
             <div className="card-glass p-6 text-center text-sm text-muted-foreground">
               No zones returned from configured Cloudflare accounts.
             </div>
@@ -324,7 +346,7 @@ export default function CloudflarePage() {
 
         <div className="space-y-3">
           <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
-            <Lock size={15} className="text-primary" /> Saved Accounts
+            <Lock size={15} className="text-primary" /> Manual account references
           </h2>
           {cfCreds.length > 0 ? (
             cfCreds.map((cred) => (
@@ -349,9 +371,9 @@ export default function CloudflarePage() {
           ) : (
             <div className="card-glass p-4 text-center text-sm text-muted-foreground">
               <Lock size={20} className="mx-auto mb-2 opacity-40" />
-              <div>No Cloudflare credentials saved</div>
+              <div>No manual Cloudflare references saved</div>
               <div className="mt-1 text-xs">
-                Add them in <strong>Credential Vault</strong>
+                Optional planning entries only. API connections use encrypted server secrets, not the Credential Vault.
               </div>
             </div>
           )}
