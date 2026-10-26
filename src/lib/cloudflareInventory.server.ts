@@ -216,9 +216,29 @@ export async function allPages(path: string, token: string, perPage = 100): Prom
       if (!Array.isArray(bare.result)) throw new Error("Invalid Pages API payload");
       const total = bare.result_info?.total_count;
       const totalPages = bare.result_info?.total_pages;
+      // A one-page bare response is sufficient only when metadata proves it.
       if (typeof total === "number" && total === bare.result.length ||
-          typeof totalPages === "number" && totalPages <= 1) return bare.result;
-      throw new Error("Cloudflare Pages pagination unavailable; inventory completeness unknown");
+          typeof totalPages === "number" && totalPages === 1) return bare.result;
+      if (typeof totalPages !== "number" || !Number.isInteger(totalPages) ||
+          totalPages < 2 || totalPages > MAX_PAGES) {
+        throw new Error("Cloudflare Pages pagination unavailable; inventory completeness unknown");
+      }
+      // Some Pages backends reject per_page even at 20. Keep the server-side
+      // inventory complete by using the API's own default page size instead.
+      const results: unknown[] = [...bare.result];
+      for (let nextPage = 2; nextPage <= totalPages; nextPage++) {
+        const next = await cloudflareGet<Envelope>(path + "?page=" + nextPage, token);
+        if (!Array.isArray(next.result) ||
+            next.result_info?.total_pages !== undefined &&
+              next.result_info.total_pages !== totalPages) {
+          throw new Error("Cloudflare Pages pagination changed during inventory");
+        }
+        results.push(...next.result);
+      }
+      if (typeof total === "number" && results.length !== total) {
+        throw new Error("Cloudflare Pages pagination returned incomplete results");
+      }
+      return results;
     }
     const rows = envelope.result;
     if (!Array.isArray(rows)) throw new Error("Invalid Cloudflare pagination payload");
