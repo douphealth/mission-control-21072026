@@ -2,7 +2,7 @@ import { useCredentials } from "@/hooks/useTableData";
 import { useCallback, useEffect, useState } from "react";
 import { Cloud, Globe, Zap, ExternalLink, Copy, RefreshCw, Lock, Activity } from "lucide-react";
 import { toast } from "sonner";
-import { getCloudflareZones, type CloudflareZoneRow } from "@/lib/integrations.functions";
+import { getCloudflareInventory, type CloudflareInventory } from "@/lib/cloudflareInventory.functions";
 import { TruthBadge, ConnectorEmpty, ConnectorError } from "@/components/TruthUI";
 import type { TruthMeta } from "@/lib/truth";
 import { db } from "@/lib/db";
@@ -95,68 +95,74 @@ const dotFor = (status: string) =>
 
 export default function CloudflarePage() {
   const credentials = useCredentials();
-  const [zones, setZones] = useState<CloudflareZoneRow[]>([]);
-  const [meta, setMeta] = useState<TruthMeta>({
-    truthState: "unavailable",
-    source: "Cloudflare API",
-  });
+  // A single authenticated snapshot powers both zones and deployments.
+  // Separate API calls previously duplicated expensive multi-account discovery
+  // and could display contradictory Cloudflare status on one screen.
+  const [inventory, setInventory] = useState<CloudflareInventory | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const zones = inventory?.zones ?? [];
+  const meta: TruthMeta = {
+    truthState: inventory?.truthState === "partial" ? "error"
+      : inventory?.truthState ?? (failure ? "error" : "unavailable"),
+    source: "Cloudflare API",
+    fetchedAt: inventory?.fetchedAt,
+    error: failure ?? (inventory?.errors.length ? inventory.errors.join("; ").slice(0, 300) : undefined),
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
+    setFailure(null);
     try {
-      const r = await getCloudflareZones();
-      setZones(r.zones);
-      setMeta({
-        truthState: r.truthState === "partial" ? "error" : r.truthState,
-        source: r.source,
-        fetchedAt: r.fetchedAt,
-        error: r.error,
-      });
-      await db.syncHealth.put({
-        id: "cloudflare",
-        label: "Cloudflare",
-        status:
-          r.truthState === "live"
-            ? "ok"
-            : r.truthState === "error"
-              ? "error"
-              : "not-configured",
-        lastAttemptAt: r.fetchedAt || new Date().toISOString(),
-        lastSuccessAt: r.truthState === "live" ? r.fetchedAt : undefined,
-        error: r.error || undefined,
-        detail: "Cloudflare zones API truth state.",
-      });
-      markCloudRecordDirty("syncHealth", "cloudflare");
-      queueCloudPush();
-    } catch (e: any) {
-      setZones([]);
-      const fetchedAt = new Date().toISOString();
-      const message = String(e?.message ?? e);
-      setMeta({
-        truthState: "error",
-        source: "Cloudflare API",
-        fetchedAt,
-        error: message,
-      });
-      await db.syncHealth.put({
-        id: "cloudflare",
-        label: "Cloudflare",
-        status: "error",
-        lastAttemptAt: fetchedAt,
-        error: message,
-        detail: "Cloudflare zones API truth state.",
-      });
-      markCloudRecordDirty("syncHealth", "cloudflare");
-      queueCloudPush();
+      const result = await getCloudflareInventory();
+      setInventory(result);
+      // Local health persistence must never turn a successful API read into a
+      // page-level failure (for example, when IndexedDB storage is full).
+      try {
+        const previous = await db.syncHealth.get("cloudflare");
+        await db.syncHealth.put({
+          id: "cloudflare",
+          label: "Cloudflare",
+          status: result.truthState === "live" ? "ok"
+            : result.truthState === "not_connected" ? "not-configured" : "error",
+          lastAttemptAt: result.fetchedAt,
+          lastSuccessAt: result.truthState === "live" ? result.fetchedAt : previous?.lastSuccessAt,
+          error: result.errors.length ? result.errors.join("; ").slice(0, 300) : undefined,
+          detail: "Shared Cloudflare Pages, Workers and zone API snapshot.",
+        });
+        markCloudRecordDirty("syncHealth", "cloudflare");
+        queueCloudPush();
+      } catch {
+        console.warn("Cloudflare health snapshot could not be stored locally.");
+      }
+    } catch (error) {
+      setInventory(null);
+      const message = error instanceof Error ? error.message : "";
+      setFailure(message.includes("Cloudflare Access is not configured")
+        ? "Cloudflare Access is not configured on this deployment. Protect the hostname and configure server-side Access settings; credentials saved in the browser do not activate the API."
+        : "Authenticated Cloudflare inventory is unavailable. Verify Access, configured account IDs, read-only token permissions and deployment logs.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
+  useEffect(() => { void load(); }, [load]);
+
+  // Never send unresolved :account/:zone placeholders to Cloudflare.
+  // With more than one possible target, go to its account selector.
+  const resolveToolUrl = (url: string) => {
+    if (url.includes("/:account/:zone")) {
+      const zone = zones.length === 1 ? zones[0] : null;
+      return zone
+        ? url.replace("/:account/:zone", "/" + zone.accountId + "/" + encodeURIComponent(zone.name))
+        : "https://dash.cloudflare.com";
+    }
+    if (url.includes("/:account")) {
+      const account = inventory?.accounts.length === 1 ? inventory.accounts[0] : null;
+      return account ? url.replace("/:account", "/" + account) : "https://dash.cloudflare.com";
+    }
+    return url;
+  };
 
   const cfCreds = credentials.filter(
     (c) =>
@@ -206,7 +212,7 @@ export default function CloudflarePage() {
         </div>
       </div>
 
-      <CloudflareDeploymentsPanel />
+      <CloudflareDeploymentsPanel inventory={inventory} loading={loading} failure={failure} onRefresh={() => void load()} />
 
       {meta.truthState === "live" && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -366,7 +372,7 @@ export default function CloudflarePage() {
           {cfTools.map((tool) => (
             <a
               key={tool.label}
-              href={tool.url}
+              href={resolveToolUrl(tool.url)}
               target="_blank"
               rel="noopener noreferrer"
               className="card-glass group block p-3.5 transition-all hover:border-primary/20"
@@ -376,7 +382,9 @@ export default function CloudflarePage() {
                 {tool.label}
               </div>
               <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">
-                {tool.desc}
+                {tool.url.includes(":account") && resolveToolUrl(tool.url) === "https://dash.cloudflare.com"
+                  ? "Select the account or zone in Cloudflare Dashboard"
+                  : tool.desc}
               </div>
             </a>
           ))}
