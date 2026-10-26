@@ -79,7 +79,17 @@ function fpNote(item: Partial<Note>): string {
 }
 
 function fpPayment(item: Partial<Payment>): string {
-  return `p|${norm(item.title)}|${item.amount ?? 0}|${norm(item.type)}|${norm(item.from)}|${norm(item.to)}`;
+  // A recurring subscription can produce the same amount to the same vendor
+  // every month. Collapsing different dates/currencies loses actual expenses.
+  // Verified provider references take precedence over descriptive matching.
+  if (item.sourceRef?.trim()) {
+    return JSON.stringify(["payment-source", norm(item.source), item.sourceRef.trim()]);
+  }
+  return JSON.stringify([
+    "payment", norm(item.title), item.amount ?? 0, norm(item.currency),
+    norm(item.type), norm(item.from), norm(item.to),
+    norm(item.dueDate), norm(item.paidDate), norm(item.createdAt),
+  ]);
 }
 
 function fpIdea(item: Partial<Idea>): string {
