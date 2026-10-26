@@ -161,6 +161,12 @@ export interface Payment {
   linkedProject: string;
   notes: string;
   createdAt: string;
+  /** Provenance is recorded with each ledger item, never inferred from its title. */
+  source?: "manual" | "email-receipt" | "email-invoice" | "stripe" | "bank" | "other";
+  sourceRef?: string;
+  sourceUrl?: string;
+  evidenceStatus?: "confirmed" | "unverified";
+  verifiedAt?: string;
 }
 
 export interface Idea {
