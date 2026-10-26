@@ -221,7 +221,7 @@ export default function CloudflarePage() {
             className="inline-flex text-xs font-semibold text-primary">Cloudflare Zero Trust / Access <ExternalLink size={12} /></a>
         </section>
       )}
-      <CloudflareDeploymentsPanel inventory={inventory} loading={loading}
+      <CloudflareDeploymentsPanel inventory={inventory} status={control?.status ?? null} loading={loading}
         failure={failure ?? (control?.status === "error" ? control.message : null)}
         onRefresh={() => void load()} />
 
