@@ -342,7 +342,7 @@ async function syncCycle(): Promise<SyncResult> {
       const fileId = await writeRemote(file?.id, backup, token.access_token, currentEpoch);
       await confirmCloudReadback(merged, outboundKeys, async () => {
         const verified = parseBackup(await driveJson<unknown>(
-          `${DRIVE_FILES}/${encodeURIComponent(fileId)}?alt=media&mc_verify=${crypto.randomUUID()}`,
+          `${DRIVE_FILES}/${encodeURIComponent(fileId)}?alt=media`,
           token.access_token, currentEpoch,
           { headers: { 'Cache-Control': 'no-cache' } },
         ));
