@@ -1,5 +1,6 @@
 import { usePayments, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
 import { useState, useCallback } from "react";
+import { dueState, direction, financeCsv, localToday, moneySummary } from "@/lib/financeLedger";
 import {
   Plus,
   Search,
@@ -61,6 +62,8 @@ export default function PaymentsPage() {
   const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
+  const [filterStatus, setFilterStatus] = useState("all");
+  const today = localToday();
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyPayment);
@@ -69,6 +72,7 @@ export default function PaymentsPage() {
 
   const filtered = payments
     .filter((p) => filterType === "all" || p.type === filterType)
+    .filter((p) => filterStatus === "all" || (filterStatus === "overdue" ? dueState(p, today) === "overdue" : p.status === filterStatus))
     .filter(
       (p) =>
         p.title.toLowerCase().includes(search.toLowerCase()) ||
@@ -76,31 +80,20 @@ export default function PaymentsPage() {
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  const currencySummary = payments.reduce(
-    (acc, payment) => {
-      const currency = (payment.currency || "USD").toUpperCase();
-      const row = acc[currency] || { income: 0, expenses: 0, pending: 0 };
-      if (payment.status === "paid" && payment.type === "income") row.income += payment.amount;
-      if (
-        payment.status === "paid" &&
-        (payment.type === "expense" || payment.type === "subscription")
-      ) {
-        row.expenses += payment.amount;
-      }
-      if (payment.status === "pending" || payment.status === "overdue") {
-        row.pending += payment.amount;
-      }
-      acc[currency] = row;
-      return acc;
-    },
-    {} as Record<string, { income: number; expenses: number; pending: number }>,
-  );
+  const currencySummary = moneySummary(payments);
   const currencyRows = Object.entries(currencySummary).sort(([a], [b]) => a.localeCompare(b));
-  const overdueCount = payments.filter((p) => p.status === "overdue").length;
-
+  const overdueCount = payments.filter(p => dueState(p, today) === "overdue").length;
+  const upcoming = payments.filter(p => dueState(p, today) === "upcoming")
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5);
+  const exportCsv = () => {
+    const url = URL.createObjectURL(new Blob([financeCsv(filtered)], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = "mission-control-payments-" + today + ".csv"; anchor.click();
+    URL.revokeObjectURL(url);
+  };
   const openAdd = () => {
     setEditId(null);
-    setForm(emptyPayment);
+    setForm({ ...emptyPayment, dueDate: today, createdAt: today, currency: "EUR" });
     setModalOpen(true);
   };
   const openEdit = (p: Payment) => {
@@ -110,9 +103,9 @@ export default function PaymentsPage() {
     setModalOpen(true);
   };
   const saveForm = () => {
-    if (!form.title.trim()) return;
+    if (!form.title.trim() || !Number.isFinite(form.amount) || form.amount <= 0 || !/^[A-Z]{3}$/.test(form.currency)) { toast.error("Enter title, positive amount and valid 3-letter currency."); return; }
     if (editId) {
-      updateData({ payments: payments.map((p) => (p.id === editId ? { ...p, ...form } : p)) });
+      void updateData({ payments: payments.map((p) => (p.id === editId ? { ...p, ...form } : p)) });
       toast.success("Payment updated");
     } else {
       updateData({
@@ -151,7 +144,7 @@ export default function PaymentsPage() {
           : p,
       ),
     });
-    toast.success("Marked as paid");
+    toast.success("Ledger marked paid; no funds transferred");
   };
   const uf = (field: keyof typeof form, val: any) => setForm((f) => ({ ...f, [field]: val }));
   const fmt = (n: number, currency = "USD") => {
@@ -211,6 +204,7 @@ export default function PaymentsPage() {
             >
               <CheckSquare size={15} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
             </button>
+            <button onClick={exportCsv} className="btn-secondary text-xs" disabled={!filtered.length}>Export CSV</button>
             <button
               onClick={openAdd}
               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
@@ -278,6 +272,21 @@ export default function PaymentsPage() {
         />
       )}
 
+      <section className="grid gap-3 md:grid-cols-2">
+        <div className="card-glass p-4">
+          <h2 className="text-sm font-semibold">Upcoming payments &amp; collections</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{overdueCount} overdue · settled income and outgoing costs are reported separately</p>
+          {upcoming.length ? <div className="mt-3 space-y-2">{upcoming.map(p =>
+            <div key={p.id} className="flex justify-between gap-3 border-t border-border/30 pt-2 text-xs">
+              <span className="min-w-0 truncate">{p.title} · {p.dueDate}</span>
+              <span className="shrink-0 font-semibold">{fmt(p.amount,p.currency)}</span>
+            </div>)}</div> : <p className="mt-3 text-xs text-muted-foreground">No upcoming recorded obligations.</p>}
+        </div>
+        <div className="card-glass p-4">
+          <h2 className="text-sm font-semibold">Financial integrity</h2>
+          <p className="mt-2 text-xs text-muted-foreground">Only paid records count as settled cash flow. Outstanding invoices are receivables; unpaid operating costs are payables. A bill email is not a payment receipt. Updates here never transfer money.</p>
+        </div>
+      </section>
       {/* Currency-safe summary — never add unlike currencies together. */}
       <div className="card-elevated overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-3">
@@ -300,7 +309,7 @@ export default function PaymentsPage() {
             {currencyRows.map(([currency, row]) => (
               <div
                 key={currency}
-                className="grid grid-cols-2 gap-2 px-4 py-3 sm:grid-cols-[110px_repeat(4,minmax(0,1fr))] sm:items-center"
+                className="grid grid-cols-2 gap-2 px-4 py-3 sm:grid-cols-[100px_repeat(5,minmax(0,1fr))] sm:items-center"
               >
                 <div className="col-span-2 flex items-center gap-2 sm:col-span-1">
                   <span className="rounded-lg bg-secondary px-2 py-1 font-mono text-xs font-black text-foreground">
@@ -315,7 +324,8 @@ export default function PaymentsPage() {
                     value: row.income - row.expenses,
                     color: row.income - row.expenses >= 0 ? "text-success" : "text-destructive",
                   },
-                  { label: "Pending", value: row.pending, color: "text-warning" },
+                  { label: "Payable", value: row.payable, color: "text-warning" },
+                  { label: "Receivable", value: row.receivable, color: "text-primary" },
                 ].map((metric) => (
                   <div key={metric.label} className="rounded-xl bg-secondary/35 px-3 py-2">
                     <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
@@ -344,7 +354,7 @@ export default function PaymentsPage() {
           />
         </div>
         <div className="flex items-center gap-1 bg-secondary rounded-xl p-1 overflow-x-auto hide-scrollbar">
-          {["all", "income", "expense", "subscription"].map((t) => (
+          {["all", "income", "expense", "invoice", "subscription"].map((t) => (
             <button
               key={t}
               onClick={() => setFilterType(t)}
@@ -356,6 +366,8 @@ export default function PaymentsPage() {
         </div>
       </div>
 
+      <select aria-label="Payment status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+        className="rounded-xl bg-secondary px-3 py-2 text-xs"><option value="all">All statuses</option><option value="overdue">Overdue by due date</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="cancelled">Cancelled</option></select>
       {/* Payment List */}
       <div className="space-y-2">
         {filtered.map((payment, i) => (
@@ -401,7 +413,7 @@ export default function PaymentsPage() {
                 <div
                   className={`text-sm font-bold ${payment.type === "income" || payment.type === "invoice" ? "text-success" : "text-card-foreground"}`}
                 >
-                  {payment.type === "income" || payment.type === "invoice" ? "+" : "-"}
+                  {direction(payment) === "in" ? "+" : "-"}
                   {fmt(payment.amount, payment.currency)}
                 </div>
                 <div className="text-[10px] text-muted-foreground">
@@ -422,7 +434,7 @@ export default function PaymentsPage() {
                       onClick={() => markPaid(payment.id)}
                       className="text-[11px] text-success hover:underline px-1.5"
                     >
-                      Pay
+                      Record paid
                     </button>
                   )}
                   <button
@@ -531,6 +543,13 @@ export default function PaymentsPage() {
           <FormField label="To">
             <FormInput value={form.to} onChange={(v) => uf("to", v)} placeholder="Payee" />
           </FormField>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Currency"><FormInput value={form.currency} onChange={v => uf("currency",v.trim().toUpperCase())} placeholder="EUR" /></FormField>
+          <FormField label="Billing frequency"><FormSelect value={form.recurringInterval || ""} onChange={v => setForm(f => ({...f,recurring:!!v,recurringInterval:v}))}
+            options={[{value:"",label:"One-time / unknown"},{value:"monthly",label:"Monthly"},{value:"yearly",label:"Yearly"},{value:"weekly",label:"Weekly"}]} /></FormField>
+          <FormField label="Evidence"><FormSelect value={form.evidenceStatus || "unverified"} onChange={v => uf("evidenceStatus",v)}
+            options={[{value:"unverified",label:"Needs confirmation"},{value:"confirmed",label:"Provider / bank confirmed"}]} /></FormField>
         </div>
         <FormField label="Linked Project">
           <FormInput
