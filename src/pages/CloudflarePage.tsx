@@ -2,7 +2,8 @@ import { useCredentials } from "@/hooks/useTableData";
 import { useCallback, useEffect, useState } from "react";
 import { Cloud, Globe, Zap, ExternalLink, Copy, RefreshCw, Lock, Activity } from "lucide-react";
 import { toast } from "sonner";
-import { getCloudflareInventory, type CloudflareInventory } from "@/lib/cloudflareInventory.functions";
+import { getCloudflareControl } from "@/lib/cloudflareControl.functions";
+import { cloudflareTruthState, cloudflareSetupRequired, type CloudflareControlSnapshot } from "@/lib/cloudflareControlState";
 import { TruthBadge, ConnectorEmpty, ConnectorError } from "@/components/TruthUI";
 import type { TruthMeta } from "@/lib/truth";
 import { db } from "@/lib/db";
@@ -98,49 +99,44 @@ export default function CloudflarePage() {
   // A single authenticated snapshot powers both zones and deployments.
   // Separate API calls previously duplicated expensive multi-account discovery
   // and could display contradictory Cloudflare status on one screen.
-  const [inventory, setInventory] = useState<CloudflareInventory | null>(null);
+  const [control, setControl] = useState<CloudflareControlSnapshot | null>(null);
+  const inventory = control?.inventory ?? null;
   const [failure, setFailure] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const zones = inventory?.zones ?? [];
   const meta: TruthMeta = {
-    truthState: inventory?.truthState === "partial" ? "error"
-      : inventory?.truthState ?? (failure ? "error" : "unavailable"),
+    truthState: failure ? "unavailable" : cloudflareTruthState(control?.status ?? null),
     source: "Cloudflare API",
-    fetchedAt: inventory?.fetchedAt,
-    error: failure ?? (inventory?.errors.length ? inventory.errors.join("; ").slice(0, 300) : undefined),
+    fetchedAt: control?.fetchedAt,
+    error: failure ?? control?.message ?? undefined,
   };
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailure(null);
     try {
-      const result = await getCloudflareInventory();
-      setInventory(result);
-      // Local health persistence must never turn a successful API read into a
-      // page-level failure (for example, when IndexedDB storage is full).
+      const result = await getCloudflareControl();
+      setControl(result);
       try {
         const previous = await db.syncHealth.get("cloudflare");
         await db.syncHealth.put({
           id: "cloudflare",
           label: "Cloudflare",
-          status: result.truthState === "live" ? "ok"
-            : result.truthState === "not_connected" ? "not-configured" : "error",
+          status: result.status === "live" ? "ok" :
+            result.status === "partial" || result.status === "error" ? "error" : "not-configured",
           lastAttemptAt: result.fetchedAt,
-          lastSuccessAt: result.truthState === "live" ? result.fetchedAt : previous?.lastSuccessAt,
-          error: result.errors.length ? result.errors.join("; ").slice(0, 300) : undefined,
-          detail: "Shared Cloudflare Pages, Workers and zone API snapshot.",
+          lastSuccessAt: result.status === "live" ? result.fetchedAt : previous?.lastSuccessAt,
+          error: result.message ?? undefined,
+          detail: "Authenticated Cloudflare Pages, Workers and DNS snapshot.",
         });
         markCloudRecordDirty("syncHealth", "cloudflare");
         queueCloudPush();
       } catch {
-        console.warn("Cloudflare health snapshot could not be stored locally.");
+        console.warn("Cloudflare health state could not be stored locally.");
       }
-    } catch (error) {
-      setInventory(null);
-      const message = error instanceof Error ? error.message : "";
-      setFailure(message.includes("Cloudflare Access is not configured")
-        ? "Cloudflare Access is not configured on this deployment. Protect the hostname and configure server-side Access settings; credentials saved in the browser do not activate the API."
-        : "Authenticated Cloudflare inventory is unavailable. Verify Access, configured account IDs, read-only token permissions and deployment logs.");
+    } catch {
+      setControl(null);
+      setFailure("Cloudflare server function is unreachable. Confirm the live Pages deployment includes its server Worker.");
     } finally {
       setLoading(false);
     }
@@ -212,7 +208,22 @@ export default function CloudflarePage() {
         </div>
       </div>
 
-      <CloudflareDeploymentsPanel inventory={inventory} loading={loading} failure={failure} onRefresh={() => void load()} />
+      {!loading && cloudflareSetupRequired(control?.status ?? null) && (
+        <section className="card-glass space-y-2 border border-amber-500/30 p-4" role="status">
+          <h2 className="text-sm font-semibold">Cloudflare connection setup required</h2>
+          <p className="text-xs text-muted-foreground">{control?.message}</p>
+          <p className="text-xs text-muted-foreground">
+            Connect the Cloudflare Access application and install the read-only account tokens
+            as encrypted secrets in the actual production Pages runtime. Browser Credential Vault entries
+            do not authorize this server integration.
+          </p>
+          <a href="https://one.dash.cloudflare.com/" target="_blank" rel="noopener noreferrer"
+            className="inline-flex text-xs font-semibold text-primary">Cloudflare Zero Trust / Access <ExternalLink size={12} /></a>
+        </section>
+      )}
+      <CloudflareDeploymentsPanel inventory={inventory} loading={loading}
+        failure={failure ?? (control?.status === "error" ? control.message : null)}
+        onRefresh={() => void load()} />
 
       {meta.truthState === "live" && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -269,7 +280,7 @@ export default function CloudflarePage() {
             </div>
           )}
 
-          {!loading && meta.truthState === "not_connected" && (
+          {!loading && control?.status === "not_connected" && (
             <ConnectorEmpty
               title="Cloudflare is not connected"
               description="Add a Cloudflare API token with Zone:Read permission to this project and your real zones will appear here. Until then this page shows nothing — no sample domains."
@@ -278,7 +289,7 @@ export default function CloudflarePage() {
             />
           )}
 
-          {!loading && meta.truthState === "error" && (
+          {!loading && (meta.truthState === "error" || Boolean(failure)) && (
             <ConnectorError message={meta.error ?? "Unknown error"} onRetry={() => void load()} />
           )}
 
@@ -355,10 +366,8 @@ export default function CloudflarePage() {
           ) : (
             <div className="card-glass p-4 text-center text-sm text-muted-foreground">
               <Lock size={20} className="mx-auto mb-2 opacity-40" />
-              <div>No Cloudflare credentials saved</div>
-              <div className="mt-1 text-xs">
-                Add them in <strong>Credential Vault</strong>
-              </div>
+              <div>No browser credentials saved</div>
+              <div className="mt-1 text-xs">Cloudflare API access is configured using secure server secrets, not this vault.</div>
             </div>
           )}
         </div>
