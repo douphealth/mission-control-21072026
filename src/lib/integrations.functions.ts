@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getRequest } from "@tanstack/react-start/server";
 import { requireCloudflareViewer } from "@/lib/cloudflareAccess.server";
+import { readCloudflareRuntimeEnv } from "@/lib/cloudflareRuntimeEnv.server";
 import { collectCloudflareInventory } from "@/lib/cloudflareInventory.server";
 
 // ─── Real infrastructure connectors ────────────────────────────────────────────
@@ -37,8 +38,9 @@ export interface CloudflareZoneRow {
 }
 
 export const getCloudflareZones = createServerFn({ method: "GET" }).handler(async () => {
-  await requireCloudflareViewer(getRequest());
-  const inventory = await collectCloudflareInventory();
+  const environment = await readCloudflareRuntimeEnv();
+  await requireCloudflareViewer(getRequest(), environment);
+  const inventory = await collectCloudflareInventory(environment);
   return {
     truthState: inventory.truthState,
     source: "Cloudflare API",
@@ -62,7 +64,7 @@ export interface VercelProjectRow {
 }
 
 export const getVercelProjects = createServerFn({ method: "GET" }).handler(async () => {
-  await requireCloudflareViewer(getRequest());
+  await requireCloudflareViewer(getRequest(), await readCloudflareRuntimeEnv());
   const token = process.env["VERCEL_API_TOKEN"];
   const fetchedAt = nowIso();
   if (!token) {
@@ -111,7 +113,7 @@ export const getVercelProjects = createServerFn({ method: "GET" }).handler(async
 export const probeEndpoint = createServerFn({ method: "POST" })
   .inputValidator((d) => z.object({ url: z.string().url() }).parse(d))
   .handler(async ({ data }) => {
-    await requireCloudflareViewer(getRequest());
+    await requireCloudflareViewer(getRequest(), await readCloudflareRuntimeEnv());
     const checkedAt = nowIso();
     const started = Date.now();
     try {
