@@ -9,6 +9,7 @@ import { GDRIVE_APPDATA_SCOPE, GOOGLE_SCOPES, clearGoogleToken, fetchGoogleEmail
 import { mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
   type RemoteBackup, type RemoteRecords } from '@/lib/cloudSyncProtocol';
 import { applyAndConfirm, createCommittedMutationBuffer } from '@/lib/syncTransactionSafety';
+import { confirmCloudReadback } from '@/lib/cloudReadback';
 
 export type CloudStatus = 'signed-out' | 'connecting' | 'syncing' | 'synced' | 'offline' | 'error';
 export type RecordSyncState = 'saved' | 'pending' | 'failed' | 'local-only';
@@ -339,10 +340,14 @@ async function syncCycle(): Promise<SyncResult> {
       const file = remote.files.filter(f => f.name === `${PREFIX}${writer}.json`).sort((a, b) => b.modifiedTime.localeCompare(a.modifiedTime) || a.id.localeCompare(b.id))[0];
       const backup: RemoteBackup = { version: 2, writerId: writer, updatedAt: new Date().toISOString(), records: merged };
       const fileId = await writeRemote(file?.id, backup, token.access_token, currentEpoch);
-      const verified = parseBackup(await driveJson<unknown>(`${DRIVE_FILES}/${encodeURIComponent(fileId)}?alt=media`, token.access_token, currentEpoch));
-      for (const recordKey of outboundKeys) {
-        if (!verified.records[recordKey] || revisionOf(verified.records[recordKey]) !== revisionOf(merged[recordKey])) throw new Error('Cloud read-back did not match the write. Changes remain queued.');
-      }
+      await confirmCloudReadback(merged, outboundKeys, async () => {
+        const verified = parseBackup(await driveJson<unknown>(
+          `${DRIVE_FILES}/${encodeURIComponent(fileId)}?alt=media`,
+          token.access_token, currentEpoch,
+          { headers: { 'Cache-Control': 'no-cache' } },
+        ));
+        return verified.records;
+      });
     }
     const currentSession = () => epoch === currentEpoch && readGoogleToken()?.access_token === token.access_token;
     if (!currentSession()) throw new Error('Account changed before applying sync.');
