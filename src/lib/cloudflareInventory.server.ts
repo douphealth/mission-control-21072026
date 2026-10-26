@@ -173,18 +173,53 @@ export async function cloudflareGet<T>(path: string, token: string): Promise<T> 
     signal: AbortSignal.timeout(12000),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error("Cloudflare HTTP " + response.status);
+  if (!response.ok) {
+    // Cloudflare's numeric error code is useful for distinguishing invalid
+    // pagination from missing API scope, but provider messages can echo
+    // request details and must never be sent to the browser.
+    let cfCode = "";
+    try {
+      const payload: unknown = await response.json();
+      if (payload && typeof payload === "object" && "errors" in payload) {
+        const errors = (payload as { errors?: unknown }).errors;
+        if (Array.isArray(errors)) {
+          const first = errors.find(x => x && typeof x === "object" &&
+            "code" in x && typeof x.code === "number");
+          if (first && typeof first.code === "number") cfCode = " (CF code " + first.code + ")";
+        }
+      }
+    } catch { /* only safe numeric codes are reported */ }
+    throw new Error("Cloudflare HTTP " + response.status + cfCode);
+  }
   const data = await response.json();
   if (!data || data.success !== true) throw new Error("Cloudflare API returned an error");
   return data as T;
 }
-type Envelope = { result: any; result_info?: { total_pages?: number } };
+type Envelope = { result: any; result_info?: { total_pages?: number; total_count?: number; per_page?: number } };
 export async function allPages(path: string, token: string, perPage = 100): Promise<unknown[]> {
   const entries: unknown[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const glue = path.includes("?") ? "&" : "?";
-    const envelope = await cloudflareGet<Envelope>(
-      path + glue + "page=" + page + "&per_page=" + perPage, token);
+    let envelope: Envelope;
+    try {
+      envelope = await cloudflareGet<Envelope>(
+        path + glue + "page=" + page + "&per_page=" + perPage, token);
+    } catch (error) {
+      // Cloudflare's documented Pages list example uses 20 per page. Some
+      // accounts reject the page query entirely (HTTP 400). Probe bare GET
+      // only on the first page, and accept it ONLY if completeness is proven.
+      if (page !== 1 || !path.endsWith("/pages/projects") ||
+          !(error instanceof Error) || !error.message.startsWith("Cloudflare HTTP 400")) {
+        throw error;
+      }
+      const bare = await cloudflareGet<Envelope>(path, token);
+      if (!Array.isArray(bare.result)) throw new Error("Invalid Pages API payload");
+      const total = bare.result_info?.total_count;
+      const totalPages = bare.result_info?.total_pages;
+      if (typeof total === "number" && total === bare.result.length ||
+          typeof totalPages === "number" && totalPages <= 1) return bare.result;
+      throw new Error("Cloudflare Pages pagination unavailable; inventory completeness unknown");
+    }
     const rows = envelope.result;
     if (!Array.isArray(rows)) throw new Error("Invalid Cloudflare pagination payload");
     entries.push(...rows);
@@ -247,7 +282,7 @@ async function accountInventory(accountId: string, token: string) {
   const zoneRows: CloudflareZone[] = [];
   const errors: string[] = [];
   const [pages, scripts, domains, zones] = await Promise.allSettled([
-    allPages("/accounts/" + accountId + "/pages/projects", token),
+    allPages("/accounts/" + accountId + "/pages/projects", token, 20),
     cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token),
     allPages("/accounts/" + accountId + "/workers/domains", token),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
@@ -258,7 +293,12 @@ async function accountInventory(accountId: string, token: string) {
       const row = normalizePagesProject(accountId, raw);
       if (row) rows.push(row);
     }
-  } else errors.push("Pages inventory unavailable for account " + accountId.slice(-6));
+  } else {
+    const reason = pages.reason instanceof Error ? pages.reason.message : "";
+    const match = /^Cloudflare HTTP (400|401|403)(?: \(CF code \d+\))?$/.exec(reason);
+    errors.push("Pages inventory unavailable for account " + accountId.slice(-6) +
+      (match ? " (" + match[0] + ")" : ""));
+  }
   const workerDomains = domains.status === "fulfilled" ? domains.value : [];
   if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6));
 
