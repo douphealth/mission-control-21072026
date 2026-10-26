@@ -157,14 +157,25 @@ export function configuredAccounts(env: Record<string, string | undefined> = pro
   return [...new Set((env["CLOUDFLARE_ACCOUNT_IDS"] || "").split(",").map(s => s.trim()).filter(Boolean))]
     .filter(id => ACCOUNT_ID.test(id));
 }
-export function apiTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
-  // Optional per-account tokens are server-side secrets only; never echo them.
+/**
+ * Account tokens may be a legacy string or an object with separate
+ * `default` and `pages` credentials. Different Cloudflare tokens may have
+ * different read scopes. Never fall back to another ACCOUNT's token.
+ */
+function accountTokenConfig(accountId: string, env: Record<string, string | undefined>): unknown {
   try {
-    const map: unknown = JSON.parse(env["CLOUDFLARE_ACCOUNT_TOKENS_JSON"] || "{}");
-    const perAccount = asString(asObject(map)[accountId]);
-    if (perAccount) return perAccount;
-  } catch { /* invalid configuration falls back to a shared token */ }
-  return asString(env["CLOUDFLARE_API_TOKEN"]);
+    return asObject(JSON.parse(env["CLOUDFLARE_ACCOUNT_TOKENS_JSON"] || "{}"))[accountId];
+  } catch { return undefined; }
+}
+export function apiTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  const configured = accountTokenConfig(accountId, env);
+  const token = asString(configured) ||
+    asString(asObject(configured).default);
+  return token || asString(env["CLOUDFLARE_API_TOKEN"]);
+}
+export function pagesTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  const configured = accountTokenConfig(accountId, env);
+  return asString(asObject(configured).pages) || apiTokenFor(accountId, env);
 }
 export async function cloudflareGet<T>(path: string, token: string): Promise<T> {
   const response = await fetch(API + path, {
@@ -297,12 +308,12 @@ function normalizeZone(accountId: string, raw: unknown): CloudflareZone | null {
     dnsUrl: prefix + "/dns/records",
   };
 }
-async function accountInventory(accountId: string, token: string) {
+async function accountInventory(accountId: string, token: string, pagesToken: string) {
   const rows: CloudflareDeploymentRow[] = [];
   const zoneRows: CloudflareZone[] = [];
   const errors: string[] = [];
   const [pages, scripts, domains, zones] = await Promise.allSettled([
-    allPages("/accounts/" + accountId + "/pages/projects", token, 20),
+    allPages("/accounts/" + accountId + "/pages/projects", pagesToken, 20),
     cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token),
     allPages("/accounts/" + accountId + "/workers/domains", token),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
@@ -393,7 +404,7 @@ export async function collectCloudflareInventory(
   // Cap simultaneous account inventories to prevent API request bursts.
   const results = await parallelMap(accounts, async id => {
     const token = apiTokenFor(id, environment);
-    return token ? await accountInventory(id, token) : null;
+    return token ? await accountInventory(id, token, pagesTokenFor(id, environment) || token) : null;
   }, 2);
   results.forEach((entry, index) => {
     const id = accounts[index];
@@ -454,7 +465,9 @@ export async function loadDeploymentHistory(input: {
       input.page < 1 || input.page > MAX_PAGES) {
     throw new Error("Unknown Cloudflare deployment resource");
   }
-  const token = apiTokenFor(input.accountId, environment);
+  const token = input.kind === "pages"
+    ? pagesTokenFor(input.accountId, environment)
+    : apiTokenFor(input.accountId, environment);
   if (!token) throw new Error("Cloudflare API token is not configured");
   const url = input.kind === "pages"
     ? "/accounts/" + input.accountId + "/pages/projects/" + encodeURIComponent(input.name) +
