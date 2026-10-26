@@ -40,7 +40,7 @@ export function financeCsv(rows: readonly Payment[]): string {
   const safe = (value: unknown): string => {
     const raw = String(value ?? "");
     // Avoid formula execution in Excel/Sheets when an imported vendor/title starts with =,+,-,@.
-    const neutral = /^[\s\u0000-\u001f]*[=+\-@]/.test(raw) ? "'" + raw : raw;
+    const neutral = /^[\p{Cc}\s]*[=+\-@]/u.test(raw) ? "'" + raw : raw;
     return '"' + neutral.replace(/"/g, '""') + '"';
   };
   return [columns.join(","), ...rows.map(row => columns.map(key => safe(row[key])).join(","))].join("\r\n");
