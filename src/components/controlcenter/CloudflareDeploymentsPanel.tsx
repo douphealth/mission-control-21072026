@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Cloud, ExternalLink, GitBranch, History, RefreshCw, Search, Server, ShieldCheck } from "lucide-react";
 import {
-  getCloudflareInventory,
   getCloudflareDeploymentHistory,
   type CloudflareDeploymentRow,
   type CloudflareInventory,
@@ -32,10 +31,14 @@ function repoRelationship(row: CloudflareDeploymentRow) {
   return matches.length === 1 ? { url: matches[0], verified: false } : null;
 }
 
-export default function CloudflareDeploymentsPanel() {
-  const [inventory, setInventory] = useState<CloudflareInventory | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [failure, setFailure] = useState<string | null>(null);
+export default function CloudflareDeploymentsPanel({
+  inventory, loading, failure, onRefresh,
+}: {
+  inventory: CloudflareInventory | null;
+  loading: boolean;
+  failure: string | null;
+  onRefresh: () => void;
+}) {
   const [filter, setFilter] = useState<Filter>("all");
   const [account, setAccount] = useState("all");
   const [query, setQuery] = useState("");
@@ -45,21 +48,14 @@ export default function CloudflareDeploymentsPanel() {
   const [historyPage, setHistoryPage] = useState(0);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    setFailure(null);
-    try {
-      const payload = await getCloudflareInventory();
-      setInventory(payload);
-    } catch {
-      // Do not reflect upstream error bodies or access-policy internals.
-      setFailure("Secure Cloudflare API request denied or unavailable. Check Access policy, server environment and deployment logs.");
-      setInventory(null);
-    } finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void refresh(); }, [refresh]);
+  const requestNumber = useRef(0);
+  useEffect(() => {
+    // Invalidate history requests whenever the backing inventory changes.
+    requestNumber.current++;
+    setSelected(null);
+    setHistory([]);
+    setHistoryPage(0);
+  }, [inventory]);
 
   const rows = useMemo(() => (inventory?.rows || []).filter(row => {
     if (filter !== "all" && row.kind !== filter) return false;
@@ -74,6 +70,7 @@ export default function CloudflareDeploymentsPanel() {
   const accountName = (id: string) => inventory?.accountDetails.find(a => a.accountId === id)?.label || "Account …" + shorten(id);
 
   const requestHistory = async (row: CloudflareDeploymentRow, page = 1) => {
+    const requestId = ++requestNumber.current;
     setSelected(row);
     setHistoryLoading(true);
     setHistoryError(null);
@@ -82,11 +79,15 @@ export default function CloudflareDeploymentsPanel() {
       const result = await getCloudflareDeploymentHistory({
         data: { accountId: row.accountId, kind: row.kind, name: row.name, page },
       });
+      if (requestId !== requestNumber.current) return;
       setHistory(old => page === 1 ? result.rows : [...old, ...result.rows]);
       setHistoryPage(page);
     } catch {
-      setHistoryError("Could not fetch authorized deployment history. Confirm token scope and try again.");
-    } finally { setHistoryLoading(false); }
+      if (requestId === requestNumber.current)
+        setHistoryError("Could not fetch authorized deployment history. Confirm token scope and try again.");
+    } finally {
+      if (requestId === requestNumber.current) setHistoryLoading(false);
+    }
   };
 
   return (
@@ -103,18 +104,18 @@ export default function CloudflareDeploymentsPanel() {
             {inventory?.fetchedAt && <span className="text-xs text-muted-foreground">Fetched {freshness(inventory.fetchedAt) || inventory.fetchedAt}</span>}
           </div>
         </div>
-        <button className="btn-secondary text-xs" type="button" disabled={loading} onClick={() => void refresh()}>
+        <button className="btn-secondary text-xs" type="button" disabled={loading} onClick={() => onRefresh()}>
           <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh deployments
         </button>
       </div>
       {loading && <p role="status" className="card-glass p-4 text-sm text-muted-foreground">Loading authenticated Cloudflare infrastructure…</p>}
-      {failure && <ConnectorError message={failure} onRetry={() => void refresh()} />}
+      {failure && <ConnectorError message={failure} onRetry={() => onRefresh()} />}
       {!loading && inventory?.truthState === "not_connected" && (
         <ConnectorEmpty
           title="Cloudflare account configuration missing"
           description="Configure server-side Cloudflare account IDs and API read tokens, and protect the application with Cloudflare Access. No sample deployments are shown."
           docsUrl="https://developers.cloudflare.com/api/"
-          onRetry={() => void refresh()}
+          onRetry={() => onRefresh()}
         />
       )}
       {!loading && inventory?.errors.length ? (
@@ -213,7 +214,7 @@ export default function CloudflareDeploymentsPanel() {
         <div className="card-glass space-y-3 p-4" aria-label="Deployment history">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="break-all font-semibold">Deployment history — {selected.name}</h3>
-            <button type="button" className="btn-secondary text-xs" onClick={() => { setSelected(null); setHistory([]); }}>Close</button>
+            <button type="button" className="btn-secondary text-xs" onClick={() => { requestNumber.current++; setSelected(null); setHistory([]); setHistoryLoading(false); }}>Close</button>
           </div>
           <p className="text-xs text-muted-foreground">Historical records from Cloudflare API, sorted as returned by Cloudflare. No rollback or redeploy is performed.</p>
           {historyLoading && <p className="text-xs" role="status">Fetching deployment history…</p>}
