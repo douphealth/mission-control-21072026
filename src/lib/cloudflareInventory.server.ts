@@ -388,13 +388,13 @@ export async function loadDeploymentHistory(input: {
   kind: InfraKind;
   name: string;
   page: number;
-}): Promise<{ rows: DeploymentHistoryItem[]; page: number }> {
-  if (!configuredAccounts().includes(input.accountId) ||
+}, environment: Record<string, string | undefined> = process.env): Promise<{ rows: DeploymentHistoryItem[]; page: number }> {
+  if (!configuredAccounts(environment).includes(input.accountId) ||
       !SCRIPT_NAME.test(input.name) || !Number.isInteger(input.page) ||
       input.page < 1 || input.page > MAX_PAGES) {
     throw new Error("Unknown Cloudflare deployment resource");
   }
-  const token = apiTokenFor(input.accountId);
+  const token = apiTokenFor(input.accountId, environment);
   if (!token) throw new Error("Cloudflare API token is not configured");
   const url = input.kind === "pages"
     ? "/accounts/" + input.accountId + "/pages/projects/" + encodeURIComponent(input.name) +
