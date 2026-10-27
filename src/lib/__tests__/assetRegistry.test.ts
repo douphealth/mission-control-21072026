@@ -26,6 +26,14 @@ describe("unified apps and infrastructure registry",()=>{
     }]);
     expect(rows.find(r=>r.app==="Backlinks Outreach")?.cloudflareUrl).toContain("284f1a03");
   });
+  it("keeps distinct unlinked apps without repository or deployed URL",()=>{
+    const base={...APP_FUNNEL_CATALOG[0],githubRepo:"",deployedUrl:"",cloudflareDashboardUrl:""};
+    const rows=buildAssetRegistry([
+      {...base,id:"orphan-a",name:"Orphan A"},
+      {...base,id:"orphan-b",name:"Orphan B"},
+    ] as BuildProject[],[],[]);
+    expect(rows.filter(r=>r.app.startsWith("Orphan")).map(r=>r.app)).toEqual(["Orphan A","Orphan B"]);
+  });
   it("escapes spreadsheet formulas in CSV",()=>{
     const rows=buildAssetRegistry([{...APP_FUNNEL_CATALOG[0],id:"test",nextSteps:"=WEBSERVICE(1)"}],[],[]);
     expect(exportRegistryCsv(rows)).toContain("'=WEBSERVICE(1)");
