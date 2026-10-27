@@ -63,7 +63,7 @@ export default function LiveGitHubCommandCenter(){
       <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ["Verified repositories",all.length],["Accounts updated",success+"/3"],
-          ["Archived repos",all.filter(r=>r.archived).length],["Open issues (GitHub)",all.reduce((s,r)=>s+r.openIssues,0)]
+          ["Archived repos",all.filter(r=>r.archived).length],["Open issues (GitHub)",all.reduce((s,r)=>s+r.openIssues,0)]]
           .map(([label,value])=><div key={label} className="rounded-xl border border-border/40 bg-secondary/30 p-3"><p className="text-lg font-bold tabular-nums">{value}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>)}
       </div>
       <div className="mt-3 grid gap-2 sm:grid-cols-3">{OWNERS.map(o=>{
