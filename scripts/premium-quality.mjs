@@ -67,6 +67,9 @@ export async function runPremiumChecks(page, check, engine) {
       });
     });
     await go('github');
+    await page.getByRole('region', { name: 'Apps and infrastructure registry' })
+      .getByRole('heading', { name: 'Apps & Infrastructure Registry' }).waitFor();
+    await page.getByText('Repository cards and planning details', { exact: true }).click();
     const workspace = page.getByRole('region', { name: 'Unified GitHub repository command center' });
     await workspace.getByRole('textbox', { name: 'Find repository' }).fill(name);
     const card = workspace.locator('article').filter({
