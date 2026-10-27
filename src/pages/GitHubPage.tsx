@@ -383,7 +383,9 @@ export default function GitHubPage() {
         </div>
       </section>
 
-      <LiveGitHubCommandCenter />
+      <LiveGitHubCommandCenter repos={displayRepos} onEdit={openEdit} />
+      <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Advanced planning tools · bulk editing, legacy filters and printable register</summary>
+      <div className="mt-4 space-y-4">
       {bulk.bulkMode && (
         <BulkActionBar
           selectedCount={bulk.selectedCount}
@@ -475,6 +477,7 @@ export default function GitHubPage() {
       <div className="flex items-center justify-between text-sm"><span>{filtered.length} repositories / page {Math.min(page + 1, Math.max(1, Math.ceil(filtered.length / 12)))} of {Math.max(1, Math.ceil(filtered.length / 12))}</span><div className="flex gap-2"><button className="min-h-11 rounded-xl border border-border px-3 disabled:opacity-40" disabled={page === 0} onClick={() => setPage(value => value - 1)}>Previous</button><button className="min-h-11 rounded-xl border border-border px-3 disabled:opacity-40" disabled={(page + 1) * 12 >= filtered.length} onClick={() => setPage(value => value + 1)}>Next</button></div></div>
       <p className="text-xs text-muted-foreground">The 229 public URLs are a dated snapshot, not live API sync. Unsaved repositories have unassessed plans. Private repositories are only fetched through authenticated server-side GitHub access.</p>
 
+      </div></details>
       <FormModal
         open={modalOpen}
         onClose={() => setModalOpen(false)}
