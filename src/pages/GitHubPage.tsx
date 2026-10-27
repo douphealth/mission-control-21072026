@@ -45,6 +45,7 @@ import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
 import PrivateGitHubInventory from "@/components/github/PrivateGitHubInventory";
 import LiveGitHubCommandCenter from "@/components/github/LiveGitHubCommandCenter";
+import AssetRegistry from "@/components/github/AssetRegistry";
 import { UNIFIED_PUBLIC_GITHUB_CATALOG, UNIFIED_PUBLIC_GITHUB_COUNT, getGitHubRepoKey, getGitHubRepoOwner, mergeUnifiedGitHubRows } from "@/lib/unifiedGitHubCatalog";
 
 const langColors: Record<string, string> = {
@@ -383,7 +384,8 @@ export default function GitHubPage() {
         </div>
       </section>
 
-      <LiveGitHubCommandCenter repos={displayRepos} onEdit={openEdit} />
+      <AssetRegistry />
+      <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Repository cards and planning details</summary><div className="mt-3"><LiveGitHubCommandCenter repos={displayRepos} onEdit={openEdit} /></div></details>
       <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Advanced planning tools · bulk editing, legacy filters and printable register</summary>
       <div className="mt-4 space-y-4">
       {bulk.bulkMode && (

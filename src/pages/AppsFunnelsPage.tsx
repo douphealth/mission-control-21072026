@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
 import { useAddItem, useBuildProjects, useUpdateItem, useBulkAddItems } from "@/hooks/useTableData";
+import AssetRegistry from "@/components/github/AssetRegistry";
 import type { BuildProject } from "@/lib/db";
 import FormModal, {
   FormField,
@@ -160,6 +161,7 @@ export default function AppsFunnelsPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5 mc-print-apps-page">
+      <AssetRegistry />
       <header className="flex flex-col gap-3 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
