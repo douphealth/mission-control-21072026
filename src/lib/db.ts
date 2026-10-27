@@ -362,6 +362,8 @@ export interface GitHubRepo {
   devPlatformUrl?: string;
   /** URL of the deployment gateway (Cloudways, Vercel, Netlify, Railway, etc.) */
   deploymentUrl?: string;
+  /** Editable Cloudflare Pages/Workers dashboard URL; association, not uptime proof. */
+  cloudflareDashboardUrl?: string;
   /** Database connection info */
   dbType?:
     | "supabase"
@@ -392,6 +394,8 @@ export interface BuildProject {
   lastWorkedOn: string;
   nextSteps: string;
   githubRepo: string;
+  /** Optional Cloudflare dashboard link for the deployed application. */
+  cloudflareDashboardUrl?: string;
   /** Parent content/business website that owns the funnel. */
   parentWebsite?: string;
   /** WordPress or site landing page that routes traffic into the app. */
