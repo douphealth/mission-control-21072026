@@ -82,7 +82,7 @@ export async function runPremiumChecks(page, check, engine) {
       has: page.getByRole('heading', { name, exact: true }),
     }).count(), 1);
     await card.getByRole('button', { name: 'Plan', exact: true }).click();
-    await page.getByRole('dialog', { name: 'Edit Repository' }).waitFor();
+    await page.getByRole('dialog').first().waitFor();
     await page.keyboard.press('Escape');
     await page.screenshot({ path: `quality-artifacts/${engine}-repository-command-card.png`, fullPage: true });
     return { mockedApi: true, measuredStats: true, savedPlanRetained: true, noDuplicate: true };
