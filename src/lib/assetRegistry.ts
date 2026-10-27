@@ -30,7 +30,7 @@ export function buildAssetRegistry(apps:BuildProject[],saved:GitHubRepo[],live:L
   const make=(id:string):RegistryRow=>({id,app:"",productionUrl:"",repoUrl:"",cloudflareUrl:"",parentWebsite:"",priority:"medium",nextAction:"",account:"",deployedKind:"unknown",linkSource:"unmatched",liveRepo:null,appRecord:null,savedRepo:null});
   for(const app of apps){
     const k=key(app.githubRepo);const appUrl=url(app.deployedUrl);
-    const id=k||"app:"+identity(appUrl||app.name)||"app:"+app.name;
+    const id=k||(appUrl?"app:"+identity(appUrl):"app:record:"+app.id);
     const row=records.get(id)||make(id);
     row.app=app.name;row.productionUrl=appUrl;row.repoUrl=k?"https://github.com/"+k:"";
     row.cloudflareUrl=url(app.cloudflareDashboardUrl)||row.cloudflareUrl;
