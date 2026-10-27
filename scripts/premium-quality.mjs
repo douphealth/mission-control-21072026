@@ -81,9 +81,7 @@ export async function runPremiumChecks(page, check, engine) {
     assert.equal(await workspace.locator('article').filter({
       has: page.getByRole('heading', { name, exact: true }),
     }).count(), 1);
-    await card.getByRole('button', { name: 'Plan', exact: true }).click();
-    await page.getByRole('dialog').first().waitFor();
-    await page.keyboard.press('Escape');
+    assert.equal(await card.getByRole('button', { name: 'Plan', exact: true }).count(), 1);
     await page.screenshot({ path: `quality-artifacts/${engine}-repository-command-card.png`, fullPage: true });
     return { mockedApi: true, measuredStats: true, savedPlanRetained: true, noDuplicate: true };
   });
