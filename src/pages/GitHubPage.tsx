@@ -44,6 +44,7 @@ import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
 import PrivateGitHubInventory from "@/components/github/PrivateGitHubInventory";
+import LiveGitHubCommandCenter from "@/components/github/LiveGitHubCommandCenter";
 import { UNIFIED_PUBLIC_GITHUB_CATALOG, UNIFIED_PUBLIC_GITHUB_COUNT, getGitHubRepoKey, getGitHubRepoOwner, mergeUnifiedGitHubRows } from "@/lib/unifiedGitHubCatalog";
 
 const langColors: Record<string, string> = {
@@ -342,7 +343,7 @@ export default function GitHubPage() {
               GitHub Projects
             </h1>
             <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {UNIFIED_PUBLIC_GITHUB_COUNT} public repos in three-account snapshot ({GITHUB_REPO_CATALOG_GENERATED_AT}) · 76 curated douphealth planning records. Not a live GitHub API connection.
+              {UNIFIED_PUBLIC_GITHUB_COUNT} public repos in three-account snapshot ({GITHUB_REPO_CATALOG_GENERATED_AT}) · 76 curated douphealth planning records. Saved planning catalog; live account inventory is available below.
             </p>
             <a href="/portfolio-atlas" className="mt-3 inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/15">
               View all three GitHub accounts in Portfolio Atlas ↗
@@ -382,6 +383,7 @@ export default function GitHubPage() {
         </div>
       </section>
 
+      <LiveGitHubCommandCenter />
       {bulk.bulkMode && (
         <BulkActionBar
           selectedCount={bulk.selectedCount}
