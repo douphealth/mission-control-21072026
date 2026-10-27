@@ -25,7 +25,7 @@ const explicit=[{
 /** User mappings take precedence over API inference; never infer a repo from a similarly named Worker. */
 export function buildAssetRegistry(apps:BuildProject[],saved:GitHubRepo[],live:LiveRepo[],cloud:CloudflareDeploymentRow[]=[]):RegistryRow[]{
   const records=new Map<string,RegistryRow>();
-  const byRepo=new Map<string,GitHubRepo>(saved.filter(r=>r.visibility!=="private").map(r=>[key(r.url),r]).filter(([k])=>Boolean(k)));
+  const byRepo=new Map<string,GitHubRepo>(saved.filter(r=>r.visibility!=="private").flatMap(r=>{const id=key(r.url);return id?[[id,r] as [string,GitHubRepo]]:[]}));
   const liveByRepo=new Map(live.map(r=>[r.key,r]));
   const make=(id:string):RegistryRow=>({id,app:"",productionUrl:"",repoUrl:"",cloudflareUrl:"",parentWebsite:"",priority:"medium",nextAction:"",account:"",deployedKind:"unknown",linkSource:"unmatched",liveRepo:null,appRecord:null,savedRepo:null});
   for(const app of apps){
