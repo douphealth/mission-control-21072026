@@ -71,7 +71,7 @@ export function buildAssetRegistry(apps:BuildProject[],saved:GitHubRepo[],live:L
     .sort((a,b)=>a.app.localeCompare(b.app));
 }
 export function exportRegistryCsv(rows:RegistryRow[]):string{
-  const safe=(value:string)=>{const s=/^[\s]*[=+@\-]/.test(value)?"'"+value:value;return '"'+s.replace(/"/g,'""')+'"';};
+  const safe=(value:string)=>{const s=/^[\s]*[=+@-]/.test(value)?"'"+value:value;return '"'+s.replace(/"/g,'""')+'"';};
   return [["App","Live URL","GitHub Repo","Cloudflare Dashboard","GitHub Account","Priority","Next Action","Link Evidence"],
     ...rows.map(r=>[r.app,r.productionUrl,r.repoUrl,r.cloudflareUrl,r.account,r.priority,r.nextAction,r.linkSource])]
     .map(row=>row.map(safe).join(",")).join("\r\n");
