@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { requireCloudflareViewer } from "@/lib/cloudflareAccess.server";
+import { readCloudflareRuntimeEnv } from "@/lib/cloudflareRuntimeEnv.server";
 import { collectCloudflareInventory, loadDeploymentHistory } from "@/lib/cloudflareInventory.server";
 export type { CloudflareDeploymentRow, CloudflareInventory, DeploymentHistoryItem }
   from "@/lib/cloudflareInventory.server";
@@ -9,9 +10,10 @@ export type { CloudflareDeploymentRow, CloudflareInventory, DeploymentHistoryIte
 /** Both endpoints fail closed until Cloudflare Access JWT is verified. */
 export const getCloudflareInventory = createServerFn({ method: "GET" })
   .handler(async () => {
-    await requireCloudflareViewer(getRequest());
+    const environment = await readCloudflareRuntimeEnv();
+    await requireCloudflareViewer(getRequest(), environment);
     setResponseHeader("Cache-Control", "private, no-store");
-    return await collectCloudflareInventory();
+    return await collectCloudflareInventory(environment);
   });
 
 export const getCloudflareDeploymentHistory = createServerFn({ method: "POST" })
@@ -22,7 +24,8 @@ export const getCloudflareDeploymentHistory = createServerFn({ method: "POST" })
     page: z.number().int().min(1).max(100),
   }).parse(data))
   .handler(async ({ data }) => {
-    await requireCloudflareViewer(getRequest());
+    const environment = await readCloudflareRuntimeEnv();
+    await requireCloudflareViewer(getRequest(), environment);
     setResponseHeader("Cache-Control", "private, no-store");
-    return await loadDeploymentHistory(data);
+    return await loadDeploymentHistory(data, environment);
   });

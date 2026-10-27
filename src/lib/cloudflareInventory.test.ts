@@ -73,6 +73,21 @@ describe("Cloudflare production inventory normalization", () => {
   });
 });
 
+describe("multi-account scoped API credentials", () => {
+  it("preserves each account and can use a separate Pages token", async () => {
+    const { apiTokenFor, pagesTokenFor } = await import("@/lib/cloudflareInventory.server");
+    const first = "a".repeat(32), second = "b".repeat(32);
+    const env = { CLOUDFLARE_ACCOUNT_TOKENS_JSON: JSON.stringify({
+      [first]: { default: "first-general", pages: "first-pages" },
+      [second]: { default: "second-general", pages: "second-pages" },
+    }) };
+    expect(apiTokenFor(first, env)).toBe("first-general");
+    expect(pagesTokenFor(first, env)).toBe("first-pages");
+    expect(apiTokenFor(second, env)).toBe("second-general");
+    expect(pagesTokenFor(second, env)).toBe("second-pages");
+  });
+});
+
 describe("infrastructure security", () => {
   it("fails closed when Cloudflare Access policy is missing", async () => {
     await expect(requireCloudflareViewer(undefined, {}))

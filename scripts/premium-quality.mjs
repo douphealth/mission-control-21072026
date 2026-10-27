@@ -42,10 +42,48 @@ export async function runPremiumChecks(page, check, engine) {
     await page.reload({ waitUntil: 'domcontentloaded' }); await page.locator('#main-content').waitFor(); await go('family-schedule'); await page.getByLabel('Timetable date', { exact: true }).fill('2026-10-26'); await page.getByRole('button', { name: 'Week', exact: true }).click(); await page.locator('.fs-week').getByRole('heading', { name: title, exact: true }).waitFor();
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.screenshot({ path: `quality-artifacts/${engine}-family-week.png`, fullPage: true }); await page.getByRole('button', { name: 'Day', exact: true }).click(); await page.setViewportSize({ width: 390, height: 844 }); assert(await page.getByTestId('family-schedule').evaluate(el => el.scrollWidth <= el.clientWidth + 2)); await page.screenshot({ path: `quality-artifacts/${engine}-family-day-mobile.png`, fullPage: true }); await page.setViewportSize({ width: 1440, height: 1000 }); return { persisted: true, exceptionsApplied: true, mobileFit: true };
   });
-  await test('Repository cards expose working links and distinguish saved snapshots from refreshed public data', async () => {
-    const name = `QA-repository-${crypto.randomUUID()}`; await page.evaluate(async name => (await import('/src/stores/dataStore.ts')).useDataStore.getState().addItem('repos', { name, url: `https://github.com/fixture/${name}`, description: 'Synthetic project', status: 'active', priority: 'high', stars: 0, forks: 0, language: 'TypeScript', defaultBranch: 'main', topics: [] }), name);
-    await page.route(`https://api.github.com/repos/fixture/${name}`, route => route.fulfill({ headers: { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' }, json: { full_name: `fixture/${name}`, stargazers_count: 7, forks_count: 2, open_issues_count: 3, size: 24, default_branch: 'main', description: 'Synthetic verified public response', language: 'TypeScript', visibility: 'public' } }));
-    await go('github'); await page.getByPlaceholder(/Search.*repositories/).fill(name); const card = page.locator('article').filter({ has: page.getByRole('heading', { name, exact: true }) }); await card.waitFor(); assert.equal(await card.getByRole('link', { name: 'Code', exact: true }).getAttribute('href'), `https://github.com/fixture/${name}`); await card.getByRole('button', { name: 'Refresh metadata', exact: true }).click(); await card.getByText('Synthetic verified public response', { exact: true }).waitFor(); await card.locator('summary').click(); await card.getByText('7 stars', { exact: true }).waitFor(); await page.screenshot({ path: `quality-artifacts/${engine}-repository-command-card.png`, fullPage: true }); return { mockedApi: true, measuredStats: true };
+  await test('Unified GitHub inventory keeps saved plans and refreshes real API fields', async () => {
+    const name = `QA-repository-${crypto.randomUUID()}`;
+    const url = `https://github.com/douphealth/${name}`;
+    await page.evaluate(async ({ name, url }) =>
+      (await import('/src/stores/dataStore.ts')).useDataStore.getState().addItem('repos', {
+        name, url, description: 'Saved project plan', status: 'active', priority: 'high',
+        pendingSummary: 'Retain this planned next action', stars: 0, forks: 0,
+        language: 'TypeScript', defaultBranch: 'main', topics: [],
+      }), { name, url });
+    await page.route(/https:\/\/api\.github\.com\/users\/[^/]+\/repos\?/, route => {
+      const target = new URL(route.request().url());
+      const isTestOwner = target.pathname === '/users/douphealth/repos' &&
+        target.searchParams.get('page') === '1';
+      return route.fulfill({
+        status: 200, headers: { 'access-control-allow-origin': '*' },
+        json: isTestOwner ? [{
+          name, html_url: url, owner: { login: 'douphealth' }, private: false,
+          description: 'Synthetic verified public response', stargazers_count: 7,
+          forks_count: 2, open_issues_count: 3, language: 'TypeScript',
+          default_branch: 'main', pushed_at: '2026-10-27T07:00:00Z',
+          updated_at: '2026-10-27T07:00:00Z',
+        }] : [],
+      });
+    });
+    await go('github');
+    const workspace = page.getByRole('region', { name: 'Unified GitHub repository command center' });
+    await workspace.getByRole('textbox', { name: 'Find repository' }).fill(name);
+    const card = workspace.locator('article').filter({
+      has: page.getByRole('heading', { name, exact: true }),
+    });
+    await card.waitFor();
+    assert.equal(await card.getByRole('link', { name: 'Code' }).getAttribute('href'), url);
+    await workspace.getByRole('button', { name: 'Refresh all accounts' }).click();
+    await card.getByText('Synthetic verified public response', { exact: true }).waitFor();
+    await card.getByText('7 stars', { exact: true }).waitFor();
+    await card.getByText('Retain this planned next action', { exact: false }).waitFor();
+    assert.equal(await workspace.locator('article').filter({
+      has: page.getByRole('heading', { name, exact: true }),
+    }).count(), 1);
+    assert.equal(await card.getByRole('button', { name: 'Plan', exact: true }).count(), 1);
+    await page.screenshot({ path: `quality-artifacts/${engine}-repository-command-card.png`, fullPage: true });
+    return { mockedApi: true, measuredStats: true, savedPlanRetained: true, noDuplicate: true };
   });
   await test('Intelligence status panels report missing access and do not expose secret values', async () => {
     await go('audience'); const panel = page.getByTestId('collector-status-audience'); await panel.waitFor(); await panel.locator('summary').first().click(); await panel.getByText(/Official audience integrations configured/).waitFor(); assert((await panel.innerText()).includes('Paid intelligence calls:')); await page.screenshot({ path: `quality-artifacts/${engine}-provider-connections.png`, fullPage: true }); return { capabilityCheck: true };

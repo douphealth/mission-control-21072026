@@ -9,6 +9,7 @@ import {
 import { PUBLIC_PORTFOLIO_REPOS } from "@/lib/portfolioAtlas";
 import { ConnectorEmpty, ConnectorError, TruthBadge } from "@/components/TruthUI";
 import { freshness, type TruthState } from "@/lib/truth";
+import { cloudflareTruthState, type CloudflareConnectionStatus } from "@/lib/cloudflareControlState";
 
 type Filter = "all" | "pages" | "worker";
 const shorten = (id: string) => id.slice(-6);
@@ -32,9 +33,10 @@ function repoRelationship(row: CloudflareDeploymentRow) {
 }
 
 export default function CloudflareDeploymentsPanel({
-  inventory, loading, failure, onRefresh,
+  inventory, status, loading, failure, onRefresh,
 }: {
   inventory: CloudflareInventory | null;
+  status: CloudflareConnectionStatus | null;
   loading: boolean;
   failure: string | null;
   onRefresh: () => void;
@@ -100,7 +102,7 @@ export default function CloudflareDeploymentsPanel({
             Management links open Cloudflare; no production changes are initiated here.
           </p>
           <div className="mt-2 flex items-center gap-2">
-            <TruthBadge meta={{ truthState: stateFor(inventory), source: "Cloudflare API", fetchedAt: inventory?.fetchedAt }} />
+            <TruthBadge meta={{ truthState: status ? cloudflareTruthState(status) : stateFor(inventory), source: "Cloudflare API", fetchedAt: inventory?.fetchedAt }} />
             {inventory?.fetchedAt && <span className="text-xs text-muted-foreground">Fetched {freshness(inventory.fetchedAt) || inventory.fetchedAt}</span>}
           </div>
         </div>
@@ -110,10 +112,10 @@ export default function CloudflareDeploymentsPanel({
       </div>
       {loading && <p role="status" className="card-glass p-4 text-sm text-muted-foreground">Loading authenticated Cloudflare infrastructure…</p>}
       {failure && <ConnectorError message={failure} onRetry={() => onRefresh()} />}
-      {!loading && inventory?.truthState === "not_connected" && (
+      {!loading && (status === "not_connected" || status === "access_not_configured" || status === "login_required") && (
         <ConnectorEmpty
-          title="Cloudflare account configuration missing"
-          description="Configure server-side Cloudflare account IDs and API read tokens, and protect the application with Cloudflare Access. No sample deployments are shown."
+          title={status === "login_required" ? "Cloudflare Access sign-in required" : "Cloudflare server setup incomplete"}
+          description="Protect the Pages hostname with Cloudflare Access and configure the Access audience, account IDs, and read-only API tokens in the deployed server runtime. This app does not accept browser-side tokens."
           docsUrl="https://developers.cloudflare.com/api/"
           onRetry={() => onRefresh()}
         />

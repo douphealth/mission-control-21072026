@@ -157,14 +157,25 @@ export function configuredAccounts(env: Record<string, string | undefined> = pro
   return [...new Set((env["CLOUDFLARE_ACCOUNT_IDS"] || "").split(",").map(s => s.trim()).filter(Boolean))]
     .filter(id => ACCOUNT_ID.test(id));
 }
-export function apiTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
-  // Optional per-account tokens are server-side secrets only; never echo them.
+/**
+ * Account tokens may be a legacy string or an object with separate
+ * `default` and `pages` credentials. Different Cloudflare tokens may have
+ * different read scopes. Never fall back to another ACCOUNT's token.
+ */
+function accountTokenConfig(accountId: string, env: Record<string, string | undefined>): unknown {
   try {
-    const map: unknown = JSON.parse(env["CLOUDFLARE_ACCOUNT_TOKENS_JSON"] || "{}");
-    const perAccount = asString(asObject(map)[accountId]);
-    if (perAccount) return perAccount;
-  } catch { /* invalid configuration falls back to a shared token */ }
-  return asString(env["CLOUDFLARE_API_TOKEN"]);
+    return asObject(JSON.parse(env["CLOUDFLARE_ACCOUNT_TOKENS_JSON"] || "{}"))[accountId];
+  } catch { return undefined; }
+}
+export function apiTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  const configured = accountTokenConfig(accountId, env);
+  const token = asString(configured) ||
+    asString(asObject(configured).default);
+  return token || asString(env["CLOUDFLARE_API_TOKEN"]);
+}
+export function pagesTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  const configured = accountTokenConfig(accountId, env);
+  return asString(asObject(configured).pages) || apiTokenFor(accountId, env);
 }
 export async function cloudflareGet<T>(path: string, token: string): Promise<T> {
   const response = await fetch(API + path, {
@@ -173,18 +184,73 @@ export async function cloudflareGet<T>(path: string, token: string): Promise<T> 
     signal: AbortSignal.timeout(12000),
     cache: "no-store",
   });
-  if (!response.ok) throw new Error("Cloudflare HTTP " + response.status);
+  if (!response.ok) {
+    // Cloudflare's numeric error code is useful for distinguishing invalid
+    // pagination from missing API scope, but provider messages can echo
+    // request details and must never be sent to the browser.
+    let cfCode = "";
+    try {
+      const payload: unknown = await response.json();
+      if (payload && typeof payload === "object" && "errors" in payload) {
+        const errors = (payload as { errors?: unknown }).errors;
+        if (Array.isArray(errors)) {
+          const first = errors.find(x => x && typeof x === "object" &&
+            "code" in x && typeof x.code === "number");
+          if (first && typeof first.code === "number") cfCode = " (CF code " + first.code + ")";
+        }
+      }
+    } catch { /* only safe numeric codes are reported */ }
+    throw new Error("Cloudflare HTTP " + response.status + cfCode);
+  }
   const data = await response.json();
   if (!data || data.success !== true) throw new Error("Cloudflare API returned an error");
   return data as T;
 }
-type Envelope = { result: any; result_info?: { total_pages?: number } };
+type Envelope = { result: any; result_info?: { total_pages?: number; total_count?: number; per_page?: number } };
 export async function allPages(path: string, token: string, perPage = 100): Promise<unknown[]> {
   const entries: unknown[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const glue = path.includes("?") ? "&" : "?";
-    const envelope = await cloudflareGet<Envelope>(
-      path + glue + "page=" + page + "&per_page=" + perPage, token);
+    let envelope: Envelope;
+    try {
+      envelope = await cloudflareGet<Envelope>(
+        path + glue + "page=" + page + "&per_page=" + perPage, token);
+    } catch (error) {
+      // Cloudflare's documented Pages list example uses 20 per page. Some
+      // accounts reject the page query entirely (HTTP 400). Probe bare GET
+      // only on the first page, and accept it ONLY if completeness is proven.
+      if (page !== 1 || !path.endsWith("/pages/projects") ||
+          !(error instanceof Error) || !error.message.startsWith("Cloudflare HTTP 400")) {
+        throw error;
+      }
+      const bare = await cloudflareGet<Envelope>(path, token);
+      if (!Array.isArray(bare.result)) throw new Error("Invalid Pages API payload");
+      const total = bare.result_info?.total_count;
+      const totalPages = bare.result_info?.total_pages;
+      // A one-page bare response is sufficient only when metadata proves it.
+      if (typeof total === "number" && total === bare.result.length ||
+          typeof totalPages === "number" && totalPages === 1) return bare.result;
+      if (typeof totalPages !== "number" || !Number.isInteger(totalPages) ||
+          totalPages < 2 || totalPages > MAX_PAGES) {
+        throw new Error("Cloudflare Pages pagination unavailable; inventory completeness unknown");
+      }
+      // Some Pages backends reject per_page even at 20. Keep the server-side
+      // inventory complete by using the API's own default page size instead.
+      const results: unknown[] = [...bare.result];
+      for (let nextPage = 2; nextPage <= totalPages; nextPage++) {
+        const next = await cloudflareGet<Envelope>(path + "?page=" + nextPage, token);
+        if (!Array.isArray(next.result) ||
+            next.result_info?.total_pages !== undefined &&
+              next.result_info.total_pages !== totalPages) {
+          throw new Error("Cloudflare Pages pagination changed during inventory");
+        }
+        results.push(...next.result);
+      }
+      if (typeof total === "number" && results.length !== total) {
+        throw new Error("Cloudflare Pages pagination returned incomplete results");
+      }
+      return results;
+    }
     const rows = envelope.result;
     if (!Array.isArray(rows)) throw new Error("Invalid Cloudflare pagination payload");
     entries.push(...rows);
@@ -242,12 +308,12 @@ function normalizeZone(accountId: string, raw: unknown): CloudflareZone | null {
     dnsUrl: prefix + "/dns/records",
   };
 }
-async function accountInventory(accountId: string, token: string) {
+async function accountInventory(accountId: string, token: string, pagesToken: string) {
   const rows: CloudflareDeploymentRow[] = [];
   const zoneRows: CloudflareZone[] = [];
   const errors: string[] = [];
   const [pages, scripts, domains, zones] = await Promise.allSettled([
-    allPages("/accounts/" + accountId + "/pages/projects", token),
+    allPages("/accounts/" + accountId + "/pages/projects", pagesToken, 20),
     cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token),
     allPages("/accounts/" + accountId + "/workers/domains", token),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
@@ -258,7 +324,12 @@ async function accountInventory(accountId: string, token: string) {
       const row = normalizePagesProject(accountId, raw);
       if (row) rows.push(row);
     }
-  } else errors.push("Pages inventory unavailable for account " + accountId.slice(-6));
+  } else {
+    const reason = pages.reason instanceof Error ? pages.reason.message : "";
+    const match = /^Cloudflare HTTP (400|401|403)(?: \(CF code \d+\))?$/.exec(reason);
+    errors.push("Pages inventory unavailable for account " + accountId.slice(-6) +
+      (match ? " (" + match[0] + ")" : ""));
+  }
   const workerDomains = domains.status === "fulfilled" ? domains.value : [];
   if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6));
 
@@ -333,7 +404,7 @@ export async function collectCloudflareInventory(
   // Cap simultaneous account inventories to prevent API request bursts.
   const results = await parallelMap(accounts, async id => {
     const token = apiTokenFor(id, environment);
-    return token ? await accountInventory(id, token) : null;
+    return token ? await accountInventory(id, token, pagesTokenFor(id, environment) || token) : null;
   }, 2);
   results.forEach((entry, index) => {
     const id = accounts[index];
@@ -388,13 +459,15 @@ export async function loadDeploymentHistory(input: {
   kind: InfraKind;
   name: string;
   page: number;
-}): Promise<{ rows: DeploymentHistoryItem[]; page: number }> {
-  if (!configuredAccounts().includes(input.accountId) ||
+}, environment: Record<string, string | undefined> = process.env): Promise<{ rows: DeploymentHistoryItem[]; page: number }> {
+  if (!configuredAccounts(environment).includes(input.accountId) ||
       !SCRIPT_NAME.test(input.name) || !Number.isInteger(input.page) ||
       input.page < 1 || input.page > MAX_PAGES) {
     throw new Error("Unknown Cloudflare deployment resource");
   }
-  const token = apiTokenFor(input.accountId);
+  const token = input.kind === "pages"
+    ? pagesTokenFor(input.accountId, environment)
+    : apiTokenFor(input.accountId, environment);
   if (!token) throw new Error("Cloudflare API token is not configured");
   const url = input.kind === "pages"
     ? "/accounts/" + input.accountId + "/pages/projects/" + encodeURIComponent(input.name) +
