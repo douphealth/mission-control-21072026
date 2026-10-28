@@ -1,6 +1,7 @@
 // Durable IndexedDB snapshots. Portable exports omit credentials; local safety copies retain them.
 import { db } from './db';
 import { versionDb, prepareVersionStorage, validateSnapshot } from './versionStorage';
+import { isSnapshotDataTable } from './snapshotValidation';
 import { stripSecretsForExport } from './secrets';
 import { preserveExcludedSecrets } from './versionSecrets';
 export const SNAPSHOTS_TABLE = 'mc_snapshots';
@@ -29,7 +30,7 @@ export function getDeviceLabel(): string {
   } catch { return 'Device'; }
 }
 export function setDeviceLabel(label: string) { try { localStorage.setItem(DEVICE_KEY, label.trim() || 'Device'); } catch { /* Nonessential preference. */ } }
-const snapshotTables = () => db.tables.filter(table => !['settings', 'syncHealth'].includes(table.name));
+const snapshotTables = () => db.tables.filter(table => isSnapshotDataTable(table.name));
 async function captureLocal() {
   const tables = snapshotTables();
   const payload: Record<string, any[]> = {}, counts: Record<string, number> = {};
