@@ -787,6 +787,9 @@ export interface SyncHealth {
 
 export type ValidationStatus = "pending" | "validating" | "monitoring" | "passed" | "failed";
 
+export interface SyncJournalRow { key: string; operation: 'put' | 'delete'; changedAt: string; revision?: string }
+export interface SyncMetaRow { id: string; completedAt: string }
+
 export interface Validation {
   id: string;
   title: string;
@@ -840,6 +843,8 @@ class MissionControlDB extends Dexie {
   auditLog!: Table<AuditEntry>;
   syncHealth!: Table<SyncHealth>;
   validations!: Table<Validation>;
+  syncJournal!: Table<SyncJournalRow>;
+  syncMeta!: Table<SyncMetaRow>;
 
   constructor() {
     super("MissionControlDB");
@@ -899,6 +904,12 @@ class MissionControlDB extends Dexie {
     // Validation ledger: proof that shipped changes actually worked.
     this.version(7).stores({
       validations: "id, status, entityId, actionId, reviewAt, startedAt, updatedAt",
+    });
+
+    // Durable sync queue: independent from all record-backed cloud collections.
+    this.version(8).stores({
+      syncJournal: "key, changedAt",
+      syncMeta: "id",
     });
   }
 }
