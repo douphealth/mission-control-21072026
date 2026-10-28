@@ -1,5 +1,12 @@
 import type { Snapshot } from './versions';
 
+// Sync transport state is local to a device and must never be copied, wiped or
+// restored as user data. The durable queue uses 'key', not an entity 'id'.
+const LOCAL_TRANSPORT_TABLES = new Set(['settings', 'syncHealth', 'syncJournal', 'syncMeta']);
+export function isSnapshotDataTable(name: string): boolean {
+  return !LOCAL_TRANSPORT_TABLES.has(name);
+}
+
 /** Pure validation: safe to use before opening a database or changing records. */
 export function validateSnapshot(value: unknown): asserts value is Snapshot {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid version file. No data was changed.');
