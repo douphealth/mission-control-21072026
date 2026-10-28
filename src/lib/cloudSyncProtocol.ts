@@ -62,3 +62,20 @@ export function rebaseLocalPending(
   const rebasedMs = Math.max(nowMs, localMs, remoteMs + (remote ? 1 : 0));
   return { ...local, updatedAt: new Date(rebasedMs).toISOString() };
 }
+
+/**
+ * Initial backfill is inferred from a durable local row that does not exist
+ * remotely. It is deliberately NOT written into the explicit mutation journal.
+ * A new journal entry during the upload wins over the inferred seed and is
+ * retried by the next sync cycle. Explicit changes must still match their
+ * captured revision before they can be acknowledged.
+ */
+export function capturedChangeIsCurrent(
+  captured: { changedAt: string; revision?: string },
+  current: { changedAt: string; revision?: string } | undefined,
+  inferredSeed: boolean,
+): boolean {
+  if (inferredSeed) return current === undefined;
+  return current !== undefined &&
+    (current.revision || current.changedAt) === (captured.revision || captured.changedAt);
+}
