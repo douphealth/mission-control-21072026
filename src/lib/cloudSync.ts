@@ -6,7 +6,7 @@
 import { db } from '@/lib/db';
 import { GDRIVE_APPDATA_SCOPE, GOOGLE_SCOPES, clearGoogleToken, fetchGoogleEmail,
   getGoogleClientId, googleTokenHasScopes, readGoogleToken, requestGoogleToken } from '@/lib/googleDirectAuth';
-import { mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
+import { capturedChangeIsCurrent, mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
   type RemoteBackup, type RemoteRecords } from '@/lib/cloudSyncProtocol';
 import { applyAndConfirm, createCommittedMutationBuffer } from '@/lib/syncTransactionSafety';
 
@@ -310,7 +310,8 @@ async function syncCycle(): Promise<SyncResult> {
     const remote = await readRemote(token.access_token, currentEpoch);
     const initialSeeds = !localSeedChecked ? await seedMissingRecords(remote.records) : {};
     // Explicit user edits take precedence over inferred initial backfill.
-    const captured = { ...initialSeeds, ...readDirty() };
+    const explicitDirty = readDirty();
+    const captured = { ...initialSeeds, ...explicitDirty };
     const merged = mergeRemoteRecords(remote.records);
     const repairedQueueEntries = new Set<string>();
     const outboundKeys: string[] = [];
@@ -319,7 +320,11 @@ async function syncCycle(): Promise<SyncResult> {
       const table = COLLECTIONS[collection];
       if (!table || !id) throw new Error(`Unknown queued collection ${collection}. Queue retained for recovery.`);
       const data = change.operation === 'delete' ? null : await table.get(id);
-      if (!sameChange(readDirty()[recordKey], change)) continue;
+      // Backfilled records have no journal entry until a user explicitly edits them.
+      // Do not confuse the absence of a journal entry with a stale backfill seed.
+      const inferredSeed = Object.prototype.hasOwnProperty.call(initialSeeds, recordKey) &&
+        !Object.prototype.hasOwnProperty.call(explicitDirty, recordKey);
+      if (!capturedChangeIsCurrent(change, readDirty()[recordKey], inferredSeed)) continue;
       if (!data && change.operation !== 'delete') { repairedQueueEntries.add(recordKey); continue; }
       const remoteRecord = merged[recordKey];
       const originalCandidate = { data: data || null, deleted: change.operation === 'delete', updatedAt: change.changedAt, revision: change.revision };
