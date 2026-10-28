@@ -9,6 +9,7 @@ import { GDRIVE_APPDATA_SCOPE, GOOGLE_SCOPES, clearGoogleToken, fetchGoogleEmail
 import { capturedChangeIsCurrent, mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
   type RemoteBackup, type RemoteRecords } from '@/lib/cloudSyncProtocol';
 import { applyAndConfirm, createCommittedMutationBuffer } from '@/lib/syncTransactionSafety';
+import { readDurableJournal, persistJournalChanges, acknowledgeJournalChanges } from '@/lib/syncJournal';
 
 export type CloudStatus = 'signed-out' | 'connecting' | 'syncing' | 'synced' | 'offline' | 'error';
 export type RecordSyncState = 'saved' | 'pending' | 'failed' | 'local-only';
@@ -70,31 +71,31 @@ const JOURNAL_EXCLUDED = new Set(['auditLog', 'syncHealth']);
 const remoteCache = new Map<string, { modifiedTime: string; backup: RemoteBackup }>();
 // Disposable optimization only. Never put record receipts into localStorage.
 const receiptCache = new Map<string, string>();
-let dirtyRaw: string | null | undefined;
 let dirtyCache: DirtyRecordMap = {};
+let journalWrites: Promise<void> = Promise.resolve();
+async function flushJournal() {
+  await journalWrites;
+  dirtyCache = await readDurableJournal();
+  journalReadError = false;
+}
+function persistChanges(changes: DirtyRecordMap) {
+  journalWrites = journalWrites.then(() => persistJournalChanges(changes)).then(() => {
+    for (const [k,v] of Object.entries(changes)) {
+      if (sameChange(unsavedMutations[k],v)) delete unsavedMutations[k];
+    }
+    journalError = false;
+    dirtyListeners.forEach(cb => cb());
+  }).catch(error => {
+    journalError = true;
+    setStatus('error','IndexedDB sync journal could not be saved. Local records are preserved; export a backup.');
+    throw error;
+  });
+  void journalWrites.catch(() => undefined);
+}
 const unsavedMutations: DirtyRecordMap = {};
 function key(collection: string, id: string) { return `${collection}::${id}`; }
 function readDirty(): DirtyRecordMap {
-  try {
-    const raw = localStorage.getItem(DIRTY_KEY);
-    if (raw !== dirtyRaw) {
-      const parsed: unknown = raw ? JSON.parse(raw) : {};
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
-          !Object.entries(parsed).every(([recordKey, entry]) => {
-            const value = entry as DirtyRecord | null;
-            return recordKey.includes('::') && !!value &&
-              (value.operation === 'put' || value.operation === 'delete') &&
-              typeof value.changedAt === 'string' && Number.isFinite(Date.parse(value.changedAt));
-          })) throw new Error('Invalid sync journal');
-      dirtyCache = parsed as DirtyRecordMap;
-      dirtyRaw = raw;
-    }
-    journalReadError = false;
-  } catch {
-    // Never reinterpret corrupt/unreadable pending operations as an empty queue.
-    journalReadError = true;
-  }
-  return Object.keys(unsavedMutations).length ? { ...dirtyCache, ...unsavedMutations } : dirtyCache;
+  return { ...dirtyCache, ...unsavedMutations };
 }
 function setStatus(next: CloudStatus, error: string | null = null) {
   status = next; lastError = error;
@@ -102,19 +103,12 @@ function setStatus(next: CloudStatus, error: string | null = null) {
   dirtyListeners.forEach(callback => callback());
 }
 function writeDirty(records: DirtyRecordMap): boolean {
-  try {
-    if (journalReadError) throw new Error('Unreadable journal');
-    const raw = JSON.stringify(records);
-    localStorage.setItem(DIRTY_KEY, raw);
-    dirtyRaw = raw; dirtyCache = records; journalError = false;
-    for (const recordKey of Object.keys(unsavedMutations)) {
-      if (sameChange(records[recordKey], unsavedMutations[recordKey])) delete unsavedMutations[recordKey];
-    }
-  } catch {
-    journalError = true;
-    setStatus('error', 'Device storage could not retain the sync queue. Local records are preserved; keep this tab open and export a backup before clearing storage.');
+  // Upserts only; removal requires revision-checked durable acknowledgement.
+  const additions: DirtyRecordMap = {};
+  for (const [k, v] of Object.entries(records)) {
+    if (!sameChange(dirtyCache[k], v)) additions[k] = v;
   }
-  dirtyListeners.forEach(callback => callback());
+  if (Object.keys(additions).length) persistChanges(additions);
   return !journalError;
 }
 function newChange(operation: DirtyOperation): DirtyRecord {
@@ -157,6 +151,7 @@ function installMutationJournal() {
   }
 }
 export async function repairStaleCloudJournal(): Promise<number> {
+  await flushJournal();
   const captured = { ...readDirty() };
   if (journalReadError) throw new Error('The sync queue is unreadable. No pending entries were discarded.');
   const stale: string[] = [];
@@ -173,7 +168,10 @@ export async function repairStaleCloudJournal(): Promise<number> {
   for (const recordKey of stale) {
     if (sameChange(next[recordKey], captured[recordKey])) { delete next[recordKey]; repaired++; }
   }
-  if (repaired && !writeDirty(next)) throw new Error('The sync queue repair could not be saved.');
+  if (repaired) {
+    await acknowledgeJournalChanges(Object.fromEntries(stale.filter(k => !next[k]).map(k => [k, captured[k]])));
+    await flushJournal();
+  }
   return repaired;
 }
 function validRecord(collection: string, data: unknown, id: string): data is Record<string, unknown> {
@@ -302,14 +300,16 @@ async function syncCycle(): Promise<SyncResult> {
   const currentEpoch = epoch;
   setStatus('syncing');
   try {
+    await flushJournal();
     const initialDirty = readDirty();
     if (journalReadError) throw new Error('The sync queue is unreadable. Local and cloud records were left unchanged.');
-    if ((journalError || Object.keys(unsavedMutations).length) && !writeDirty({ ...initialDirty })) throw new Error('Pending changes are not durably queued. Keep this tab open and export a backup.');
+    if (journalError || Object.keys(unsavedMutations).length) throw new Error('Pending changes are not durably queued. Keep this tab open and export a backup.');
     await bindIdentity(token.access_token, currentEpoch);
     await repairStaleCloudJournal();
     const remote = await readRemote(token.access_token, currentEpoch);
     const initialSeeds = !localSeedChecked ? await seedMissingRecords(remote.records) : {};
     // Explicit user edits take precedence over inferred initial backfill.
+    await flushJournal();
     const explicitDirty = readDirty();
     const captured = { ...initialSeeds, ...explicitDirty };
     const merged = mergeRemoteRecords(remote.records);
@@ -373,12 +373,11 @@ async function syncCycle(): Promise<SyncResult> {
         staged.set(recordKey, revisionOf(record));
       }
     }), currentSession);
-    const current = { ...readDirty() };
+    await flushJournal();
     const acknowledged = new Set([...outboundKeys, ...repairedQueueEntries]);
-    for (const [recordKey, change] of Object.entries(captured)) {
-      if (acknowledged.has(recordKey) && sameChange(current[recordKey], change)) delete current[recordKey];
-    }
-    if (!writeDirty(current)) throw new Error('Cloud write completed but the device queue could not be acknowledged.');
+    await acknowledgeJournalChanges(Object.fromEntries(Object.entries(captured).filter(([k]) => acknowledged.has(k))));
+    await flushJournal();
+    const current = readDirty();
     lastSyncInMemory = new Date().toISOString();
     // A display timestamp is not a sync prerequisite; never undo a verified sync for it.
     try { localStorage.setItem(LAST_SYNC_KEY, lastSyncInMemory); } catch { /* display only */ }
@@ -420,19 +419,18 @@ export function getRecordSyncState(collection: string, id: string): RecordSyncSt
 export function markCloudRecordDirty(collection: string, id: string, operation: DirtyOperation = 'put') {
   if (!COLLECTIONS[collection] || !id) return;
   const recordKey = key(collection, id);
-  const dirty = { ...readDirty() };
   const change = newChange(operation);
-  dirty[recordKey] = change; unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
-  writeDirty(dirty);
+  unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
+  persistChanges({ [recordKey]: change });
 }
 export function markCloudRecordsDirty(collection: string, ids: string[], operation: DirtyOperation = 'put') {
-  const dirty = { ...readDirty() };
+  const changes: DirtyRecordMap = {};
   ids.forEach(id => {
     if (!COLLECTIONS[collection] || !id) return;
     const recordKey = key(collection, id), change = newChange(operation);
-    dirty[recordKey] = change; unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
+    changes[recordKey] = change; unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
   });
-  writeDirty(dirty);
+  if (Object.keys(changes).length) persistChanges(changes);
 }
 export function getCloudStatus() { return status; }
 export function getCloudError() { return lastError; }
@@ -504,10 +502,12 @@ export async function verifyEmailCode(_email: string, _code: string) { return { 
 export async function verifyMagicLink(_url: string, _email?: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function startCloudSync(_force = false): Promise<{ signedIn: boolean; restored: number }> {
   installMutationJournal(); installRefreshListeners();
+  await flushJournal();
   const result = await synchronize();
   return { signedIn: hasSession() && result.ok, restored: result.restored };
 }
 if (typeof window !== 'undefined') {
   try { localStorage.removeItem(LEGACY_RECEIPTS_KEY); } catch { /* disposable legacy receipts only */ }
   installMutationJournal();
+  void flushJournal().catch(() => { journalReadError = true; });
 }
