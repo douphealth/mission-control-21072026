@@ -79,7 +79,7 @@ async function flushJournal() {
   journalReadError = false;
 }
 function persistChanges(changes: DirtyRecordMap) {
-  journalWrites = journalWrites.then(() => persistJournalChanges(changes)).then(() => {
+  journalWrites = journalWrites.catch(() => undefined).then(() => persistJournalChanges(changes)).then(() => {
     for (const [k,v] of Object.entries(changes)) {
       if (sameChange(unsavedMutations[k],v)) delete unsavedMutations[k];
     }
@@ -301,7 +301,6 @@ async function syncCycle(): Promise<SyncResult> {
   setStatus('syncing');
   try {
     await flushJournal();
-    const initialDirty = readDirty();
     if (journalReadError) throw new Error('The sync queue is unreadable. Local and cloud records were left unchanged.');
     if (journalError || Object.keys(unsavedMutations).length) throw new Error('Pending changes are not durably queued. Keep this tab open and export a backup.');
     await bindIdentity(token.access_token, currentEpoch);
