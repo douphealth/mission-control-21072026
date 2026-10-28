@@ -12,6 +12,7 @@ const KEYS = [
   "CLOUDFLARE_ACCOUNT_LABELS_JSON",
   "CLOUDFLARE_ACCOUNT_TOKENS_JSON",
   "CLOUDFLARE_API_TOKEN",
+  "GITHUB_PORTFOLIO_TOKENS_JSON",
 ] as const;
 type CloudflareRuntimeEnv = Record<string, string | undefined>;
 
