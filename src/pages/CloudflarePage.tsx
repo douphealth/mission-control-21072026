@@ -9,6 +9,7 @@ import type { TruthMeta } from "@/lib/truth";
 import { db } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import CloudflareDeploymentsPanel from "@/components/controlcenter/CloudflareDeploymentsPanel";
+import CloudflareEstatePanel from "@/components/controlcenter/CloudflareEstatePanel";
 
 const cfTools = [
   {
@@ -224,6 +225,8 @@ export default function CloudflarePage() {
       <CloudflareDeploymentsPanel inventory={inventory} status={control?.status ?? null} loading={loading}
         failure={failure ?? (control?.status === "error" ? control.message : null)}
         onRefresh={() => void load()} />
+
+      <CloudflareEstatePanel inventory={inventory} enabled={Boolean(inventory && (control?.status === "live" || control?.status === "partial"))} />
 
       {meta.truthState === "live" && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
