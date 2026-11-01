@@ -91,7 +91,7 @@ async function request(path: string, token: string, jurisdiction?: string): Prom
     headers: {
       Authorization: "Bearer " + token,
       Accept: "application/json",
-      ...(jurisdiction ? { "cf-r2-jurisdiction": jurisdiction } : {}),
+      ...(jurisdiction && jurisdiction !== "default" ? { "cf-r2-jurisdiction": jurisdiction } : {}),
     },
     cache: "no-store",
     signal: AbortSignal.timeout(12000),
