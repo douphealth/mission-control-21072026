@@ -401,6 +401,7 @@ export default function GitHubPage() {
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            aria-label="Search planning register"
             placeholder={"Search " + displayRepos.length + " repositories..."}
             className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
           />
