@@ -352,6 +352,12 @@ export interface GitHubRepo {
   doneSummary?: string;
   /** Highest-value remaining work or verification gap. */
   pendingSummary?: string;
+  /** Pinned repositories lead every GitHub view. */
+  pinned?: boolean;
+  /** Free-form labels for grouping repositories across accounts. */
+  tags?: string[];
+  /** Private planning notes for this repository. */
+  notes?: string;
   /** GitHub repository visibility captured by the portfolio inventory. */
   visibility?: "public" | "private" | "internal";
   /** Default Git branch captured by the portfolio inventory. */

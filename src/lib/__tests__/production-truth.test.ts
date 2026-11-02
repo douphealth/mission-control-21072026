@@ -44,8 +44,13 @@ describe("production truth gate", () => {
   });
 
   it("connector pages render provenance badges", () => {
-    for (const page of ["src/pages/CloudflarePage.tsx", "src/pages/VercelPage.tsx"]) {
-      const src = readFileSync(page, "utf8");
+    // The Cloudflare page delegates its connector surfaces to the estate command center.
+    const surfaces: Record<string, string[]> = {
+      "src/pages/CloudflarePage.tsx": ["src/components/estate/CloudflareCommandCenter.tsx", "src/components/estate/EstateStatus.tsx"],
+      "src/pages/VercelPage.tsx": [],
+    };
+    for (const [page, parts] of Object.entries(surfaces)) {
+      const src = [page, ...parts].map((f) => readFileSync(f, "utf8")).join("\n");
       expect(src).toContain("TruthBadge");
       expect(src).toContain("ConnectorEmpty");
       expect(src).toContain("ConnectorError");

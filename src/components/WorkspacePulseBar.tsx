@@ -6,7 +6,6 @@ import {
   Blocks,
   Brain,
   CheckCircle2,
-  Cloud,
   DollarSign,
   ExternalLink,
   Flame,
@@ -39,7 +38,6 @@ import {
   useSyncHealth,
   useTasks,
   useWatchTerms,
-  useWebsites,
 } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { todayISO } from "@/lib/overdue";
@@ -77,7 +75,6 @@ const MANAGED = new Set([
   "payments",
   "builds",
   "google-tasks",
-  "cloudflare",
   "vercel",
   "ideas",
   "habits",
@@ -108,7 +105,6 @@ export default function WorkspacePulseBar() {
   const accounts = useAudienceAccounts();
   const readings = useAudienceReadings();
   const health = useSyncHealth();
-  const websites = useWebsites();
 
   if (!MANAGED.has(activeSection)) return null;
 
@@ -184,9 +180,6 @@ export default function WorkspacePulseBar() {
   );
   const audienceUnavailable = accounts.filter(
     (account) => account.lastStatus === "unavailable" || account.lastStatus === "limited",
-  );
-  const cloudflareSites = websites.filter((site) =>
-    (site.hostingProvider || "").toLowerCase().includes("cloudflare"),
   );
   const vercelBuilds = builds.filter((build) => build.platform === "vercel");
   const healthState = (id: string) => health.find((item) => item.id === id)?.status ?? "not-configured";
@@ -307,22 +300,6 @@ export default function WorkspacePulseBar() {
         { label: "Calendar", section: "calendar" },
       ],
       truth: "Google data appears only after OAuth succeeds; local linkage is counted separately.",
-    },
-    cloudflare: {
-      group: "Systems & tools",
-      label: "Cloudflare control pulse",
-      subtitle: "DNS, security, CDN and deployment control with live API truth when connected.",
-      icon: Cloud,
-      stats: [
-        { label: "Known hosted sites", value: cloudflareSites.length, tone: "info" },
-        { label: "Saved credentials", value: credentials.filter((c) => (c.service + " " + c.label).toLowerCase().includes("cloudflare")).length, tone: "violet" },
-        { label: "Connector", value: connectorLabel(healthState("cloudflare")), tone: healthState("cloudflare") === "ok" ? "success" : "neutral" },
-      ],
-      related: [
-        { label: "Websites", section: "websites" },
-        { label: "Credentials", section: "credentials" },
-      ],
-      truth: "Zone counts on the page come only from the Cloudflare API when connected.",
     },
     vercel: {
       group: "Systems & tools",

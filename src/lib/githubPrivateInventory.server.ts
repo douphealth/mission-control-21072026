@@ -5,7 +5,7 @@
  * Tokens MUST be installed in server secrets. ChatGPT-connected GitHub tokens
  * do not automatically authorize deployed Mission Control.
  */
-export const MANAGED_GITHUB_ACCOUNTS = ["douphealth", "Papalexios", "papalexios001-wq"] as const;
+export const MANAGED_GITHUB_ACCOUNTS = ["douphealth", "Papalexios", "papalexios01", "papalexios001-wq"] as const;
 export type ManagedGitHubAccount = typeof MANAGED_GITHUB_ACCOUNTS[number];
 export type GitHubInventoryState = "live" | "partial" | "error" | "not_connected";
 export type PrivateRepoSnapshot = {
@@ -28,15 +28,18 @@ const BASE = "https://api.github.com";
 const USER_REPO = /^[A-Za-z0-9_.-]+$/;
 const MAX_PAGES = 25; // fails closed instead of returning a truncated "complete" result
 
-function secrets(env: Record<string, string | undefined> = process.env):
+/** Owner → token map from GITHUB_PORTFOLIO_TOKENS_JSON, restricted to managed accounts. */
+export function githubPortfolioTokens(env: Record<string, string | undefined> = process.env):
     Partial<Record<ManagedGitHubAccount, string>> {
   let raw: unknown;
   try { raw = JSON.parse(env["GITHUB_PORTFOLIO_TOKENS_JSON"] || "{}"); }
   catch { return {}; }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
-  const record = raw as Record<string, unknown>;
+  // GitHub logins are case-insensitive; accept "papalexios" for "Papalexios".
+  const record = Object.fromEntries(Object.entries(raw as Record<string, unknown>)
+    .map(([key, value]) => [key.toLowerCase(), value]));
   const entries = MANAGED_GITHUB_ACCOUNTS.flatMap(owner => {
-    const secret = record[owner];
+    const secret = record[owner.toLowerCase()];
     return typeof secret === "string" && secret.length > 15
       ? [[owner, secret.trim()] as const] : [];
   });
@@ -90,7 +93,7 @@ export async function collectPrivateGithubInventory(
   environment: Record<string, string | undefined> = process.env,
 ): Promise<GitHubPrivateInventory> {
   const fetchedAt = new Date().toISOString();
-  const accounts = secrets(environment);
+  const accounts = githubPortfolioTokens(environment);
   const owners = MANAGED_GITHUB_ACCOUNTS.filter(owner => Boolean(accounts[owner]));
   if (!owners.length) return {
     truthState: "not_connected", fetchedAt, repositories: [], connectedAccounts: [], errors: [],

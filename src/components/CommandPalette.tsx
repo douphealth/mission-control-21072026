@@ -58,6 +58,8 @@ import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
 import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
+import { getGitHubRepoKey } from "@/lib/unifiedGitHubCatalog";
+import { useEstateSnapshotPassive } from "@/hooks/useEstate";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 
@@ -393,7 +395,8 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
   const addItem = useAddItem();
   const exportAllData = useExportAllData();
   const toggleTheme = useSettingsStore((s) => s.toggleTheme);
-  const { setActiveSection, recentSections } = useNavigationStore();
+  const { setActiveSection, recentSections, setFocusEntity } = useNavigationStore();
+  const estate = useEstateSnapshotPassive();
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -604,6 +607,8 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
           r.description?.slice(0, 50) ||
           "",
         action: () => {
+          const key = getGitHubRepoKey(r.url);
+          if (key) setFocusEntity({ type: "repo", id: key });
           setActiveSection("github");
           onClose();
         },
@@ -630,6 +635,78 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
         priority: meta?.directWebsiteApp ? 30 : master?.m === "Verified" ? 22 : 15,
       });
     });
+    // Live estate (last snapshot this device saw): every repo across the four
+    // GitHub accounts plus Cloudflare Pages, Workers and zones. Opens the item.
+    if (estate) {
+      const known = new Set(portfolioRepos.map((r) => getGitHubRepoKey(r.url)).filter(Boolean));
+      for (const r of estate.github.repos) {
+        const key = r.fullName.toLowerCase();
+        if (known.has(key)) continue;
+        items.push({
+          id: `estate-repo-${key}`,
+          type: "data",
+          label: r.name,
+          sub: [r.owner, r.primaryLanguage, r.isPrivate ? "private" : null, r.description?.slice(0, 50)].filter(Boolean).join(" · "),
+          action: () => {
+            setFocusEntity({ type: "repo", id: key });
+            setActiveSection("github");
+            onClose();
+          },
+          emoji: "🐙",
+          glyph: Github,
+          keywords: [r.fullName, r.homepage ?? "", ...r.topics],
+          priority: 18,
+        });
+      }
+      for (const p of estate.cloudflare.pages) {
+        items.push({
+          id: `estate-pages-${p.key}`,
+          type: "data",
+          label: p.name,
+          sub: ["Pages", p.accountLabel, p.health === "failing" ? "deploy failing" : p.health, p.domains.find((d) => !d.endsWith(".pages.dev")) ?? p.subdomain].filter(Boolean).join(" · "),
+          action: () => {
+            setFocusEntity({ type: "cf-pages", id: p.key, label: p.name });
+            setActiveSection("cloudflare");
+            onClose();
+          },
+          emoji: "🚀",
+          keywords: ["cloudflare", "pages", ...p.domains, p.source.repo ?? ""],
+          priority: p.health === "failing" ? 28 : 18,
+        });
+      }
+      for (const w of estate.cloudflare.workers) {
+        items.push({
+          id: `estate-worker-${w.key}`,
+          type: "data",
+          label: w.name,
+          sub: ["Worker", w.accountLabel, ...w.customDomains.slice(0, 1)].join(" · "),
+          action: () => {
+            setFocusEntity({ type: "cf-worker", id: w.key, label: w.name });
+            setActiveSection("cloudflare");
+            onClose();
+          },
+          emoji: "⚡",
+          keywords: ["cloudflare", "worker", ...w.customDomains, ...w.routes],
+          priority: 14,
+        });
+      }
+      for (const z of estate.cloudflare.zones) {
+        items.push({
+          id: `estate-zone-${z.id}`,
+          type: "data",
+          label: z.name,
+          sub: ["Zone", z.accountLabel, z.plan, z.status].join(" · "),
+          action: () => {
+            setFocusEntity({ type: "cf-zone", id: z.id, label: z.name });
+            setActiveSection("cloudflare");
+            onClose();
+          },
+          emoji: "🌐",
+          keywords: ["cloudflare", "dns", "domain", "zone"],
+          priority: 14,
+        });
+      }
+    }
     APP_FUNNEL_CATALOG.forEach((app) =>
       items.push({
         id: `app-${app.name}`,
@@ -710,6 +787,8 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
     websites,
     tasks,
     portfolioRepos,
+    estate,
+    setFocusEntity,
     buildProjects,
     links,
     notes,

@@ -19,10 +19,11 @@ export function getGitHubRepoKey(url: string | undefined | null): string | null 
 }
 
 export function getGitHubRepoOwner(url: string | undefined | null):
-  "douphealth" | "Papalexios" | "papalexios001-wq" | "other" {
+  "douphealth" | "Papalexios" | "papalexios01" | "papalexios001-wq" | "other" {
   const owner = getGitHubRepoKey(url)?.split("/")[0] || "";
   if (owner === "douphealth") return "douphealth";
   if (owner === "papalexios") return "Papalexios";
+  if (owner === "papalexios01") return "papalexios01";
   if (owner === "papalexios001-wq") return "papalexios001-wq";
   return "other";
 }

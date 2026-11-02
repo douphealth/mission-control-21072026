@@ -46,6 +46,34 @@ not by creation date.
 - Secrets: never commit `.env`. Credentials stored in the vault are encrypted
   (AES-256-GCM) before they leave the device.
 
+## GitHub and Cloudflare sections
+
+Both sections read live data on the server at request time. Tokens stay on the
+server: they are never sent to the browser, logged or cached in a response.
+Every estate call requires a verified Cloudflare Access identity
+(`CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD`); without it the
+sections show a locked state instead of data.
+
+Set these as Worker secrets (`wrangler secret put NAME`):
+
+| Secret | Format | Used for |
+| --- | --- | --- |
+| `GITHUB_PORTFOLIO_TOKENS_JSON` | `{"douphealth":"…","Papalexios":"…","papalexios01":"…","papalexios001-wq":"…"}` | Repository inventory for each account. Fine-grained tokens need read access to Metadata, Contents, Pull requests, Issues and Actions. A token whose owner does not match its key is rejected. Missing accounts show as "not connected". |
+| `CLOUDFLARE_ACCOUNT_IDS` | `id1,id2` (32-hex account IDs) | Which Cloudflare accounts to read. |
+| `CLOUDFLARE_ACCOUNT_TOKENS_JSON` | `{"<accountId>":"token"}` or `{"<accountId>":{"default":"…","pages":"…"}}` | One token per account. Read: Account Settings, Pages, Workers Scripts, Zone, DNS. Actions also need **Pages Edit** (retry and rollback) and **Cache Purge** (purge everything). A read-only token keeps actions disabled with a clear error. |
+| `CLOUDFLARE_ACCOUNT_LABELS_JSON` | `{"<accountId>":"Main"}` | Optional display names. |
+| `CLOUDFLARE_API_TOKEN` | token | Optional fallback for accounts without their own token. |
+
+Retry, rollback and purge only run after you type the exact project or zone
+name, and the server checks that name again before calling Cloudflare.
+
+Local development only: `MC_DEV_ALLOW_UNAUTHENTICATED=1 bun run dev` skips the
+Access check so the sections can be exercised on localhost. The flag has no
+effect in production builds.
+
+Keyboard: `⌘K` searches repos, Pages, Workers and zones; `/` focuses the
+section search; `Shift R` refreshes; `g g` opens GitHub and `g c` Cloudflare.
+
 ## Development
 
 ```sh

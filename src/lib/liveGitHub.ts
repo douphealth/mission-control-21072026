@@ -1,7 +1,7 @@
 import { getGitHubRepoKey } from "@/lib/unifiedGitHubCatalog";
 import type { GitHubRepo } from "@/lib/db";
 
-export const OWNERS = ["douphealth", "Papalexios", "papalexios001-wq"] as const;
+export const OWNERS = ["douphealth", "Papalexios", "papalexios01", "papalexios001-wq"] as const;
 export type LiveRepo = {
   key: string; owner: string; name: string; url: string; description: string | null;
   language: string | null; updatedAt: string | null; pushedAt: string | null;
