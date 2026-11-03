@@ -285,7 +285,7 @@ export async function allPages(path: string, token: string, perPage = 100): Prom
  * A fallback is explicitly marked partial instead of silently counted as full. */
 function safeApiReason(error: unknown): string {
   if (!(error instanceof Error)) return "request failed";
-  const match = /^Cloudflare HTTP (\\d{3})(?: \\(CF code (\\d+)\\))?$/.exec(error.message);
+  const match = /^Cloudflare HTTP (\d{3})(?: \(CF code (\d+)\))?$/.exec(error.message);
   return match ? "HTTP " + match[1] + (match[2] ? " / code " + match[2] : "") :
     error.message.includes("pagination") || error.message.includes("incomplete")
       ? "incomplete pagination" : "request failed";
