@@ -99,6 +99,29 @@ export async function fetchOwnerRepos(owner: string, fetcher: typeof fetch = fet
       error: error instanceof Error ? error.message : "GitHub API unavailable", retryAt };
   }
 }
+/**
+ * Shared loader for all owners. Unauthenticated GitHub allows 60 requests/hour,
+ * so every component reuses one in-flight request and a 10-minute cache, and a
+ * rate-limit backoff is honoured even for forced refreshes.
+ */
+const OWNER_TTL_MS = 10 * 60_000;
+let ownersLoadedAt = 0;
+let ownersRetryAt = 0;
+let ownersInflight: Promise<OwnerResult[]> | null = null;
+export function ownersRateLimitedUntil(): number { return ownersRetryAt > Date.now() ? ownersRetryAt : 0; }
+export function loadOwnerRepos(options: { force?: boolean } = {}): Promise<OwnerResult[]> {
+  if (ownersInflight) return ownersInflight;
+  const cached = OWNERS.flatMap(o => accountCache.get(o) ? [accountCache.get(o)!] : []);
+  const fresh = cached.length === OWNERS.length && Date.now() - ownersLoadedAt < OWNER_TTL_MS;
+  if ((fresh && !options.force) || Date.now() < ownersRetryAt) return Promise.resolve(cached);
+  ownersInflight = Promise.all(OWNERS.map(o => fetchOwnerRepos(o))).then(results => {
+    ownersLoadedAt = Date.now();
+    const waits = results.map(r => r.retryAt ? Date.parse(r.retryAt) : 0).filter(t => t > Date.now());
+    ownersRetryAt = waits.length ? Math.max(...waits) : 0;
+    return results.map(retainOwnerResult);
+  }).finally(() => { ownersInflight = null; });
+  return ownersInflight;
+}
 /** Build one view: live fields are read-only, saved plans are always authoritative. */
 export function joinGitHubPlans(saved: GitHubRepo[], live: LiveRepo[]): ManagedRepo[] {
   const rows = new Map<string, ManagedRepo>();

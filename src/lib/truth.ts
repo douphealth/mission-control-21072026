@@ -7,6 +7,8 @@ export type TruthState =
   | "cached"
   | "manual"
   | "stale"
+  /** Some sources/permissions verified, others failed. Verified data is usable. */
+  | "partial"
   | "not_connected"
   | "unavailable"
   | "error";
@@ -30,6 +32,7 @@ export const TRUTH_LABEL: Record<TruthState, string> = {
   cached: "CACHED",
   manual: "MANUAL",
   stale: "STALE",
+  partial: "PARTIAL",
   not_connected: "NOT CONNECTED",
   unavailable: "UNAVAILABLE",
   error: "ERROR",
@@ -41,6 +44,7 @@ export const TRUTH_TONE: Record<TruthState, string> = {
   cached: "text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/25",
   manual: "text-violet-600 dark:text-violet-400 bg-violet-500/10 border-violet-500/25",
   stale: "text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/25",
+  partial: "text-amber-700 dark:text-amber-300 bg-amber-500/10 border-amber-500/30",
   not_connected: "text-muted-foreground bg-muted/40 border-border",
   unavailable: "text-muted-foreground bg-muted/40 border-border",
   error: "text-red-600 dark:text-red-400 bg-red-500/10 border-red-500/25",

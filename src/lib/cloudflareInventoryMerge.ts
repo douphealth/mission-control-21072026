@@ -1,0 +1,126 @@
+import type {
+  CloudflareAccountSummary,
+  CloudflareDeploymentRow,
+  CloudflareInventory,
+  CloudflareZone,
+  InfraTruth,
+} from "@/lib/cloudflareInventory.server";
+
+/**
+ * Pure, browser-safe aggregation shared by the server collector and the client
+ * loader. The client fetches each account (and each section) in a separate
+ * server invocation so no single Worker invocation exhausts its subrequest
+ * budget; this module recombines those parts with the exact same truth rules.
+ */
+export function accountTruth(
+  summary: Pick<
+    CloudflareAccountSummary,
+    "configuredToken" | "errors" | "pagesCount" | "workersCount" | "zonesCount"
+  >,
+): InfraTruth {
+  if (!summary.configuredToken) return "not_connected";
+  if (!summary.errors.length) return "live";
+  return summary.pagesCount + summary.workersCount + summary.zonesCount > 0 ? "partial" : "error";
+}
+
+export function overallTruth(
+  accountDetails: CloudflareAccountSummary[],
+  errors: string[],
+): InfraTruth {
+  if (!accountDetails.length) return "not_connected";
+  if (!errors.length) return "live";
+  const connected = accountDetails.some(
+    (a) => a.truthState === "live" || a.truthState === "partial",
+  );
+  if (connected) return "partial";
+  return accountDetails.every((a) => a.truthState === "not_connected") ? "not_connected" : "error";
+}
+
+function mergeSummaries(
+  a: CloudflareAccountSummary,
+  b: CloudflareAccountSummary,
+): CloudflareAccountSummary {
+  const merged: CloudflareAccountSummary = {
+    accountId: a.accountId,
+    label: a.label || b.label,
+    configuredToken: a.configuredToken && b.configuredToken,
+    pagesCount: a.pagesCount + b.pagesCount,
+    workersCount: a.workersCount + b.workersCount,
+    zonesCount: a.zonesCount + b.zonesCount,
+    errors: [...new Set([...a.errors, ...b.errors])],
+    sections: [...new Set([...(a.sections || []), ...(b.sections || [])])],
+    pagesApiRequests: a.pagesApiRequests ?? b.pagesApiRequests,
+    pagesReportedTotal:
+      a.pagesReportedTotal !== undefined ? a.pagesReportedTotal : b.pagesReportedTotal,
+    deployEnabled: Boolean(a.deployEnabled || b.deployEnabled),
+    truthState: "live",
+  };
+  merged.truthState = accountTruth(merged);
+  return merged;
+}
+
+export function mergeCloudflareInventories(
+  parts: CloudflareInventory[],
+  fetchedAt = new Date().toISOString(),
+): CloudflareInventory {
+  const rows = new Map<string, CloudflareDeploymentRow>();
+  const zones = new Map<string, CloudflareZone>();
+  const details = new Map<string, CloudflareAccountSummary>();
+  const accounts: string[] = [];
+  for (const part of parts) {
+    for (const row of part.rows) rows.set(row.key, row);
+    for (const zone of part.zones) zones.set(zone.accountId + ":" + zone.id, zone);
+    for (const id of part.accounts) if (!accounts.includes(id)) accounts.push(id);
+    for (const summary of part.accountDetails) {
+      const previous = details.get(summary.accountId);
+      details.set(summary.accountId, previous ? mergeSummaries(previous, summary) : summary);
+    }
+  }
+  const accountDetails = accounts.flatMap((id) => (details.get(id) ? [details.get(id)!] : []));
+  const errors = accountDetails.flatMap((a) => a.errors);
+  return {
+    truthState: overallTruth(accountDetails, errors),
+    source: "Cloudflare API",
+    fetchedAt,
+    accounts,
+    accountDetails,
+    errors,
+    rows: [...rows.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    zones: [...zones.values()].sort((a, b) => a.name.localeCompare(b.name)),
+  };
+}
+
+/** Synthesized summary for a part whose server invocation failed entirely. */
+export function unreachableAccountPart(
+  accountId: string,
+  label: string,
+  section: "pages" | "platform",
+  fetchedAt: string,
+): CloudflareInventory {
+  const reason =
+    (section === "pages" ? "Pages inventory" : "Workers/DNS inventory") +
+    " request failed for " +
+    label +
+    "; retry or check the server runtime";
+  const summary: CloudflareAccountSummary = {
+    accountId,
+    label,
+    configuredToken: true,
+    pagesCount: 0,
+    workersCount: 0,
+    zonesCount: 0,
+    errors: [reason],
+    sections: [section],
+    truthState: "error",
+  };
+  return {
+    truthState: "error",
+    source: "Cloudflare API",
+    fetchedAt,
+    accounts: [accountId],
+    accountDetails: [summary],
+    errors: [reason],
+    rows: [],
+    zones: [],
+  };
+}

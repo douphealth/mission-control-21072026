@@ -77,6 +77,11 @@ export const STATUS_STYLE: Record<
     cls: "text-sky-600 bg-sky-500/10 border-sky-500/20",
     dot: "bg-sky-500 animate-pulse",
   },
+  partial: {
+    label: "Partial",
+    cls: "text-amber-700 bg-amber-500/10 border-amber-500/25",
+    dot: "bg-amber-500",
+  },
   stale: {
     label: "Stale",
     cls: "text-amber-600 bg-amber-500/10 border-amber-500/20",

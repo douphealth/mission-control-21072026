@@ -773,7 +773,7 @@ export type SyncSourceId =
 export interface SyncHealth {
   id: SyncSourceId | string;
   label: string;
-  status: "ok" | "stale" | "error" | "not-configured" | "syncing";
+  status: "ok" | "partial" | "stale" | "error" | "not-configured" | "syncing";
   lastSuccessAt?: string;
   lastAttemptAt?: string;
   pending?: number;

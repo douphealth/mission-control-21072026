@@ -60,3 +60,30 @@ describe("authenticated GitHub API inventory", () => {
     expect(inventory.truthState).toBe("error");
   });
 });
+
+describe("authenticated owned repository metadata", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("returns public and private owned repos with metadata, never other owners' repos", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const path = new URL(String(input)).pathname;
+      const payload = path === "/user" ? { login: "Papalexios" } : [
+        { name: "pub", owner: { login: "Papalexios" }, private: false, language: "TypeScript",
+          stargazers_count: 3, open_issues_count: 2, pushed_at: "2026-11-01T00:00:00Z",
+          homepage: "https://pub.example.com", fork: false, archived: false },
+        { name: "secret", owner: { login: "Papalexios" }, private: true, homepage: "javascript:alert(1)" },
+        { name: "foreign", owner: { login: "someone-else" }, private: false },
+      ];
+      return new Response(JSON.stringify(payload), { status: 200 });
+    }));
+    const inventory = await collectPrivateGithubInventory({
+      GITHUB_PORTFOLIO_TOKENS_JSON: JSON.stringify({ Papalexios: "synthetic-supersecret-long-token" }),
+    });
+    expect(inventory.ownedRepositories.map(r => r.name)).toEqual(["pub", "secret"]);
+    expect(inventory.ownedRepositories[0]).toMatchObject({
+      visibility: "public", language: "TypeScript", stars: 3, openIssues: 2, homepage: "https://pub.example.com",
+    });
+    expect(inventory.ownedRepositories[1]).toMatchObject({ visibility: "private", homepage: null });
+    expect(inventory.repositories.map(r => r.name)).toEqual(["secret"]);
+    expect(JSON.stringify(inventory)).not.toContain("synthetic-supersecret-long-token");
+  });
+});

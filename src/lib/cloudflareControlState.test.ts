@@ -6,7 +6,8 @@ describe("Cloudflare connection truth", () => {
     expect(cloudflareTruthState("access_not_configured")).toBe("not_connected");
     expect(cloudflareTruthState("login_required")).toBe("unavailable");
     expect(cloudflareTruthState("not_connected")).toBe("not_connected");
-    expect(cloudflareTruthState("partial")).toBe("error");
+    expect(cloudflareTruthState("partial")).toBe("partial");
+    expect(cloudflareTruthState("error")).toBe("error");
     expect(cloudflareTruthState("live")).toBe("live");
   });
   it("always reveals setup-dependent states without exposing credentials", () => {

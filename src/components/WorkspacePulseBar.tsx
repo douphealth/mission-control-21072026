@@ -191,7 +191,7 @@ export default function WorkspacePulseBar() {
   const vercelBuilds = builds.filter((build) => build.platform === "vercel");
   const healthState = (id: string) => health.find((item) => item.id === id)?.status ?? "not-configured";
   const connectorLabel = (state: string) =>
-    state === "ok" ? "Live" : state === "error" ? "Error" : state === "not-configured" ? "Not connected" : state.replace("-", " ");
+    state === "ok" ? "Live" : state === "partial" ? "Partial" : state === "error" ? "Error" : state === "not-configured" ? "Not connected" : state.replace("-", " ");
 
   const config: Record<string, PulseConfig> = {
     review: {

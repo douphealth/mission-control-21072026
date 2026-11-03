@@ -17,10 +17,31 @@ export type PrivateRepoSnapshot = {
   archived: boolean;
   description: string | null;
 };
+/** Every owned repository (public AND private) with operational metadata. */
+export type OwnedRepoSnapshot = {
+  owner: ManagedGitHubAccount;
+  name: string;
+  url: string;
+  visibility: "public" | "private";
+  description: string | null;
+  language: string | null;
+  defaultBranch: string | null;
+  pushedAt: string | null;
+  updatedAt: string | null;
+  archived: boolean;
+  fork: boolean;
+  stars: number;
+  forks: number;
+  openIssues: number;
+  homepage: string | null;
+};
 export type GitHubPrivateInventory = {
   truthState: GitHubInventoryState;
   fetchedAt: string;
+  /** Private repositories only (backwards compatible). */
   repositories: PrivateRepoSnapshot[];
+  /** All owned repositories of connected accounts, authenticated (no rate-limit gaps). */
+  ownedRepositories: OwnedRepoSnapshot[];
   connectedAccounts: ManagedGitHubAccount[];
   errors: string[];
 };
@@ -55,12 +76,14 @@ async function api(path: string, token: string): Promise<unknown> {
   if (!res.ok) throw new Error("GitHub HTTP " + res.status);
   return await res.json();
 }
-async function collectOne(owner: ManagedGitHubAccount, token: string): Promise<PrivateRepoSnapshot[]> {
+const num = (x: unknown) => typeof x === "number" && Number.isFinite(x) ? Math.max(0, x) : 0;
+const text = (x: unknown, max = 400) => typeof x === "string" && x.trim() ? x.slice(0, max) : null;
+async function collectOne(owner: ManagedGitHubAccount, token: string): Promise<OwnedRepoSnapshot[]> {
   const profile = await api("/user", token) as Record<string, unknown>;
   if (String(profile?.login || "").toLowerCase() !== owner.toLowerCase()) {
     throw new Error("GitHub token identity does not match the configured account");
   }
-  const output: PrivateRepoSnapshot[] = [];
+  const output: OwnedRepoSnapshot[] = [];
   let finished = false;
   for (let page = 1; page <= MAX_PAGES; page++) {
     const payload = await api("/user/repos?affiliation=owner&per_page=100&page=" + page +
@@ -71,14 +94,22 @@ async function collectOne(owner: ManagedGitHubAccount, token: string): Promise<P
       const item = row as Record<string, any>;
       const name = item.name;
       if (!USER_REPO.test(String(name)) || item.owner?.login?.toLowerCase() !== owner.toLowerCase()) continue;
-      if (item.private !== true && item.visibility !== "private") continue;
+      const homepage = text(item.homepage, 300);
       output.push({
         owner, name,
         url: "https://github.com/" + owner + "/" + encodeURIComponent(name),
-        defaultBranch: typeof item.default_branch === "string" ? item.default_branch : null,
-        pushedAt: typeof item.pushed_at === "string" ? item.pushed_at : null,
+        visibility: item.private === true || item.visibility === "private" ? "private" : "public",
+        description: text(item.description),
+        language: text(item.language, 60),
+        defaultBranch: text(item.default_branch, 200),
+        pushedAt: text(item.pushed_at, 40),
+        updatedAt: text(item.updated_at, 40),
         archived: item.archived === true,
-        description: typeof item.description === "string" ? item.description.slice(0, 400) : null,
+        fork: item.fork === true,
+        stars: num(item.stargazers_count),
+        forks: num(item.forks_count),
+        openIssues: num(item.open_issues_count),
+        homepage: homepage && /^https:\/\/[^/\s]+/i.test(homepage) ? homepage : null,
       });
     }
     if (payload.length < 100) { finished = true; break; }
@@ -93,24 +124,32 @@ export async function collectPrivateGithubInventory(
   const accounts = secrets(environment);
   const owners = MANAGED_GITHUB_ACCOUNTS.filter(owner => Boolean(accounts[owner]));
   if (!owners.length) return {
-    truthState: "not_connected", fetchedAt, repositories: [], connectedAccounts: [], errors: [],
+    truthState: "not_connected", fetchedAt, repositories: [], ownedRepositories: [], connectedAccounts: [], errors: [],
   };
   const results = await Promise.allSettled(owners.map(owner => collectOne(owner, accounts[owner]!)));
-  const repositories: PrivateRepoSnapshot[] = [];
+  const owned: OwnedRepoSnapshot[] = [];
   const errors: string[] = [];
   for (let i = 0; i < owners.length; i++) {
     const result = results[i];
-    if (result.status === "fulfilled") repositories.push(...result.value);
+    if (result.status === "fulfilled") owned.push(...result.value);
     else errors.push("GitHub private inventory unavailable for " + owners[i]);
   }
   for (const owner of MANAGED_GITHUB_ACCOUNTS) {
     if (!accounts[owner]) errors.push("GitHub account not connected: " + owner);
   }
-  const unique = new Map(repositories.map(repo => [repo.url.toLowerCase(), repo]));
+  const unique = new Map(owned.map(repo => [repo.url.toLowerCase(), repo]));
+  const ownedRepositories = [...unique.values()].sort((a, b) => a.url.localeCompare(b.url));
+  const repositories: PrivateRepoSnapshot[] = ownedRepositories
+    .filter(repo => repo.visibility === "private")
+    .map(repo => ({
+      owner: repo.owner, name: repo.name, url: repo.url, defaultBranch: repo.defaultBranch,
+      pushedAt: repo.pushedAt, archived: repo.archived, description: repo.description,
+    }));
   return {
-    truthState: errors.length ? unique.size ? "partial" : "error" : "live",
+    truthState: errors.length ? repositories.length || ownedRepositories.length ? "partial" : "error" : "live",
     fetchedAt,
-    repositories: [...unique.values()].sort((a,b) => a.url.localeCompare(b.url)),
+    repositories,
+    ownedRepositories,
     connectedAccounts: owners,
     errors,
   };

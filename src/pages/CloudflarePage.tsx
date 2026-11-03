@@ -1,9 +1,9 @@
 import { useCredentials } from "@/hooks/useTableData";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Cloud, Globe, Zap, ExternalLink, Copy, RefreshCw, Lock, Activity } from "lucide-react";
 import { toast } from "sonner";
-import { getCloudflareControl } from "@/lib/cloudflareControl.functions";
-import { cloudflareTruthState, cloudflareSetupRequired, type CloudflareControlSnapshot } from "@/lib/cloudflareControlState";
+import { useCloudflareControl } from "@/lib/cloudflareControlClient";
+import { cloudflareTruthState, cloudflareSetupRequired } from "@/lib/cloudflareControlState";
 import { TruthBadge, ConnectorEmpty, ConnectorError } from "@/components/TruthUI";
 import type { TruthMeta } from "@/lib/truth";
 import { db } from "@/lib/db";
@@ -97,13 +97,10 @@ const dotFor = (status: string) =>
 
 export default function CloudflarePage() {
   const credentials = useCredentials();
-  // A single authenticated snapshot powers both zones and deployments.
-  // Separate API calls previously duplicated expensive multi-account discovery
-  // and could display contradictory Cloudflare status on one screen.
-  const [control, setControl] = useState<CloudflareControlSnapshot | null>(null);
+  // One shared, deduplicated snapshot powers zones, deployments and the GitHub
+  // workspace. Each account/section is fetched in its own server invocation.
+  const { snapshot: control, loading, failure, load } = useCloudflareControl();
   const inventory = control?.inventory ?? null;
-  const [failure, setFailure] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const zones = inventory?.zones ?? [];
   const meta: TruthMeta = {
     truthState: failure ? "unavailable" : cloudflareTruthState(control?.status ?? null),
@@ -112,22 +109,19 @@ export default function CloudflarePage() {
     error: failure ?? control?.message ?? undefined,
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setFailure(null);
-    try {
-      const result = await getCloudflareControl();
-      setControl(result);
+  useEffect(() => {
+    if (!control) return;
+    void (async () => {
       try {
         const previous = await db.syncHealth.get("cloudflare");
         await db.syncHealth.put({
           id: "cloudflare",
           label: "Cloudflare",
-          status: result.status === "live" ? "ok" :
-            result.status === "partial" || result.status === "error" ? "error" : "not-configured",
-          lastAttemptAt: result.fetchedAt,
-          lastSuccessAt: result.status === "live" ? result.fetchedAt : previous?.lastSuccessAt,
-          error: result.message ?? undefined,
+          status: control.status === "live" ? "ok" : control.status === "partial" ? "partial" :
+            control.status === "error" ? "error" : "not-configured",
+          lastAttemptAt: control.fetchedAt,
+          lastSuccessAt: control.status === "live" || control.status === "partial" ? control.fetchedAt : previous?.lastSuccessAt,
+          error: control.message ?? undefined,
           detail: "Authenticated Cloudflare Pages, Workers and DNS snapshot.",
         });
         markCloudRecordDirty("syncHealth", "cloudflare");
@@ -135,15 +129,8 @@ export default function CloudflarePage() {
       } catch {
         console.warn("Cloudflare health state could not be stored locally.");
       }
-    } catch {
-      setControl(null);
-      setFailure("Cloudflare server function is unreachable. Confirm the live Pages deployment includes its server Worker.");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
+    })();
+  }, [control]);
 
   // Never send unresolved :account/:zone placeholders to Cloudflare.
   // With more than one possible target, go to its account selector.
@@ -187,7 +174,7 @@ export default function CloudflarePage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => void load()} disabled={loading} className="btn-secondary text-sm">
+          <button onClick={() => void load(true)} disabled={loading} className="btn-secondary text-sm">
             <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
           </button>
           <a
@@ -224,11 +211,11 @@ export default function CloudflarePage() {
       )}
       <CloudflareDeploymentsPanel inventory={inventory} status={control?.status ?? null} loading={loading}
         failure={failure ?? (control?.status === "error" ? control.message : null)}
-        onRefresh={() => void load()} />
+        onRefresh={() => void load(true)} />
 
       <CloudflareEstatePanel inventory={inventory} enabled={Boolean(inventory && (control?.status === "live" || control?.status === "partial"))} />
 
-      {meta.truthState === "live" && (
+      {(meta.truthState === "live" || meta.truthState === "partial") && (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             {
@@ -288,15 +275,15 @@ export default function CloudflarePage() {
               title="Cloudflare is not connected"
               description="Add a Cloudflare API token with Zone:Read permission to this project and your real zones will appear here. Until then this page shows nothing — no sample domains."
               docsUrl="https://developers.cloudflare.com/fundamentals/api/get-started/create-token/"
-              onRetry={() => void load()}
+              onRetry={() => void load(true)}
             />
           )}
 
           {!loading && (meta.truthState === "error" || Boolean(failure)) && (
-            <ConnectorError message={meta.error ?? "Unknown error"} onRetry={() => void load()} />
+            <ConnectorError message={meta.error ?? "Unknown error"} onRetry={() => void load(true)} />
           )}
 
-          {!loading && meta.truthState === "live" && zones.length === 0 && (
+          {!loading && (meta.truthState === "live" || meta.truthState === "partial") && zones.length === 0 && (
             <div className="card-glass p-6 text-center text-sm text-muted-foreground">
               No zones returned from configured Cloudflare accounts.
             </div>

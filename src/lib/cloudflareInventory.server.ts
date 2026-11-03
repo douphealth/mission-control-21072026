@@ -3,8 +3,24 @@
  * resource names are included in browser bundles or public snapshots.
  * Deployments are API-observed states, NOT independent uptime checks.
  */
+import { accountTruth, overallTruth } from "@/lib/cloudflareInventoryMerge";
 export type InfraKind = "pages" | "worker";
 export type InfraTruth = "live" | "partial" | "error" | "not_connected";
+/** One inventory call can collect Pages only, the rest of the platform, or both. */
+export type InventorySection = "pages" | "platform";
+/**
+ * Normalized operational state derived only from Cloudflare deployment metadata.
+ * "failing" means the newest PRODUCTION deployment failed while an older one may
+ * still serve traffic. None of these values is an uptime check.
+ */
+export type DeployHealth = "live" | "failing" | "building" | "none" | "unknown";
+export interface LatestProductionAttempt {
+  id: string | null;
+  status: string;
+  createdAt: string | null;
+  branch: string | null;
+  commit: string | null;
+}
 export interface CloudflareDeploymentRow {
   key: string;
   kind: InfraKind;
@@ -21,6 +37,14 @@ export interface CloudflareDeploymentRow {
   deployedAt: string | null;
   status: string;
   statusSource: "cloudflare-deployment" | "unavailable";
+  /** Pages build source; null for Workers or when Cloudflare omits it. */
+  sourceType?: "github" | "gitlab" | "direct_upload" | null;
+  /** Canonical *.pages.dev hostname URL, independent of custom domains. */
+  pagesDevUrl?: string | null;
+  createdAt?: string | null;
+  health?: DeployHealth;
+  /** Newest production attempt when it differs from the serving deployment. */
+  latestProduction?: LatestProductionAttempt | null;
 }
 export interface DeploymentHistoryItem {
   id: string;
@@ -50,6 +74,14 @@ export interface CloudflareAccountSummary {
   workersCount: number;
   zonesCount: number;
   errors: string[];
+  /** Sections this summary covers; absent on legacy full snapshots. */
+  sections?: InventorySection[];
+  /** Number of Pages list requests used to prove completeness. */
+  pagesApiRequests?: number;
+  /** Cloudflare's result_info.total_count; may be capped/under-reported. */
+  pagesReportedTotal?: number | null;
+  /** True only when a dedicated per-account deploy token is configured. */
+  deployEnabled?: boolean;
 }
 export interface CloudflareInventory {
   zones: CloudflareZone[];
@@ -95,18 +127,46 @@ function deploymentStatus(deployment: Record<string, any>): string {
   const stage = asObject(deployment.latest_stage);
   return asString(stage.status) || asString(deployment.status) || "unknown";
 }
+const FAILED_STAGE = /^(failure|failed)$/i;
+const BUILDING_STAGE = /^(active|idle|queued|running|in_progress)$/i;
+function sourceTypeOf(source: Record<string, any>): CloudflareDeploymentRow["sourceType"] {
+  const type = asString(source.type);
+  if (type === "github" || type === "gitlab") return type;
+  return Object.keys(source).length ? null : "direct_upload";
+}
 export function normalizePagesProject(accountId: string, raw: unknown): CloudflareDeploymentRow | null {
   const project = asObject(raw);
   const name = asString(project.name);
   if (!name || !SCRIPT_NAME.test(name)) return null;
-  // Never select latest_deployment: that can refer to a preview branch.
+  // The serving deployment comes from canonical/production only; latest_deployment
+  // can be a preview branch and is used ONLY when explicitly marked production.
   const deployment = asObject(project.canonical_deployment || project.production_deployment);
+  const latest = asObject(project.latest_deployment);
   const source = asObject(project.source);
   const customDomains = Array.isArray(project.domains)
     ? project.domains.map(asString).filter((x): x is string => Boolean(x)) : [];
   const subdomain = asString(project.subdomain);
   const canonical = subdomain && /^[a-z0-9.-]+\.pages\.dev$/i.test(subdomain)
     ? validHttps(subdomain) : null;
+  const hasDeployment = Object.keys(deployment).length > 0;
+  const servingStatus = hasDeployment ? deploymentStatus(deployment) : "unknown";
+  const latestId = asString(latest.id);
+  const latestIsNewerProduction = asString(latest.environment) === "production" &&
+    Boolean(latestId) && latestId !== asString(deployment.id);
+  const latestMeta = asObject(asObject(latest.deployment_trigger).metadata);
+  const latestProduction: LatestProductionAttempt | null = latestIsNewerProduction ? {
+    id: latestId,
+    status: deploymentStatus(latest),
+    createdAt: asString(latest.created_on),
+    branch: asString(latestMeta.branch),
+    commit: asString(latestMeta.commit_hash),
+  } : null;
+  const health: DeployHealth = latestProduction && FAILED_STAGE.test(latestProduction.status) ? "failing"
+    : latestProduction && BUILDING_STAGE.test(latestProduction.status) ? "building"
+      : hasDeployment ? FAILED_STAGE.test(servingStatus) ? "failing"
+        : BUILDING_STAGE.test(servingStatus) ? "building"
+          : /^success$/i.test(servingStatus) ? "live" : "unknown"
+        : "none";
   return {
     key: "pages:" + accountId + ":" + name,
     kind: "pages", accountId, name,
@@ -115,12 +175,18 @@ export function normalizePagesProject(accountId: string, raw: unknown): Cloudfla
     domains: customDomains, routes: [],
     repoUrl: githubSource(source),
     branch: asString(asObject(source.config).production_branch) ||
-      asString(asObject(asObject(deployment.deployment_trigger).metadata).branch) || asString(deployment.production_branch),
+      asString(asObject(asObject(deployment.deployment_trigger).metadata).branch) ||
+      asString(deployment.production_branch) || asString(project.production_branch),
     commit: asString(asObject(asObject(deployment.deployment_trigger).metadata).commit_hash),
     deploymentId: asString(deployment.id),
     deployedAt: asString(deployment.created_on),
-    status: Object.keys(deployment).length ? deploymentStatus(deployment) : "unknown",
-    statusSource: Object.keys(deployment).length ? "cloudflare-deployment" : "unavailable",
+    status: servingStatus,
+    statusSource: hasDeployment ? "cloudflare-deployment" : "unavailable",
+    sourceType: sourceTypeOf(source),
+    pagesDevUrl: canonical,
+    createdAt: asString(project.created_on),
+    health,
+    latestProduction,
   };
 }
 export function normalizeWorkerScript(
@@ -138,12 +204,13 @@ export function normalizeWorkerScript(
   const deployment = asObject(activeDeployment);
   const version = Array.isArray(deployment.versions) && deployment.versions.length
     ? asObject(deployment.versions[0]) : {};
+  const deployed = Object.keys(deployment).length > 0 || Boolean(asString(script.deployed_on));
   return {
     key: "worker:" + accountId + ":" + name,
     kind: "worker", accountId, name,
-    // The account overview is a supported Cloudflare URL; unknown script deep
-    // links should not be invented.
-    projectUrl: "https://dash.cloudflare.com/" + accountId + "/workers-and-pages",
+    // Cloudflare's Worker service view (production environment).
+    projectUrl: "https://dash.cloudflare.com/" + accountId + "/workers/services/view/" +
+      encodeURIComponent(name) + "/production",
     publicUrl: customDomains.length ? validHttps(customDomains[0]) : null,
     domains: customDomains, routes, repoUrl: null, branch: null,
     commit: null,
@@ -151,8 +218,11 @@ export function normalizeWorkerScript(
     deployedAt: asString(deployment.created_on) || asString(script.deployed_on) || asString(script.modified_on),
     status: Object.keys(deployment).length ? "serving (API deployment)" :
       asString(script.deployed_on) ? "deployed (API metadata)" : "unknown",
-    statusSource: Object.keys(deployment).length || asString(script.deployed_on)
-      ? "cloudflare-deployment" : "unavailable",
+    statusSource: deployed ? "cloudflare-deployment" : "unavailable",
+    sourceType: null, pagesDevUrl: null,
+    createdAt: asString(script.created_on),
+    health: deployed ? "live" : "unknown",
+    latestProduction: null,
   };
 }
 export function configuredAccounts(env: Record<string, string | undefined> = process.env): string[] {
@@ -185,11 +255,22 @@ export function workersTokenFor(accountId: string, env: Record<string, string | 
   const configured = accountTokenConfig(accountId, env);
   return asString(asObject(configured).workers) || apiTokenFor(accountId, env);
 }
+/**
+ * Write-capable Pages token (Account > Cloudflare Pages > Edit). Deliberately
+ * NEVER falls back to read tokens: deploy/retry/rollback stay disabled until the
+ * owner opts in with a dedicated `deploy` key for that exact account.
+ */
+export function deployTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  return asString(asObject(accountTokenConfig(accountId, env)).deploy);
+}
 export async function cloudflareGet<T>(path: string, token: string): Promise<T> {
+  return cloudflareRequest<T>("GET", path, token);
+}
+export async function cloudflareRequest<T>(method: "GET" | "POST", path: string, token: string): Promise<T> {
   const response = await fetch(API + path, {
-    method: "GET",
+    method,
     headers: { Authorization: "Bearer " + token, Accept: "application/json" },
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(method === "GET" ? 12000 : 20000),
     cache: "no-store",
   });
   if (!response.ok) {
@@ -215,50 +296,114 @@ export async function cloudflareGet<T>(path: string, token: string): Promise<T> 
   return data as T;
 }
 type Envelope = { result: any; result_info?: { total_pages?: number; total_count?: number; per_page?: number } };
+
+/** Cloudflare's supported Pages list page size (the same value wrangler uses). */
+export const PAGES_PAGE_SIZE = 10;
+/** 400 list requests ⇒ up to 4,000 Pages projects per account before failing closed. */
+const PAGES_MAX_API_PAGES = 400;
+const PAGES_PARALLEL = 4;
+const PAGES_PROBE_BATCH = 3;
+export interface PagesProjectListing {
+  projects: unknown[];
+  /** List requests performed (diagnostic, proves exhaustive pagination). */
+  requests: number;
+  /** result_info.total_count from page 1 — informational only, never a stop signal. */
+  reportedTotal: number | null;
+  mode: "per_page" | "default";
+}
+const isHttp400 = (error: unknown) =>
+  error instanceof Error && error.message.startsWith("Cloudflare HTTP 400");
+
+/**
+ * Lists EVERY Pages project of an account.
+ *
+ * Cloudflare's Pages `result_info` (total_pages / total_count) can under-report
+ * large accounts — trusting it truncated a 185-project account at exactly 100.
+ * Like wrangler, this keeps requesting pages until Cloudflare returns a short
+ * or empty page. Metadata is only used as a prefetch hint and as a lower-bound
+ * completeness check. A page that returns only already-seen projects means the
+ * API ignored `page`, which fails closed instead of reporting a partial total.
+ */
+export async function listAllPagesProjects(accountId: string, token: string): Promise<PagesProjectListing> {
+  const base = "/accounts/" + accountId + "/pages/projects";
+  let mode: PagesProjectListing["mode"] = "per_page";
+  const pathFor = (page: number) => mode === "per_page"
+    ? base + "?page=" + page + "&per_page=" + PAGES_PAGE_SIZE
+    : page === 1 ? base : base + "?page=" + page;
+  let first: Envelope;
+  let requests = 1;
+  try {
+    first = await cloudflareGet<Envelope>(pathFor(1), token);
+  } catch (error) {
+    // A backend that rejects per_page still paginates with its default size.
+    if (!isHttp400(error)) throw error;
+    mode = "default";
+    requests++;
+    first = await cloudflareGet<Envelope>(pathFor(1), token);
+  }
+  if (!Array.isArray(first.result)) throw new Error("Invalid Pages API payload");
+  const byName = new Map<string, unknown>();
+  let unnamed = 0;
+  const absorb = (rows: unknown[]): number => {
+    let added = 0;
+    for (const raw of rows) {
+      const name = asString(asObject(raw).name);
+      const key = name ? name.toLowerCase() : "\u0000unnamed:" + unnamed++;
+      if (!byName.has(key)) { byName.set(key, raw); added++; }
+    }
+    return added;
+  };
+  absorb(first.result);
+  const reportedTotal = typeof first.result_info?.total_count === "number"
+    ? first.result_info.total_count : null;
+  const hintedPages = typeof first.result_info?.total_pages === "number" &&
+    Number.isInteger(first.result_info.total_pages)
+    ? Math.min(first.result_info.total_pages, PAGES_MAX_API_PAGES) : 1;
+  // In default mode the first page defines the server's page size.
+  const pageSize = mode === "per_page" ? PAGES_PAGE_SIZE : Math.max(1, first.result.length);
+  // Default mode always probes page 2: a capped total_count must not end listing.
+  let ended = first.result.length === 0 || first.result.length < pageSize;
+  let page = 2;
+  while (!ended) {
+    if (page > PAGES_MAX_API_PAGES) {
+      throw new Error("Cloudflare Pages inventory exceeds the configured page limit");
+    }
+    const last = page <= hintedPages
+      ? Math.min(hintedPages, page + PAGES_PARALLEL - 1)
+      : Math.min(PAGES_MAX_API_PAGES, page + PAGES_PROBE_BATCH - 1);
+    const batch = Array.from({ length: last - page + 1 }, (_, i) => page + i);
+    requests += batch.length;
+    const settled = await Promise.allSettled(batch.map(p => cloudflareGet<Envelope>(pathFor(p), token)));
+    for (let i = 0; i < settled.length; i++) {
+      const result = settled[i];
+      // Results after the detected end are ignored, including errors.
+      if (result.status === "rejected") throw result.reason;
+      const rows = result.value.result;
+      if (!Array.isArray(rows)) throw new Error("Invalid Pages API payload");
+      const added = absorb(rows);
+      if (rows.length === 0 || rows.length < pageSize) { ended = true; break; }
+      if (added === 0) {
+        // A default-size backend that ignores ?page is complete only if the
+        // first page already holds the full reported total.
+        if (mode === "default" && batch[i] === 2 && reportedTotal !== null &&
+            byName.size >= reportedTotal) { ended = true; break; }
+        throw new Error("Cloudflare Pages pagination repeated a page; inventory completeness unknown");
+      }
+    }
+    page = last + 1;
+  }
+  if (reportedTotal !== null && byName.size < reportedTotal) {
+    throw new Error("Cloudflare Pages pagination incomplete: fewer projects than the API-reported total");
+  }
+  return { projects: [...byName.values()], requests, reportedTotal, mode };
+}
+
 export async function allPages(path: string, token: string, perPage = 100): Promise<unknown[]> {
   const entries: unknown[] = [];
   for (let page = 1; page <= MAX_PAGES; page++) {
     const glue = path.includes("?") ? "&" : "?";
-    let envelope: Envelope;
-    try {
-      envelope = await cloudflareGet<Envelope>(
-        path + glue + "page=" + page + "&per_page=" + perPage, token);
-    } catch (error) {
-      // Some Cloudflare Pages accounts reject larger page sizes or optional query
-      // accounts reject the page query entirely (HTTP 400). Probe bare GET
-      // only on the first page, and accept it ONLY if completeness is proven.
-      if (page !== 1 || !path.endsWith("/pages/projects") ||
-          !(error instanceof Error) || !error.message.startsWith("Cloudflare HTTP 400")) {
-        throw error;
-      }
-      const bare = await cloudflareGet<Envelope>(path, token);
-      if (!Array.isArray(bare.result)) throw new Error("Invalid Pages API payload");
-      const total = bare.result_info?.total_count;
-      const totalPages = bare.result_info?.total_pages;
-      // A one-page bare response is sufficient only when metadata proves it.
-      if (typeof total === "number" && total === bare.result.length ||
-          typeof totalPages === "number" && totalPages === 1) return bare.result;
-      if (typeof totalPages !== "number" || !Number.isInteger(totalPages) ||
-          totalPages < 2 || totalPages > MAX_PAGES) {
-        throw new Error("Cloudflare Pages pagination unavailable; inventory completeness unknown");
-      }
-      // Some Pages backends reject per_page even at 20. Keep the server-side
-      // inventory complete by using the API's own default page size instead.
-      const results: unknown[] = [...bare.result];
-      for (let nextPage = 2; nextPage <= totalPages; nextPage++) {
-        const next = await cloudflareGet<Envelope>(path + "?page=" + nextPage, token);
-        if (!Array.isArray(next.result) ||
-            next.result_info?.total_pages !== undefined &&
-              next.result_info.total_pages !== totalPages) {
-          throw new Error("Cloudflare Pages pagination changed during inventory");
-        }
-        results.push(...next.result);
-      }
-      if (typeof total === "number" && results.length !== total) {
-        throw new Error("Cloudflare Pages pagination returned incomplete results");
-      }
-      return results;
-    }
+    const envelope = await cloudflareGet<Envelope>(
+      path + glue + "page=" + page + "&per_page=" + perPage, token);
     const rows = envelope.result;
     if (!Array.isArray(rows)) throw new Error("Invalid Cloudflare pagination payload");
     entries.push(...rows);
@@ -367,36 +512,55 @@ function normalizeZone(accountId: string, raw: unknown): CloudflareZone | null {
     dnsUrl: prefix + "/dns/records",
   };
 }
-async function accountInventory(accountId: string, token: string, pagesToken: string, workersToken: string) {
+interface AccountInventoryResult {
+  rows: CloudflareDeploymentRow[];
+  zones: CloudflareZone[];
+  errors: string[];
+  pagesApiRequests?: number;
+  pagesReportedTotal?: number | null;
+}
+async function accountInventory(
+  accountId: string, token: string, pagesToken: string, workersToken: string,
+  sections: ReadonlySet<InventorySection> = new Set(["pages", "platform"]),
+): Promise<AccountInventoryResult> {
   const rows: CloudflareDeploymentRow[] = [];
   const zoneRows: CloudflareZone[] = [];
   const errors: string[] = [];
+  const result: AccountInventoryResult = { rows, zones: zoneRows, errors };
+  const wantPages = sections.has("pages");
+  const wantPlatform = sections.has("platform");
   const [pages, scripts, domains, zones] = await Promise.allSettled([
-    allPages("/accounts/" + accountId + "/pages/projects", pagesToken, 10),
-    listAccountWorkers(accountId, workersToken),
-    listWorkerDomains(accountId, workersToken),
+    wantPages ? listAllPagesProjects(accountId, pagesToken) : Promise.resolve(null),
+    wantPlatform ? listAccountWorkers(accountId, workersToken) : Promise.resolve(null),
+    wantPlatform ? listWorkerDomains(accountId, workersToken) : Promise.resolve(null),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
-    allPages("/zones?account.id=" + encodeURIComponent(accountId), token, 50),
+    wantPlatform ? allPages("/zones?account.id=" + encodeURIComponent(accountId), token, 50)
+      : Promise.resolve(null),
   ]);
-  if (pages.status === "fulfilled") {
-    for (const raw of pages.value) {
-      const row = normalizePagesProject(accountId, raw);
-      if (row) rows.push(row);
+  if (wantPages) {
+    if (pages.status === "fulfilled" && pages.value) {
+      for (const raw of pages.value.projects) {
+        const row = normalizePagesProject(accountId, raw);
+        if (row) rows.push(row);
+      }
+      result.pagesApiRequests = pages.value.requests;
+      result.pagesReportedTotal = pages.value.reportedTotal;
+    } else {
+      const reason = pages.status === "rejected" && pages.reason instanceof Error ? pages.reason.message : "";
+      const match = /^Cloudflare HTTP (400|401|403|429)(?: \(CF code \d+\))?$/.exec(reason);
+      errors.push("Pages inventory unavailable for account " + accountId.slice(-6) +
+        (match ? " (" + match[0] + ")" : /pagination|limit/i.test(reason) ? " (" + reason + ")" : ""));
     }
-  } else {
-    const reason = pages.reason instanceof Error ? pages.reason.message : "";
-    const match = /^Cloudflare HTTP (400|401|403)(?: \(CF code \d+\))?$/.exec(reason);
-    errors.push("Pages inventory unavailable for account " + accountId.slice(-6) +
-      (match ? " (" + match[0] + ")" : ""));
   }
-  const workerDomains = domains.status === "fulfilled" ? domains.value : [];
+  if (!wantPlatform) return result;
+  const workerDomains = domains.status === "fulfilled" && domains.value ? domains.value : [];
   if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6) +
     " (" + safeApiReason(domains.reason) + "); verify Workers read permission for this account");
 
   // Worker routes are zone-scoped, not fields on a script. Discover all zones
   // of this account and map real route patterns back to Worker script names.
   const routesByScript = new Map<string, string[]>();
-  if (zones.status === "rejected") {
+  if (zones.status === "rejected" || !zones.value) {
     errors.push("Zone inventory unavailable for account " + accountId.slice(-6));
   } else {
     for (const raw of zones.value) {
@@ -405,7 +569,7 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
     }
     // Route association is only useful for Workers actually listed by the API.
     // Avoid making many unnecessary zone-scoped calls for accounts with no Workers.
-    const ids = scripts.status === "fulfilled" && scripts.value.scripts.length > 0
+    const ids = scripts.status === "fulfilled" && scripts.value && scripts.value.scripts.length > 0
       ? zones.value.map(asObject).map(z => asString(z.id))
         .filter((id): id is string => typeof id === "string" && ACCOUNT_ID.test(id)) : [];
     const routeResults = await parallelMap(ids, id =>
@@ -427,7 +591,7 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
       " zone(s) for account " + accountId.slice(-6) +
       "; verify Zone > Workers Routes > Read permissions for these zones");
   }
-  if (scripts.status === "fulfilled") {
+  if (scripts.status === "fulfilled" && scripts.value) {
     if (scripts.value.usedLegacy) {
       errors.push("New Workers API unavailable for account " + accountId.slice(-6) +
         " (" + scripts.value.modernError + "); legacy Scripts fallback used — Worker count is unverified. " +
@@ -448,16 +612,29 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
       if (row) rows.push(row);
     });
   } else errors.push("Worker inventory unavailable for account " + accountId.slice(-6) +
-    " (" + (scripts.reason instanceof Error ? scripts.reason.message : "request failed") +
+    " (" + (scripts.status === "rejected" && scripts.reason instanceof Error ? scripts.reason.message : "request failed") +
     "); verify account-scoped Workers Read permissions");
-  return { rows, zones: zoneRows, errors };
+  return result;
+}
+export interface InventoryScope {
+  /** Restrict collection to one configured account. */
+  accountId?: string;
+  /** Restrict collection to Pages or to Workers/DNS ("platform"). */
+  section?: InventorySection;
 }
 /** Caller must pass Cloudflare Access authorization before invoking. */
 export async function collectCloudflareInventory(
   environment: Record<string, string | undefined> = process.env,
+  scope: InventoryScope = {},
 ): Promise<CloudflareInventory> {
   const fetchedAt = new Date().toISOString();
-  const accounts = configuredAccounts(environment);
+  const configured = configuredAccounts(environment);
+  if (scope.accountId && !configured.includes(scope.accountId)) {
+    throw new Error("Unknown Cloudflare account");
+  }
+  const accounts = scope.accountId ? [scope.accountId] : configured;
+  const sections: ReadonlySet<InventorySection> = new Set(
+    scope.section ? [scope.section] : ["pages", "platform"]);
   const labels = configuredAccountLabels(environment);
   const rows: CloudflareDeploymentRow[] = [];
   const zones: CloudflareZone[] = [];
@@ -472,54 +649,56 @@ export async function collectCloudflareInventory(
   const results = await parallelMap(accounts, async id => {
     const token = apiTokenFor(id, environment);
     return token ? await accountInventory(id, token, pagesTokenFor(id, environment) || token,
-      workersTokenFor(id, environment) || token) : null;
+      workersTokenFor(id, environment) || token, sections) : null;
   }, 2);
   results.forEach((entry, index) => {
     const id = accounts[index];
     const configuredToken = Boolean(apiTokenFor(id, environment));
     const label = labels[id] || "Account …" + id.slice(-6);
+    const base = { accountId: id, label, sections: [...sections],
+      deployEnabled: Boolean(deployTokenFor(id, environment)) };
     if (!configuredToken) {
       const reason = "API token is not configured for " + label;
       errors.push(reason);
-      accountDetails.push({accountId:id,label,truthState:"not_connected",
-        configuredToken:false,pagesCount:0,workersCount:0,zonesCount:0,
-        errors:[reason]});
+      accountDetails.push({ ...base, truthState: "not_connected",
+        configuredToken: false, pagesCount: 0, workersCount: 0, zonesCount: 0,
+        errors: [reason] });
       return;
     }
     if (entry.status === "rejected" || !entry.value) {
       const reason = "Cloudflare account " + label + " could not be queried";
       errors.push(reason);
-      accountDetails.push({accountId:id,label,truthState:"error",
-        configuredToken:true,pagesCount:0,workersCount:0,zonesCount:0,
-        errors:[reason]});
+      accountDetails.push({ ...base, truthState: "error",
+        configuredToken: true, pagesCount: 0, workersCount: 0, zonesCount: 0,
+        errors: [reason] });
       return;
     }
     const result = entry.value;
     rows.push(...result.rows);
     zones.push(...result.zones);
     errors.push(...result.errors);
-    accountDetails.push({
-      accountId:id,label,configuredToken:true,
-      pagesCount:result.rows.filter(row=>row.kind==="pages").length,
-      workersCount:result.rows.filter(row=>row.kind==="worker").length,
-      zonesCount:result.zones.length,
-      truthState: result.errors.length
-        ? result.rows.length || result.zones.length ? "partial" : "error"
-        : "live",
+    const summary: CloudflareAccountSummary = {
+      ...base, configuredToken: true,
+      pagesCount: result.rows.filter(row => row.kind === "pages").length,
+      workersCount: result.rows.filter(row => row.kind === "worker").length,
+      zonesCount: result.zones.length,
+      truthState: "live",
       errors: result.errors,
-    });
+    };
+    if (sections.has("pages")) {
+      summary.pagesApiRequests = result.pagesApiRequests;
+      summary.pagesReportedTotal = result.pagesReportedTotal ?? null;
+    }
+    summary.truthState = accountTruth(summary);
+    accountDetails.push(summary);
   });
   const unique = new Map(rows.map(row => [row.key, row]));
-  const uniqueZones = new Map(zones.map(zone => [zone.accountId+":"+zone.id, zone]));
-  const connected = accountDetails.some(a=>a.truthState==="live" || a.truthState==="partial");
-  const truthState: InfraTruth = errors.length
-    ? connected ? "partial" : accountDetails.every(a=>a.truthState==="not_connected")
-      ? "not_connected" : "error"
-    : "live";
+  const uniqueZones = new Map(zones.map(zone => [zone.accountId + ":" + zone.id, zone]));
   return {
-    truthState, source:"Cloudflare API", fetchedAt, accounts, accountDetails, errors,
-    rows:[...unique.values()].sort((a,b)=>a.name.localeCompare(b.name)),
-    zones:[...uniqueZones.values()].sort((a,b)=>a.name.localeCompare(b.name)),
+    truthState: overallTruth(accountDetails, errors), source: "Cloudflare API",
+    fetchedAt, accounts, accountDetails, errors,
+    rows: [...unique.values()].sort((a, b) => a.name.localeCompare(b.name)),
+    zones: [...uniqueZones.values()].sort((a, b) => a.name.localeCompare(b.name)),
   };
 }
 export async function loadDeploymentHistory(input: {

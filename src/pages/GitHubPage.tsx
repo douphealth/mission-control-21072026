@@ -44,7 +44,7 @@ import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
 import PrivateGitHubInventory from "@/components/github/PrivateGitHubInventory";
-import LiveGitHubCommandCenter from "@/components/github/LiveGitHubCommandCenter";
+import RepoOpsWorkspace from "@/components/github/RepoOpsWorkspace";
 import AssetRegistry from "@/components/github/AssetRegistry";
 import { UNIFIED_PUBLIC_GITHUB_CATALOG, UNIFIED_PUBLIC_GITHUB_COUNT, getGitHubRepoKey, getGitHubRepoOwner, mergeUnifiedGitHubRows } from "@/lib/unifiedGitHubCatalog";
 
@@ -384,8 +384,13 @@ export default function GitHubPage() {
         </div>
       </section>
 
-      <AssetRegistry />
-      <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Repository cards and planning details</summary><div className="mt-3"><LiveGitHubCommandCenter repos={displayRepos} onEdit={openEdit} /></div></details>
+      <RepoOpsWorkspace displayRepos={displayRepos} savedRepos={repos} onEdit={openEdit} />
+      <details className="rounded-xl border border-border/40 p-3">
+        <summary className="cursor-pointer text-sm font-semibold">
+          Apps & infrastructure registry · app ↔ repo ↔ Cloudflare mapping, including build projects
+        </summary>
+        <div className="mt-3"><AssetRegistry /></div>
+      </details>
       <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Advanced planning tools · bulk editing, legacy filters and printable register</summary>
       <div className="mt-4 space-y-4">
       {bulk.bulkMode && (

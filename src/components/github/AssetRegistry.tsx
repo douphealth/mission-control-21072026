@@ -2,9 +2,9 @@ import { useCallback,useEffect,useMemo,useState } from "react";
 import { Download,ExternalLink,RefreshCw,Search,ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useBuildProjects,useRepos } from "@/hooks/useTableData";
-import { OWNERS,fetchOwnerRepos,cachedOwners,retainOwnerResult,type OwnerResult } from "@/lib/liveGitHub";
+import { OWNERS,loadOwnerRepos,cachedOwners,retainOwnerResult,type OwnerResult } from "@/lib/liveGitHub";
 import { buildAssetRegistry,exportRegistryCsv } from "@/lib/assetRegistry";
-import { getCloudflareControl } from "@/lib/cloudflareControl.functions";
+import { loadCloudflareControl } from "@/lib/cloudflareControlClient";
 import type { CloudflareDeploymentRow } from "@/lib/cloudflareInventory.server";
 
 const card="rounded-2xl border border-border/60 bg-card/85 p-4";
@@ -22,12 +22,12 @@ export default function AssetRegistry(){
   const [order,setOrder]=useState("name");
   const [limit,setLimit]=useState(40);
   const [expanded,setExpanded]=useState<string|null>(null);
-  const refresh=useCallback(async()=>{
+  const refresh=useCallback(async(force=false)=>{
     setBusy(true);
     try{
       const [ownerResults,cfResult]=await Promise.all([
-        Promise.all(OWNERS.map(o=>fetchOwnerRepos(o))),
-        getCloudflareControl().then(result=>({ok:true as const,result}),()=>({ok:false as const})),
+        loadOwnerRepos({force}),
+        loadCloudflareControl({force}).then(result=>({ok:true as const,result}),()=>({ok:false as const})),
       ]);
       setOwners(previous=>{
         const updated={...previous};
@@ -63,7 +63,7 @@ export default function AssetRegistry(){
     <div className={card}>
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-lg font-bold">Apps & Infrastructure Registry</h2>
         <p className="mt-1 text-xs text-muted-foreground">One row per matched app/repo/resource · known mappings first · no guessed deployment ownership</p></div>
-        <div className="flex gap-2"><button type="button" className="btn-secondary inline-flex gap-1 text-xs" disabled={busy} onClick={()=>void refresh()}><RefreshCw size={13} className={busy?"animate-spin":""}/>Refresh</button>
+        <div className="flex gap-2"><button type="button" className="btn-secondary inline-flex gap-1 text-xs" disabled={busy} onClick={()=>void refresh(true)}><RefreshCw size={13} className={busy?"animate-spin":""}/>Refresh</button>
           <button type="button" className="btn-secondary inline-flex gap-1 text-xs" onClick={csv}><Download size={13}/>CSV</button></div></div>
       <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground"><span>{registry.length} assets</span><span>{registry.filter(r=>r.productionUrl).length} linked app URLs</span><span>{registry.filter(r=>r.repoUrl).length} GitHub repos</span><span>{registry.filter(r=>r.cloudflareUrl).length} Cloudflare links</span></div>
       <div className="mt-2 text-xs text-muted-foreground" role="status">GitHub: {OWNERS.map(o=>o+" "+(owners[o]?.state||"not checked")).join(" · ")} · Cloudflare: {cfState}{checked?" · Checked "+new Date(checked).toLocaleTimeString():""}</div>
