@@ -313,7 +313,7 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
   const zoneRows: CloudflareZone[] = [];
   const errors: string[] = [];
   const [pages, scripts, domains, zones] = await Promise.allSettled([
-    allPages("/accounts/" + accountId + "/pages/projects", pagesToken, 20),
+    allPages("/accounts/" + accountId + "/pages/projects", pagesToken, 10),
     cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token),
     allPages("/accounts/" + accountId + "/workers/domains", token),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
