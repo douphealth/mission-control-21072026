@@ -11,7 +11,7 @@ export interface RawItem {
   sourceUrl?: string;
 }
 
-import { fetchPublicFeed, publicFeedUrl } from "./publicFeedFetch.server";
+import { assertFeedDocument, fetchPublicFeed, publicFeedUrl } from "./publicFeedFetch.server";
 export const httpGet = fetchPublicFeed;
 
 function decodeEntities(s: string): string {
@@ -91,39 +91,81 @@ export function parseFeed(xml: string, baseUrl?: string): RawItem[] {
   return out;
 }
 
-/** Find a feed URL from a homepage: <link rel=alternate> then common paths. */
+/** Official links verified from the publishers' own pages, 2026-11-03. */
+export function knownPublisherFeed(pageUrl: string): string | null {
+  const page = publicFeedUrl(pageUrl);
+  const path = page.pathname.replace(/\/$/, "");
+  if (page.hostname === "developers.google.com" && path === "/search/blog") return "https://feeds.feedburner.com/blogspot/amDG";
+  if (page.hostname === "github.blog" && path === "/changelog") return "https://github.blog/changelog/feed/";
+  return null;
+}
+
+/** Find the selected section's feed, including publishers using normal RSS anchors. */
 export async function discoverFeed(pageUrl: string): Promise<string | null> {
   const base = publicFeedUrl(pageUrl);
+  const known = knownPublisherFeed(pageUrl);
+  if (known) return known;
+  const candidates: string[] = [];
   try {
     const html = await httpGet(base.toString(), 6000, 0);
-    if (/<(rss|feed)[\s>]/i.test(html.slice(0, 2000))) return base.toString();
+    try { assertFeedDocument(html); return base.toString(); } catch { /* Read advertised feed links below. */ }
     const links = html.match(/<link[^>]+>/gi) ?? [];
     for (const l of links) {
       if (!/rel=["']?alternate/i.test(l)) continue;
       if (!/type=["'][^"']*(rss|atom)\+xml/i.test(l)) continue;
       const href = l.match(/href=["']([^"']+)["']/i);
-      if (href) return publicFeedUrl(new URL(decodeEntities(href[1]), base).toString()).toString();
+      if (href) candidates.push(publicFeedUrl(new URL(decodeEntities(href[1]), base).toString()).toString());
+    }
+    for (const anchor of html.match(/<a\b[^>]*>[\s\S]*?<\/a>/gi) ?? []) {
+      if (!/\b(?:rss|atom)\b|(?:subscribe|copy)\s+(?:to\s+)?(?:our\s+)?(?:\w+\s+)?feed/i.test(stripTags(anchor))) continue;
+      const href = anchor.match(/\bhref=["']([^"']+)["']/i)?.[1];
+      if (!href) continue;
+      try { candidates.push(publicFeedUrl(new URL(decodeEntities(href), base).toString()).toString()); } catch { /* Ignore unsupported links. */ }
     }
   } catch {
     /* homepage may be blocked — fall through to common paths */
   }
-  const candidates = [
+  const basePath = base.pathname.replace(/\/$/, "");
+  candidates.sort((a, b) => {
+    const scoped = (url: string) => { const u = new URL(url); return u.origin === base.origin && basePath && u.pathname.startsWith(`${basePath}/`) ? 1 : 0; };
+    return scoped(b) - scoped(a);
+  });
+  const paths = [
+    ...(basePath ? [`${basePath}/feed/`, `${basePath}/rss.xml`] : []),
     "/feed",
     "/rss",
     "/rss.xml",
     "/feed.xml",
 
   ];
-  for (const path of candidates) {
+  candidates.push(...paths.map(path => new URL(path, base).toString()));
+  for (const url of [...new Set(candidates)].slice(0, 6)) {
     try {
-      const url = new URL(path, base).toString();
       const body = await httpGet(url, 4500, 0);
-      if (/<(rss|feed)[\s>]/i.test(body.slice(0, 2000))) return url;
+      assertFeedDocument(body);
+      return url;
     } catch {
       /* try next */
     }
   }
   return null;
+}
+
+/** A cached webpage/challenge must not trap a source in a permanent failure loop. */
+export async function readSourceFeed(pageUrl: string, savedFeedUrl?: string): Promise<{ feedUrl: string; items: RawItem[] }> {
+  const known = knownPublisherFeed(pageUrl);
+  let feedUrl = known || savedFeedUrl || await discoverFeed(pageUrl);
+  if (!feedUrl) throw new Error("No readable RSS/Atom feed found. Add the publisher's exact feed URL.");
+  const read = async (url: string) => { const xml = await httpGet(url); assertFeedDocument(xml); return parseFeed(xml, url); };
+  try { return { feedUrl, items: await read(feedUrl) }; }
+  catch (error) {
+    // Known publisher links must fail honestly, never fall back to unrelated feeds.
+    if (known || !savedFeedUrl) throw error;
+    const discovered = await discoverFeed(pageUrl);
+    if (!discovered || discovered === savedFeedUrl) throw error;
+    feedUrl = discovered;
+    return { feedUrl, items: await read(feedUrl) };
+  }
 }
 
 export function googleNewsUrl(

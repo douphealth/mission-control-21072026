@@ -1,14 +1,11 @@
-import { assertFeedDocument } from "./publicFeedFetch.server";
 import { collectMentionCoverage, collectAudienceMetrics } from "./intelligenceCollectors.server";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { readIntelligenceConfiguration } from "./intelligenceConfiguration.server";
 import { z } from "zod";
 import {
-  discoverFeed,
   hostOf,
-  httpGet,
-  parseFeed,
+  readSourceFeed,
   type RawItem,
 } from "./controlCenter.server";
 import { anthropicComplete, isAnthropicAvailable } from "@/lib/anthropicServer";
@@ -71,18 +68,8 @@ export const collectIndustry = createServerFn({ method: "POST" })
     const results = await Promise.all(
       data.sources.map(async (src) => {
         try {
-          const feedUrl = src.feedUrl ?? (await discoverFeed(src.url));
-          if (!feedUrl) {
-            return {
-              sourceId: src.id,
-              feedUrl: null,
-              items: [] as RawItem[],
-              error: "No readable feed found",
-            };
-          }
-          const xml = await httpGet(feedUrl);
-          assertFeedDocument(xml);
-          const items = parseFeed(xml, feedUrl)
+          const { feedUrl, items: feedItems } = await readSourceFeed(src.url, src.feedUrl);
+          const items = feedItems
             .slice(0, 40)
             .map((i) => ({
               ...i,
@@ -101,34 +88,10 @@ export const collectIndustry = createServerFn({ method: "POST" })
       }),
     );
 
-    // Optional topic-phrase discovery uses multiple live providers.
-    const topics = [
-      ...new Set(
-        data.sources
-          .flatMap((s) => s.topics ?? [])
-          .map((t) => t.trim())
-          .filter(Boolean),
-      ),
-    ].slice(0, 2);
-    const topicResults = await Promise.all(
-      topics.map(async (topic) => {
-        const coverage = await searchNewsCoverage(`"${topic}"`, 7);
-        return {
-          sourceId: `topic:${topic}`,
-          feedUrl: null,
-          error: coverage.allFailed
-            ? summarizeProviderFailures(coverage).join(" · ") || "All news providers failed"
-            : null,
-          items: coverage.items.slice(0, 18).map((item) => ({
-            ...item,
-            source: item.source || hostOf(item.sourceUrl || "") || "News coverage",
-            sourceUrl: item.sourceUrl,
-          })),
-        };
-      }),
-    );
-
-    return { results: [...results, ...topicResults] };
+    // Monitoring retrieves the publishers the user chose. Broader topic research
+    // belongs to the explicit search action; generic source tags must not silently
+    // fill the monitoring stream (or spend on a configured search provider).
+    return { results };
   });
 
 export const searchIndustryTopic = createServerFn({ method: "POST" })

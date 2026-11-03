@@ -58,7 +58,7 @@ describe('preference persistence safety', () => {
     resilientWebStorage.setItem('ssr-pref', 'private'); expect(resilientWebStorage.getItem('ssr-pref')).toBeNull();
   });
   it('rejects corrupt navigation shapes and never hydrates methods', () => {
-    expect(sanitizeNavigation({ recentSections: 'bad', activeSection: '<script>', setActiveSection: 'bad' })).toEqual({ activeSection:'dashboard', recentSections:[], sidebarCollapsed:false, density:'comfortable' });
-    expect(sanitizeNavigation({ activeSection:'calendar', recentSections:['tasks','tasks',null,...Array(20).fill('calendar')] })).toEqual({ activeSection:'calendar', recentSections:['tasks','calendar'], sidebarCollapsed:false, density:'comfortable' });
+    expect(sanitizeNavigation({ recentSections: 'bad', activeSection: '<script>', setActiveSection: 'bad' })).toEqual({ activeSection:'dashboard', recentSections:[], sidebarCollapsed:false, density:'comfortable', pinnedSections:['dashboard','tasks','industry','review'], closedGroups:['Growth','Tools'] });
+    expect(sanitizeNavigation({ activeSection:'calendar', recentSections:['tasks','tasks',null,...Array(20).fill('calendar')] })).toEqual({ activeSection:'calendar', recentSections:['tasks','calendar'], sidebarCollapsed:false, density:'comfortable', pinnedSections:['dashboard','tasks','industry','review'], closedGroups:['Growth','Tools'] });
   });
 });

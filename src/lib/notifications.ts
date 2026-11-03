@@ -1,10 +1,12 @@
 // ─── Notification Engine ─────────────────────────────────────────────────────
-// Handles both browser push notifications and in-app toast reminders for tasks.
+// App-open notification checks for tasks and standalone reminders. No background push service.
 
 import { db } from "@/lib/db";
-import type { Task } from "@/lib/db";
+import type { Task, Reminder } from "@/lib/db";
 import { toast } from "sonner";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
+import { claimDueReminder, shouldNotifyReminder } from "@/lib/reminderNotifications";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 const REMINDER_OFFSETS: Record<string, number> = {
   "at-time": 0,
@@ -100,6 +102,61 @@ function fireNotification(task: Task, label: string) {
   }
 }
 
+function openReminders() {
+  useNavigationStore.getState().setActiveSection("reminders");
+}
+
+function fireStandaloneReminder(reminder: Reminder) {
+  const due = new Date(reminder.remindAt).toLocaleString();
+  toast.info(`Reminder due: ${reminder.title}`, {
+    id: `reminder-${reminder.id}-${reminder.notifiedFor}`,
+    description: [due, reminder.notes?.slice(0, 240)].filter(Boolean).join(" · "),
+    duration: 15_000,
+    action: { label: "Open reminders", onClick: openReminders },
+  });
+  // Reuse permission only. The checker must never trigger a permission dialog.
+  if (
+    typeof window !== "undefined" &&
+    "Notification" in window &&
+    Notification.permission === "granted"
+  ) {
+    try {
+      const notice = new Notification("Mission Control reminder", {
+        body: `${reminder.title} · ${due}`,
+        icon: "/favicon.ico",
+        tag: `reminder-${reminder.id}-${reminder.notifiedFor}`,
+      });
+      notice.onclick = () => {
+        window.focus();
+        openReminders();
+        notice.close();
+      };
+    } catch {
+      /* The persisted reminder and in-app alert remain available. */
+    }
+  }
+}
+
+export async function notifyDueReminders(now = Date.now()): Promise<number> {
+  if (typeof document !== "undefined" && document.hidden) return 0;
+  const reminders = await db.reminders.toArray();
+  let notified = 0;
+  for (const candidate of reminders) {
+    if (!shouldNotifyReminder(candidate, now)) continue;
+    const claimed = await claimDueReminder(candidate.id, now);
+    if (!claimed) continue;
+    fireStandaloneReminder(claimed);
+    notified += 1;
+    try {
+      markCloudRecordDirty("reminders", claimed.id);
+      queueCloudPush();
+    } catch (error) {
+      console.error("Reminder notification marker sync needs attention:", error);
+    }
+  }
+  return notified;
+}
+
 let intervalId: ReturnType<typeof setInterval> | null = null;
 let visibilityHandler: (() => void) | null = null;
 
@@ -143,15 +200,19 @@ async function overdueDigestCheck(tasks: Task[]) {
   }
 }
 
+let checking = false;
 const check = async () => {
+  if (checking || (typeof document !== "undefined" && document.hidden)) return;
+  checking = true;
   try {
     const now = Date.now();
+    await notifyDueReminders(now);
     const tasks = await db.tasks.toArray();
 
     await overdueDigestCheck(tasks);
 
     for (const task of tasks) {
-      if (task.status === "done") continue;
+      if (task.status === "done" || task.archived || task.deletedAt) continue;
 
       // ── New multi-reminder system ──
       const reminders = task.reminders;
@@ -200,6 +261,8 @@ const check = async () => {
     }
   } catch (e) {
     console.error("Notification check error:", e);
+  } finally {
+    checking = false;
   }
 };
 
@@ -217,10 +280,10 @@ function stopTimer() {
 
 /** Start the notification checker loop (call once from a top-level component) */
 export function startNotificationLoop() {
-  check();
   if (typeof document !== "undefined" && document.hidden) {
     // Don't poll while hidden — wakes up on visibility change
   } else {
+    check();
     startTimer();
   }
   if (!visibilityHandler && typeof document !== "undefined") {

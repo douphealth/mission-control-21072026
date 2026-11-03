@@ -31,11 +31,18 @@ export default function StatusBar() {
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 8_000);
     let mounted = true;
-    void readBuildInfo(controller.signal).then(info => {
-      if (mounted) { setBuild(info); setBuildChecked(true); }
+    void readBuildInfo(controller.signal).then((info) => {
+      if (mounted) {
+        setBuild(info);
+        setBuildChecked(true);
+      }
       window.clearTimeout(timeout);
     });
-    return () => { mounted = false; window.clearTimeout(timeout); controller.abort(); };
+    return () => {
+      mounted = false;
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
   useEffect(() => {
@@ -47,11 +54,14 @@ export default function StatusBar() {
         timer = setTimeout(() => setSaveStatus("idle"), 3000);
       }
     });
-    return () => { unsubscribe(); if (timer) clearTimeout(timer); };
+    return () => {
+      unsubscribe();
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   return (
-    <footer className="enterprise-panel sticky bottom-0 z-20 hidden lg:flex border-x-0 border-b-0 rounded-none shadow-none px-5 h-8 items-center justify-between text-[11px] text-muted-foreground/70">
+    <footer className="mc-statusbar enterprise-panel hidden lg:flex shrink-0 border-x-0 border-b-0 rounded-none shadow-none px-5 h-9 items-center justify-between text-[11px] text-muted-foreground/70">
       <div className="flex items-center gap-4">
         {online ? (
           <span className="flex items-center gap-1.5 text-success font-medium">
@@ -71,7 +81,13 @@ export default function StatusBar() {
         </span>
         <span className="flex items-center gap-1 text-muted-foreground/50">
           {cloudStatus === "signed-out" ? <CloudOff size={10} /> : <Cloud size={10} />}
-          {cloudStatus === "synced" ? "Google synced" : cloudStatus === "syncing" ? "Google syncing" : cloudStatus === "error" ? "Sync needs attention" : "Local only"}
+          {cloudStatus === "synced"
+            ? "Google synced"
+            : cloudStatus === "syncing"
+              ? "Google syncing"
+              : cloudStatus === "error"
+                ? "Sync needs attention"
+                : "Local only"}
         </span>
         {saveStatus === "saving" && (
           <span className="flex items-center gap-1 text-amber-500/70 animate-pulse">
@@ -93,8 +109,19 @@ export default function StatusBar() {
         <kbd className="text-[10px] text-muted-foreground/30 bg-secondary/40 px-1.5 py-0.5 rounded font-mono border border-border/20">
           {shortcut}
         </kbd>
-        <span className="font-medium text-muted-foreground/65" title={build ? `Deployment manifest · ${build.commit} · Built ${new Date(build.builtAt).toLocaleString()}` : "A deployment version is shown only when its generated manifest is available."}>
-          {build ? `Deployment ${build.commit.slice(0, 7)}` : buildChecked ? "Build unavailable" : "Checking build…"}
+        <span
+          className="font-medium text-muted-foreground/65"
+          title={
+            build
+              ? `Deployment manifest · ${build.commit} · Built ${new Date(build.builtAt).toLocaleString()}`
+              : "A deployment version is shown only when its generated manifest is available."
+          }
+        >
+          {build
+            ? `Deployment ${build.commit.slice(0, 7)}`
+            : buildChecked
+              ? "Build unavailable"
+              : "Checking build…"}
         </span>
       </div>
     </footer>

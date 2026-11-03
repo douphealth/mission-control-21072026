@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from "react";
+import "@/operate-workspaces.css";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Scale,
   RefreshCcw,
@@ -72,6 +73,12 @@ export default function DecisionsPage() {
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("open");
   const [query, setQuery] = useState("");
   const [source, setSource] = useState("all");
+  const [severity, setSeverity] = useState("all");
+  const [order, setOrder] = useState("priority");
+  const [limit, setLimit] = useState(30);
+  useEffect(() => {
+    setLimit(30);
+  }, [filter, query, source, severity, order]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [lastScan, setLastScan] = useState<string | null>(null);
@@ -92,16 +99,17 @@ export default function DecisionsPage() {
           (d) =>
             d.status === filter &&
             (source === "all" || d.source === source) &&
+            (severity === "all" || d.severity === severity) &&
             `${d.title} ${d.context} ${d.recommendation || ""}`
               .toLocaleLowerCase()
               .includes(query.trim().toLocaleLowerCase()),
         )
         .sort(
           (a, b) =>
-            SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] ||
+            (order === "priority" ? SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] : 0) ||
             b.updatedAt.localeCompare(a.updatedAt),
         ),
-    [decisions, filter, source, query],
+    [decisions, filter, source, query, severity, order],
   );
 
   async function operation(action: () => Promise<void>) {
@@ -160,7 +168,7 @@ export default function DecisionsPage() {
   ).length;
 
   return (
-    <div className="space-y-5">
+    <div className="mc-operate mc-findings space-y-5">
       <PageHeader
         icon={Scale}
         eyebrow="Operate / Evidence into action"
@@ -195,29 +203,26 @@ export default function DecisionsPage() {
           </>
         }
       />
-      <section className="rounded-2xl border border-border bg-card p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">Evidence coverage</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {seoIssues.length} saved SEO issues ·{" "}
-              {streamItems.filter((item) => item.kind === "mention").length} mention records ·{" "}
-              {tasks.length} tasks · {payments.length} finance records · {health.length} source
-              statuses
-            </p>
-          </div>
-          <span className="text-xs text-muted-foreground">
-            {lastScan
-              ? `Local review ${relTime(lastScan)}`
-              : "External sources are refreshed in their own workspaces"}
+      <details className="op-help-panel">
+        <summary>
+          Evidence coverage{" "}
+          <span>
+            {seoIssues.length} SEO issues ·{" "}
+            {streamItems.filter((item) => item.kind === "mention").length} mentions · {tasks.length}{" "}
+            tasks · {payments.length} finance records
           </span>
-        </div>
-        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-          Findings keep the original observation context. Only active, identity-matched, recent
-          mentions become new findings. An empty list means there are no matching saved findings; it
-          does not certify that every system is healthy.
+        </summary>
+        <p>
+          Reviews use saved source records. Refresh Trends, Mentions, Audience or your connected
+          tools for new observations. Findings preserve the original context; linking a task records
+          the next action without certifying the issue is fixed.
         </p>
-      </section>
+        <p>
+          {lastScan
+            ? `Last review in this session: ${relTime(lastScan)}`
+            : "Run Review saved evidence to scan the available records."}
+        </p>
+      </details>
       <section className="space-y-3 rounded-2xl border border-border bg-card p-4">
         <div className="flex flex-wrap gap-2">
           {FILTERS.map((value) => (
@@ -232,7 +237,7 @@ export default function DecisionsPage() {
             </button>
           ))}
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="op-findings-filters">
           <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border px-3">
             <Search size={16} />
             <input
@@ -256,7 +261,32 @@ export default function DecisionsPage() {
               </option>
             ))}
           </select>
+          <select
+            aria-label="Finding priority"
+            value={severity}
+            onChange={(event) => setSeverity(event.target.value)}
+            className={input}
+          >
+            <option value="all">All priorities</option>
+            {["critical", "high", "medium", "low"].map((value) => (
+              <option key={value} value={value}>
+                {value.charAt(0).toUpperCase() + value.slice(1)}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Sort findings"
+            value={order}
+            onChange={(event) => setOrder(event.target.value)}
+            className={input}
+          >
+            <option value="priority">Highest priority first</option>
+            <option value="updated">Recently updated first</option>
+          </select>
         </div>
+        <p className="text-xs text-muted-foreground">
+          {list.length} matching findings · a task link is a follow-up, not a resolution
+        </p>
       </section>
       {error && !dismiss && !adding && (
         <p
@@ -278,13 +308,26 @@ export default function DecisionsPage() {
                 Review saved evidence to turn recorded issues into decisions, or add a specific
                 finding with its supporting context.
               </p>
-              <button disabled={busy} onClick={scan} className={`${button} mt-4`}>
-                <RefreshCcw size={15} />
-                Review saved evidence
-              </button>
+              {query || source !== "all" || severity !== "all" ? (
+                <button
+                  className={`${button} mt-4`}
+                  onClick={() => {
+                    setQuery("");
+                    setSource("all");
+                    setSeverity("all");
+                  }}
+                >
+                  Clear search and filters
+                </button>
+              ) : (
+                <button disabled={busy} onClick={scan} className={`${button} mt-4`}>
+                  <RefreshCcw size={15} />
+                  Review saved evidence
+                </button>
+              )}
             </div>
           )}
-          {list.map((finding) => {
+          {list.slice(0, limit).map((finding) => {
             const meta = SOURCES[finding.source] || SOURCES.manual;
             const mention =
               finding.source === "mention"
@@ -429,6 +472,11 @@ export default function DecisionsPage() {
               </article>
             );
           })}
+          {list.length > limit && (
+            <button className={`${button} w-full`} onClick={() => setLimit((value) => value + 30)}>
+              Show 30 more · {list.length - limit} remaining
+            </button>
+          )}
         </section>
         <aside className="h-fit rounded-2xl border border-border bg-card p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold">

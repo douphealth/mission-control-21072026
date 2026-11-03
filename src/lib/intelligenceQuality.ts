@@ -211,9 +211,11 @@ export function titleSimilarity(left: string, right: string): number {
 
 
 export function publisherHost(item: { sourceUrl?: string; url?: string }): string {
-  const preferred = item.sourceUrl || item.url || "";
+  const preferred = item.sourceUrl || (item.url ? canonicalWebUrl(item.url) : "");
   try {
-    return new URL(preferred).hostname.replace(/^www\./, "").toLocaleLowerCase();
+    const host = new URL(preferred).hostname.replace(/^www\./, "").toLocaleLowerCase();
+    // A search intermediary is not an independent publisher.
+    return ["news.google.com", "bing.com"].includes(host) ? "" : host;
   } catch {
     return "";
   }
@@ -243,10 +245,25 @@ export function independentPublisherCorroboration(
 
 export function canonicalWebUrl(raw: string): string {
   try {
-    const url = new URL(raw);
+    let url = new URL(raw.trim());
+    // Resolve only documented/observed outbound envelopes; never guess opaque
+    // Google News article IDs or strip arbitrary application query parameters.
+    for (let hop = 0; hop < 3; hop += 1) {
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      const target = host === "bing.com" && url.pathname.toLowerCase() === "/news/apiclick.aspx"
+        ? url.searchParams.get("url")
+        : host === "google.com" && url.pathname === "/url"
+          ? url.searchParams.get("url") || url.searchParams.get("q")
+          : null;
+      if (!target) break;
+      const next = new URL(target);
+      if (!/^https?:$/.test(next.protocol) || next.username || next.password) break;
+      if (next.toString() === url.toString()) break;
+      url = next;
+    }
     url.hash = "";
     [...url.searchParams.keys()].forEach((key) => {
-      if (/^(utm_|fbclid|gclid|msclkid|ref|source)/i.test(key)) url.searchParams.delete(key);
+      if (/^(utm_.+|fbclid|gclid|msclkid|dclid|gbraid|wbraid|mc_cid|mc_eid|ref|source)$/i.test(key)) url.searchParams.delete(key);
     });
     url.hostname = url.hostname.toLocaleLowerCase();
     if (url.pathname !== "/") url.pathname = url.pathname.replace(/\/$/, "");
@@ -255,6 +272,25 @@ export function canonicalWebUrl(raw: string): string {
   } catch {
     return raw.trim();
   }
+}
+
+/** Preserve publisher metadata; repair legacy attribution to a search redirector. */
+export function attributedArticle<T extends { url: string; source?: string; sourceUrl?: string }>(item: T): T {
+  const url = canonicalWebUrl(item.url);
+  try {
+    const target = new URL(url);
+    if (!/^https?:$/.test(target.protocol) || target.username || target.password) return item;
+    const host = target.hostname.replace(/^www\./, "").toLowerCase();
+    const intermediary = (value: string | undefined) => {
+      if (!value) return true;
+      try { return ["bing.com", "news.google.com"].includes(new URL(value).hostname.replace(/^www\./, "").toLowerCase()); }
+      catch { return false; }
+    };
+    const actualPublisher = !["bing.com", "news.google.com"].includes(host);
+    const sourceUrl = actualPublisher && intermediary(item.sourceUrl) ? `${target.origin}/` : item.sourceUrl;
+    const source = actualPublisher && (!item.source || /^(?:www\.)?bing\.com$|^bing news$|^google news$/i.test(item.source)) ? host : item.source;
+    return { ...item, url, source, sourceUrl };
+  } catch { return item; }
 }
 
 export function isRecentIso(value: string | undefined, days: number, now = Date.now()): boolean {

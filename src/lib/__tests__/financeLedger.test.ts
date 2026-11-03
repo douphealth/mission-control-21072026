@@ -113,3 +113,46 @@ describe("Recorded finance evidence and status", () => {
     );
   });
 });
+
+import { amountInMinorUnits, paymentMatchesPeriod, ledgerEvidenceUrl } from "../financeLedger";
+
+describe("Filtered ledger arithmetic and provenance", () => {
+  it("adds exact currency minor units and respects currencies without cents", () => {
+    expect(moneySummary([payment({ amount: 0.1 }), payment({ amount: 0.2 })]).USD.expenses).toBe(
+      0.3,
+    );
+    expect(amountInMinorUnits(1200, "JPY")).toBe(1200);
+    expect(amountInMinorUnits(12.5, "JPY")).toBeNull();
+    expect(amountInMinorUnits(2.125, "KWD")).toBe(2125);
+    expect(amountInMinorUnits(2.125, "EUR")).toBeNull();
+    expect(
+      moneySummary([payment({ amount: NaN }), payment({ amount: -2 }), payment({ amount: 1.005 })]),
+    ).toEqual({});
+  });
+  it("uses actual paid dates for cash flow and due dates for obligations", () => {
+    const paid = payment({ paidDate: "2026-11-02", dueDate: "2026-10-30" });
+    expect(paymentMatchesPeriod(paid, "2026-11-01", "2026-11-30")).toBe(true);
+    expect(paymentMatchesPeriod(paid, "2026-10-01", "2026-10-31")).toBe(false);
+    expect(paymentMatchesPeriod({ ...paid, status: "pending" }, "2026-10-01", "2026-10-31")).toBe(
+      true,
+    );
+    expect(paymentMatchesPeriod({ ...paid, paidDate: "" }, "2026-11-01", "2026-11-30")).toBe(false);
+    expect(paymentMatchesPeriod({ ...paid, paidDate: "" }, "", "")).toBe(true);
+  });
+  it("does not expose embedded credentials or executable evidence links", () => {
+    expect(ledgerEvidenceUrl("https://user:secret@example.com/receipt")).toBeNull();
+    expect(ledgerEvidenceUrl("javascript:alert(1)")).toBeNull();
+    expect(ledgerEvidenceUrl("https://example.com/receipt/42")).toBe(
+      "https://example.com/receipt/42",
+    );
+    expect(financeCsv([payment({ sourceUrl: "https://example.com/receipt/42" })])).toContain(
+      "https://example.com/receipt/42",
+    );
+  });
+  it("validates currency precision before accepting a ledger amount", () => {
+    expect(validatePayment(payment({ currency: "EUR", amount: 2.125 }))).toMatch(
+      /2 decimal places/,
+    );
+    expect(validatePayment(payment({ currency: "JPY", amount: 12.5 }))).toMatch(/0 decimal places/);
+  });
+});

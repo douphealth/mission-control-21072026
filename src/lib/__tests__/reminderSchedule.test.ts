@@ -70,3 +70,47 @@ describe("Reminder dates and recurrence", () => {
     expect(grouped.done).toHaveLength(1);
   });
 });
+
+import { reminderCalendarFile, reminderScheduleForEdit } from "../reminderSchedule";
+
+describe("Reminder editing and calendar handoff", () => {
+  it("preserves the original month-end anchor when only notes are edited", () => {
+    const anchor = new Date(2026, 0, 31, 10, 30, 27).toISOString();
+    const current = new Date(2026, 1, 28, 10, 30, 27).toISOString();
+    const row = reminder({ remindAt: current, recurrenceAnchorAt: anchor });
+    expect(reminderScheduleForEdit(row, localReminderInput(current), "monthly")).toEqual({
+      remindAt: current,
+      recurrenceAnchorAt: anchor,
+    });
+    const changed = reminderScheduleForEdit(row, "2026-02-28T11:30", "monthly");
+    expect(changed.recurrenceAnchorAt).toBe(changed.remindAt);
+    expect(localReminderInput(changed.remindAt!)).toBe("2026-02-28T11:30");
+  });
+  it("exports the exact UTC occurrence without creating a recurring calendar series", () => {
+    const file = reminderCalendarFile(
+      reminder({ remindAt: "2026-11-03T16:30:00.000Z" }),
+      new Date("2026-11-03T12:00:00Z"),
+    );
+    expect(file).toContain("DTSTART:20261103T163000Z\r\n");
+    expect(file).toContain("DTSTAMP:20261103T120000Z\r\n");
+    expect(file).toContain("BEGIN:VALARM");
+    expect(file).not.toContain("RRULE");
+  });
+  it("escapes untrusted titles and folds UTF-8 at valid byte boundaries", () => {
+    const file = reminderCalendarFile(
+      reminder({
+        id: "x\nEND:VEVENT",
+        title: "Check, source; then\nBEGIN:VEVENT",
+        notes: "Διατροφή🙂 ".repeat(30),
+      }),
+    );
+    expect(file.split("\r\n").filter((line) => line === "BEGIN:VEVENT")).toHaveLength(1);
+    expect(file).toContain("SUMMARY:Check\\, source\\; then\\nBEGIN:VEVENT");
+    for (const line of file.split("\r\n"))
+      expect(new TextEncoder().encode(line).length).toBeLessThanOrEqual(75);
+    expect(file).not.toContain("�");
+    expect(() => reminderCalendarFile(reminder({ remindAt: "invalid" }))).toThrow(
+      /valid reminder time/,
+    );
+  });
+});

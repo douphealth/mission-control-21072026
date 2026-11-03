@@ -6,7 +6,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
   ExternalLink,
-  Gauge,
+  Download,
+  LayoutGrid,
+  List,
+  Pencil,
+  Plug,
+  Users,
+  X,
   Minus,
   Plus,
   RefreshCw,
@@ -18,11 +24,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAudienceAccounts, useAudienceReadings, genId } from "@/hooks/useTableData";
-import { db, type AudiencePlatform, type AudienceReading } from "@/lib/db";
+import { db, type AudiencePlatform, type AudienceReading, type AudienceAccount } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { runAudienceCollector } from "@/lib/controlCenter";
 import { isTrustedAudienceReading } from "@/lib/intelligenceQuality";
-import { CCHeader, EmptyState, Panel, relTime } from "@/components/controlcenter/ui";
+import {
+  IntelligenceMetrics,
+  IntelligenceTabs,
+  IntelligenceHeading,
+  IntelligenceEmpty,
+  downloadIntelligenceCsv,
+} from "@/components/controlcenter/IntelligenceWorkspace";
+import { CCHeader, Panel, relTime } from "@/components/controlcenter/ui";
 
 const PLATFORMS: {
   id: AudiencePlatform;
@@ -30,12 +43,37 @@ const PLATFORMS: {
   hint: string;
   hosts: string[];
 }[] = [
-  { id: "youtube", label: "YouTube", hint: "https://youtube.com/@handle", hosts: ["youtube.com", "youtu.be"] },
+  {
+    id: "youtube",
+    label: "YouTube",
+    hint: "https://youtube.com/@handle",
+    hosts: ["youtube.com", "youtu.be"],
+  },
   { id: "x", label: "X", hint: "https://x.com/handle", hosts: ["x.com", "twitter.com"] },
-  { id: "instagram", label: "Instagram", hint: "https://instagram.com/handle", hosts: ["instagram.com"] },
-  { id: "facebook", label: "Facebook", hint: "https://facebook.com/page", hosts: ["facebook.com", "fb.com"] },
-  { id: "linkedin", label: "LinkedIn", hint: "https://linkedin.com/company/x", hosts: ["linkedin.com"] },
-  { id: "threads", label: "Threads", hint: "https://threads.net/@handle", hosts: ["threads.net", "threads.com"] },
+  {
+    id: "instagram",
+    label: "Instagram",
+    hint: "https://instagram.com/handle",
+    hosts: ["instagram.com"],
+  },
+  {
+    id: "facebook",
+    label: "Facebook",
+    hint: "https://facebook.com/page",
+    hosts: ["facebook.com", "fb.com"],
+  },
+  {
+    id: "linkedin",
+    label: "LinkedIn",
+    hint: "https://linkedin.com/company/x",
+    hosts: ["linkedin.com"],
+  },
+  {
+    id: "threads",
+    label: "Threads",
+    hint: "https://threads.net/@handle",
+    hosts: ["threads.net", "threads.com"],
+  },
   { id: "tiktok", label: "TikTok", hint: "https://tiktok.com/@handle", hosts: ["tiktok.com"] },
   { id: "github", label: "GitHub", hint: "https://github.com/username", hosts: ["github.com"] },
   { id: "bluesky", label: "Bluesky", hint: "https://bsky.app/profile/handle", hosts: ["bsky.app"] },
@@ -44,40 +82,90 @@ const PLATFORMS: {
 const nf = new Intl.NumberFormat("en-US");
 
 function Sparkline({ readings }: { readings: AudienceReading[] }) {
-  const values = readings
-    .filter((reading) => isTrustedAudienceReading(reading))
-    .slice(-12)
-    .map((reading) => reading.followers as number);
-  if (values.length < 2) {
-    return <div className="cc-audience-spark-empty">Needs 2 readings for trend</div>;
-  }
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = Math.max(1, max - min);
-  const points = values
-    .map((value, index) => {
-      const x = (index / (values.length - 1)) * 100;
-      const y = 34 - ((value - min) / span) * 28;
-      return `${x},${y}`;
-    })
+  const samples = [
+    ...new Map(
+      readings
+        .filter((reading) => isTrustedAudienceReading(reading))
+        .map((reading) => [reading.capturedAt, reading]),
+    ).values(),
+  ].slice(-12);
+  if (samples.length < 2)
+    return (
+      <div className="cc-audience-spark-empty">
+        A second comparable reading will reveal a trend.
+      </div>
+    );
+  const values = samples.map((reading) => reading.followers as number);
+  const min = Math.min(...values),
+    max = Math.max(...values);
+  const firstAt = Date.parse(samples[0].capturedAt),
+    lastAt = Date.parse(samples.at(-1)!.capturedAt);
+  const elapsed = Math.max(1, lastAt - firstAt);
+  const points = samples
+    .map(
+      (reading, index) =>
+        `${((Date.parse(reading.capturedAt) - firstAt) / elapsed) * 100},${max === min ? 20 : 34 - ((values[index] - min) / (max - min)) * 28}`,
+    )
     .join(" ");
   return (
-    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="cc-audience-spark" role="img" aria-label={`Follower measurements from the same provider and profile, ${values[0]} to ${values.at(-1)}`}>
+    <svg
+      viewBox="0 0 100 40"
+      preserveAspectRatio="none"
+      className="cc-audience-spark"
+      role="img"
+      aria-label={`Range-scaled follower history. ${samples.length} comparable readings, from ${values[0]} on ${new Date(firstAt).toLocaleDateString()} to ${values.at(-1)} on ${new Date(lastAt).toLocaleDateString()}.`}
+    >
       <polyline points={points} fill="none" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
 
+function countLabel(reading?: AudienceReading) {
+  if (reading?.followers === null || reading?.followers === undefined) return "Unavailable";
+  return `${reading.metricSemantics === "approximate" || reading.metricSemantics === "rounded" ? "~" : ""}${nf.format(reading.followers)}`;
+}
+
 export default function AudiencePage() {
   const accounts = useAudienceAccounts();
   const readings = useAudienceReadings();
+  const [measurementNow, setMeasurementNow] = useState(() => Date.now());
   const [platform, setPlatform] = useState<AudiencePlatform>("youtube");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"all" | "current" | "attention">("all");
-  const [report, setReport] = useState<Awaited<ReturnType<typeof runAudienceCollector>> | null>(null);
+  const [tab, setTab] = useState<"profiles" | "add" | "connections">("profiles");
+  const [platformFilter, setPlatformFilter] = useState("all");
+  const [layout, setLayout] = useState<"cards" | "compact">("cards");
+  const [sort, setSort] = useState<"name" | "attention" | "latest">("attention");
+  const [pending, setPending] = useState("");
+  const mutationLock = useRef(false);
+  const [editingAccount, setEditingAccount] = useState("");
+  const [editLabel, setEditLabel] = useState("");
+  const [confirmRemoval, setConfirmRemoval] = useState("");
+  const [report, setReport] = useState<Awaited<ReturnType<typeof runAudienceCollector>> | null>(
+    null,
+  );
   const autoRefreshStarted = useRef(false);
+
+  useEffect(() => {
+    // Freshness expires even when no data changes. Refresh immediately after
+    // returning to a suspended tab, without starting another provider request.
+    const updateClock = () => {
+      if (!document.hidden) setMeasurementNow(Date.now());
+    };
+    updateClock();
+    const timer = window.setInterval(updateClock, 60_000);
+    window.addEventListener("focus", updateClock);
+    window.addEventListener("pageshow", updateClock);
+    document.addEventListener("visibilitychange", updateClock);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", updateClock);
+      window.removeEventListener("pageshow", updateClock);
+      document.removeEventListener("visibilitychange", updateClock);
+    };
+  }, []);
 
   const byAccount = useMemo(() => {
     const map = new Map<string, AudienceReading[]>();
@@ -90,26 +178,41 @@ export default function AudiencePage() {
     return map;
   }, [readings]);
 
-  const latestValid = useMemo(() => {
-    const map = new Map<string, AudienceReading>();
-    accounts.forEach((account) => {
-      const { latest } = audienceMeasurementSummary(byAccount.get(account.id) ?? [], account);
-      if (latest) map.set(account.id, latest);
-    });
-    return map;
-  }, [accounts, byAccount]);
-
-  const officialCount = [...latestValid.values()].filter(
-    (reading) => reading.method === "official-api",
+  const summaries = useMemo(
+    () =>
+      new Map(
+        accounts.map((account) => [
+          account.id,
+          audienceMeasurementSummary(byAccount.get(account.id) ?? [], account, measurementNow),
+        ]),
+      ),
+    [accounts, byAccount, measurementNow],
+  );
+  const officialCount = [...summaries.values()].filter(
+    (summary) => summary.latest?.method === "official-api",
   ).length;
-  const freshVerified = accounts.filter(account =>
-    audienceMeasurementSummary(byAccount.get(account.id) ?? [], account).current,
-  ).length;
-  const visibleAccounts = accounts.filter(account => {
-    const current = audienceMeasurementSummary(byAccount.get(account.id) ?? [], account).current;
-    return (view === "all" || (view === "current" ? current : !current)) &&
-      (!search.trim() || `${account.handle} ${account.label || ""} ${account.platform} ${account.url}`.toLowerCase().includes(search.trim().toLowerCase()));
-  });
+  const freshVerified = [...summaries.values()].filter((summary) => summary.current).length;
+  const measuredCount = [...summaries.values()].filter((summary) => summary.latest).length;
+  const visibleAccounts = accounts
+    .filter((account) => {
+      const current = summaries.get(account.id)?.current;
+      return (
+        (view === "all" || (view === "current" ? current : !current)) &&
+        (platformFilter === "all" || account.platform === platformFilter) &&
+        (!search.trim() ||
+          `${account.handle} ${account.label || ""} ${account.platform} ${account.url}`
+            .toLowerCase()
+            .includes(search.trim().toLowerCase()))
+      );
+    })
+    .sort((a, b) =>
+      sort === "attention"
+        ? Number(summaries.get(a.id)?.current) - Number(summaries.get(b.id)?.current) ||
+          (a.label || a.handle).localeCompare(b.label || b.handle)
+        : sort === "latest"
+          ? (b.lastCheckedAt || "").localeCompare(a.lastCheckedAt || "")
+          : (a.label || a.handle).localeCompare(b.label || b.handle),
+    );
 
   useEffect(() => {
     if (autoRefreshStarted.current || !accounts.length) return;
@@ -121,14 +224,21 @@ export default function AudiencePage() {
     if (!stale) return;
     autoRefreshStarted.current = true;
     setBusy(true);
-    void runAudienceCollector().then(setReport).catch(() => {
-      // Account/collector status surfaces failures; auto-refresh stays quiet.
-    }).finally(() => setBusy(false));
+    void runAudienceCollector()
+      .then(setReport)
+      .catch(() => {
+        // Account/collector status surfaces failures; auto-refresh stays quiet.
+      })
+      .finally(() => setBusy(false));
   }, [accounts]);
 
   const addAccount = async () => {
     const clean = url.trim();
-    if (!clean) return;
+    if (!clean || mutationLock.current) return;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(clean) && !/^https?:\/\//i.test(clean)) {
+      toast.error("Use an HTTP or HTTPS profile URL");
+      return;
+    }
     const normalised = /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
     let parsed: URL;
     try {
@@ -151,13 +261,20 @@ export default function AudiencePage() {
     }
 
     let profile: ReturnType<typeof audienceProfile>;
-    try { profile = audienceProfile(platform, normalised); }
-    catch (error) { toast.error(error instanceof Error ? error.message : "Invalid profile URL"); return; }
+    try {
+      profile = audienceProfile(platform, normalised);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid profile URL");
+      return;
+    }
 
     const key = audienceProfileKey(platform, normalised);
     const duplicate = accounts.find((account) => {
-      try { return audienceProfileKey(account.platform, account.url) === key; }
-      catch { return account.url.toLowerCase() === profile.url.toLowerCase(); }
+      try {
+        return audienceProfileKey(account.platform, account.url) === key;
+      } catch {
+        return account.url.toLowerCase() === profile.url.toLowerCase();
+      }
     });
     if (duplicate) {
       toast.info("This profile is already tracked");
@@ -172,11 +289,28 @@ export default function AudiencePage() {
       url: profile.url,
       createdAt: new Date().toISOString(),
     };
-    await db.audienceAccounts.put(record);
-    markCloudRecordDirty("audienceAccounts", record.id);
-    queueCloudPush();
-    setUrl("");
-    toast.success(`Tracking ${handle}`);
+    mutationLock.current = true;
+    setPending("new");
+    try {
+      await db.audienceAccounts.put(record);
+      markCloudRecordDirty("audienceAccounts", record.id);
+      queueCloudPush();
+      setUrl("");
+      setTab("profiles");
+      setView("all");
+      setSearch("");
+      setPlatformFilter("all");
+      toast.success(`Tracking ${handle}`, {
+        description: "Refresh metrics to collect a verified measurement.",
+      });
+    } catch (error) {
+      toast.error("Profile was not saved", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      mutationLock.current = false;
+      setPending("");
+    }
   };
 
   const refresh = async () => {
@@ -185,8 +319,20 @@ export default function AudiencePage() {
       const result = await runAudienceCollector();
       setReport(result);
       if (!result.updated) toast.info("Add a profile before refreshing");
-      else if (!result.succeeded) toast.error("No current audience metrics retrieved", { description: "Every attempted profile was unavailable. See the exact reason and next action on each profile card." });
-      else toast[result.unavailable ? "warning" : "success"](`${result.succeeded}/${result.updated} profiles returned verified metrics`, { description: result.unavailable ? `${result.unavailable} unavailable; previous valid readings are preserved and labeled.` : "The displayed readings came from the stated source methods." });
+      else if (!result.succeeded)
+        toast.error("No current audience metrics retrieved", {
+          description:
+            "Every attempted profile was unavailable. See the exact reason and next action on each profile card.",
+        });
+      else
+        toast[result.unavailable ? "warning" : "success"](
+          `${result.succeeded}/${result.updated} profiles returned verified metrics`,
+          {
+            description: result.unavailable
+              ? `${result.unavailable} unavailable; previous valid readings are preserved and labeled.`
+              : "The displayed readings came from the stated source methods.",
+          },
+        );
     } catch (error: any) {
       toast.error("Audience refresh failed", { description: String(error?.message ?? error) });
     } finally {
@@ -194,274 +340,744 @@ export default function AudiencePage() {
     }
   };
 
+  const changeAccount = async (id: string, action: () => Promise<void>) => {
+    if (mutationLock.current) return;
+    mutationLock.current = true;
+    setPending(id);
+    try {
+      await action();
+    } catch (error) {
+      toast.error("Profile change was not saved", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      mutationLock.current = false;
+      setPending("");
+    }
+  };
+  const removeAccount = async (account: AudienceAccount) => {
+    if (busy) {
+      toast.info("Wait for the current refresh before removing a profile");
+      return;
+    }
+    const history = readings.filter((reading) => reading.accountId === account.id);
+    await db.transaction("rw", db.audienceAccounts, db.audienceReadings, async () => {
+      await db.audienceReadings.bulkDelete(history.map((reading) => reading.id));
+      await db.audienceAccounts.delete(account.id);
+    });
+    history.forEach((reading) => markCloudRecordDirty("audienceReadings", reading.id, "delete"));
+    markCloudRecordDirty("audienceAccounts", account.id, "delete");
+    queueCloudPush();
+    setConfirmRemoval("");
+    toast("Profile removed", {
+      description: `${account.label || account.handle} and ${history.length} saved readings.`,
+      duration: 10_000,
+      action: {
+        label: "Undo",
+        onClick: () =>
+          void changeAccount(account.id, async () => {
+            await db.transaction("rw", db.audienceAccounts, db.audienceReadings, async () => {
+              await db.audienceAccounts.put(account);
+              await db.audienceReadings.bulkPut(history);
+            });
+            markCloudRecordDirty("audienceAccounts", account.id);
+            history.forEach((reading) => markCloudRecordDirty("audienceReadings", reading.id));
+            queueCloudPush();
+            toast.success("Profile and history restored");
+          }),
+      },
+    });
+  };
+  const resetView = () => {
+    setSearch("");
+    setView("all");
+    setPlatformFilter("all");
+  };
+  const exportProfiles = () =>
+    downloadIntelligenceCsv(
+      "mission-control-audience.csv",
+      [
+        "Label",
+        "Platform",
+        "Profile",
+        "URL",
+        "Latest valid count",
+        "Metric semantics",
+        "Captured at",
+        "Current within 24h",
+        "Provider",
+        "Method",
+        "Delta",
+        "Compared with",
+        "Last attempt",
+        "Last status",
+        "Next action",
+      ],
+      visibleAccounts.map((account) => {
+        const summary = summaries.get(account.id)!;
+        return [
+          account.label,
+          account.platform,
+          account.handle,
+          account.url,
+          summary.latest?.followers,
+          summary.latest?.metricSemantics,
+          summary.latest?.capturedAt,
+          summary.current ? "Yes" : "No",
+          summary.latest?.provider,
+          summary.latest?.method,
+          summary.delta,
+          summary.previous?.capturedAt,
+          account.lastCheckedAt,
+          account.lastStatus,
+          account.lastAction,
+        ];
+      }),
+    );
+
   return (
-    <div className="space-y-5">
+    <div className="intel-workspace">
       <CCHeader
-        title="Audience Intelligence"
-        subtitle="Track audience growth for your exact profiles. Compare measurements from the same provider, see when each count was checked, and resolve unavailable connections."
+        title="Audience"
+        subtitle="Understand your audience one verified profile at a time. Compare like-for-like measurements and see exactly where a connection needs attention."
         actions={
-          <button
-            onClick={() => void refresh()}
-            disabled={busy || !accounts.length}
-            className="inline-flex items-center gap-2 rounded-xl gradient-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            <RefreshCw size={13} className={busy ? "animate-spin" : ""} />
-            {busy ? "Checking profiles…" : "Refresh metrics"}
-          </button>
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setTab("add")}>
+              <Plus size={15} />
+              Track profile
+            </button>
+            <button
+              type="button"
+              onClick={() => void refresh()}
+              disabled={busy || !accounts.length}
+              className="btn-primary"
+            >
+              <RefreshCw size={15} className={busy ? "animate-spin" : ""} />
+              {busy ? "Checking profiles…" : "Refresh metrics"}
+            </button>
+          </>
         }
       />
-      <CollectorStatusPanel kind="audience" />
+      <IntelligenceMetrics
+        items={[
+          {
+            label: "Tracked profiles",
+            value: accounts.length,
+            hint: `${measuredCount} have at least one valid reading`,
+            tone: "accent",
+            onClick: () => {
+              setTab("profiles");
+              resetView();
+            },
+          },
+          {
+            label: "Current measurements",
+            value: freshVerified,
+            hint: "Successful status · measured within 24h",
+            tone: freshVerified ? "success" : undefined,
+            active: tab === "profiles" && view === "current",
+            onClick: () => {
+              setTab("profiles");
+              setView("current");
+              setPlatformFilter("all");
+              setSearch("");
+            },
+          },
+          {
+            label: "Needs attention",
+            value: accounts.length - freshVerified,
+            hint: "Unavailable, never measured or out of date",
+            tone: accounts.length > freshVerified ? "warning" : undefined,
+            active: tab === "profiles" && view === "attention",
+            onClick: () => {
+              setTab("profiles");
+              setView("attention");
+              setPlatformFilter("all");
+              setSearch("");
+            },
+          },
+          {
+            label: "Official API readings",
+            value: officialCount,
+            hint: "Profiles whose latest valid reading used an API",
+            onClick: () => setTab("connections"),
+          },
+        ]}
+      />
+      <IntelligenceTabs
+        value={tab}
+        onChange={setTab}
+        label="Audience workspace views"
+        items={[
+          { id: "profiles", label: "Profiles", count: accounts.length, icon: <Users size={15} /> },
+          { id: "add", label: "Track a profile", icon: <Plus size={15} /> },
+          { id: "connections", label: "Connections", icon: <Plug size={15} /> },
+        ]}
+      />
 
-      <section className="grid gap-2 sm:grid-cols-4">
-        {[
-          ["Tracked profiles", accounts.length, "primary"],
-          ["Fresh verified <24h", freshVerified, "success"],
-          ["Last valid via API", officialCount, "info"],
-          ["Needs attention", accounts.length - freshVerified, accounts.length - freshVerified ? "warning" : "success"],
-        ].map(([label, value, tone]) => (
-          <div key={String(label)} className="cc-intel-kpi" data-tone={String(tone)}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-          </div>
-        ))}
-      </section>
-
-      <AudienceConnectionsPanel />
-
-      {report && <div role="status" className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
-        <strong className="text-foreground">Last refresh: {report.succeeded}/{report.updated} profiles measured.</strong>{" "}
-        {report.unavailable ? `${report.unavailable} need attention; each profile shows its provider response and next step.` : "Each measurement is tied to its stated source and capture time."}
-      </div>}
-
-      <Panel>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
-              <ShieldCheck size={15} className="text-success" />
-              Track a profile
-            </div>
-            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
-              Add a public profile URL to track its followers or subscribers. GitHub and Bluesky support
-              public measurements; other networks may need an authorized integration. Open the connection
-              status panel for setup details. Missing counts stay unavailable; a confirmed zero remains zero.
-            </p>
-          </div>
-          <span className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-1 text-xs font-bold text-muted-foreground">
-            {freshVerified}/{accounts.length} fresh verified in last 24h
-          </span>
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-[auto_1.6fr_auto]">
-          <select
-            aria-label="Profile platform"
-            value={platform}
-            onChange={(event) => setPlatform(event.target.value as AudiencePlatform)}
-            className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          >
-            {PLATFORMS.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <input
-            aria-label="Public profile URL"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && void addAccount()}
-            placeholder={PLATFORMS.find((item) => item.id === platform)?.hint}
-            className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          />
-          <button onClick={() => void addAccount()} className="btn-primary justify-center">
-            <Plus size={14} /> Track profile
-          </button>
-        </div>
-      </Panel>
-
-      {!!accounts.length && <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4">
-        <div>
-          <h2 className="text-sm font-bold">Your audience profiles</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{visibleAccounts.length} of {accounts.length} profiles · Counts are per profile, not unique people across networks.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-3">
-            <Search size={15} className="text-muted-foreground" />
-            <input aria-label="Find audience profiles" value={search} onChange={event => setSearch(event.target.value)} placeholder="Find a profile…" className="min-w-0 bg-transparent text-sm outline-none" />
-          </label>
-          <select aria-label="Filter audience measurement status" value={view} onChange={event => setView(event.target.value as typeof view)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
-            <option value="all">All profiles</option>
-            <option value="current">Current measurements</option>
-            <option value="attention">Needs attention</option>
-          </select>
-        </div>
-      </div>}
-
-      {accounts.length === 0 ? (
-        <EmptyState
-          title="No profiles tracked yet"
-          hint="Add the exact public profile URL. Mission Control validates that the URL matches the selected platform before saving it."
-        />
-      ) : !visibleAccounts.length ? (
-        <EmptyState title="No profiles match this view" hint="Clear the search or choose All profiles to see every tracked account." />
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {visibleAccounts.map((account) => {
-            const list = byAccount.get(account.id) ?? [];
-            const { latest, series, previous, current, delta } = audienceMeasurementSummary(list, account);
-            const DeltaIcon =
-              delta === null || delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
-            const platformLabel =
-              PLATFORMS.find((item) => item.id === account.platform)?.label ?? account.platform;
-
-            return (
-              <article key={account.id} className="cc-audience-card">
-                <div className={`mb-3 rounded-xl border p-3 text-xs ${current ? "border-success/20 bg-success/5 text-success" : "border-warning/30 bg-warning/5 text-warning"}`} role="status">
-                  <strong>{current ? "Current · checked within 24 hours" : latest ? "Previous measurement · refresh needed" : "No verified measurement yet"}</strong>
-                  <p className="mt-1">{account.lastEvidence}</p>
-                  {account.lastAction && <p className="mt-1 font-semibold">{account.lastAction}</p>}
-                  {!current && !account.lastAction && <p className="mt-1">Refresh metrics to check the provider and the latest available count.</p>}
+      {tab === "profiles" && (
+        <section className="space-y-4" aria-label="Audience profiles">
+          <IntelligenceHeading
+            eyebrow="Audience health"
+            title="Your profile portfolio"
+            description="Counts belong to each profile. They are not a deduplicated total of people across networks."
+            actions={
+              <>
+                <div className="flex gap-1" aria-label="Profile layout">
+                  <button
+                    type="button"
+                    aria-label="Card view"
+                    aria-pressed={layout === "cards"}
+                    className="intel-icon-button"
+                    onClick={() => setLayout("cards")}
+                  >
+                    <LayoutGrid size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="Compact table view"
+                    aria-pressed={layout === "compact"}
+                    className="intel-icon-button"
+                    onClick={() => setLayout("compact")}
+                  >
+                    <List size={15} />
+                  </button>
                 </div>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-xs font-black uppercase tracking-[0.12em] text-muted-foreground">
-                        {platformLabel}
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  disabled={!visibleAccounts.length}
+                  onClick={exportProfiles}
+                >
+                  <Download size={14} />
+                  Export view
+                </button>
+              </>
+            }
+          />
+          {report && (
+            <div
+              role="status"
+              className="intel-notice"
+              data-tone={report.unavailable ? "warning" : undefined}
+            >
+              <ShieldCheck size={17} />
+              <div>
+                <strong className="text-foreground">
+                  Last refresh: {report.succeeded}/{report.updated} profiles measured.
+                </strong>{" "}
+                {report.unavailable
+                  ? `${report.unavailable} need attention. Previous valid readings are preserved and labeled.`
+                  : "Each measurement is tied to its source and capture time."}
+              </div>
+            </div>
+          )}
+          {!!accounts.length && (
+            <>
+              <div className="intel-toolbar">
+                <label className="intel-search-field">
+                  <Search size={15} />
+                  <input
+                    aria-label="Find audience profiles"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Find a profile, label or platform"
+                  />
+                </label>
+                <select
+                  className="intel-select"
+                  aria-label="Filter audience platform"
+                  value={platformFilter}
+                  onChange={(event) => setPlatformFilter(event.target.value)}
+                >
+                  <option value="all">All platforms</option>
+                  {PLATFORMS.filter((item) =>
+                    accounts.some((account) => account.platform === item.id),
+                  ).map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  className="intel-select"
+                  aria-label="Filter audience measurement status"
+                  value={view}
+                  onChange={(event) => setView(event.target.value as typeof view)}
+                >
+                  <option value="all">All profiles</option>
+                  <option value="current">Current measurements</option>
+                  <option value="attention">Needs attention</option>
+                </select>
+                <select
+                  className="intel-select"
+                  aria-label="Sort audience profiles"
+                  value={sort}
+                  onChange={(event) => setSort(event.target.value as typeof sort)}
+                >
+                  <option value="attention">Needs attention first</option>
+                  <option value="name">Profile name</option>
+                  <option value="latest">Latest checked</option>
+                </select>
+              </div>
+              <div className="intel-filter-note">
+                <span>
+                  {visibleAccounts.length} of {accounts.length} profiles · Missing measurements are
+                  unavailable, never assumed to be zero.
+                </span>
+                {(search || view !== "all" || platformFilter !== "all") && (
+                  <button type="button" className="intel-link-button" onClick={resetView}>
+                    Reset filters
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+          {!accounts.length ? (
+            <IntelligenceEmpty
+              title="Your audience starts with one profile"
+              description="Add the exact public URL of a profile you manage. Public APIs are available for some networks; other platforms may require an authorized integration."
+              action="Track your first profile"
+              onAction={() => setTab("add")}
+            />
+          ) : !visibleAccounts.length ? (
+            <IntelligenceEmpty
+              title="No profiles match this view"
+              description="Reset the search, status and platform filters to return to your full profile portfolio."
+              action="Show all profiles"
+              onAction={resetView}
+            />
+          ) : layout === "compact" ? (
+            <div
+              className="intel-table-scroll"
+              tabIndex={0}
+              role="region"
+              aria-label="Audience measurement table"
+            >
+              <table className="intel-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Profile</th>
+                    <th scope="col">Measurement</th>
+                    <th scope="col">Change</th>
+                    <th scope="col">Data status</th>
+                    <th scope="col">Source & time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleAccounts.map((account) => {
+                    const { latest, previous, current, delta } = summaries.get(account.id)!;
+                    return (
+                      <tr key={account.id}>
+                        <td>
+                          <a
+                            href={account.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold hover:text-primary"
+                          >
+                            {account.label || account.handle}
+                            <ExternalLink size={11} className="ml-1 inline" />
+                          </a>
+                          <small>
+                            {PLATFORMS.find((item) => item.id === account.platform)?.label} ·{" "}
+                            {account.handle}
+                          </small>
+                          <button
+                            type="button"
+                            className="intel-link-button"
+                            onClick={() => {
+                              setLayout("cards");
+                              setSearch(account.handle);
+                            }}
+                          >
+                            Manage profile
+                          </button>
+                        </td>
+                        <td className="font-semibold tabular-nums">
+                          {countLabel(latest)}
+                          <small>
+                            {!current && latest
+                              ? "Previous valid count"
+                              : account.platform === "youtube"
+                                ? "Subscribers"
+                                : "Followers"}
+                            {latest?.metricSemantics && ` · ${latest.metricSemantics}`}
+                          </small>
+                        </td>
+                        <td>
+                          {delta === null
+                            ? "Not comparable"
+                            : `${delta > 0 ? "+" : ""}${nf.format(delta)}`}
+                          <small>
+                            {delta !== null && previous
+                              ? `Since ${new Date(previous.capturedAt).toLocaleString()}`
+                              : "Two exact readings from the same provider are required."}
+                          </small>
+                        </td>
+                        <td>
+                          <span className="intel-pill" data-tone={current ? "success" : "warning"}>
+                            {current ? "Current <24h" : latest ? "Previous reading" : "Unavailable"}
+                          </span>
+                          <small>
+                            {account.lastAction ||
+                              (!current
+                                ? "Refresh or inspect connection"
+                                : "Last refresh successful")}
+                          </small>
+                        </td>
+                        <td>
+                          {latest?.provider || "No valid source"}
+                          <small>
+                            {latest
+                              ? new Date(latest.capturedAt).toLocaleString()
+                              : "No valid capture"}
+                          </small>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="intel-profile-grid">
+              {visibleAccounts.map((account) => {
+                const { latest, series, previous, current, delta } = summaries.get(account.id)!;
+                const DeltaIcon =
+                  delta === null || delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
+                const platformName =
+                  PLATFORMS.find((item) => item.id === account.platform)?.label || account.platform;
+                return (
+                  <article key={account.id} className="intel-profile-card">
+                    <div className="intel-profile-top">
+                      <div className="min-w-0">
+                        <div className="intel-eyebrow">{platformName}</div>
+                        <a
+                          href={account.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block break-words text-base font-semibold tracking-tight hover:text-primary"
+                        >
+                          {account.label || account.handle}
+                        </a>
+                        {account.label && (
+                          <p className="mt-1 break-words text-xs text-muted-foreground">
+                            {account.handle}
+                          </p>
+                        )}
+                      </div>
+                      <div className="intel-source-actions">
+                        <a
+                          href={account.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="intel-icon-button"
+                          aria-label={`Open ${account.handle} profile`}
+                        >
+                          <ExternalLink size={14} />
+                        </a>
+                        <button
+                          type="button"
+                          className="intel-icon-button"
+                          aria-label={`Edit label for ${account.handle}`}
+                          onClick={() => {
+                            setEditingAccount(account.id);
+                            setEditLabel(account.label || "");
+                          }}
+                        >
+                          <Pencil size={14} />
+                        </button>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <span className="intel-pill" data-tone={current ? "success" : "warning"}>
+                        {current
+                          ? "Current · under 24h"
+                          : latest
+                            ? "Previous measurement"
+                            : "No valid measurement"}
                       </span>
                       {latest?.method === "official-api" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-1.5 py-0.5 text-xs font-bold text-success">
-                          <BadgeCheck size={9} /> Official API
+                        <span className="intel-pill">
+                          <BadgeCheck size={11} />
+                          Official API
                         </span>
                       )}
                       {latest?.method === "public-page" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-1.5 py-0.5 text-xs font-bold text-info">
-                          <ShieldCheck size={9} /> Identity-verified public page
-                        </span>
+                        <span className="intel-pill">Identity-verified public page</span>
                       )}
                     </div>
-                    <a
-                      href={account.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="mt-1 block truncate text-sm font-extrabold text-foreground hover:text-primary"
-                    >
-                      {account.handle}
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <a
-                      href={account.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-primary"
-                      aria-label="Open profile"
-                    >
-                      <ExternalLink size={13} />
-                    </a>
-                    <button
-                      onClick={async () => {
-                        await db.audienceAccounts.delete(account.id);
-                        const accountReadings = readings.filter((reading) => reading.accountId === account.id);
-                        if (accountReadings.length) {
-                          await db.audienceReadings.bulkDelete(accountReadings.map((reading) => reading.id));
-                          accountReadings.forEach((reading) =>
-                            markCloudRecordDirty("audienceReadings", reading.id, "delete"),
-                          );
-                        }
-                        markCloudRecordDirty("audienceAccounts", account.id, "delete");
-                        queueCloudPush();
-                      }}
-                      className="rounded-lg p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-                      aria-label="Remove profile"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-end justify-between gap-3">
-                  <div>
-                    <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
-                      {!current && latest ? "Last valid count" : account.platform === "youtube" ? "Subscribers" : "Followers"}
-                    </div>
-                    <div className="mt-0.5 text-3xl font-black tabular-nums tracking-tight text-foreground">
-                      {latest?.followers !== null && latest?.followers !== undefined
-                        ? `${latest.metricSemantics === "approximate" || latest.metricSemantics === "rounded" ? "~" : ""}${nf.format(latest.followers)}`
-                        : "—"}
-                    </div>
-                  </div>
-                  <div
-                    title={previous ? `Change since ${new Date(previous.capturedAt).toLocaleString()}; same provider, profile and metric definition.` : "Two comparable measurements are needed to calculate growth."}
-                    className={`flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-bold ${
-                      delta !== null && delta > 0
-                        ? "bg-success/10 text-success"
-                        : delta !== null && delta < 0
-                          ? "bg-destructive/10 text-destructive"
-                          : "bg-secondary text-muted-foreground"
-                    }`}
-                  >
-                    <DeltaIcon size={11} />
-                    {delta === null
-                      ? latest?.metricSemantics === "rounded" ? "Rounded count" : "Awaiting comparable history"
-                      : `${delta > 0 ? "+" : ""}${nf.format(delta)}`}
-                  </div>
-                </div>
-
-                <div className="mt-3 rounded-xl border border-border/35 bg-background/35 p-2">
-                  <Sparkline readings={series} />
-                </div>
-
-                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                  <div className="rounded-xl bg-secondary/35 p-2">
-                    <span className="block text-muted-foreground">Provider</span>
-                    <strong className="mt-0.5 block truncate text-foreground">
-                      {latest?.provider || "No valid reading"}
-                    </strong>
-                  </div>
-                  <div className="rounded-xl bg-secondary/35 p-2">
-                    <span className="block text-muted-foreground">Confidence</span>
-                    <strong className="mt-0.5 block capitalize text-foreground">
-                      {latest?.confidence || "unknown"}
-                    </strong>
-                    {latest?.metricSemantics && (
-                      <span className="mt-0.5 block capitalize text-muted-foreground">
-                        {latest.metricSemantics} metric
-                      </span>
+                    {editingAccount === account.id && (
+                      <form
+                        className="intel-form mt-4"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void changeAccount(account.id, async () => {
+                            await db.audienceAccounts.update(account.id, {
+                              label: editLabel.trim(),
+                            });
+                            markCloudRecordDirty("audienceAccounts", account.id);
+                            queueCloudPush();
+                            setEditingAccount("");
+                            toast.success("Profile label updated");
+                          });
+                        }}
+                      >
+                        <label className="intel-field">
+                          Display label
+                          <input
+                            value={editLabel}
+                            onChange={(event) => setEditLabel(event.target.value)}
+                            placeholder="Optional · e.g. GearUpToFit main channel"
+                          />
+                        </label>
+                        <div className="flex gap-2">
+                          <button type="submit" className="btn-primary" disabled={Boolean(pending)}>
+                            Save label
+                          </button>
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => setEditingAccount("")}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
                     )}
-                  </div>
-                </div>
-
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                  <Gauge size={10} />
-                  <span>
-                    {latest ? `valid reading ${relTime(latest.capturedAt)}` : "no valid metric yet"}
-                  </span>
-                  {account.lastCheckedAt && <span>· checked {relTime(account.lastCheckedAt)}</span>}
-                </div>
-
-                {account.lastStatus && account.lastStatus !== "ok" && (
-                  <div className="mt-2 rounded-xl border border-warning/20 bg-warning/7 p-2 text-xs leading-4 text-muted-foreground">
-                    Latest refresh was <strong className="text-warning">{account.lastStatus}</strong>.
-                    {latest
-                      ? " The previous valid metric is preserved above."
-                      : " No follower value is shown because the platform did not expose one reliably."}
-                  </div>
-                )}
-
-                {latest?.evidence && (
-                  <p className="mt-2 text-xs leading-4 text-muted-foreground/75">
-                    Evidence: {latest.evidence}
-                    {latest.metricSemantics === "rounded"
-                      ? " The platform reports this counter in rounded form, so exact growth deltas are disabled."
-                      : latest.metricSemantics === "approximate"
-                        ? " Displayed with ~ because the source exposed an approximate value."
-                        : ""}
-                  </p>
-                )}
-              </article>
-            );
-          })}
-        </div>
+                    <div className="intel-profile-measure">
+                      <div>
+                        <p className="mb-2 text-xs text-muted-foreground">
+                          {!current && latest ? "Last valid " : ""}
+                          {account.platform === "youtube" ? "subscribers" : "followers"}
+                        </p>
+                        <div
+                          className={
+                            latest
+                              ? "intel-profile-value"
+                              : "text-xl font-semibold text-muted-foreground"
+                          }
+                        >
+                          {countLabel(latest)}
+                        </div>
+                      </div>
+                      <div
+                        className={`flex items-center gap-1 text-sm font-semibold tabular-nums ${delta !== null && delta > 0 ? "text-success" : delta !== null && delta < 0 ? "text-destructive" : "text-muted-foreground"}`}
+                      >
+                        <DeltaIcon size={15} />
+                        {delta === null ? "—" : `${delta > 0 ? "+" : ""}${nf.format(delta)}`}
+                      </div>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-muted-foreground">
+                      {delta !== null && previous
+                        ? `Change since ${new Date(previous.capturedAt).toLocaleString()} · same provider and metric`
+                        : latest?.metricSemantics === "rounded"
+                          ? "Rounded source count. Exact growth is not calculated."
+                          : latest?.metricSemantics === "approximate"
+                            ? "Approximate source count. Exact growth is not calculated."
+                            : "Growth requires two comparable exact measurements."}
+                    </p>
+                    <div className="intel-profile-spark">
+                      <Sparkline readings={series} />
+                    </div>
+                    {series.length > 1 && (
+                      <p className="mb-4 text-[10px] text-muted-foreground">
+                        Range-scaled trend · latest {Math.min(series.length, 12)} comparable
+                        readings
+                      </p>
+                    )}
+                    <dl className="intel-profile-meta">
+                      <div>
+                        <dt>Measurement source</dt>
+                        <dd>{latest?.provider || "No verified reading"}</dd>
+                      </div>
+                      <div>
+                        <dt>Captured</dt>
+                        <dd title={latest?.capturedAt}>
+                          {latest ? relTime(latest.capturedAt) : "Not available"}
+                        </dd>
+                      </div>
+                    </dl>
+                    {!current && (
+                      <div className="mt-4 rounded-xl border border-warning/20 bg-warning/5 p-3 text-xs leading-relaxed">
+                        <p className="font-semibold text-foreground">
+                          {account.lastAction ||
+                            "Refresh metrics to check this profile's connection."}
+                        </p>
+                        {account.lastEvidence && (
+                          <p className="mt-1 text-muted-foreground">{account.lastEvidence}</p>
+                        )}
+                        <button
+                          type="button"
+                          className="intel-link-button"
+                          onClick={() => setTab("connections")}
+                        >
+                          Inspect connections
+                        </button>
+                      </div>
+                    )}
+                    <details className="intel-evidence-details">
+                      <summary>Evidence & profile settings</summary>
+                      <div className="space-y-2">
+                        <p>
+                          <strong>Latest attempt:</strong>{" "}
+                          {account.lastCheckedAt
+                            ? new Date(account.lastCheckedAt).toLocaleString()
+                            : "Not recorded"}{" "}
+                          · {account.lastStatus || "Not checked"}
+                        </p>
+                        <p>
+                          <strong>Confidence:</strong> {latest?.confidence || "Unknown"} ·{" "}
+                          <strong>Metric:</strong> {latest?.metricSemantics || "Unavailable"}
+                        </p>
+                        {latest && (
+                          <p>
+                            <strong>Valid measurement:</strong>{" "}
+                            {new Date(latest.capturedAt).toLocaleString()}
+                          </p>
+                        )}
+                        {latest?.evidence && (
+                          <p>
+                            <strong>Evidence:</strong> {latest.evidence}
+                          </p>
+                        )}
+                        {account.lastError && (
+                          <p className="break-words text-warning">{account.lastError}</p>
+                        )}
+                        <p>
+                          <strong>Saved history:</strong> {(byAccount.get(account.id) || []).length}{" "}
+                          readings; {series.length} comparable to the latest valid metric.
+                        </p>
+                        {confirmRemoval === account.id ? (
+                          <div className="rounded-lg border border-destructive/25 bg-destructive/5 p-3">
+                            <p className="font-semibold text-foreground">
+                              Remove this profile and its {(byAccount.get(account.id) || []).length}{" "}
+                              saved readings?
+                            </p>
+                            <p className="mt-1">
+                              This stops tracking here. Your actual social account is unaffected.
+                            </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                className="btn-secondary text-destructive"
+                                disabled={Boolean(pending) || busy}
+                                onClick={() =>
+                                  void changeAccount(account.id, () => removeAccount(account))
+                                }
+                              >
+                                <Trash2 size={14} />
+                                Remove profile
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-secondary"
+                                onClick={() => setConfirmRemoval("")}
+                              >
+                                <X size={14} />
+                                Keep profile
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="intel-link-button text-destructive"
+                            disabled={busy}
+                            onClick={() => setConfirmRemoval(account.id)}
+                          >
+                            <Trash2 size={13} />
+                            Remove tracked profile
+                          </button>
+                        )}
+                      </div>
+                    </details>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
+
+      {tab === "add" && (
+        <section className="space-y-5" aria-label="Add an audience profile">
+          <IntelligenceHeading
+            eyebrow="Grow your portfolio"
+            title="Track an exact profile"
+            description="Add the public profile URL, then refresh to attempt a measurement. The URL is validated against the selected network before it is saved."
+          />
+          <Panel>
+            <form
+              className="intel-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addAccount();
+              }}
+            >
+              <div className="intel-form-grid">
+                <label className="intel-field">
+                  Platform
+                  <select
+                    value={platform}
+                    onChange={(event) => setPlatform(event.target.value as AudiencePlatform)}
+                  >
+                    {PLATFORMS.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="intel-field">
+                  Public profile URL
+                  <input
+                    value={url}
+                    onChange={(event) => setUrl(event.target.value)}
+                    placeholder={PLATFORMS.find((item) => item.id === platform)?.hint}
+                    required
+                  />
+                  <small>Use the exact account profile, not a post, video or search page.</small>
+                </label>
+              </div>
+              <div className="intel-form-footer">
+                <p>No follower counts are assumed when you add a profile.</p>
+                <button type="submit" disabled={Boolean(pending)} className="btn-primary">
+                  <Plus size={15} />
+                  {pending === "new" ? "Saving profile…" : "Track profile"}
+                </button>
+              </div>
+            </form>
+          </Panel>
+          <div className="intel-notice">
+            <Plug size={18} />
+            <div>
+              GitHub and Bluesky support public API measurements. Other networks may need an
+              authorized integration or an accessible identity-verified page.{" "}
+              <button
+                type="button"
+                className="intel-link-button"
+                onClick={() => setTab("connections")}
+              >
+                Check available connections
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {tab === "connections" && (
+        <section className="space-y-5" aria-label="Audience integration status">
+          <IntelligenceHeading
+            eyebrow="Measurement infrastructure"
+            title="Connect reliable data"
+            description="Inspect the methods available to this deployment. A configured integration still needs valid permissions and a successful profile measurement."
+          />
+          <AudienceConnectionsPanel />
+        </section>
+      )}
+      <CollectorStatusPanel kind="audience" />
     </div>
   );
 }

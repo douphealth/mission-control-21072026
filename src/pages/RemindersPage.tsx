@@ -1,12 +1,26 @@
+import "@/operate-workspaces.css";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Check, Trash2, Clock, Bell, Edit2, RotateCcw, Search, Repeat2 } from "lucide-react";
+import {
+  Plus,
+  Check,
+  Trash2,
+  Clock,
+  Bell,
+  Edit2,
+  RotateCcw,
+  Search,
+  Repeat2,
+  Download,
+  Globe2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useReminders, useAddItem, useUpdateItem, useDeleteItem } from "@/hooks/useTableData";
 import type { Reminder } from "@/lib/db";
 import {
   localReminderInput,
   nextReminderOccurrence,
-  parseReminderInput,
+  reminderScheduleForEdit,
+  reminderCalendarFile,
   reminderGroups,
   type ScheduledReminder,
 } from "@/lib/reminderSchedule";
@@ -38,6 +52,7 @@ export default function RemindersPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const lock = useRef(false);
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || "Device local time";
 
   useEffect(() => {
     const tick = () => setNow(Date.now());
@@ -97,23 +112,19 @@ export default function RemindersPage() {
   function save() {
     void run(async () => {
       if (!draft.title.trim()) throw new Error("Enter what you want to be reminded about.");
-      const remindAt = parseReminderInput(draft.when);
+      const schedule = reminderScheduleForEdit(
+        editor && editor !== "new" ? editor : null,
+        draft.when,
+        draft.recurrence,
+      );
       const values = {
         title: draft.title.trim(),
         notes: draft.notes.trim(),
-        remindAt,
+        ...schedule,
         recurrence: draft.recurrence,
-        recurrenceAnchorAt: remindAt,
       };
       if (editor && editor !== "new") {
-        const unchangedSchedule =
-          editor.remindAt === remindAt && editor.recurrence === draft.recurrence;
-        await updateItem<ScheduledReminder>("reminders", editor.id, {
-          ...values,
-          recurrenceAnchorAt: unchangedSchedule
-            ? (editor as ScheduledReminder).recurrenceAnchorAt || remindAt
-            : remindAt,
-        });
+        await updateItem<ScheduledReminder>("reminders", editor.id, values);
       } else {
         await addItem<ScheduledReminder>("reminders", {
           ...values,
@@ -157,6 +168,27 @@ export default function RemindersPage() {
       });
       toast.success("Reminder moved one hour from now");
     });
+  }
+
+  function exportCalendar(reminder: Reminder) {
+    try {
+      const href = URL.createObjectURL(
+        new Blob([reminderCalendarFile(reminder)], { type: "text/calendar;charset=utf-8" }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = "mission-control-reminder.ics";
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(href), 1_000);
+      toast.success("Calendar file downloaded", {
+        description:
+          "Import it into your calendar for this occurrence. Calendar alerts depend on that app’s settings.",
+      });
+    } catch (failure) {
+      toast.error(
+        failure instanceof Error ? failure.message : "The calendar file could not be created.",
+      );
+    }
   }
 
   function remove(row: Reminder) {
@@ -220,6 +252,16 @@ export default function RemindersPage() {
               +1 hour
             </button>
           )}
+          {valid && reminder.status !== "done" && (
+            <button
+              className={button}
+              aria-label={`Export ${reminder.title} to calendar`}
+              onClick={() => exportCalendar(reminder)}
+            >
+              <Download size={15} />
+              <span className="hidden lg:inline">Calendar</span>
+            </button>
+          )}
           <button
             disabled={busy}
             className={button}
@@ -253,7 +295,7 @@ export default function RemindersPage() {
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="mc-operate mc-reminders space-y-5">
       <PageHeader
         icon={Bell}
         eyebrow="Operate / Time commitments"
@@ -271,6 +313,15 @@ export default function RemindersPage() {
           </button>
         }
       />
+      <div className="op-reminder-context">
+        <span>
+          <Globe2 size={15} />
+          <strong>{timezone}</strong>
+        </span>
+        <span>
+          Alerts while the app is open · export to your calendar for alerts outside Mission Control.
+        </span>
+      </div>
       <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center">
         <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border px-3">
           <Search size={16} className="text-muted-foreground" />
@@ -330,6 +381,17 @@ export default function RemindersPage() {
               ? "Try another search or show all reminders."
               : "Add a follow-up, renewal or recurring check. Each item keeps its original note and next due time."}
           </p>
+          {query && (
+            <button
+              className={`${button} mt-4`}
+              onClick={() => {
+                setQuery("");
+                setView("all");
+              }}
+            >
+              Clear search and show all
+            </button>
+          )}
           {!query && view !== "done" && (
             <button className={`${button} mt-4`} onClick={() => edit()}>
               <Plus size={15} />
@@ -339,8 +401,10 @@ export default function RemindersPage() {
         </section>
       )}
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Times use this device’s local timezone. This list updates while Mission Control is open; it
-        does not guarantee an email or a push notification when the app is closed.
+        All times are shown in {timezone}. Due reminders display an in-app alert while Mission
+        Control is open and active. Browser notices use permission only if already granted; nothing
+        is sent while the app is closed. A calendar export includes only the selected occurrence and
+        does not synchronize later changes or completion.
       </p>
       <Dialog
         open={editor !== null}
@@ -351,8 +415,8 @@ export default function RemindersPage() {
         <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl sm:max-w-xl">
           <DialogTitle>{editor === "new" ? "New reminder" : "Edit reminder"}</DialogTitle>
           <DialogDescription>
-            Set the time in your local timezone. Recurring items advance to their next future
-            occurrence when completed.
+            Set the time in {timezone}. Completing a recurring item advances to its next future
+            occurrence.
           </DialogDescription>
           <form
             className="space-y-4"

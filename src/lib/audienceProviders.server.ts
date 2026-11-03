@@ -1,4 +1,4 @@
-import { audienceProfile, measuredCount, profileJsonMetrics } from './audienceEvidence';
+import { AUDIENCE_HOSTS, audienceProfile, measuredCount, profileJsonMetrics } from './audienceEvidence';
 
 export type AudienceMethod = 'official-api' | 'public-page' | 'none';
 export type AudienceMetricSemantics = 'exact' | 'rounded' | 'approximate' | 'unavailable';
@@ -92,16 +92,34 @@ async function get(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 12_000);
     try {
-      const response = await fetch(url, {
-        headers: {
-          Accept: json ? 'application/json' : 'text/html',
-          'User-Agent': 'MissionControl/3.0 audience-intelligence',
-          ...headers,
-        },
-        signal: controller.signal,
-        redirect: 'error',
-        cache: 'no-store',
-      });
+      let currentUrl = new URL(url);
+      let response: Response | undefined;
+      for (let hop = 0; hop <= 2; hop += 1) {
+        response = await fetch(currentUrl.toString(), {
+          headers: {
+            Accept: json ? 'application/json' : 'text/html',
+            'User-Agent': 'MissionControl/3.0 audience-intelligence',
+            ...headers,
+          },
+          signal: controller.signal,
+          // Workers supports follow/manual, not redirect:error. Inspect redirects
+          // explicitly so API credentials can never move to another endpoint.
+          redirect: 'manual',
+          cache: 'no-store',
+        });
+        if (![301, 302, 303, 307, 308].includes(response.status)) break;
+        const location = response.headers.get('location');
+        await response.body?.cancel();
+        if (json || !location || hop === 2) throw new Error('Provider redirected instead of returning the requested profile data.');
+        const next = new URL(location, currentUrl);
+        const cleanHost = (value: URL) => value.hostname.toLowerCase().replace(/^(www|m)\./, '');
+        const allowed = Object.values(AUDIENCE_HOSTS).find(hosts => hosts.includes(cleanHost(new URL(url))));
+        if (next.protocol !== 'https:' || next.username || next.password || next.port || !allowed?.includes(cleanHost(next))) {
+          throw new Error('Provider redirected outside the selected platform. No data was accepted.');
+        }
+        currentUrl = next;
+      }
+      if (!response) throw new Error('Provider did not return a response.');
 
       if (!response.ok) {
         const retryable = [408, 500, 502, 503, 504].includes(response.status);

@@ -83,3 +83,81 @@ export function reminderGroups(rows: readonly Reminder[], now: number) {
       .sort((a, b) => b.remindAt.localeCompare(a.remindAt)),
   };
 }
+
+/** Editing only a title or note must not shift a recurrence anchor or truncate seconds. */
+export function reminderScheduleForEdit(
+  reminder: ScheduledReminder | null,
+  input: string,
+  recurrence: NonNullable<Reminder["recurrence"]>,
+): Pick<ScheduledReminder, "remindAt" | "recurrenceAnchorAt"> {
+  const parsed = parseReminderInput(input);
+  if (
+    reminder &&
+    localReminderInput(reminder.remindAt) === input &&
+    (reminder.recurrence || "none") === recurrence
+  ) {
+    return {
+      remindAt: reminder.remindAt,
+      recurrenceAnchorAt: reminder.recurrenceAnchorAt || reminder.remindAt,
+    };
+  }
+  return { remindAt: parsed, recurrenceAnchorAt: parsed };
+}
+
+/** A portable calendar entry for this occurrence only; no external calendar is modified. */
+export function reminderCalendarFile(reminder: Reminder, now = new Date()): string {
+  const date = new Date(reminder.remindAt);
+  if (!Number.isFinite(date.getTime()) || !Number.isFinite(now.getTime()))
+    throw new Error("Choose a valid reminder time before exporting.");
+  const stamp = (value: Date) =>
+    value
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}Z$/, "Z");
+  const escape = (value: string) =>
+    value
+      .replace(/\\/g, "\\\\")
+      .replace(/\r\n|\r|\n/g, "\\n")
+      .replace(/;/g, "\\;")
+      .replace(/,/g, "\\,");
+  // RFC 5545 line folding uses UTF-8 octets, not JavaScript character counts.
+  const fold = (line: string) => {
+    const parts: string[] = [];
+    let current = "",
+      bytes = 0;
+    for (const character of line) {
+      const length = new TextEncoder().encode(character).length;
+      if (bytes + length > 75) {
+        parts.push(current);
+        current = " ";
+        bytes = 1;
+      }
+      current += character;
+      bytes += length;
+    }
+    parts.push(current);
+    return parts.join("\r\n");
+  };
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//Mission Control//Reminder//EN",
+    "CALSCALE:GREGORIAN",
+    "BEGIN:VEVENT",
+    `UID:${encodeURIComponent(reminder.id)}-${date.getTime()}@mission-control.local`,
+    `DTSTAMP:${stamp(now)}`,
+    `DTSTART:${stamp(date)}`,
+    `SUMMARY:${escape(reminder.title)}`,
+    `DESCRIPTION:${escape([reminder.notes || "", "One exported occurrence from Mission Control. Later edits are not synchronized."].filter(Boolean).join("\n\n"))}`,
+    "BEGIN:VALARM",
+    "TRIGGER:PT0S",
+    "ACTION:DISPLAY",
+    `DESCRIPTION:${escape(reminder.title)}`,
+    "END:VALARM",
+    "END:VEVENT",
+    "END:VCALENDAR",
+    "",
+  ]
+    .map(fold)
+    .join("\r\n");
+}

@@ -119,7 +119,9 @@ try {
     await page.getByRole('navigation', { name: 'Mobile navigation' })
       .getByRole('button', { name: 'Open all workspaces', exact: true }).click();
     const sheet = page.getByRole('dialog', { name: 'Everything, in one place.', exact: true });
-    const settings = sheet.getByRole('button', { name: /Settings/ });
+    // The separate pin control is named "Pin Settings" / "Unpin Settings".
+    const settings = sheet.getByRole('button', { name: /^Settings/ });
+    assert.equal(await settings.count(), 1, 'Exactly one Settings navigation action is required');
     await settings.scrollIntoViewIfNeeded();
     assert(await settings.isVisible());
     await settings.click();
