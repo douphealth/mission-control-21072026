@@ -12,10 +12,15 @@ import {
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { buildIntelligenceCapture } from "./intelligenceCapture";
 import { groupWatchTerms, watchIdentityKey } from "./watchTerms";
+import { stableBootstrapId } from "./bootstrapIdentity";
+import { groupFeedSources } from "./intelligencePresentation";
 import {
+  attributedArticle,
   canonicalWebUrl,
+  containsExactPhrase,
   isTrustedAudienceReading,
   matchIdentity,
+  normalizeIntelText,
 } from "@/lib/intelligenceQuality";
 
 const LAST_RUN_KEY = "mc-cc-last-run";
@@ -65,46 +70,50 @@ function verifyMentionAgainstText(
 export function localScore(
   item: { title: string; summary?: string; publishedAt: string; dateBasis?: string },
   topics: string[] = [],
+  now = Date.now(),
 ): number {
   const published = Date.parse(item.publishedAt);
-  const dated = item.dateBasis !== "discovered" && Number.isFinite(published) && published <= Date.now() + 5 * 60_000;
-  const ageHours = dated ? Math.max(0, (Date.now() - published) / 3_600_000) : Infinity;
-  const recency = Math.max(0, 45 - ageHours * 0.8);
-  const hay = `${item.title} ${item.summary ?? ""}`.toLowerCase();
-  const topicHits = topics.filter((t) => t && hay.includes(t.toLowerCase())).length;
-  const signal =
-    /launch|acquisi|funding|outage|breach|update|release|ban|lawsuit|price|record/i.test(hay)
-      ? 12
-      : 0;
-  const depth = Math.min(15, (item.summary?.length ?? 0) / 30);
-  return Math.round(Math.min(100, 25 + recency + topicHits * 8 + signal + depth));
+  const dated = item.dateBasis !== "discovered" && Number.isFinite(published) && published <= now + 5 * 60_000;
+  const ageDays = dated ? Math.max(0, (now - published) / 86_400_000) : Infinity;
+  const recency = dated ? 55 * Math.pow(0.5, ageDays / 4) : 0;
+  const hay = `${item.title} ${item.summary ?? ""}`;
+  const uniqueTopics = [...new Set(topics.map(normalizeIntelText).filter(Boolean))];
+  const topicHits = uniqueTopics.filter(topic => containsExactPhrase(hay, topic)).length;
+  // Duplicate configurations cannot multiply relevance. Scores describe review
+  // priority only, never credibility; stale/undated stories receive no fresh boost.
+  const relevance = Math.min(25, topicHits * 8);
+  const signal = /\b(launch(?:es|ed)?|acquisition|funding|outage|breach|update[sd]?|release[sd]?|ban(?:ned)?|lawsuit|price[sd]?)\b/i.test(item.title) ? 10 : 0;
+  return Math.max(0, Math.min(100, Math.round(10 + recency + relevance + signal)));
 }
 
-async function persistItems(
+export async function persistCollectedItems(
   kind: StreamKind,
   incoming: Omit<StreamItem, "id" | "kind" | "status" | "discoveredAt">[],
 ) {
   if (!incoming.length) return 0;
-  const existing = (await db.streamItems.toArray()).filter((item) => item.kind === kind);
   const watches = kind === "mention" ? await db.watchTerms.toArray() : [];
   const identities = new Map(watches.map(watch => [watch.id, watchIdentityKey(watch)]));
   const mentionIdentity = (item: { sourceId?: string; matchedTerm?: string }) => identities.get(item.sourceId || "") || item.sourceId || item.matchedTerm || "";
-  const seen = new Set(existing.map((i) => `${canonicalUrl(i.url)}${kind === "mention" ? `::${mentionIdentity(i)}` : ""}`));
-  const fresh: StreamItem[] = [];
-  for (const item of incoming) {
-    const key = `${canonicalUrl(item.url)}${kind === "mention" ? `::${mentionIdentity(item)}` : ""}`;
-    if (!item.title || !item.url || seen.has(key)) continue;
-    seen.add(key);
-    fresh.push({
-      ...item,
-      id: genId(),
-      kind,
-      status: "active",
-      discoveredAt: new Date().toISOString(),
-    });
-  }
+  const keyOf = (item: { url: string; sourceId?: string; matchedTerm?: string }) => JSON.stringify([kind, canonicalUrl(item.url), kind === "mention" ? mentionIdentity(item) : ""]);
+  // Finish cryptographic identities before opening a transaction; a native
+  // promise inside IndexedDB could otherwise close its transaction early.
+  const prepared = await Promise.all(incoming.filter(item => item.title && item.url).map(async raw => {
+    const item = attributedArticle(raw), key = keyOf(item);
+    return { item, key, id: await stableBootstrapId("stream-v2", key) };
+  }));
+  const fresh = await db.transaction("rw", db.streamItems, async () => {
+    const existing = (await db.streamItems.toArray()).filter(item => item.kind === kind);
+    const seen = new Set(existing.map(keyOf));
+    const added: StreamItem[] = [];
+    for (const { item, key, id } of prepared) {
+      if (seen.has(key)) continue;
+      seen.add(key);
+      added.push({ ...item, id, kind, status: "active", discoveredAt: new Date().toISOString() });
+    }
+    if (added.length) await db.streamItems.bulkAdd(added);
+    return added;
+  });
   if (!fresh.length) return 0;
-  await db.streamItems.bulkPut(fresh);
   fresh.forEach((f) => markCloudRecordDirty("streamItems", f.id));
   queueCloudPush();
   return fresh.length;
@@ -149,7 +158,7 @@ export function runIndustryCollector(useAi = false) {
   return industryFlight;
 }
 async function collectIndustryOnce(useAi: boolean) {
-  const sources = (await db.feedSources.toArray()).filter((s) => s.enabled);
+  const sources = groupFeedSources(await db.feedSources.toArray()).filter((s) => s.enabled);
   if (!sources.length) {
     await writeCollectorHealth("feeds", "Trends", "not-configured", "No enabled trend sources.");
     queueCloudPush();
@@ -181,13 +190,14 @@ async function collectIndustryOnce(useAi: boolean) {
   for (const r of results) {
     const src = sources.find((s) => s.id === r.sourceId);
     if (src) {
-      await db.feedSources.update(src.id, {
-        lastCheckedAt: now,
-        feedUrl: r.feedUrl ?? src.feedUrl,
-        lastError: r.error ?? undefined,
-      });
-      markCloudRecordDirty("feedSources", src.id);
-
+      for (const id of src.memberIds) {
+        await db.feedSources.update(id, {
+          lastCheckedAt: now,
+          feedUrl: r.feedUrl ?? src.feedUrl,
+          lastError: r.error ?? undefined,
+        });
+        markCloudRecordDirty("feedSources", id);
+      }
     }
     if (r.error) errors.push(`${src?.name || r.sourceId}: ${r.error}`);
     for (const item of r.items) {
@@ -218,7 +228,7 @@ async function collectIndustryOnce(useAi: boolean) {
     }
   }
 
-  const added = await persistItems("industry", payload);
+  const added = await persistCollectedItems("industry", payload);
   if (useAi && added) await aiRerank("industry");
   const checked = results.filter(r => !r.error && sources.some(s => s.id === r.sourceId)).length;
   await writeCollectorHealth(
@@ -280,7 +290,7 @@ async function collectMentionsOnce(_useAi: boolean) {
       dateBasis: "published", score: localScore(story), verification: identity.verification,
       verificationReason: identity.reason, confidence: identity.confidence, matchedAnchors: identity.matchedAnchors, evidenceType: "tracked-feed" });
   }
-  const added = await persistItems("mention", payload);
+  const added = await persistCollectedItems("mention", payload);
   const checked = results.filter(r => r.checked).length;
   const matched = new Set(payload.map(i => `${i.sourceId}:${canonicalUrl(i.url)}`)).size;
   const failed = terms.length - checked;
@@ -355,25 +365,51 @@ export function lastCollectorRun(): string | null {
   }
 }
 
-export async function archiveStreamItem(id: string) {
-  await db.streamItems.update(id, { status: "archived" });
-  markCloudRecordDirty("streamItems", id);
-  queueCloudPush();
+async function setStreamItemsStatus(ids: string[], status: StreamItem["status"]) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return;
+  const changed = await db.transaction("rw", db.streamItems, async () => {
+    const updated: string[] = [];
+    for (const id of unique) {
+      if (await db.streamItems.update(id, { status })) updated.push(id);
+    }
+    return updated;
+  });
+  changed.forEach(id => markCloudRecordDirty("streamItems", id));
+  if (changed.length) queueCloudPush();
 }
 
-export async function restoreStreamItem(id: string) {
-  await db.streamItems.update(id, { status: "active" });
-  markCloudRecordDirty("streamItems", id);
-  queueCloudPush();
-}
+export const archiveStreamItems = (ids: string[]) => setStreamItemsStatus(ids, "archived");
+export const restoreStreamItems = (ids: string[]) => setStreamItemsStatus(ids, "active");
+export const archiveStreamItem = (id: string) => archiveStreamItems([id]);
+export const restoreStreamItem = (id: string) => restoreStreamItems([id]);
 
-export async function captureStreamItem(id: string): Promise<"created" | "exists" | "trash"> {
+export async function captureStreamItem(id: string, memberIds: string[] = [id]): Promise<"created" | "exists" | "trash"> {
+  const saved = await db.streamItems.get(id);
+  if (!saved) throw new Error("This story is no longer saved. Refresh the stream before capturing it.");
+  const watches = saved.kind === "mention" ? await db.watchTerms.toArray() : [];
+  const watchIdentities = new Map(watches.map(watch => [watch.id, watchIdentityKey(watch)]));
+  const identityOf = (item: StreamItem) => JSON.stringify([
+    item.kind, canonicalUrl(item.url), item.kind === "mention"
+      ? watchIdentities.get(item.sourceId || "") || item.sourceId || normalizeIntelText(item.matchedTerm || "")
+      : "",
+  ]);
+  const captureIdentity = identityOf(saved);
+  const stableId = await stableBootstrapId("intel-capture-v2", captureIdentity);
   const result = await db.transaction("rw", db.streamItems, db.tasks, async () => {
     const item = await db.streamItems.get(id);
     if (!item) throw new Error("This story is no longer saved. Refresh the stream before capturing it.");
-    const task = buildIntelligenceCapture(item);
-    const existing = await db.tasks.get(task.id);
-    if (existing) return { taskId: task.id, outcome: existing.deletedAt ? "trash" as const : "exists" as const };
+    const task = { ...buildIntelligenceCapture(attributedArticle(item)), id: stableId };
+    // Legacy duplicates can have different archive states, so the visible group's
+    // aliases alone cannot prove whether this article was already captured.
+    // Match the full mention-rule identity to retain distinct branded follow-ups.
+    const historicalAliases = (await db.streamItems.toArray())
+      .filter(row => identityOf(row) === captureIdentity).map(row => row.id);
+    const aliases = [...new Set([id, ...memberIds, ...historicalAliases])];
+    for (const captureId of [stableId, ...aliases.map(value => `intel-capture-${value}`)]) {
+      const existing = await db.tasks.get(captureId);
+      if (existing) return { taskId: captureId, outcome: existing.deletedAt ? "trash" as const : "exists" as const };
+    }
     await db.tasks.add(task);
     return { taskId: task.id, outcome: "created" as const };
   });

@@ -7,15 +7,29 @@ import {
   Power,
   RefreshCw,
   Search,
-  ShieldCheck,
-  Sparkles,
+  BookOpen,
+  Download,
+  Globe2,
+  Pencil,
+  Radio,
+  SlidersHorizontal,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useFeedSources, useStreamItems, genId } from "@/hooks/useTableData";
+import { useFeedSources, useStreamItems } from "@/hooks/useTableData";
 import { db } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { localScore, runIndustryCollector } from "@/lib/controlCenter";
+import { ensureFeedSource } from "@/lib/intelligenceSources";
+import { removeFeedSources, restoreFeedSources } from "@/lib/intelligenceSourceManagement";
+import { deduplicateStreamItems, groupFeedSources } from "@/lib/intelligencePresentation";
+import {
+  IntelligenceMetrics,
+  IntelligenceTabs,
+  IntelligenceHeading,
+  IntelligenceEmpty,
+  downloadIntelligenceCsv,
+} from "@/components/controlcenter/IntelligenceWorkspace";
 import { canonicalWebUrl, queryRelevance } from "@/lib/intelligenceQuality";
 import { searchIndustryTopic } from "@/lib/controlCenter.functions";
 import { CCHeader, EmptyState, Panel, StreamRow, relTime } from "@/components/controlcenter/ui";
@@ -36,7 +50,8 @@ type SearchStory = {
 };
 
 export default function IndustryPage() {
-  const sources = useFeedSources();
+  const savedSources = useFeedSources();
+  const sources = useMemo(() => groupFeedSources(savedSources), [savedSources]);
   const items = useStreamItems();
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
@@ -44,7 +59,17 @@ export default function IndustryPage() {
   const [busy, setBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [streamQuery, setStreamQuery] = useState("");
-  const [streamDays, setStreamDays] = useState(0);
+  const [streamDays, setStreamDays] = useState(30);
+  const [streamSort, setStreamSort] = useState<"newest" | "priority">("newest");
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [tab, setTab] = useState<"monitor" | "research" | "sources">("monitor");
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceView, setSourceView] = useState<"all" | "attention" | "enabled" | "paused">("all");
+  const [sourcePending, setSourcePending] = useState("");
+  const sourceLock = useRef(false);
+  const [editingSource, setEditingSource] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editTopics, setEditTopics] = useState("");
   const [visibleCount, setVisibleCount] = useState(40);
   const [query, setQuery] = useState("");
   const [days, setDays] = useState(7);
@@ -53,29 +78,107 @@ export default function IndustryPage() {
   const [resolvedQuery, setResolvedQuery] = useState("");
   const [lookupStatus, setLookupStatus] = useState("");
   const [cachedResult, setCachedResult] = useState(false);
-  const [providerStatus, setProviderStatus] = useState<Awaited<ReturnType<typeof searchIndustryTopic>>["providers"]>([]);
+  const [providerStatus, setProviderStatus] = useState<
+    Awaited<ReturnType<typeof searchIndustryTopic>>["providers"]
+  >([]);
   const searchLock = useRef(false);
   const [searchStories, setSearchStories] = useState<SearchStory[]>([]);
   const [evidenceFilter, setEvidenceFilter] = useState<"all" | "medium" | "high">("medium");
   const autoRefreshStarted = useRef(false);
 
+  const allStories = useMemo(
+    () => deduplicateStreamItems(items.filter((item) => item.kind === "industry")),
+    [items],
+  );
+  const enabledTopics = useMemo(
+    () => [
+      ...new Set(
+        sources.filter((source) => source.enabled).flatMap((source) => source.topics || []),
+      ),
+    ],
+    [sources],
+  );
+  const sourceAliases = useMemo(
+    () =>
+      new Map(sources.flatMap((source) => source.memberIds.map((id) => [id, source.id] as const))),
+    [sources],
+  );
+  const streamById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
   const stories = useMemo(
     () =>
-      items
+      allStories
+        .filter((item) => item.status === (showArchived ? "archived" : "active"))
         .filter(
           (item) =>
-            item.kind === "industry" &&
-            (showArchived ? item.status === "archived" : item.status === "active"),
+            sourceFilter === "all" ||
+            item.memberIds.some(
+              (id) => sourceAliases.get(streamById.get(id)?.sourceId || "") === sourceFilter,
+            ),
         )
-        .filter(item => !streamQuery.trim() || `${item.title} ${item.summary || ""} ${item.source}`.toLowerCase().includes(streamQuery.trim().toLowerCase()))
-        .filter(item => !streamDays || (item.dateBasis === "published" && Date.parse(item.publishedAt) >= Date.now() - streamDays * 86_400_000))
-        .map(item => ({ ...item, score: localScore(item, sources.filter(source => source.enabled).flatMap(source => source.topics || [])) }))
-        .sort((a, b) => b.score - a.score || b.publishedAt.localeCompare(a.publishedAt)),
-    [items, showArchived, streamQuery, streamDays, sources],
+        .filter(
+          (item) =>
+            !streamQuery.trim() ||
+            `${item.title} ${item.summary || ""} ${item.source}`
+              .toLowerCase()
+              .includes(streamQuery.trim().toLowerCase()),
+        )
+        .filter(
+          (item) =>
+            !streamDays ||
+            (item.dateBasis === "published" &&
+              Number.isFinite(Date.parse(item.publishedAt)) &&
+              Date.parse(item.publishedAt) >= Date.now() - streamDays * 86_400_000 &&
+              Date.parse(item.publishedAt) <= Date.now() + 300_000),
+        )
+        .map((item) => ({ ...item, score: localScore(item, enabledTopics) }))
+        .sort((a, b) =>
+          streamSort === "priority"
+            ? b.score - a.score || b.publishedAt.localeCompare(a.publishedAt)
+            : b.publishedAt.localeCompare(a.publishedAt) || b.score - a.score,
+        ),
+    [
+      allStories,
+      showArchived,
+      sourceFilter,
+      sourceAliases,
+      streamById,
+      streamQuery,
+      streamDays,
+      enabledTopics,
+      streamSort,
+    ],
+  );
+  const recentStories = allStories.filter(
+    (item) =>
+      item.status === "active" &&
+      item.dateBasis === "published" &&
+      Date.parse(item.publishedAt) >= Date.now() - 7 * 86_400_000 &&
+      Date.parse(item.publishedAt) <= Date.now() + 300_000,
+  ).length;
+  const activeCount = allStories.filter((item) => item.status === "active").length;
+  const searchResults = searchStories.filter(
+    (story) =>
+      evidenceFilter === "all" ||
+      (evidenceFilter === "high"
+        ? story.evidenceLevel === "high"
+        : story.evidenceLevel !== "limited"),
   );
 
   const enabled = sources.filter((source) => source.enabled);
-  const sourceErrors = sources.filter((source) => source.lastError);
+  const sourceErrors = sources.filter((source) => source.enabled && source.lastError);
+  const visibleSources = sources.filter(
+    (source) =>
+      (!sourceSearch.trim() ||
+        `${source.name} ${source.url} ${(source.topics || []).join(" ")}`
+          .toLowerCase()
+          .includes(sourceSearch.trim().toLowerCase())) &&
+      (sourceView === "all" ||
+        (sourceView === "attention"
+          ? source.enabled && Boolean(source.lastError || !source.lastCheckedAt)
+          : sourceView === "enabled"
+            ? source.enabled
+            : !source.enabled)),
+  );
   const lastChecked = enabled
     .map((source) => source.lastCheckedAt)
     .filter(Boolean)
@@ -92,21 +195,30 @@ export default function IndustryPage() {
     if (!stale) return;
     autoRefreshStarted.current = true;
     setBusy(true);
-    void runIndustryCollector(false).catch(() => {
-      // Collector health records the failure; avoid noisy auto-refresh toasts.
-    }).finally(() => setBusy(false));
+    void runIndustryCollector(false)
+      .catch(() => {
+        // Collector health records the failure; avoid noisy auto-refresh toasts.
+      })
+      .finally(() => setBusy(false));
   }, [enabled]);
 
-  useEffect(() => { setVisibleCount(40); }, [streamQuery, streamDays, showArchived]);
+  useEffect(() => {
+    setVisibleCount(40);
+  }, [streamQuery, streamDays, sourceFilter, streamSort, showArchived]);
 
   const addSource = async () => {
     const clean = url.trim();
-    if (!clean) return;
+    if (!clean || sourceLock.current) return;
+    if (/^[a-z][a-z0-9+.-]*:/i.test(clean) && !/^https?:\/\//i.test(clean)) {
+      toast.error("Use an HTTP or HTTPS publisher URL");
+      return;
+    }
     const normalised = /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
     let host = "";
     try {
       const parsed = new URL(normalised);
-      if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error("Use a public HTTP or HTTPS URL.");
+      if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password)
+        throw new Error("Use a public HTTP or HTTPS URL.");
       host = parsed.hostname.replace(/^www\./, "");
     } catch {
       toast.error("That does not look like a valid URL");
@@ -114,7 +226,10 @@ export default function IndustryPage() {
     }
     const duplicate = sources.find((source) => {
       try {
-        return canonicalWebUrl(source.url) === canonicalWebUrl(normalised) || Boolean(source.feedUrl && canonicalWebUrl(source.feedUrl) === canonicalWebUrl(normalised));
+        return (
+          canonicalWebUrl(source.url) === canonicalWebUrl(normalised) ||
+          Boolean(source.feedUrl && canonicalWebUrl(source.feedUrl) === canonicalWebUrl(normalised))
+        );
       } catch {
         return source.url === normalised;
       }
@@ -124,7 +239,6 @@ export default function IndustryPage() {
       return;
     }
     const record = {
-      id: genId(),
       name: name.trim() || host,
       url: normalised,
       topics: topics
@@ -134,13 +248,33 @@ export default function IndustryPage() {
       enabled: true,
       createdAt: new Date().toISOString(),
     };
-    await db.feedSources.put(record);
-    markCloudRecordDirty("feedSources", record.id);
-    queueCloudPush();
-    setUrl("");
-    setName("");
-    setTopics("");
-    toast.success(`Added ${record.name}`);
+    sourceLock.current = true;
+    setSourcePending("new");
+    try {
+      const saved = await ensureFeedSource(record);
+      if (!saved.created) {
+        toast.info(
+          saved.record.enabled
+            ? "Source already tracked"
+            : "This source is already tracked and paused",
+        );
+        return;
+      }
+      queueCloudPush();
+      setUrl("");
+      setName("");
+      setTopics("");
+      toast.success(`Added ${record.name}`, {
+        description: "Refresh tracked feeds to collect this publisher's latest available stories.",
+      });
+    } catch (error) {
+      toast.error("Source was not saved", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      sourceLock.current = false;
+      setSourcePending("");
+    }
   };
 
   const refresh = async () => {
@@ -149,10 +283,17 @@ export default function IndustryPage() {
       const { added, errors, checked, total } = await runIndustryCollector();
       const unavailable = total > 0 && checked === 0;
       toast[unavailable || errors.length ? "warning" : "success"](
-        unavailable ? "Tracked feeds unavailable — no fresh coverage verified"
-          : added ? `${added} new ${added === 1 ? "story" : "stories"}`
-          : "Feed refresh finished — no new published stories",
-        { description: [`${checked}/${total} feeds checked successfully`, ...errors.slice(0, 2)].join(" · ") },
+        unavailable
+          ? "Tracked feeds unavailable — no fresh coverage verified"
+          : added
+            ? `${added} new ${added === 1 ? "story" : "stories"}`
+            : "Feed refresh finished — no new published stories",
+        {
+          description: [
+            `${checked}/${total} feeds checked successfully`,
+            ...errors.slice(0, 2),
+          ].join(" · "),
+        },
       );
     } catch (error: any) {
       toast.error("Feed refresh failed", { description: String(error?.message ?? error) });
@@ -168,14 +309,17 @@ export default function IndustryPage() {
       toast.error("Enter a subject to search");
       return;
     }
-    searchLock.current = true; setSearching(true); setLookupStatus("");
+    searchLock.current = true;
+    setSearching(true);
+    setLookupStatus("");
     try {
       const response = await searchIndustryTopic({ data: { query: clean, days } });
       const minTime = Date.now() - days * 86_400_000;
       const trackedMatches: SearchStory[] = items
         .filter(
           (story) =>
-            story.kind === "industry" && story.status === "active" &&
+            story.kind === "industry" &&
+            story.status === "active" &&
             story.evidenceType === "direct-feed" &&
             story.dateBasis === "published" &&
             new Date(story.publishedAt).getTime() >= minTime,
@@ -214,7 +358,15 @@ export default function IndustryPage() {
 
       setSearchStories(combined);
       setProviderStatus(response.providers || []);
-      setSearchedAt(response.fetchedAt); setResolvedQuery(clean); setCachedResult(response.cached); setLookupStatus(response.error || (response.degraded ? "Some providers failed. Coverage is incomplete; results are from remaining sources." : ""));
+      setSearchedAt(response.fetchedAt);
+      setResolvedQuery(clean);
+      setCachedResult(response.cached);
+      setLookupStatus(
+        response.error ||
+          (response.degraded
+            ? "Some providers failed. Coverage is incomplete; results are from remaining sources."
+            : ""),
+      );
 
       const providerSummary = (response.providers ?? [])
         .filter((provider) => provider.configured && provider.ok)
@@ -231,10 +383,9 @@ export default function IndustryPage() {
 
       if (response.error && !combined.length) {
         toast.warning("Live providers are temporarily unavailable", {
-          description:
-            trackedMatches.length
-              ? `Tracked feeds were still checked. ${response.error}`
-              : "No live provider returned usable coverage. Try again shortly; tracked feeds remain available.",
+          description: trackedMatches.length
+            ? `Tracked feeds were still checked. ${response.error}`
+            : "No live provider returned usable coverage. Try again shortly; tracked feeds remain available.",
         });
       } else {
         toast[response.degraded ? "warning" : "success"](
@@ -242,358 +393,737 @@ export default function IndustryPage() {
             ? `${combined.length} current results for “${clean}”`
             : `No recent verified results for “${clean}”`,
           {
-            description: [
-              providerSummary || undefined,
-              trackedMatches.length
-                ? `${trackedMatches.length} tracked-feed match${trackedMatches.length === 1 ? "" : "es"} included`
-                : undefined,
-              response.degraded ? "One live provider was unavailable; results were served by the remaining sources." : undefined,
-            ]
-              .filter(Boolean)
-              .join(" · ") || undefined,
+            description:
+              [
+                providerSummary || undefined,
+                trackedMatches.length
+                  ? `${trackedMatches.length} tracked-feed match${trackedMatches.length === 1 ? "" : "es"} included`
+                  : undefined,
+                response.degraded
+                  ? "One live provider was unavailable; results were served by the remaining sources."
+                  : undefined,
+              ]
+                .filter(Boolean)
+                .join(" · ") || undefined,
           },
         );
       }
     } catch (error: any) {
-      setLookupStatus("The latest search failed. Previous results keep their original query and retrieval date.");
+      setLookupStatus(
+        "The latest search failed. Previous results keep their original query and retrieval date.",
+      );
       toast.error("Live topic search failed", { description: String(error?.message ?? error) });
     } finally {
-      setSearching(false); searchLock.current = false;
+      setSearching(false);
+      searchLock.current = false;
     }
   };
 
+  const mutateSource = async (sourceId: string, action: () => Promise<void>) => {
+    if (sourceLock.current) return;
+    sourceLock.current = true;
+    setSourcePending(sourceId);
+    try {
+      await action();
+    } catch (error) {
+      toast.error("Source change was not saved", {
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      sourceLock.current = false;
+      setSourcePending("");
+    }
+  };
+
+  const clearFilters = () => {
+    setStreamQuery("");
+    setStreamDays(0);
+    setSourceFilter("all");
+    setShowArchived(false);
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="intel-workspace">
       <CCHeader
-        title="Trends Intelligence"
-        subtitle="Research topics that matter to your sites and apps. Compare current coverage, monitor trusted publishers, and turn useful signals into decisions."
+        title="Trends"
+        subtitle="A focused view of the stories that can change your next decision. Track publishers, research a topic, and capture what matters."
         actions={
           <button
-            onClick={refresh}
+            type="button"
+            onClick={() => void refresh()}
             disabled={busy || !enabled.length}
-            className="inline-flex items-center gap-2 rounded-xl gradient-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
+            className="btn-primary disabled:opacity-50"
           >
-            <RefreshCw size={13} className={busy ? "animate-spin" : ""} />
-            {busy ? "Checking publishers…" : "Refresh tracked feeds"}
+            <RefreshCw size={15} className={busy ? "animate-spin" : ""} />
+            {busy ? "Checking publishers…" : "Refresh feeds"}
           </button>
         }
       />
-      <CollectorStatusPanel kind="feeds" />
 
-      <section className="cc-intel-search">
-        <div className="cc-intel-search-glow" />
-        <div className="relative">
-          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-primary">
-            <Sparkles size={12} />
-            Live subject search
-          </div>
-          <h2 className="mt-1 font-display text-xl font-extrabold tracking-tight text-foreground">
-            What do you need to know right now?
-          </h2>
-          <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
-            Searches multiple current coverage providers for the subject you enter and merges them
-            with your tracked publisher feeds. Results are deduplicated, freshness-filtered and
-            ranked by subject relevance, publication freshness and publisher attribution. Similar coverage across distinct domains is a discovery signal; syndication, ownership and factual claims are not independently verified.
-          </p>
-          <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
-            <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/65 px-3">
-              <Search size={15} className="text-muted-foreground" />
+      <IntelligenceMetrics
+        items={[
+          {
+            label: "Published this week",
+            value: recentStories,
+            hint: "Distinct saved stories · last 7 days",
+            tone: "accent",
+            onClick: () => {
+              setTab("monitor");
+              setShowArchived(false);
+              setStreamDays(7);
+              setSourceFilter("all");
+              setStreamQuery("");
+            },
+          },
+          {
+            label: "Enabled sources",
+            value: enabled.length,
+            hint: `${sources.length - enabled.length} paused · identical feeds grouped`,
+            onClick: () => {
+              setTab("sources");
+              setSourceView("enabled");
+            },
+          },
+          {
+            label: "Feed errors",
+            value: sourceErrors.length,
+            hint: sourceErrors.length
+              ? "Enabled feeds requiring attention"
+              : "No recorded errors in enabled feeds",
+            tone: sourceErrors.length ? "warning" : undefined,
+            onClick: () => {
+              setTab("sources");
+              setSourceView("attention");
+            },
+          },
+          {
+            label: "Latest feed check",
+            value: lastChecked ? relTime(lastChecked) : "Not checked",
+            hint: "Latest attempt · see source status for coverage",
+          },
+        ]}
+      />
+
+      <IntelligenceTabs
+        value={tab}
+        onChange={setTab}
+        label="Trends workspace views"
+        items={[
+          { id: "monitor", label: "Monitor", count: activeCount, icon: <Radio size={15} /> },
+          { id: "research", label: "Research a topic", icon: <Search size={15} /> },
+          {
+            id: "sources",
+            label: "Sources",
+            count: sources.length,
+            icon: <SlidersHorizontal size={15} />,
+          },
+        ]}
+      />
+
+      {tab === "monitor" && (
+        <section className="space-y-4" aria-label="Monitored stories">
+          <IntelligenceHeading
+            eyebrow="Your reading desk"
+            title="Publisher intelligence"
+            description="Newest publications first. Open the original source, capture a follow-up, or archive a story after review."
+            actions={
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={!stories.length}
+                onClick={() =>
+                  downloadIntelligenceCsv(
+                    "mission-control-trends.csv",
+                    [
+                      "Title",
+                      "Source",
+                      "URL",
+                      "Date",
+                      "Date basis",
+                      "Priority",
+                      "Evidence",
+                      "Status",
+                    ],
+                    stories.map((story) => [
+                      story.title,
+                      story.source,
+                      story.url,
+                      story.publishedAt,
+                      story.dateBasis || "unknown",
+                      story.score,
+                      story.evidenceType,
+                      story.status,
+                    ]),
+                  )
+                }
+              >
+                <Download size={14} />
+                Export view
+              </button>
+            }
+          />
+          <div className="intel-toolbar">
+            <label className="intel-search-field">
+              <Search size={15} aria-hidden="true" />
               <input
-                aria-label="Topic to research"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                onKeyDown={(event) => event.key === "Enter" && void searchLatest()}
-                placeholder="e.g. Google search spam update, running shoe market, AI search visibility"
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/50"
+                aria-label="Filter saved trends"
+                value={streamQuery}
+                onChange={(event) => setStreamQuery(event.target.value)}
+                placeholder="Search stories and publishers"
               />
             </label>
             <select
-              aria-label="Search publication window"
-              value={days}
-              onChange={(event) => setDays(Number(event.target.value))}
-              className="rounded-2xl border border-border/50 bg-background/65 px-3 text-xs font-semibold text-foreground"
+              className="intel-select"
+              aria-label="Filter saved publication dates"
+              value={streamDays}
+              onChange={(event) => setStreamDays(Number(event.target.value))}
             >
-              <option value={1}>Last 24h</option>
-              <option value={3}>Last 3 days</option>
-              <option value={7}>Last 7 days</option>
-              <option value={14}>Last 14 days</option>
-              <option value={30}>Last 30 days</option>
+              <option value={7}>Published · 7 days</option>
+              <option value={30}>Published · 30 days</option>
+              <option value={90}>Published · 90 days</option>
+              <option value={0}>All saved dates</option>
             </select>
-            <button
-              type="button"
-              onClick={() => void searchLatest()}
-              disabled={searching}
-              className="btn-primary justify-center disabled:opacity-50"
+            <select
+              className="intel-select"
+              aria-label="Filter source"
+              value={sourceFilter}
+              onChange={(event) => setSourceFilter(event.target.value)}
             >
-              <Search size={14} className={searching ? "animate-pulse" : ""} />
-              {searching ? "Searching providers…" : "Search latest"}
-            </button>
+              <option value="all">All sources</option>
+              {sources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </select>
+            <select
+              className="intel-select"
+              aria-label="Sort saved trends"
+              value={streamSort}
+              onChange={(event) => setStreamSort(event.target.value as typeof streamSort)}
+            >
+              <option value="newest">Newest first</option>
+              <option value="priority">Review priority</option>
+            </select>
+            <select
+              className="intel-select"
+              aria-label="Story status"
+              value={showArchived ? "archived" : "active"}
+              onChange={(event) => setShowArchived(event.target.value === "archived")}
+            >
+              <option value="active">Active stories</option>
+              <option value="archived">Archived stories</option>
+            </select>
           </div>
-        </div>
-      </section>
-
-      {lookupStatus && <p role="status" className="rounded-xl border border-border bg-card p-3 text-sm">{lookupStatus}</p>}
-      {searchedAt && (
-        <Panel>
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-extrabold text-foreground">{cachedResult ? "Recent cached search results" : "Search results"}</div>
-              <div className="mt-1 text-xs text-muted-foreground">
-                “{resolvedQuery}” · {searchStories.length} evidence-qualified results · fetched {relTime(searchedAt)}
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2" aria-label="Search provider coverage">
-                {providerStatus.filter(provider => provider.configured).map(provider => <span key={provider.provider} title={provider.error} className={`rounded-full border px-2.5 py-1 text-xs ${provider.ok ? "border-success/20 bg-success/5 text-success" : "border-warning/25 bg-warning/5 text-warning"}`}>
-                  {provider.provider === "google-news" ? "Google News" : provider.provider === "bing-news" ? "Bing News" : "DataForSEO"}: {provider.ok ? `${provider.itemCount} retrieved` : "unavailable"}
-                </span>)}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {(["medium", "high", "all"] as const).map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setEvidenceFilter(level)}
-                    aria-pressed={evidenceFilter === level}
-                    className={`rounded-full border px-2 py-1 text-xs font-bold transition ${
-                      evidenceFilter === level
-                        ? "border-primary/30 bg-primary/10 text-primary"
-                        : "border-border/45 bg-background/45 text-muted-foreground"
-                    }`}
-                  >
-                    {level === "medium"
-                      ? "Attributed coverage"
-                      : level === "high"
-                        ? "Tracked / multiple domains"
-                        : "All evidence"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/8 px-2.5 py-1 text-xs font-bold text-success">
-              <ShieldCheck size={11} />
-              Relevance + publisher + date evidence
+          <div className="intel-filter-note">
+            <span>
+              <strong>{stories.length.toLocaleString("en-US")}</strong> matching stories
+              {streamDays
+                ? " · Publication dates required for this window"
+                : " · Includes undated discoveries"}{" "}
+              · Duplicate URLs grouped
             </span>
+            {(streamQuery || sourceFilter !== "all" || streamDays !== 0 || showArchived) && (
+              <button type="button" className="intel-link-button" onClick={clearFilters}>
+                Reset filters
+              </button>
+            )}
           </div>
-          <div className="mt-3 grid gap-2">
-            {searchStories.filter((story) => {
-              if (evidenceFilter === "all") return true;
-              if (evidenceFilter === "high") return story.evidenceLevel === "high";
-              return story.evidenceLevel !== "limited";
-            }).length ? (
-              searchStories
-                .filter((story) => {
-                  if (evidenceFilter === "all") return true;
-                  if (evidenceFilter === "high") return story.evidenceLevel === "high";
-                  return story.evidenceLevel !== "limited";
-                })
-                .slice(0, 30)
-                .map((story) => {
-                const publishedAt = story.publishedAt || searchedAt;
-                const score = story.relevanceScore ?? queryRelevance(resolvedQuery, story.title, story.summary);
-                return (
-                  <article key={story.url} className="cc-intel-result">
-                    <div className="cc-intel-score" title="Subject relevance score">{score}</div>
-                    <div className="min-w-0 flex-1">
+          {stories.length ? (
+            <div className="grid gap-3">
+              {stories.slice(0, visibleCount).map((story) => (
+                <StreamRow key={story.id} item={story} />
+              ))}
+              {stories.length > visibleCount && (
+                <button
+                  type="button"
+                  className="btn-secondary justify-center"
+                  onClick={() => setVisibleCount((count) => count + 40)}
+                >
+                  Show next {Math.min(40, stories.length - visibleCount)} stories ·{" "}
+                  {stories.length - visibleCount} remaining
+                </button>
+              )}
+            </div>
+          ) : (
+            <IntelligenceEmpty
+              title={
+                activeCount || showArchived
+                  ? "No stories match this view"
+                  : "Build your intelligence stream"
+              }
+              description={
+                activeCount || showArchived
+                  ? "Widen the date range or reset the publisher and search filters. An empty view does not mean your sources were checked successfully."
+                  : "Add a publisher or RSS feed, then refresh. You can also research a topic without setting up a permanent source."
+              }
+              action={activeCount || showArchived ? "Show all saved stories" : "Add a publisher"}
+              onAction={activeCount || showArchived ? clearFilters : () => setTab("sources")}
+            />
+          )}
+        </section>
+      )}
+
+      {tab === "research" && (
+        <section className="space-y-5" aria-label="Topic research">
+          <Panel>
+            <IntelligenceHeading
+              eyebrow="On-demand research"
+              title="What do you need to know?"
+              description="Search current coverage from available news providers and your tracked feeds. Every result links to its original publisher."
+            />
+            <form
+              className="mt-5 flex flex-wrap gap-2"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void searchLatest();
+              }}
+            >
+              <label className="intel-search-field">
+                <Search size={16} aria-hidden="true" />
+                <input
+                  aria-label="Topic to research"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="A topic, market, product or search update…"
+                  minLength={2}
+                  required
+                />
+              </label>
+              <select
+                className="intel-select"
+                aria-label="Search publication window"
+                value={days}
+                onChange={(event) => setDays(Number(event.target.value))}
+              >
+                <option value={1}>Last 24 hours</option>
+                <option value={3}>Last 3 days</option>
+                <option value={7}>Last 7 days</option>
+                <option value={14}>Last 14 days</option>
+                <option value={30}>Last 30 days</option>
+              </select>
+              <button type="submit" disabled={searching} className="btn-primary">
+                <Search size={15} className={searching ? "animate-pulse" : ""} />
+                {searching ? "Searching…" : "Search coverage"}
+              </button>
+            </form>
+            <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+              Coverage depends on provider availability. Similar reports across domains do not
+              establish independent corroboration or verify a claim.
+            </p>
+          </Panel>
+          {lookupStatus && (
+            <div role="status" className="intel-notice" data-tone="warning">
+              <AlertTriangle size={16} />
+              <span>{lookupStatus}</span>
+            </div>
+          )}
+          {searchedAt && (
+            <>
+              <IntelligenceHeading
+                title={`Results for “${resolvedQuery}”`}
+                description={`${searchResults.length} matching results · ${cachedResult ? "cached response" : "retrieved"} ${relTime(searchedAt)}`}
+              />
+              <div className="intel-toolbar">
+                <select
+                  className="intel-select"
+                  aria-label="Search evidence filter"
+                  value={evidenceFilter}
+                  onChange={(event) =>
+                    setEvidenceFilter(event.target.value as typeof evidenceFilter)
+                  }
+                >
+                  <option value="medium">Publisher-attributed coverage</option>
+                  <option value="high">Tracked / multiple domains</option>
+                  <option value="all">All retrieved evidence</option>
+                </select>
+                <div className="flex flex-wrap gap-2" aria-label="Search provider coverage">
+                  {providerStatus
+                    .filter((provider) => provider.configured)
+                    .map((provider) => (
+                      <span
+                        key={provider.provider}
+                        className="intel-pill"
+                        data-tone={provider.ok ? "success" : "warning"}
+                        title={provider.error}
+                      >
+                        {provider.provider === "google-news"
+                          ? "Google News"
+                          : provider.provider === "bing-news"
+                            ? "Bing News"
+                            : "DataForSEO"}
+                        : {provider.ok ? `${provider.itemCount} retrieved` : "unavailable"}
+                      </span>
+                    ))}
+                </div>
+              </div>
+              {searchResults.length ? (
+                <div className="intel-source-list">
+                  {searchResults.slice(0, 60).map((story) => (
+                    <article key={story.url} className="intel-source-row">
+                      <div
+                        className="intel-source-icon"
+                        title="Subject relevance · not a credibility score"
+                      >
+                        {Math.round(
+                          story.relevanceScore ??
+                            queryRelevance(resolvedQuery, story.title, story.summary),
+                        )}
+                      </div>
+                      <div className="intel-source-body">
+                        <a
+                          href={story.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-semibold leading-relaxed hover:text-primary"
+                        >
+                          {story.title}
+                        </a>
+                        <div className="intel-source-meta">
+                          <strong>{story.source || "Publisher unavailable"}</strong>
+                          <span title={story.publishedAt || searchedAt}>
+                            {story.publishedAt
+                              ? `Published ${relTime(story.publishedAt)}`
+                              : `Publication date unavailable · retrieved ${relTime(searchedAt)}`}
+                          </span>
+                          <span title={story.evidenceReason}>
+                            {story.evidenceLevel === "high"
+                              ? "Tracked / multiple domains"
+                              : story.evidenceLevel === "medium"
+                                ? "Publisher attributed"
+                                : "Limited evidence"}
+                          </span>
+                        </div>
+                        {story.summary && (
+                          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                            {story.summary}
+                          </p>
+                        )}
+                        {!!story.corroborationCount && (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Similar coverage on {story.corroborationCount + 1} publisher domains ·
+                            independence unverified
+                          </p>
+                        )}
+                      </div>
                       <a
                         href={story.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="line-clamp-2 text-sm font-bold text-foreground hover:text-primary"
+                        aria-label={`Open source: ${story.title}`}
+                        className="intel-icon-button"
                       >
-                        {story.title}
+                        <ExternalLink size={16} />
                       </a>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <span className="font-bold text-foreground/75">{story.source || "Publisher unavailable"}</span>
-                        <span>·</span>
-                        <span>{relTime(publishedAt)}</span>
-                        {(story.corroborationCount || 0) > 0 && (
-                          <>
-                            <span>·</span>
-                            <span>{(story.corroborationCount ?? 0) + 1} publisher domains with similar coverage</span>
-                          </>
-                        )}
-                        {story.evidenceLevel && (
-                          <>
-                            <span>·</span>
-                            <span
-                              className={`font-bold ${
-                                story.evidenceLevel === "high"
-                                  ? "text-success"
-                                  : story.evidenceLevel === "medium"
-                                    ? "text-info"
-                                    : "text-warning"
-                              }`}
-                              title={story.evidenceReason}
-                            >
-                              {story.evidenceLevel === "high"
-                                ? "Tracked / multiple domains"
-                                : story.evidenceLevel === "medium"
-                                  ? "Publisher attributed"
-                                  : "Limited evidence"}
-                            </span>
-                          </>
-                        )}
-                      </div>
-                      {story.summary && (
-                        <p className="mt-1 line-clamp-2 text-xs leading-4 text-muted-foreground">
-                          {story.summary}
-                        </p>
-                      )}
-                    </div>
-                    <a
-                      href={story.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Open source"
-                      className="rounded-xl p-2 text-muted-foreground hover:bg-secondary hover:text-primary"
-                    >
-                      <ExternalLink size={14} />
-                    </a>
-                  </article>
-                );
-              })
-            ) : (
-              <EmptyState
-                title="No current evidence-qualified coverage found"
-                hint="Try a broader subject or a longer freshness window. Missing or weak evidence is filtered rather than padded with low-quality results."
-              />
-            )}
-          </div>
-        </Panel>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="No coverage matches the selected evidence filter"
+                  hint="Try all retrieved evidence, a broader subject or a longer publication window. Check provider statuses before drawing conclusions."
+                />
+              )}
+              {searchResults.length > 60 && (
+                <p className="text-xs text-muted-foreground">
+                  Showing the first 60 ranked results. Narrow the query for a more focused research
+                  set.
+                </p>
+              )}
+            </>
+          )}
+          {!searchedAt && (
+            <div className="intel-notice">
+              <BookOpen size={18} />
+              <span>
+                Use a specific subject such as a named product, policy update or market change.
+                Search results remain separate from the sources you monitor every day.
+              </span>
+            </div>
+          )}
+        </section>
       )}
 
-      <Panel>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
-              Persistent monitored sources
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {enabled.length} enabled · {sourceErrors.length} errors
-              {lastChecked ? ` · last checked ${relTime(lastChecked)}` : ""}
-            </p>
-          </div>
-          <button
-            onClick={() => setShowArchived((value) => !value)}
-            className="rounded-xl bg-secondary px-3 py-2 text-xs font-semibold text-foreground"
-          >
-            {showArchived ? "Show active" : "Show archived"}
-          </button>
-        </div>
-
-        <div className="mt-4 grid gap-2 sm:grid-cols-[1.4fr_1fr_1.2fr_auto]">
-          <input
-            aria-label="Publisher website or RSS feed URL"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && void addSource()}
-            placeholder="Credible site or RSS URL"
-            className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+      {tab === "sources" && (
+        <section className="space-y-5" aria-label="Manage trend sources">
+          <IntelligenceHeading
+            eyebrow="Source directory"
+            title="A reading list you control"
+            description="Choose the publishers that inform your decisions. Add topic phrases to refine review priority, pause noisy sources, and inspect failures."
           />
-          <input
-            aria-label="Publisher label"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Publisher label"
-            className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          />
-          <input
-            aria-label="Monitored topics, comma separated"
-            value={topics}
-            onChange={(event) => setTopics(event.target.value)}
-            placeholder="Topics, comma separated"
-            className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          />
-          <button onClick={() => void addSource()} className="btn-secondary justify-center">
-            <Plus size={14} /> Add source
-          </button>
-        </div>
-
-        {!!sources.length && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            {sources.map((source) => (
-              <span
-                key={source.id}
-                className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs ${
-                  source.enabled
-                    ? "border-border bg-background/60 text-foreground"
-                    : "border-border/50 bg-muted/40 text-muted-foreground"
-                }`}
-                title={
-                  source.lastError
-                    ? source.lastError
-                    : source.lastCheckedAt
-                      ? `Checked ${relTime(source.lastCheckedAt)}`
-                      : "Never checked"
-                }
-              >
-                {source.lastError && <AlertTriangle size={11} className="text-warning" />}
-                <span className="font-bold">{source.name}</span>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await db.feedSources.update(source.id, { enabled: !source.enabled });
-                    markCloudRecordDirty("feedSources", source.id);
-                    queueCloudPush();
-                  }}
-                  className="rounded-full p-1 hover:bg-secondary"
-                  aria-label={`${source.enabled ? "Pause" : "Enable"} ${source.name}`}
-                  aria-pressed={source.enabled}
-                >
-                  <Power size={11} />
+          <Panel>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                void addSource();
+              }}
+              className="intel-form"
+            >
+              <div className="intel-form-grid">
+                <label className="intel-field">
+                  Publisher website or RSS URL
+                  <input
+                    value={url}
+                    onChange={(event) => setUrl(event.target.value)}
+                    placeholder="https://example.com/feed"
+                    required
+                  />
+                  <small>
+                    Feed discovery runs when you refresh. A saved URL alone does not confirm
+                    availability.
+                  </small>
+                </label>
+                <label className="intel-field">
+                  Publisher name
+                  <input
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Optional · defaults to domain"
+                  />
+                </label>
+                <label className="intel-field sm:col-span-2">
+                  Topics to prioritize
+                  <input
+                    value={topics}
+                    onChange={(event) => setTopics(event.target.value)}
+                    placeholder="AI search, technical SEO, running technology"
+                  />
+                  <small>
+                    Comma-separated phrases. Topic matches influence priority, not source
+                    credibility.
+                  </small>
+                </label>
+              </div>
+              <div className="intel-form-footer">
+                <p>
+                  {sources.length} source{sources.length === 1 ? "" : "s"} saved · {enabled.length}{" "}
+                  enabled
+                </p>
+                <button type="submit" disabled={Boolean(sourcePending)} className="btn-primary">
+                  <Plus size={15} />
+                  {sourcePending === "new" ? "Saving…" : "Add source"}
                 </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await db.feedSources.delete(source.id);
-                    markCloudRecordDirty("feedSources", source.id, "delete");
-                    queueCloudPush();
-                    toast("Source removed", { description: source.name, action: { label: "Undo", onClick: async () => {
-                      await db.feedSources.put(source); markCloudRecordDirty("feedSources", source.id); queueCloudPush();
-                    } } });
-                  }}
-                  className="rounded-full p-1 hover:bg-destructive/15 hover:text-destructive"
-                  aria-label={`Remove ${source.name}`}
-                >
-                  <Trash2 size={11} />
-                </button>
-              </span>
-            ))}
+              </div>
+            </form>
+          </Panel>
+          <div className="intel-toolbar">
+            <label className="intel-search-field">
+              <Search size={15} />
+              <input
+                aria-label="Find sources"
+                value={sourceSearch}
+                onChange={(event) => setSourceSearch(event.target.value)}
+                placeholder="Find a publisher or topic"
+              />
+            </label>
+            <select
+              className="intel-select"
+              aria-label="Source status filter"
+              value={sourceView}
+              onChange={(event) => setSourceView(event.target.value as typeof sourceView)}
+            >
+              <option value="all">All sources</option>
+              <option value="enabled">Enabled sources</option>
+              <option value="attention">Needs attention</option>
+              <option value="paused">Paused sources</option>
+            </select>
           </div>
-        )}
-      </Panel>
-
-      <div>
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-extrabold text-foreground">Tracked intelligence stream</h2>
-            <p className="text-xs text-muted-foreground">
-              {stories.length} {showArchived ? "archived" : "active"} stories. Priority is recalculated from age, topic relevance and headline signals.
-            </p>
-          </div>
-        </div>
-        <div className="mb-4 flex flex-wrap gap-2">
-          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3">
-            <Search size={15} className="text-muted-foreground" />
-            <input aria-label="Filter saved trends" value={streamQuery} onChange={event => setStreamQuery(event.target.value)} placeholder="Find a story or publisher…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
-          </label>
-          <select aria-label="Filter saved publication dates" value={streamDays} onChange={event => setStreamDays(Number(event.target.value))} className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm">
-            <option value={0}>All saved coverage</option><option value={7}>Published in 7 days</option><option value={30}>Published in 30 days</option>
-          </select>
-        </div>
-        {stories.length === 0 ? (
-          <EmptyState
-            title={sources.length ? "No tracked stories yet" : "Add a source or search a subject"}
-            hint="Live subject search works without creating a permanent feed. Add sources for recurring daily monitoring."
-          />
-        ) : (
-          <div className="grid gap-2.5">
-            {stories.slice(0, visibleCount).map((story) => (
-              <StreamRow key={story.id} item={story} />
-            ))}
-            {stories.length > visibleCount && <button type="button" onClick={() => setVisibleCount(count => count + 40)} className="btn-secondary justify-center min-h-11">Show more · {stories.length - visibleCount} remaining</button>}
-          </div>
-        )}
-      </div>
+          {visibleSources.length ? (
+            <div className="intel-source-list">
+              {visibleSources.map((source) => (
+                <article key={source.id} className="intel-source-row" data-paused={!source.enabled}>
+                  <div className="intel-source-icon">
+                    <Globe2 size={17} />
+                  </div>
+                  <div className="intel-source-body">
+                    <div className="intel-source-title">
+                      <a
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="hover:text-primary"
+                      >
+                        {source.name}
+                      </a>
+                      <span
+                        className="intel-pill"
+                        data-tone={source.enabled && source.lastError ? "warning" : undefined}
+                      >
+                        {!source.enabled
+                          ? "Paused"
+                          : source.lastError
+                            ? "Needs attention"
+                            : source.lastCheckedAt
+                              ? "Enabled"
+                              : "Not checked"}
+                      </span>
+                    </div>
+                    <div className="intel-source-meta">
+                      <span>{source.url}</span>
+                      <span>
+                        {source.lastCheckedAt
+                          ? `Last attempt ${relTime(source.lastCheckedAt)}`
+                          : "No refresh attempted"}
+                      </span>
+                    </div>
+                    {!!source.topics?.length && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        Topics: {source.topics.join(", ")}
+                      </p>
+                    )}
+                    {source.duplicateCount > 0 && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        {source.memberIds.length} identical saved entries · displayed as one source
+                      </p>
+                    )}
+                    {source.lastError && (
+                      <p className="mt-2 break-words text-xs leading-relaxed text-warning">
+                        {source.lastError}
+                      </p>
+                    )}
+                    {editingSource === source.id && (
+                      <form
+                        className="intel-form mt-4"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          void mutateSource(source.id, async () => {
+                            const patch = {
+                              name: editName.trim() || source.name,
+                              topics: [
+                                ...new Set(
+                                  editTopics
+                                    .split(",")
+                                    .map((value) => value.trim())
+                                    .filter(Boolean),
+                                ),
+                              ],
+                            };
+                            await db.transaction("rw", db.feedSources, async () => {
+                              for (const id of source.memberIds)
+                                await db.feedSources.update(id, patch);
+                            });
+                            source.memberIds.forEach((id) =>
+                              markCloudRecordDirty("feedSources", id),
+                            );
+                            queueCloudPush();
+                            setEditingSource("");
+                            toast.success("Source settings saved");
+                          });
+                        }}
+                      >
+                        <div className="intel-form-grid">
+                          <label className="intel-field">
+                            Publisher name
+                            <input
+                              value={editName}
+                              onChange={(event) => setEditName(event.target.value)}
+                              required
+                            />
+                          </label>
+                          <label className="intel-field">
+                            Topics
+                            <input
+                              value={editTopics}
+                              onChange={(event) => setEditTopics(event.target.value)}
+                            />
+                          </label>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="submit"
+                            disabled={Boolean(sourcePending)}
+                            className="btn-primary"
+                          >
+                            Save changes
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingSource("")}
+                            className="btn-secondary"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+                  </div>
+                  <div className="intel-source-actions">
+                    <button
+                      type="button"
+                      className="intel-icon-button"
+                      disabled={Boolean(sourcePending)}
+                      aria-label={`Edit ${source.name}`}
+                      onClick={() => {
+                        setEditingSource(source.id);
+                        setEditName(source.name);
+                        setEditTopics((source.topics || []).join(", "));
+                      }}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className="intel-icon-button"
+                      disabled={Boolean(sourcePending)}
+                      aria-pressed={source.enabled}
+                      aria-label={`${source.enabled ? "Pause" : "Enable"} ${source.name}`}
+                      onClick={() =>
+                        void mutateSource(source.id, async () => {
+                          await db.transaction("rw", db.feedSources, async () => {
+                            for (const id of source.memberIds)
+                              await db.feedSources.update(id, { enabled: !source.enabled });
+                          });
+                          source.memberIds.forEach((id) => markCloudRecordDirty("feedSources", id));
+                          queueCloudPush();
+                        })
+                      }
+                    >
+                      <Power size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      className="intel-icon-button"
+                      data-danger="true"
+                      disabled={Boolean(sourcePending)}
+                      aria-label={`Remove ${source.name}`}
+                      onClick={() =>
+                        void mutateSource(source.id, async () => {
+                          const removed = await removeFeedSources(source.memberIds);
+                          toast("Source removed", {
+                            description: "Saved stories are preserved.",
+                            action: {
+                              label: "Undo",
+                              onClick: () =>
+                                void mutateSource(source.id, async () => {
+                                  await restoreFeedSources(removed);
+                                  toast.success("Source restored");
+                                }),
+                            },
+                          });
+                        })
+                      }
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title={
+                sources.length ? "No sources match this filter" : "Your source directory is empty"
+              }
+              hint={
+                sources.length
+                  ? "Choose All sources or clear the search to see the full directory."
+                  : "Add your first publisher above, then refresh feeds."
+              }
+            />
+          )}
+        </section>
+      )}
+      <CollectorStatusPanel kind="feeds" />
     </div>
   );
 }

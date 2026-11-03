@@ -7,6 +7,7 @@ import {
   Plus,
   Search,
   Settings,
+  Pin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTasks, usePayments, useCustomModules, useAddItem } from "@/hooks/useTableData";
@@ -35,14 +36,30 @@ export default function Sidebar() {
     sidebarCollapsed: collapsed,
     setSidebarCollapsed,
     setSidebarOpen,
+    pinnedSections,
+    closedGroups,
+    setClosedGroups,
   } = useNavigationStore();
   const { userName, userRole } = useSettingsStore();
   const area = usePlanStore((state) => state.area);
-  const [closedGroups, setClosedGroups] = useState<string[]>(["Tools"]);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
-  const sections = filterWorkspaces(WORKSPACE_SECTIONS, "", area === "personal");
+  const customSections: WorkspaceSection[] = custom
+    .filter((module) => module.visible)
+    .sort((a, b) => a.order - b.order)
+    .map((module) => ({
+      id: `custom-${module.id}`,
+      label: module.name,
+      description: module.description || "Custom workspace",
+      group: "Custom",
+      icon: Layers3,
+    }));
+  const sections = filterWorkspaces(
+    [...WORKSPACE_SECTIONS, ...customSections],
+    "",
+    area === "personal",
+  );
   const taskCount = tasks.filter((task) => task.status !== "done" && !task.archived).length;
   const financeCount = payments.filter(
     (payment) => dueState(payment, localToday()) === "overdue",
@@ -51,10 +68,10 @@ export default function Sidebar() {
   useEffect(() => {
     const group = workspaceById(activeSection)?.group;
     if (group)
-      setClosedGroups((current) =>
-        current.includes(group) ? current.filter((value) => value !== group) : current,
+      setClosedGroups(
+        useNavigationStore.getState().closedGroups.filter((value) => value !== group),
       );
-  }, [activeSection]);
+  }, [activeSection, setClosedGroups]);
 
   const addModule = async (event: FormEvent) => {
     event.preventDefault();
@@ -125,7 +142,7 @@ export default function Sidebar() {
           {!collapsed && (
             <span>
               <strong>Mission Control</strong>
-              <small>YOUR OPERATING SPACE</small>
+              <small>THE OPERATOR'S WORKSPACE</small>
             </span>
           )}
         </div>
@@ -149,8 +166,32 @@ export default function Sidebar() {
           {!collapsed && <AreaSwitch compact className="mc-sidebar-area" />}
         </div>
         <nav className="mc-sidebar-scroll" aria-label="Workspaces">
+          {pinnedSections.some((id) => sections.some((item) => item.id === id)) && (
+            <section className="mc-nav-group mc-nav-pinned" aria-label="Pinned workspaces">
+              {!collapsed && (
+                <div className="mc-nav-group-label">
+                  <span>
+                    <Pin size={12} /> Pinned
+                  </span>
+                  <button
+                    type="button"
+                    aria-label="Manage pinned workspaces"
+                    onClick={() => setSidebarOpen(true)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              )}
+              {pinnedSections
+                .map((id) => sections.find((item) => item.id === id))
+                .filter((item): item is WorkspaceSection => !!item)
+                .map(navItem)}
+            </section>
+          )}
           {WORKSPACE_GROUPS.filter((group) => group !== "Custom").map((group) => {
-            const items = sections.filter((section) => section.group === group);
+            const items = sections.filter(
+              (section) => section.group === group && !pinnedSections.includes(section.id),
+            );
             if (!items.length) return null;
             const isOpen = collapsed || !closedGroups.includes(group);
             return (
@@ -162,14 +203,27 @@ export default function Sidebar() {
                     aria-expanded={isOpen}
                     aria-controls={`nav-group-${group}`}
                     onClick={() =>
-                      setClosedGroups((current) =>
-                        current.includes(group)
-                          ? current.filter((value) => value !== group)
-                          : [...current, group],
+                      setClosedGroups(
+                        closedGroups.includes(group)
+                          ? closedGroups.filter((value) => value !== group)
+                          : [...closedGroups, group],
                       )
                     }
                   >
-                    <span>{group}</span>
+                    <span>
+                      {group}
+                      <small>
+                        {group === "Operate"
+                          ? "Review & control"
+                          : group === "Intelligence"
+                            ? "Signals & evidence"
+                            : group === "Growth"
+                              ? "Assets & performance"
+                              : group === "Focus"
+                                ? "Plan & execute"
+                                : "Connections & tools"}
+                      </small>
+                    </span>
                     <ChevronDown size={13} className={isOpen ? "" : "is-closed"} />
                   </button>
                 ) : (
@@ -179,23 +233,15 @@ export default function Sidebar() {
               </section>
             );
           })}
-          {area !== "personal" && custom.some((module) => module.visible) && (
-            <section className="mc-nav-group">
-              {!collapsed && <div className="mc-nav-group-label">Custom</div>}
-              {custom
-                .filter((module) => module.visible)
-                .sort((a, b) => a.order - b.order)
-                .map((module) =>
-                  navItem({
-                    id: `custom-${module.id}`,
-                    label: module.name,
-                    description: module.description || "Custom workspace",
-                    group: "Custom",
-                    icon: Layers3,
-                  }),
-                )}
-            </section>
-          )}
+          {area !== "personal" &&
+            customSections.some((section) => !pinnedSections.includes(section.id)) && (
+              <section className="mc-nav-group">
+                {!collapsed && <div className="mc-nav-group-label">Custom</div>}
+                {customSections
+                  .filter((section) => !pinnedSections.includes(section.id))
+                  .map(navItem)}
+              </section>
+            )}
           <button
             type="button"
             className="mc-sidebar-add"

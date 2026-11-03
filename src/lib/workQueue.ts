@@ -120,8 +120,10 @@ export function buildWorkQueue(input: {
   }
 
   for (const r of input.reminders ?? []) {
-    if (r.status !== "pending") continue;
-    const due = (r.remindAt || "").slice(0, 10);
+    if (r.status === "done") continue;
+    const date = new Date(r.remindAt);
+    if (!Number.isFinite(date.getTime())) continue;
+    const due = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     const overdue =
       due && due < today
         ? Math.round(
@@ -145,7 +147,7 @@ export function buildWorkQueue(input: {
       title: r.title,
       subtitle: r.notes,
       due,
-      time: (r.remindAt || "").slice(11, 16) || undefined,
+      time: `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`,
       priority: "medium",
       context: "Reminder",
       overdueDays: overdue,

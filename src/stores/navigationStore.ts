@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { resilientWebStorage } from "@/lib/resilientStorage";
-import { sanitizeNavigation } from "@/lib/navigationPreferences";
+import { DEFAULT_PINNED_SECTIONS, sanitizeNavigation } from "@/lib/navigationPreferences";
 export { sanitizeNavigation } from "@/lib/navigationPreferences";
 
 interface NavigationState {
@@ -15,6 +15,10 @@ interface NavigationState {
   setDensity: (density: "comfortable" | "compact") => void;
   toggleSidebar: () => void;
   recentSections: string[];
+  pinnedSections: string[];
+  togglePinnedSection: (section: string) => void;
+  closedGroups: string[];
+  setClosedGroups: (groups: string[]) => void;
   pushRecent: (section: string) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
@@ -49,6 +53,19 @@ export const useNavigationStore = create<NavigationState>()(
       setDensity: (density) => set({ density }),
       toggleSidebar: () => set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
       recentSections: [],
+      pinnedSections: DEFAULT_PINNED_SECTIONS,
+      togglePinnedSection: (section) => {
+        if (!validSection(section)) return;
+        set((state) => ({
+          pinnedSections: state.pinnedSections.includes(section)
+            ? state.pinnedSections.filter((id) => id !== section)
+            : state.pinnedSections.length < 8
+              ? [...state.pinnedSections, section]
+              : state.pinnedSections,
+        }));
+      },
+      closedGroups: ["Growth", "Tools"],
+      setClosedGroups: (closedGroups) => set({ closedGroups }),
       pushRecent: (section) => {
         if (validSection(section))
           set((state) => ({
@@ -70,7 +87,7 @@ export const useNavigationStore = create<NavigationState>()(
     {
       name: "mc-navigation-v1",
       storage: createJSONStorage(() => resilientWebStorage),
-      version: 2,
+      version: 3,
       migrate: (persisted) => sanitizeNavigation(persisted),
       merge: (persisted, current) => ({ ...current, ...sanitizeNavigation(persisted) }),
       partialize: (state) => ({
@@ -78,6 +95,8 @@ export const useNavigationStore = create<NavigationState>()(
         recentSections: state.recentSections,
         sidebarCollapsed: state.sidebarCollapsed,
         density: state.density,
+        pinnedSections: state.pinnedSections,
+        closedGroups: state.closedGroups,
       }),
     },
   ),

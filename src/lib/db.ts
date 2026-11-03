@@ -545,6 +545,14 @@ export interface UserSettings {
   digestEmailLastSentAt?: string;
   /** One-time migration marker for the 09:00 executive briefing schedule. */
   digestEmailScheduleVersion?: number;
+  /** Dedicated non-default settings rows retain independently synced starter-source choices. */
+  bootstrapSeedPreference?: {
+    collection: "feedSources" | "watchTerms";
+    subject: string;
+    dismissed: boolean;
+    changedAt: string;
+    revision: string;
+  };
 }
 
 export interface CustomModule {
@@ -695,6 +703,10 @@ export interface Reminder {
   notes?: string;
   remindAt: string; // ISO datetime
   recurrence?: "none" | "daily" | "weekly" | "monthly";
+  /** Original wall-clock cadence, preserved through snoozes and month-end clamping. */
+  recurrenceAnchorAt?: string;
+  /** Canonical ISO occurrence already claimed for an app-open notification. */
+  notifiedFor?: string;
   status: "pending" | "done" | "snoozed";
   sourceUrl?: string;
   createdAt: string;

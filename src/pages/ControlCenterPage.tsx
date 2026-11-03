@@ -1,3 +1,4 @@
+import "@/operate-workspaces.css";
 import { useMemo, useRef, useState } from "react";
 import {
   Archive,
@@ -30,6 +31,7 @@ export default function ControlCenterPage() {
   const setActiveSection = useNavigationStore((state) => state.setActiveSection);
   const [query, setQuery] = useState("");
   const [area, setArea] = useState("all");
+  const [sort, setSort] = useState("oldest");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editingId, setEditingId] = useState<string | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
@@ -47,17 +49,26 @@ export default function ControlCenterPage() {
   );
   const filtered = useMemo(
     () =>
-      captures.filter(
-        (task) =>
-          (area === "all" || (task.area || "work") === area) &&
-          `${task.title} ${task.description} ${task.category} ${task.linkedProject}`
-            .toLocaleLowerCase()
-            .includes(query.trim().toLocaleLowerCase()),
-      ),
-    [captures, area, query],
+      captures
+        .filter(
+          (task) =>
+            (area === "all" || (task.area || "work") === area) &&
+            `${task.title} ${task.description} ${task.category} ${task.linkedProject}`
+              .toLocaleLowerCase()
+              .includes(query.trim().toLocaleLowerCase()),
+        )
+        .sort((a, b) =>
+          sort === "newest"
+            ? b.createdAt.localeCompare(a.createdAt)
+            : sort === "deadline"
+              ? (a.dueDate || "9999").localeCompare(b.dueDate || "9999") ||
+                a.createdAt.localeCompare(b.createdAt)
+              : a.createdAt.localeCompare(b.createdAt),
+        ),
+    [captures, area, query, sort],
   );
   const visible = filtered.slice(0, limit);
-  const selectedRows = captures.filter((task) => selected.has(task.id));
+  const selectedRows = filtered.filter((task) => selected.has(task.id));
   const editing = tasks.find((task) => task.id === editingId) || null;
 
   async function operation(action: () => Promise<void>) {
@@ -116,7 +127,7 @@ export default function ControlCenterPage() {
     });
 
   return (
-    <div className="space-y-5">
+    <div className="mc-operate mc-captures space-y-5">
       <PageHeader
         icon={Inbox}
         eyebrow="Operate / Capture and clarify"
@@ -169,6 +180,7 @@ export default function ControlCenterPage() {
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
+                setSelected(new Set());
                 setLimit(PAGE_SIZE);
               }}
               placeholder="Search captured tasks and context"
@@ -180,6 +192,7 @@ export default function ControlCenterPage() {
             value={area}
             onChange={(event) => {
               setArea(event.target.value);
+              setSelected(new Set());
               setLimit(PAGE_SIZE);
             }}
             className={`${button} bg-background`}
@@ -187,6 +200,19 @@ export default function ControlCenterPage() {
             <option value="all">Work and personal</option>
             <option value="work">Work</option>
             <option value="personal">Personal</option>
+          </select>
+          <select
+            aria-label="Capture sort order"
+            value={sort}
+            onChange={(event) => {
+              setSort(event.target.value);
+              setLimit(PAGE_SIZE);
+            }}
+            className={`${button} bg-background`}
+          >
+            <option value="oldest">Oldest captured first</option>
+            <option value="newest">Newest captured first</option>
+            <option value="deadline">Nearest deadline first</option>
           </select>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -205,7 +231,7 @@ export default function ControlCenterPage() {
             Select filtered captures ({filtered.length})
           </label>
           <span className="text-xs text-muted-foreground">
-            Oldest first · every count comes from saved tasks
+            {visible.length} shown of {filtered.length} matching · saved tasks
           </span>
         </div>
         {selectedRows.length > 0 && (
@@ -351,6 +377,18 @@ export default function ControlCenterPage() {
                 ? "Adjust the search or area filter to see other captured tasks."
                 : "Use the capture bar above to save a thought. Accepting a task moves it into your task list without inventing a deadline."}
             </p>
+            {captures.length > 0 && (
+              <button
+                className={`${button} mt-4`}
+                onClick={() => {
+                  setQuery("");
+                  setArea("all");
+                  setSelected(new Set());
+                }}
+              >
+                Clear filters
+              </button>
+            )}
           </div>
         )}
         {filtered.length > limit && (
@@ -362,8 +400,8 @@ export default function ControlCenterPage() {
           </button>
         )}
       </section>
-      <section className="rounded-2xl border border-border bg-card p-4">
-        <h2 className="text-sm font-semibold">Looking for intelligence?</h2>
+      <details className="op-help-panel">
+        <summary>Where should this information go?</summary>
         <p className="mt-1 text-sm text-muted-foreground">
           Use the dedicated workspaces for publisher coverage, identity-matched mentions and
           measured audience data.
@@ -381,7 +419,7 @@ export default function ControlCenterPage() {
             </button>
           ))}
         </div>
-      </section>
+      </details>
       <TaskQuickEditor task={editing} onClose={() => setEditingId(null)} />
     </div>
   );

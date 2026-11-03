@@ -1,4 +1,5 @@
 import { assertFeedDocument } from "./publicFeedFetch.server";
+import { attributedArticle, canonicalWebUrl } from "./intelligenceQuality";
 import {
   googleNewsUrl,
   hostOf,
@@ -46,23 +47,6 @@ function providerLabel(provider: NewsProvider): string {
 function cleanError(error: unknown): string {
   const value = error instanceof Error ? error.message : String(error);
   return value.replace(/\s+/g, " ").trim().slice(0, 180);
-}
-
-function canonicalUrl(raw: string): string {
-  try {
-    const url = new URL(raw);
-    url.hash = "";
-    for (const key of [...url.searchParams.keys()]) {
-      if (/^(utm_|fbclid|gclid|msclkid|ref|source)/i.test(key)) {
-        url.searchParams.delete(key);
-      }
-    }
-    url.searchParams.sort();
-    if (url.pathname !== "/") url.pathname = url.pathname.replace(/\/$/, "");
-    return url.toString().replace(/\?$/, "");
-  } catch {
-    return raw.trim();
-  }
 }
 
 function parseTimestamp(value: unknown): string | undefined {
@@ -244,8 +228,9 @@ export function mergeNewsCoverage(
   const merged = new Map<string, NewsCoverageItem>();
 
   for (const result of results) {
-    for (const item of result.items) {
-      const key = canonicalUrl(item.url);
+    for (const raw of result.items) {
+      const item = attributedArticle(raw);
+      const key = canonicalWebUrl(item.url);
       const existing = merged.get(key);
       if (!existing) {
         merged.set(key, {
@@ -263,7 +248,7 @@ export function mergeNewsCoverage(
       }
       if (!existing.summary && item.summary) existing.summary = item.summary;
       if (!existing.publishedAt && item.publishedAt) existing.publishedAt = item.publishedAt;
-      if (!existing.source && item.source) existing.source = item.source;
+      if (item.source && (!existing.source || existing.source === hostOf(existing.sourceUrl || existing.url))) existing.source = item.source;
       if (!existing.sourceUrl && item.sourceUrl) existing.sourceUrl = item.sourceUrl;
     }
   }

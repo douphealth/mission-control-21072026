@@ -192,13 +192,16 @@ export default function DashboardLayout() {
       <div className="mc13-sidebar-wrap relative z-[1] hidden lg:block">
         <Sidebar />
       </div>
-      <div className="mc13-main-wrap relative flex min-w-0 flex-1 flex-col overflow-hidden">
+      <div
+        id="workspace-scroll"
+        className="mc13-main-wrap relative flex min-w-0 flex-1 flex-col overflow-y-auto"
+      >
         <TopBar />
         <CrossDeviceSyncBar />
         <main
           id="main-content"
           tabIndex={-1}
-          className="mc13-main mobile-content-pad flex-1 overflow-y-auto lg:pb-0 overscroll-contain"
+          className="mc13-main mobile-content-pad flex-1 lg:pb-0"
         >
           <div
             className="mc13-page max-w-[1680px] mx-auto px-3 pb-5 pt-3 sm:p-5 lg:p-7 xl:p-9"

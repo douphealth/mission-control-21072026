@@ -10,6 +10,7 @@ import {
   Zap,
   ListChecks,
   Plus,
+  ExternalLink,
 } from "lucide-react";
 import type { WorkItem } from "@/lib/workQueue";
 import { estimateOf, fmtMinutes } from "@/lib/planning";
@@ -17,6 +18,7 @@ import type { Task } from "@/lib/db";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
 import type { AreaFilter } from "@/stores/planStore";
+import { whyNow } from "@/lib/whyNow";
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -27,7 +29,7 @@ function useClock() {
   return now;
 }
 
-function ProgressRing({ pct }: { pct: number }) {
+function ProgressRing({ pct, planned }: { pct: number; planned: boolean }) {
   const size = 82;
   const stroke = 7;
   const radius = (size - stroke) / 2;
@@ -35,7 +37,10 @@ function ProgressRing({ pct }: { pct: number }) {
   const offset = circumference - (Math.min(100, Math.max(0, pct)) / 100) * circumference;
 
   return (
-    <div className="mc13-ring" aria-label={`${pct}% of today's outcomes complete`}>
+    <div
+      className="mc13-ring"
+      aria-label={planned ? `${pct}% of today's outcomes complete` : "No outcomes planned yet"}
+    >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
         <circle
           cx={size / 2}
@@ -66,8 +71,8 @@ function ProgressRing({ pct }: { pct: number }) {
         </defs>
       </svg>
       <div className="mc13-ring-value">
-        <strong>{pct}%</strong>
-        <span>done</span>
+        <strong>{planned ? `${pct}%` : "—"}</strong>
+        <span>{planned ? "done" : "to plan"}</span>
       </div>
     </div>
   );
@@ -94,6 +99,39 @@ export default function HeroNowBand({
 }) {
   const now = useClock();
   const setActiveSection = useNavigationStore((state) => state.setActiveSection);
+  const setFocusTaskId = useNavigationStore((state) => state.setFocusTaskId);
+  const links = [
+    ...new Set(
+      (nextAction?.title.match(/https?:\/\/[^\s<>]+/gi) ?? []).map((value) => {
+        let trimmed = value.replace(/[.,;:!?]+$/, "");
+        for (const [open, close] of [
+          ["(", ")"],
+          ["[", "]"],
+          ["{", "}"],
+        ]) {
+          while (
+            trimmed.endsWith(close) &&
+            trimmed.split(close).length > trimmed.split(open).length
+          )
+            trimmed = trimmed.slice(0, -1);
+        }
+        return trimmed;
+      }),
+    ),
+  ].filter((value) => {
+    try {
+      const parsed = new URL(value);
+      return !parsed.username && !parsed.password;
+    } catch {
+      return false;
+    }
+  });
+  // Keep the original saved title intact; render URLs as useful links instead of a wall of text.
+  const readableTitle =
+    nextAction?.title
+      .replace(/https?:\/\/[^\s<>]+/gi, "")
+      .replace(/\s+/g, " ")
+      .trim() || (links[0] ? new URL(links[0]).hostname : nextAction?.title);
   const hour = now.getHours();
   const greeting =
     hour < 5
@@ -109,8 +147,7 @@ export default function HeroNowBand({
     day: "numeric",
     month: "long",
   });
-  const donePct =
-    commitmentsTotal > 0 ? Math.round((commitmentsDone / commitmentsTotal) * 100) : 0;
+  const donePct = commitmentsTotal > 0 ? Math.round((commitmentsDone / commitmentsTotal) * 100) : 0;
   const contextLabel =
     area === "personal" ? "Family day" : area === "work" ? "Business day" : "Whole life";
   const contextCopy =
@@ -140,74 +177,113 @@ export default function HeroNowBand({
       <div className="mc13-hero-grid">
         <div className="mc13-now-panel">
           <div className="mc37-priority-copy">
-          <div className="mc13-eyebrow">
-            <Sparkles size={12} />
-            {greeting} · your next best move
-          </div>
+            <div className="mc13-eyebrow">
+              <Sparkles size={12} />
+              {greeting} · your next best move
+            </div>
 
-          {nextAction ? (
-            <>
-              <h1 className="mc13-now-title">{nextAction.title}</h1>
-              <p className="mc36-context-copy">{contextCopy}</p>
-
-              <div className="mc13-meta-row">
-                {nextAction.kind === "task" && (
-                  <span>
-                    <Timer size={12} />
-                    {fmtMinutes(estimateOf(nextAction.raw as Task))}
-                  </span>
+            {nextAction ? (
+              <>
+                <h1 className="mc13-now-title">{readableTitle}</h1>
+                <p className="mc36-context-copy">{whyNow(nextAction).join(" · ")}</p>
+                {links.length > 0 && (
+                  <div className="mc-priority-links" aria-label="Task links">
+                    {links.map((link) => (
+                      <a
+                        key={link}
+                        href={link}
+                        title={link}
+                        aria-label={`Open ${link}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <ExternalLink size={13} />
+                        {new URL(link).hostname.replace(/^www\./, "")}
+                      </a>
+                    ))}
+                  </div>
                 )}
-                {nextAction.due && (
-                  <span>
-                    <Clock3 size={12} />
-                    due {nextAction.due.slice(5)}
-                  </span>
-                )}
-                <span>
-                  <Gauge size={12} />
-                  {fmtMinutes(Math.max(0, availableMin))} free
-                </span>
-              </div>
 
-              <div className="mc13-actions">
-                <button type="button" onClick={() => onFocus(nextAction)} className="mc13-primary-action">
-                  <Focus size={17} />
-                  Start focus
-                  <ArrowRight size={16} />
-                </button>
-                <button type="button" onClick={() => onComplete(nextAction)} className="mc13-secondary-action">
-                  <CheckCircle2 size={16} />
-                  Mark done
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <h1 className="mc13-now-title">Clear deck. Choose the next meaningful move.</h1>
-              <p className="mc13-now-subtitle">{contextCopy}</p>
-              <div className="mc13-actions">
-                <button
-                  type="button"
-                  onClick={() => setActiveSection("tasks")}
-                  className="mc13-primary-action"
-                >
-                  <ListChecks size={17} />
-                  Choose next action
-                  <ArrowRight size={16} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() =>
-                    window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT))
-                  }
-                  className="mc13-secondary-action"
-                >
-                  <Plus size={16} />
-                  Capture
-                </button>
-              </div>
-            </>
-          )}
+                <div className="mc13-meta-row">
+                  {nextAction.kind === "task" && (
+                    <span>
+                      <Timer size={12} />
+                      {fmtMinutes(estimateOf(nextAction.raw as Task))}
+                    </span>
+                  )}
+                  {nextAction.due && (
+                    <span>
+                      <Clock3 size={12} />
+                      Due{" "}
+                      {new Date(`${nextAction.due}T12:00:00`).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  )}
+                  <span>
+                    <Gauge size={12} />
+                    {fmtMinutes(Math.max(0, availableMin))} free
+                  </span>
+                </div>
+
+                <div className="mc13-actions">
+                  <button
+                    type="button"
+                    onClick={() => onFocus(nextAction)}
+                    className="mc13-primary-action"
+                  >
+                    <Focus size={17} />
+                    Start focus
+                    <ArrowRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onComplete(nextAction)}
+                    className="mc13-secondary-action"
+                  >
+                    <CheckCircle2 size={16} />
+                    Mark done
+                  </button>
+                  {nextAction.kind === "task" && (
+                    <button
+                      type="button"
+                      className="mc-priority-open"
+                      onClick={() => {
+                        setFocusTaskId(nextAction.refId);
+                        setActiveSection("tasks");
+                      }}
+                    >
+                      View task <ArrowRight size={14} />
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <h1 className="mc13-now-title">Clear deck. Choose the next meaningful move.</h1>
+                <p className="mc13-now-subtitle">{contextCopy}</p>
+                <div className="mc13-actions">
+                  <button
+                    type="button"
+                    onClick={() => setActiveSection("tasks")}
+                    className="mc13-primary-action"
+                  >
+                    <ListChecks size={17} />
+                    Choose next action
+                    <ArrowRight size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT))}
+                    className="mc13-secondary-action"
+                  >
+                    <Plus size={16} />
+                    Capture
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="mc37-hero-art mc38-hero-art" aria-hidden="true">
@@ -224,26 +300,47 @@ export default function HeroNowBand({
           <div className="mc13-day-head">
             <div>
               <span className="mc13-day-kicker">Today</span>
-              <strong>{area === "personal" ? "Family rhythm" : area === "work" ? "Execution pulse" : "Life rhythm"}</strong>
+              <strong>
+                {area === "personal"
+                  ? "Family rhythm"
+                  : area === "work"
+                    ? "Execution pulse"
+                    : "Life rhythm"}
+              </strong>
             </div>
-            <ProgressRing pct={donePct} />
+            <ProgressRing pct={donePct} planned={commitmentsTotal > 0} />
           </div>
 
           <div className="mc13-mini-grid">
             <div className="mc13-mini-card">
-              <div className="mc16-mini-label"><CheckCircle2 size={12} /><span>Outcomes</span></div>
-              <strong>{commitmentsDone}<em>/ {commitmentsTotal}</em></strong>
+              <div className="mc16-mini-label">
+                <CheckCircle2 size={12} />
+                <span>Outcomes</span>
+              </div>
+              <strong>
+                {commitmentsDone}
+                <em>/ {commitmentsTotal}</em>
+              </strong>
             </div>
             <div className="mc13-mini-card">
-              <div className="mc16-mini-label"><Timer size={12} /><span>Planned</span></div>
+              <div className="mc16-mini-label">
+                <Timer size={12} />
+                <span>Planned</span>
+              </div>
               <strong>{fmtMinutes(plannedMin)}</strong>
             </div>
             <div className="mc13-mini-card">
-              <div className="mc16-mini-label"><Gauge size={12} /><span>Free</span></div>
+              <div className="mc16-mini-label">
+                <Gauge size={12} />
+                <span>Free</span>
+              </div>
               <strong>{fmtMinutes(Math.max(0, availableMin))}</strong>
             </div>
             <div className="mc13-mini-card mc13-mini-card-accent">
-              <div className="mc16-mini-label"><Zap size={12} /><span>Mode</span></div>
+              <div className="mc16-mini-label">
+                <Zap size={12} />
+                <span>Mode</span>
+              </div>
               <strong>{nextAction ? "Execute" : "Choose"}</strong>
             </div>
           </div>

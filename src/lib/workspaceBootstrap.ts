@@ -13,8 +13,10 @@ import {
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
 import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
-import { ensureWatchTerm } from "@/lib/watchTerms";
+import { ensureSeededWatchTerm } from "@/lib/watchTerms";
 import { stableBootstrapId } from "@/lib/bootstrapIdentity";
+import { seedPreferenceId } from "@/lib/bootstrapPreferences";
+import { canonicalWebUrl } from "@/lib/intelligenceQuality";
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -32,13 +34,15 @@ async function putIfMissing<T extends { id: string }>(
   collection: string,
   exists: () => Promise<boolean>,
   record: Omit<T, "id">,
+  preferenceId?: string,
 ) {
   const values = record as Record<string, unknown>;
   const identity = collection === "buildProjects" ? values.githubRepo
     : collection === "ideas" ? values.title : values.url;
   if (typeof identity !== "string" || !identity.trim()) throw new Error(`Missing bootstrap identity for ${collection}`);
   const id = await stableBootstrapId(`seed-${collection}`, identity.trim().toLowerCase());
-  const created = await db.transaction("rw", table, async () => {
+  const created = await db.transaction("rw", table, db.settings, async () => {
+    if (preferenceId && (await db.settings.get(preferenceId))?.bootstrapSeedPreference?.dismissed) return false;
     if (await exists() || await table.get(id)) return false;
     await table.add({ ...record, id });
     return true;
@@ -496,6 +500,7 @@ export async function ensureWorkspaceBootstrap() {
         "feedSources",
         async () => Boolean(await db.feedSources.filter((row) => row.url.toLowerCase() === feed.url.toLowerCase()).first()),
         feed,
+        await seedPreferenceId("feedSources", canonicalWebUrl(feed.url)),
       )) || changed;
   }
 
@@ -520,7 +525,7 @@ export async function ensureWorkspaceBootstrap() {
       enabled: true,
       createdAt: now(),
     };
-    changed = (await ensureWatchTerm(record)).created || changed;
+    changed = (await ensureSeededWatchTerm(record)) || changed;
   }
 
   for (const idea of IDEAS) {

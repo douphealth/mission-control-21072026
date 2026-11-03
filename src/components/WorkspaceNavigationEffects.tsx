@@ -13,7 +13,11 @@ export default function WorkspaceNavigationEffects() {
     readLocation();
     const writeLocation = (section: string, replace = false) => {
       const hash = `#section=${section}`;
-      if (!window.location.hash || window.location.hash === "#main-content" || window.location.hash.startsWith("#section=")) {
+      if (
+        !window.location.hash ||
+        window.location.hash === "#main-content" ||
+        window.location.hash.startsWith("#section=")
+      ) {
         if (window.location.hash !== hash) {
           const url = `${window.location.pathname}${window.location.search}${hash}`;
           if (replace) window.history.replaceState(window.history.state, "", url);
@@ -28,7 +32,7 @@ export default function WorkspaceNavigationEffects() {
       writeLocation(state.activeSection);
       requestAnimationFrame(() => {
         const main = document.getElementById("main-content");
-        main?.scrollTo({ top: 0, behavior: "instant" });
+        document.getElementById("workspace-scroll")?.scrollTo({ top: 0, behavior: "instant" });
         if (!document.querySelector('[role="dialog"]')) main?.focus({ preventScroll: true });
       });
     });

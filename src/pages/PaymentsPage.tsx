@@ -7,7 +7,8 @@ import {
   useBulkDeleteItems,
   useDuplicateItem,
 } from "@/hooks/useTableData";
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import "@/operate-workspaces.css";
 import {
   dueState,
   direction,
@@ -17,6 +18,9 @@ import {
   paymentStatus,
   paymentStatusPatch,
   validatePayment,
+  paymentMatchesPeriod,
+  ledgerEvidenceUrl,
+  amountInMinorUnits,
 } from "@/lib/financeLedger";
 import {
   Plus,
@@ -27,6 +31,11 @@ import {
   RefreshCw,
   CheckSquare,
   Copy,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ReceiptText,
+  ExternalLink,
+  CalendarDays,
 } from "lucide-react";
 import EmptyState from "@/components/EmptyState";
 import PageHeader from "@/components/PageHeader";
@@ -38,11 +47,11 @@ import BulkActionBar from "@/components/BulkActionBar";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
-const typeIcons: Record<string, string> = {
-  income: "💰",
-  expense: "💸",
-  invoice: "📄",
-  subscription: "🔄",
+const typeIcons = {
+  income: ArrowDownLeft,
+  expense: ArrowUpRight,
+  invoice: ReceiptText,
+  subscription: RefreshCw,
 };
 const statusBadge: Record<string, string> = {
   paid: "badge-success",
@@ -84,6 +93,10 @@ export default function PaymentsPage() {
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterCurrency, setFilterCurrency] = useState("all");
+  const [evidence, setEvidence] = useState("all");
+  const [period, setPeriod] = useState("all");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const today = localToday();
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -91,9 +104,42 @@ export default function PaymentsPage() {
   const bulk = useBulkActions<Payment>();
   const cd = useConfirmDialog();
 
+  const monthStart = `${today.slice(0, 7)}-01`;
+  const priorMonth = new Date(`${monthStart}T12:00:00`);
+  priorMonth.setMonth(priorMonth.getMonth() - 1);
+  const previousEnd = new Date(`${monthStart}T12:00:00`);
+  previousEnd.setDate(0);
+  const from =
+    period === "month"
+      ? monthStart
+      : period === "previous"
+        ? localToday(priorMonth)
+        : period === "year"
+          ? `${today.slice(0, 4)}-01-01`
+          : period === "custom"
+            ? customFrom
+            : "";
+  const to =
+    period === "month" || period === "year"
+      ? today
+      : period === "previous"
+        ? localToday(previousEnd)
+        : period === "custom"
+          ? customTo
+          : "";
+  const invalidPeriod = !!from && !!to && from > to;
+  useEffect(() => {
+    bulk.clearSelection();
+  }, [search, filterType, filterCurrency, filterStatus, evidence, from, to, bulk.clearSelection]);
   const filtered = payments
     .filter((p) => filterType === "all" || p.type === filterType)
-    .filter((p) => filterCurrency === "all" || p.currency === filterCurrency)
+    .filter((p) => filterCurrency === "all" || p.currency?.trim().toUpperCase() === filterCurrency)
+    .filter(
+      (p) =>
+        evidence === "all" ||
+        (p.evidenceStatus === "confirmed" ? "confirmed" : "unverified") === evidence,
+    )
+    .filter((p) => !invalidPeriod && paymentMatchesPeriod(p, from, to))
     .filter((p) => filterStatus === "all" || paymentStatus(p, today) === filterStatus)
     .filter((p) =>
       [p.title, p.category, p.from, p.to, p.sourceRef, p.linkedProject]
@@ -103,7 +149,8 @@ export default function PaymentsPage() {
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-  const currencySummary = moneySummary(payments);
+  const selectedPayments = filtered.filter((p) => bulk.selectedIds.has(p.id));
+  const currencySummary = moneySummary(filtered);
   const currencyRows = Object.entries(currencySummary).sort(([a], [b]) => a.localeCompare(b));
   const overdueCount = payments.filter((p) => dueState(p, today) === "overdue").length;
   const upcoming = payments
@@ -198,7 +245,12 @@ export default function PaymentsPage() {
     });
   const markPaid = (id: string) =>
     void operation(async () => {
-      await updateItem<Payment>("payments", id, paymentStatusPatch("paid", today));
+      const payment = payments.find((row) => row.id === id);
+      if (!payment) throw new Error("This record no longer exists.");
+      const patch = paymentStatusPatch("paid", today);
+      const issue = validatePayment({ ...payment, ...patch }, today);
+      if (issue) throw new Error(`Edit this record first: ${issue}`);
+      await updateItem<Payment>("payments", id, patch);
       toast.success("Payment recorded in the ledger", {
         description: "No funds transferred. Add the receipt in Edit to confirm the evidence.",
       });
@@ -217,36 +269,51 @@ export default function PaymentsPage() {
     }
   };
   const bulkDelete = () => {
-    if (!bulk.selectedCount) return;
+    if (!selectedPayments.length) return;
     cd.confirm({
-      title: `Delete ${bulk.selectedCount} payment records?`,
+      title: `Delete ${selectedPayments.length} payment records?`,
       description:
         "Selected ledger records will be removed. No bank transactions or subscriptions are changed.",
       onConfirm: () =>
         void operation(async () => {
-          await bulkDeleteItems("payments", [...bulk.selectedIds]);
-          toast.success(`${bulk.selectedCount} payment records deleted`);
+          await bulkDeleteItems(
+            "payments",
+            selectedPayments.map((p) => p.id),
+          );
+          toast.success(`${selectedPayments.length} payment records deleted`);
           bulk.clearSelection();
         }),
     });
   };
   const bulkUpdateStatus = (status: string) =>
     void operation(async () => {
+      if (!selectedPayments.length) return;
+      const patch = paymentStatusPatch(status as Payment["status"], today);
+      if (status === "paid") {
+        const invalid = selectedPayments.find((p) => validatePayment({ ...p, ...patch }, today));
+        if (invalid)
+          throw new Error(
+            `Edit “${invalid.title}” before recording it paid: ${validatePayment({ ...invalid, ...patch }, today)}`,
+          );
+      }
       await bulkPatch(
         "payments",
-        [...bulk.selectedIds],
-        paymentStatusPatch(status as Payment["status"], today),
+        selectedPayments.map((p) => p.id),
+        patch,
       );
-      toast.success(`${bulk.selectedCount} records updated`);
+      toast.success(`${selectedPayments.length} records updated`);
       bulk.clearSelection();
     });
   const invalidCurrencyCount = payments.filter(
     (p) => !/^[A-Z]{3}$/.test((p.currency || "").trim().toUpperCase()),
   ).length;
+  const invalidAmountCount = payments.filter(
+    (p) => amountInMinorUnits(p.amount, (p.currency || "").toUpperCase()) === null,
+  ).length;
   const unverifiedCount = payments.filter((p) => p.evidenceStatus !== "confirmed").length;
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    <div className="mc-operate mc-finance space-y-5">
       <PageHeader
         icon={DollarSign}
         eyebrow="Finance"
@@ -306,12 +373,85 @@ export default function PaymentsPage() {
         </p>
       )}
 
+      <section className="op-scope-panel" aria-label="Finance reporting scope">
+        <div className="op-scope-heading">
+          <CalendarDays size={18} />
+          <div>
+            <h2>Reporting period</h2>
+            <p>Paid entries use payment dates. Open entries use due dates.</p>
+          </div>
+        </div>
+        <div className="op-scope-controls">
+          <select
+            aria-label="Finance reporting period"
+            value={period}
+            onChange={(event) => setPeriod(event.target.value)}
+          >
+            <option value="all">All recorded dates</option>
+            <option value="month">This month to date</option>
+            <option value="previous">Last month</option>
+            <option value="year">This year to date</option>
+            <option value="custom">Custom dates</option>
+          </select>
+          <select
+            aria-label="Financial evidence filter"
+            value={evidence}
+            onChange={(event) => setEvidence(event.target.value)}
+          >
+            <option value="all">All evidence states</option>
+            <option value="confirmed">Confirmed references</option>
+            <option value="unverified">Need confirmation</option>
+          </select>
+          {period === "custom" && (
+            <>
+              <label>
+                From
+                <input
+                  aria-label="Finance period start"
+                  type="date"
+                  value={customFrom}
+                  onChange={(event) => setCustomFrom(event.target.value)}
+                />
+              </label>
+              <label>
+                To
+                <input
+                  aria-label="Finance period end"
+                  type="date"
+                  value={customTo}
+                  onChange={(event) => setCustomTo(event.target.value)}
+                />
+              </label>
+            </>
+          )}
+        </div>
+        {invalidPeriod && (
+          <p role="alert" className="text-sm text-destructive">
+            Choose an end date on or after the start date.
+          </p>
+        )}
+        {(from || to) && (
+          <p className="op-scope-note">
+            {from || "Any start"} → {to || "Any end"} · Undated entries are excluded from this
+            period.
+          </p>
+        )}
+      </section>
+      {invalidAmountCount > 0 && (
+        <p
+          role="status"
+          className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm"
+        >
+          {invalidAmountCount} record(s) have invalid amounts or unsupported decimal precision and
+          are excluded from totals. Edit those records to repair them.
+        </p>
+      )}
       {bulk.bulkMode && (
         <BulkActionBar
-          selectedCount={bulk.selectedCount}
+          selectedCount={selectedPayments.length}
           totalCount={filtered.length}
           onSelectAll={() => bulk.selectAll(filtered)}
-          allSelected={bulk.selectedCount === filtered.length && filtered.length > 0}
+          allSelected={selectedPayments.length === filtered.length && filtered.length > 0}
           onDelete={bulkDelete}
           dropdowns={[
             {
@@ -355,9 +495,10 @@ export default function PaymentsPage() {
         <div className="card-glass p-4">
           <h2 className="text-sm font-semibold">Financial integrity</h2>
           <p className="mt-2 text-xs text-muted-foreground">
-            This is your recorded ledger, not a live bank balance. Paid records contribute to
-            recorded cash flow; outstanding income and expenses remain separate. Marking an entry
-            paid does not confirm it with a provider or transfer money.
+            {payments.filter((p) => p.evidenceStatus === "confirmed").length} entries have
+            supporting references. {unverifiedCount} still need confirmation. Totals use the
+            reporting period and all active filters below. This ledger records your information; it
+            does not connect to a bank or transfer funds.
           </p>
         </div>
       </section>
@@ -367,8 +508,8 @@ export default function PaymentsPage() {
           <div>
             <div className="text-sm font-bold text-foreground">Recorded cash flow</div>
             <div className="text-[10px] text-muted-foreground">
-              All saved records, grouped by currency. Confirmation status remains visible on each
-              entry.
+              {filtered.length} matching records · reporting period and filters applied · currencies
+              kept separate
             </div>
           </div>
           <span className="badge badge-primary">
@@ -377,7 +518,9 @@ export default function PaymentsPage() {
         </div>
         {currencyRows.length === 0 ? (
           <div className="px-4 py-5 text-sm text-muted-foreground">
-            Add real finance records to calculate totals.
+            {payments.length > 0
+              ? "No records match this reporting scope. Adjust the period or filters to calculate totals."
+              : "Add real finance records to calculate totals."}
           </div>
         ) : (
           <div className="divide-y divide-border/35">
@@ -423,8 +566,9 @@ export default function PaymentsPage() {
           <Search size={14} className="text-muted-foreground" />
           <input
             value={search}
+            aria-label="Search finance records"
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search payments..."
+            placeholder="Search records, providers or references…"
             className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
           />
         </div>
@@ -432,10 +576,11 @@ export default function PaymentsPage() {
           {["all", "income", "expense", "invoice", "subscription"].map((t) => (
             <button
               key={t}
+              aria-pressed={filterType === t}
               onClick={() => setFilterType(t)}
               className={`px-2.5 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium transition-all whitespace-nowrap ${filterType === t ? "bg-card text-card-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
-              {t === "all" ? `All` : `${typeIcons[t]} ${t.charAt(0).toUpperCase() + t.slice(1)}`}
+              {t === "all" ? `All` : t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
         </div>
@@ -461,11 +606,13 @@ export default function PaymentsPage() {
           className="min-h-11 rounded-xl border border-border bg-secondary px-3 py-2 text-sm"
         >
           <option value="all">All currencies</option>
-          {[...new Set(payments.map((p) => p.currency).filter(Boolean))].sort().map((currency) => (
-            <option key={currency} value={currency}>
-              {currency}
-            </option>
-          ))}
+          {[...new Set(payments.map((p) => p.currency?.trim().toUpperCase()).filter(Boolean))]
+            .sort()
+            .map((currency) => (
+              <option key={currency} value={currency}>
+                {currency}
+              </option>
+            ))}
         </select>
         <span className="text-xs text-muted-foreground">
           {filtered.length} of {payments.length} records
@@ -473,110 +620,146 @@ export default function PaymentsPage() {
       </div>
       {/* Payment List */}
       <div className="space-y-2">
-        {filtered.map((payment, i) => (
-          <div
-            key={payment.id}
-            onClick={bulk.bulkMode ? () => bulk.toggleSelect(payment.id) : undefined}
-            className={`card-elevated p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 group ${bulk.bulkMode ? "cursor-pointer" : ""} ${bulk.isSelected(payment.id) ? "ring-1 ring-primary/30 border-primary/50" : ""}`}
-          >
-            <div className="flex items-center gap-3 flex-1 min-w-0">
-              {bulk.bulkMode && (
-                <div className="flex-shrink-0">
-                  {bulk.isSelected(payment.id) ? (
-                    <CheckSquare size={16} className="text-primary" />
-                  ) : (
-                    <div className="w-4 h-4 rounded border border-muted-foreground/30" />
-                  )}
+        {filtered.map((payment) => {
+          const TypeIcon = typeIcons[payment.type] || ReceiptText;
+          const evidenceUrl = ledgerEvidenceUrl(payment.sourceUrl);
+          return (
+            <div
+              key={payment.id}
+              className={`card-elevated p-3 sm:p-4 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 group ${bulk.bulkMode ? "cursor-pointer" : ""} ${bulk.isSelected(payment.id) ? "ring-1 ring-primary/30 border-primary/50" : ""}`}
+            >
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                {bulk.bulkMode && (
+                  <label className="inline-flex min-h-11 min-w-11 items-center justify-center">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 accent-primary"
+                      checked={bulk.isSelected(payment.id)}
+                      disabled={busy}
+                      onChange={() => bulk.toggleSelect(payment.id)}
+                      aria-label={`Select ${payment.title}`}
+                    />
+                  </label>
+                )}
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary flex items-center justify-center text-lg flex-shrink-0">
+                  <TypeIcon size={19} />
                 </div>
-              )}
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-secondary flex items-center justify-center text-lg flex-shrink-0">
-                {typeIcons[payment.type]}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-card-foreground truncate">
-                    {payment.title}
-                  </span>
-                  {payment.recurring && (
-                    <RefreshCw size={10} className="text-muted-foreground flex-shrink-0" />
-                  )}
-                </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-xs text-muted-foreground">{payment.category}</span>
-                  {payment.linkedProject && (
-                    <span className="text-[10px] text-primary hidden sm:inline">
-                      • {payment.linkedProject}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(payment);
+                      }}
+                      className="text-left text-sm font-semibold text-card-foreground hover:text-primary break-words"
+                    >
+                      {payment.title}
+                    </button>
+                    {payment.recurring && (
+                      <RefreshCw size={10} className="text-muted-foreground flex-shrink-0" />
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <span className="text-xs text-muted-foreground">{payment.category}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {(payment.source || "manual").replaceAll("-", " ")}
                     </span>
-                  )}
+                    {evidenceUrl && (
+                      <a
+                        href={evidenceUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex min-h-8 items-center gap-1 text-xs text-primary"
+                      >
+                        Evidence <ExternalLink size={12} />
+                      </a>
+                    )}
+                    {payment.sourceRef && (
+                      <span
+                        className="max-w-64 truncate text-xs text-muted-foreground"
+                        title={payment.sourceRef}
+                      >
+                        Ref: {payment.sourceRef}
+                      </span>
+                    )}
+                    {payment.linkedProject && (
+                      <span className="text-[10px] text-primary hidden sm:inline">
+                        • {payment.linkedProject}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="flex items-center justify-between sm:justify-end gap-3">
-              <div className="text-left sm:text-right flex-shrink-0">
-                <div
-                  className={`text-sm font-bold ${payment.type === "income" || payment.type === "invoice" ? "text-success" : "text-card-foreground"}`}
-                >
-                  {direction(payment) === "in" ? "+" : "-"}
-                  {fmt(payment.amount, payment.currency)}
+              <div className="flex items-center justify-between sm:justify-end gap-3">
+                <div className="text-left sm:text-right flex-shrink-0">
+                  <div
+                    className={`text-sm font-bold ${payment.type === "income" || payment.type === "invoice" ? "text-success" : "text-card-foreground"}`}
+                  >
+                    {direction(payment) === "in" ? "+" : "-"}
+                    {fmt(payment.amount, payment.currency)}
+                  </div>
+                  <div className="text-[10px] text-muted-foreground">
+                    {payment.status === "paid"
+                      ? `Recorded paid ${payment.paidDate || "— date missing"}`
+                      : payment.dueDate
+                        ? `Due ${payment.dueDate}`
+                        : ""}
+                  </div>
                 </div>
-                <div className="text-[10px] text-muted-foreground">
-                  {payment.status === "paid"
-                    ? `Recorded paid ${payment.paidDate || "— date missing"}`
-                    : payment.dueDate
-                      ? `Due ${payment.dueDate}`
-                      : ""}
+                <div className="flex flex-col gap-1">
+                  <span
+                    className={`${statusBadge[paymentStatus(payment, today)]} text-[10px] flex-shrink-0`}
+                  >
+                    {paymentStatus(payment, today)}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {payment.evidenceStatus === "confirmed" ? "Marked confirmed" : "Unconfirmed"}
+                  </span>
                 </div>
-              </div>
-              <div className="flex flex-col gap-1">
-                <span
-                  className={`${statusBadge[paymentStatus(payment, today)]} text-[10px] flex-shrink-0`}
-                >
-                  {paymentStatus(payment, today)}
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  {payment.evidenceStatus === "confirmed" ? "Marked confirmed" : "Unconfirmed"}
-                </span>
-              </div>
-              {!bulk.bulkMode && (
-                <div className="flex flex-wrap items-center gap-1">
-                  {(payment.status === "pending" || payment.status === "overdue") && (
+                {!bulk.bulkMode && (
+                  <div className="flex flex-wrap items-center gap-1">
+                    {(payment.status === "pending" || payment.status === "overdue") && (
+                      <button
+                        disabled={busy}
+                        onClick={() => markPaid(payment.id)}
+                        className="min-h-11 text-xs text-success hover:underline px-2.5"
+                      >
+                        Record paid
+                      </button>
+                    )}
                     <button
                       disabled={busy}
-                      onClick={() => markPaid(payment.id)}
-                      className="text-[11px] text-success hover:underline px-1.5"
+                      onClick={() => duplicatePayment(payment.id)}
+                      className="op-icon-button text-muted-foreground hover:text-primary"
+                      aria-label={`Duplicate ${payment.title}`}
                     >
-                      Record paid
+                      <Copy size={12} />
                     </button>
-                  )}
-                  <button
-                    disabled={busy}
-                    onClick={() => duplicatePayment(payment.id)}
-                    className="text-muted-foreground hover:text-blue-500 p-1"
-                    title="Duplicate"
-                  >
-                    <Copy size={12} />
-                  </button>
-                  <button
-                    aria-label={`Edit ${payment.title}`}
-                    disabled={busy}
-                    onClick={() => openEdit(payment)}
-                    className="text-muted-foreground hover:text-foreground p-1"
-                  >
-                    <Edit2 size={12} />
-                  </button>
-                  <button
-                    aria-label={`Delete ${payment.title}`}
-                    disabled={busy}
-                    onClick={() => deletePayment(payment.id)}
-                    className="text-muted-foreground hover:text-destructive p-1"
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              )}
+                    <button
+                      aria-label={`Edit ${payment.title}`}
+                      disabled={busy}
+                      onClick={() => openEdit(payment)}
+                      className="op-icon-button text-muted-foreground hover:text-foreground"
+                    >
+                      <Edit2 size={12} />
+                    </button>
+                    <button
+                      aria-label={`Delete ${payment.title}`}
+                      disabled={busy}
+                      onClick={() => deletePayment(payment.id)}
+                      className="op-icon-button text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filtered.length === 0 && (
@@ -585,13 +768,29 @@ export default function PaymentsPage() {
           title="No payments found"
           description={
             payments.length
-              ? "No records match these filters. Change the search, type, status or currency."
+              ? "No records match these filters. Change the search, type, status, currency, period or evidence filter."
               : "Add your first real income, expense, invoice or subscription. Amounts stay separate by currency and confirmation status."
           }
           action={
-            <button onClick={openAdd} className="btn-primary text-sm">
-              <Plus size={13} /> Add payment record
-            </button>
+            payments.length ? (
+              <button
+                className="btn-secondary text-sm"
+                onClick={() => {
+                  setSearch("");
+                  setFilterType("all");
+                  setFilterStatus("all");
+                  setFilterCurrency("all");
+                  setEvidence("all");
+                  setPeriod("all");
+                }}
+              >
+                Clear filters
+              </button>
+            ) : (
+              <button onClick={openAdd} className="btn-primary text-sm">
+                <Plus size={13} /> Add payment record
+              </button>
+            )
           }
         />
       )}

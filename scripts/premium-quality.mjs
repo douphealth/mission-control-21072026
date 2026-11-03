@@ -105,8 +105,12 @@ export async function runPremiumChecks(page, check, engine) {
     assert.equal(response.paidEnabled, null);
     assert.match(response.error, /Cloudflare Access/);
 
+    // Connection configuration now lives in its dedicated audience workspace view.
+    await page.getByRole('navigation', { name: 'Audience workspace views', exact: true })
+      .getByRole('button', { name: 'Connections', exact: true }).click();
     const panel = page.getByTestId('collector-status-audience');
     const connections = page.getByTestId('audience-connections');
+    await connections.waitFor();
     await panel.waitFor();
     await panel.locator('summary').first().click();
     await panel.getByRole('status').filter({ hasText: /Cloudflare Access/ }).waitFor();
