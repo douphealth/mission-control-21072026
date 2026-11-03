@@ -53,6 +53,7 @@ function mergeSummaries(
     pagesReportedTotal:
       a.pagesReportedTotal !== undefined ? a.pagesReportedTotal : b.pagesReportedTotal,
     deployEnabled: Boolean(a.deployEnabled || b.deployEnabled),
+    workersTokenSource: a.workersTokenSource ?? b.workersTokenSource,
     truthState: "live",
   };
   merged.truthState = accountTruth(merged);

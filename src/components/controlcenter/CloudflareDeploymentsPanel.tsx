@@ -84,6 +84,17 @@ const possibleRepo = (row: CloudflareDeploymentRow) => {
 };
 
 const PREFS_KEY = "mc.cloudflare.workspace.v2";
+const TOKEN_SOURCE_LABEL: Record<
+  NonNullable<CloudflareAccountSummary["workersTokenSource"]>,
+  string
+> = {
+  workers: 'this account\'s "workers" token',
+  pages: 'this account\'s "pages" token',
+  default: 'this account\'s "default" token',
+  account: "this account's token in CLOUDFLARE_ACCOUNT_TOKENS_JSON",
+  global: "the shared CLOUDFLARE_API_TOKEN",
+  none: "not reported",
+};
 /** Cloudflare's documented per-account Pages soft limit (raised only on request). */
 const PAGES_PROJECT_SOFT_LIMIT = 100;
 type Prefs = { quick: QuickFilter; account: string; sort: SortKey };
@@ -531,12 +542,53 @@ export default function CloudflareDeploymentsPanel({
                         total includes them, so it will be higher than {a.pagesCount}.
                       </p>
                       <p className="mt-1">
-                        The API token for this account is refused by the Workers API (HTTP 403).
-                        Edit that token in Cloudflare and add{" "}
-                        <strong>Account › Workers Scripts › Read</strong> and{" "}
-                        <strong>Zone › Workers Routes › Read</strong>, then press Refresh. Editing
-                        permissions keeps the same token value, so nothing else needs to change.
+                        Cloudflare refuses this account&apos;s token on the Workers API (HTTP 403).
+                        Token used here:{" "}
+                        <strong>{TOKEN_SOURCE_LABEL[a.workersTokenSource || "none"]}</strong>.
                       </p>
+                      {(() => {
+                        const peer = inventory.accountDetails.find(
+                          (o) =>
+                            o.accountId !== a.accountId &&
+                            !workerGap(o) &&
+                            o.workersTokenSource === "global" &&
+                            a.workersTokenSource === "global",
+                        );
+                        return peer ? (
+                          <p className="mt-1">
+                            The same token <strong>can</strong> read Workers on {peer.label}, so it
+                            is not covering this account. Either add this account under the
+                            token&apos;s
+                            <em> Account Resources</em> (the token&apos;s creator must have Workers
+                            access here), or add a separate{" "}
+                            <code className="rounded bg-muted px-1">workers</code> token for this
+                            account.
+                          </p>
+                        ) : null;
+                      })()}
+                      <ol className="mt-1 list-decimal space-y-0.5 pl-4">
+                        <li>
+                          Sign in to Cloudflare as a user who can see this account&apos;s Workers
+                          (its owner), then open API tokens.
+                        </li>
+                        <li>
+                          Edit that token, or create a custom token, with{" "}
+                          <strong>Account › Workers Scripts › Read</strong> and{" "}
+                          <strong>Zone › Workers Routes › Read</strong>, with this account selected
+                          under Account Resources.
+                        </li>
+                        <li>
+                          Editing keeps the token value: just press Refresh. A new token goes in{" "}
+                          <code className="rounded bg-muted px-1">
+                            CLOUDFLARE_ACCOUNT_TOKENS_JSON
+                          </code>{" "}
+                          as{" "}
+                          <code className="rounded bg-muted px-1">
+                            {'"' + a.accountId.slice(0, 6) + "…" + '": { "workers": "…" }'}
+                          </code>
+                          , then redeploy.
+                        </li>
+                      </ol>
                       <a
                         href="https://dash.cloudflare.com/profile/api-tokens"
                         target="_blank"

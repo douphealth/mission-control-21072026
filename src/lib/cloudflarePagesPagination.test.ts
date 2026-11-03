@@ -272,3 +272,26 @@ describe("client-side merge of per-account, per-section inventories", () => {
     expect(merged.errors[0]).toMatch(/Pages inventory request failed/);
   });
 });
+
+describe("token source diagnostics", () => {
+  it("reports which configuration entry supplies the Workers token, never its value", async () => {
+    const { tokenSourceFor } = await import("@/lib/cloudflareInventory.server");
+    const A = ACCOUNT, B = SECOND;
+    const env = {
+      CLOUDFLARE_API_TOKEN: "global-secret-value",
+      CLOUDFLARE_ACCOUNT_TOKENS_JSON: JSON.stringify({ [A]: { default: "d", workers: "w" }, [B]: "plain" }),
+    };
+    expect(tokenSourceFor(A, "workers", env)).toBe("workers");
+    expect(tokenSourceFor(A, "pages", env)).toBe("default");
+    expect(tokenSourceFor(B, "workers", env)).toBe("account");
+    expect(tokenSourceFor("f".repeat(32), "workers", env)).toBe("global");
+    expect(tokenSourceFor(A, "workers", {})).toBe("none");
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ success: true, result: [], result_info: {} }))));
+    const inventory = await collectCloudflareInventory(
+      { CLOUDFLARE_ACCOUNT_IDS: A, CLOUDFLARE_API_TOKEN: "global-secret-value" }, { accountId: A, section: "pages" });
+    expect(inventory.accountDetails[0].workersTokenSource).toBe("global");
+    expect(JSON.stringify(inventory)).not.toContain("global-secret-value");
+    vi.unstubAllGlobals();
+  });
+});

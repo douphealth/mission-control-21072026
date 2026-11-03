@@ -6,6 +6,8 @@
 import { accountTruth, overallTruth } from "@/lib/cloudflareInventoryMerge";
 export type InfraKind = "pages" | "worker";
 export type InfraTruth = "live" | "partial" | "error" | "not_connected";
+/** Where a token comes from in configuration — a label only, never the secret. */
+export type TokenSource = "workers" | "pages" | "default" | "account" | "global" | "none";
 /** One inventory call can collect Pages only, the rest of the platform, or both. */
 export type InventorySection = "pages" | "platform";
 /**
@@ -82,6 +84,8 @@ export interface CloudflareAccountSummary {
   pagesReportedTotal?: number | null;
   /** True only when a dedicated per-account deploy token is configured. */
   deployEnabled?: boolean;
+  /** Which configuration entry supplies this account's Workers token (never the value). */
+  workersTokenSource?: TokenSource;
 }
 export interface CloudflareInventory {
   zones: CloudflareZone[];
@@ -257,6 +261,16 @@ export function pagesTokenFor(accountId: string, env: Record<string, string | un
 export function workersTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
   const configured = accountTokenConfig(accountId, env);
   return asString(asObject(configured).workers) || apiTokenFor(accountId, env);
+}
+/** Mirrors the token resolution order of pagesTokenFor / workersTokenFor. */
+export function tokenSourceFor(
+  accountId: string, kind: "workers" | "pages", env: Record<string, string | undefined> = process.env,
+): TokenSource {
+  const configured = accountTokenConfig(accountId, env);
+  if (asString(asObject(configured)[kind])) return kind;
+  if (asString(configured)) return "account";
+  if (asString(asObject(configured).default)) return "default";
+  return asString(env["CLOUDFLARE_API_TOKEN"]) ? "global" : "none";
 }
 /**
  * Write-capable Pages token (Account > Cloudflare Pages > Edit). Deliberately
@@ -659,7 +673,8 @@ export async function collectCloudflareInventory(
     const configuredToken = Boolean(apiTokenFor(id, environment));
     const label = labels[id] || "Account …" + id.slice(-6);
     const base = { accountId: id, label, sections: [...sections],
-      deployEnabled: Boolean(deployTokenFor(id, environment)) };
+      deployEnabled: Boolean(deployTokenFor(id, environment)),
+      workersTokenSource: tokenSourceFor(id, "workers", environment) };
     if (!configuredToken) {
       const reason = "API token is not configured for " + label;
       errors.push(reason);
