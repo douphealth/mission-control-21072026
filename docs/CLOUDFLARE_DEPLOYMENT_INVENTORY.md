@@ -60,11 +60,11 @@ The main Cloudflare dashboard now gathers Pages, Workers, routes, custom domains
 
 ## Complete Pages inventory (November 2026)
 
-Cloudflare's Pages list endpoint supports `per_page=10`, and its `result_info` (`total_pages` / `total_count`) can under-report large accounts. Trusting it truncated a 185-project account at exactly **100**. The collector (`listAllPagesProjects` in `src/lib/cloudflareInventory.server.ts`) now behaves like wrangler:
+The Pages list is paginated exhaustively (`listAllPagesProjects` in `src/lib/cloudflareInventory.server.ts`), like wrangler: it keeps requesting pages until Cloudflare returns a short or empty page. `result_info` is only a prefetch hint and a lower-bound check. It de-duplicates by name and fails closed (explicit warning, never a silent partial count) if Cloudflare repeats a page or returns fewer projects than it reports. Each account card shows the proof, e.g. "All 100 Pages projects listed (13 API pages)".
 
-- keeps requesting pages until Cloudflare returns a short or empty page; metadata is only a prefetch hint and a lower-bound check;
-- de-duplicates by project name; fails closed (explicit warning, never a silent partial count) if Cloudflare repeats a page or returns fewer projects than it reports;
-- each account card shows the proof, e.g. "All 185 Pages projects listed (19 API pages). Cloudflare metadata reported only 100".
+**Why Cloudflare's dashboard shows more than the Pages count.** The dashboard's "Workers & Pages" list counts Pages projects **and** Workers together. Cloudflare also applies a per-account soft limit of 100 Pages projects, so an account at exactly 100 Pages creates newer apps as Workers. If an account card says "Workers are hidden", its API token is refused by the Workers API (HTTP 403): edit that token and add **Account › Workers Scripts › Read** and **Zone › Workers Routes › Read** (editing permissions keeps the same token value), then refresh.
+
+Cloudflare includes each project's own `*.pages.dev` hostname in the project's `domains`; it is excluded from "custom domains".
 
 The browser fetches **each account × section (Pages / Workers+DNS) in its own server invocation**, in parallel (`getCloudflareManifest` + `getCloudflareInventoryPart`). Each invocation therefore has its own Workers subrequest budget, so growing project counts cannot push the Pages listing over the per-request limit. A failed part is reported as an error for that account, never as zero.
 

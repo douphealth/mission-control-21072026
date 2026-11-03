@@ -84,6 +84,8 @@ const possibleRepo = (row: CloudflareDeploymentRow) => {
 };
 
 const PREFS_KEY = "mc.cloudflare.workspace.v2";
+/** Cloudflare's documented per-account Pages soft limit (raised only on request). */
+const PAGES_PROJECT_SOFT_LIMIT = 100;
 type Prefs = { quick: QuickFilter; account: string; sort: SortKey };
 const DEFAULT_PREFS: Prefs = { quick: "all", account: "all", sort: "name" };
 function readPrefs(): Prefs {
@@ -516,9 +518,35 @@ export default function CloudflareDeploymentsPanel({
                             a.pagesReportedTotal +
                             "; full pagination verified the rest."
                           : ""}
+                        {a.pagesCount >= PAGES_PROJECT_SOFT_LIMIT
+                          ? " This account is at Cloudflare's 100-project Pages limit, so newer apps here are Workers."
+                          : ""}
                       </>
                     )}
                   </p>
+                  {workerGap(a) && (
+                    <div className="mt-2 rounded-xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-900 dark:text-amber-100">
+                      <p className="font-semibold">
+                        Workers are hidden — Cloudflare&apos;s &ldquo;Workers &amp; Pages&rdquo;
+                        total includes them, so it will be higher than {a.pagesCount}.
+                      </p>
+                      <p className="mt-1">
+                        The API token for this account is refused by the Workers API (HTTP 403).
+                        Edit that token in Cloudflare and add{" "}
+                        <strong>Account › Workers Scripts › Read</strong> and{" "}
+                        <strong>Zone › Workers Routes › Read</strong>, then press Refresh. Editing
+                        permissions keeps the same token value, so nothing else needs to change.
+                      </p>
+                      <a
+                        href="https://dash.cloudflare.com/profile/api-tokens"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1.5 inline-flex items-center gap-1 font-semibold text-primary"
+                      >
+                        Open Cloudflare API tokens <ExternalLink size={12} />
+                      </a>
+                    </div>
+                  )}
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                     <span
                       className="text-muted-foreground"

@@ -53,7 +53,7 @@ function pagesApi(
 describe("exhaustive Cloudflare Pages pagination", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("returns all 185 projects when Cloudflare caps result_info at 100 (the reported bug)", async () => {
+  it("returns every project past 100 even when result_info claims only 100", async () => {
     const calls = pagesApi(projects(185), () => ({ total_count: 100, total_pages: 10 }));
     const listing = await listAllPagesProjects(ACCOUNT, "synthetic-read");
     expect(listing.projects).toHaveLength(185);
@@ -156,6 +156,22 @@ describe("exhaustive Cloudflare Pages pagination", () => {
 });
 
 describe("Pages deployment health", () => {
+  it("never treats the project's own *.pages.dev hostname as a custom domain", () => {
+    const own = normalizePagesProject(ACCOUNT, {
+      name: "site",
+      subdomain: "site.pages.dev",
+      domains: ["site.pages.dev"],
+    });
+    expect(own?.domains).toEqual([]);
+    expect(own?.publicUrl).toBe("https://site.pages.dev/");
+    const custom = normalizePagesProject(ACCOUNT, {
+      name: "shop",
+      subdomain: "shop.pages.dev",
+      domains: ["shop.pages.dev", "www.shop.example"],
+    });
+    expect(custom?.domains).toEqual(["www.shop.example"]);
+    expect(custom?.publicUrl).toBe("https://www.shop.example/");
+  });
   it("flags a failed newer production build while the old deployment still serves", () => {
     const row = normalizePagesProject(ACCOUNT, {
       name: "broken-build",

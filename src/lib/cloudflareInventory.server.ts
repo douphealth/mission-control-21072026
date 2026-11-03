@@ -143,8 +143,11 @@ export function normalizePagesProject(accountId: string, raw: unknown): Cloudfla
   const deployment = asObject(project.canonical_deployment || project.production_deployment);
   const latest = asObject(project.latest_deployment);
   const source = asObject(project.source);
+  // Cloudflare lists the project's own *.pages.dev hostname inside `domains`;
+  // only other hostnames are custom domains.
   const customDomains = Array.isArray(project.domains)
-    ? project.domains.map(asString).filter((x): x is string => Boolean(x)) : [];
+    ? project.domains.map(asString)
+      .filter((x): x is string => Boolean(x) && !/(^|\.)pages\.dev$/i.test(x as string)) : [];
   const subdomain = asString(project.subdomain);
   const canonical = subdomain && /^[a-z0-9.-]+\.pages\.dev$/i.test(subdomain)
     ? validHttps(subdomain) : null;
@@ -317,8 +320,8 @@ const isHttp400 = (error: unknown) =>
 /**
  * Lists EVERY Pages project of an account.
  *
- * Cloudflare's Pages `result_info` (total_pages / total_count) can under-report
- * large accounts — trusting it truncated a 185-project account at exactly 100.
+ * Cloudflare's Pages `result_info` (total_pages / total_count) is treated as a
+ * hint only; completeness is proven by reaching a short or empty page.
  * Like wrangler, this keeps requesting pages until Cloudflare returns a short
  * or empty page. Metadata is only used as a prefetch hint and as a lower-bound
  * completeness check. A page that returns only already-seen projects means the
