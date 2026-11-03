@@ -92,7 +92,29 @@ export async function runPremiumChecks(page, check, engine) {
     await page.screenshot({ path: `quality-artifacts/${engine}-repository-command-card.png`, fullPage: true });
     return { mockedApi: true, measuredStats: true, savedPlanRetained: true, noDuplicate: true };
   });
-  await test('Intelligence status panels report missing access and do not expose secret values', async () => {
-    await go('audience'); const panel = page.getByTestId('collector-status-audience'); await panel.waitFor(); await panel.locator('summary').first().click(); await panel.getByText(/Official audience integrations configured/).waitFor(); assert((await panel.innerText()).includes('Paid intelligence calls:')); await page.screenshot({ path: `quality-artifacts/${engine}-provider-connections.png`, fullPage: true }); return { capabilityCheck: true };
+  await test('Intelligence configuration fails closed without an authenticated Access session', async () => {
+    await go('audience');
+    const response = await page.evaluate(async () => {
+      const { intelligenceCapabilities } = await import('/src/lib/controlCenter.functions.ts');
+      return intelligenceCapabilities();
+    });
+    assert(['access-not-configured', 'authentication-required'].includes(response.status), 'An isolated unsigned browser must not receive provider configuration');
+    assert.deepEqual(Object.keys(response).sort(), ['audience', 'connections', 'error', 'inspectedAt', 'paidEnabled', 'status']);
+    assert.equal(response.audience, null);
+    assert.deepEqual(response.connections, []);
+    assert.equal(response.paidEnabled, null);
+    assert.match(response.error, /Cloudflare Access/);
+
+    const panel = page.getByTestId('collector-status-audience');
+    const connections = page.getByTestId('audience-connections');
+    await panel.waitFor();
+    await panel.locator('summary').first().click();
+    await panel.getByRole('status').filter({ hasText: /Cloudflare Access/ }).waitFor();
+    await connections.getByRole('status').filter({ hasText: /Cloudflare Access/ }).waitFor();
+    await connections.getByText('Connection status is currently unavailable.', { exact: true }).waitFor();
+    assert.equal(await panel.getByText(/Official audience integrations configured|Paid intelligence calls:/).count(), 0);
+    assert.equal(await connections.locator('details').count(), 0);
+    await page.screenshot({ path: `quality-artifacts/${engine}-provider-connections.png`, fullPage: true });
+    return { accessDenied: true, capabilityFlagsWithheld: true, unknownConnectionStatus: true };
   });
 }
