@@ -34,6 +34,7 @@ import FirstRunExperience from "@/components/dashboard/FirstRunExperience";
 import HeroNowBand from "@/components/dashboard/HeroNowBand";
 import ShortcutsOverlay from "@/components/dashboard/ShortcutsOverlay";
 import AreaSwitch from "@/components/AreaSwitch";
+import EstateOverviewStrip from "@/components/estate/EstateOverviewStrip";
 import DayClose from "@/components/DayClose";
 import type { WorkItem } from "@/lib/workQueue";
 import { useDailyOps } from "@/hooks/useDailyOps";
@@ -329,6 +330,8 @@ export default function DashboardHome() {
             )}
           </div>
         )}
+
+        {ops.area !== "personal" && <EstateOverviewStrip />}
 
         <div className="mc-launch-grid mc36-workspace-grid" aria-label="Primary workspaces">
           {launchItems.map((item, index) => (

@@ -16,6 +16,16 @@ const GROUPS: { title: string; items: { keys: string; label: string; icon: typeo
     ],
   },
   {
+    title: "Navigate",
+    items: [
+      { keys: "G then G", label: "GitHub repositories", icon: Command },
+      { keys: "G then C", label: "Cloudflare", icon: Command },
+      { keys: "G then H / T", label: "Today / Tasks", icon: Command },
+      { keys: "/", label: "Search the GitHub or Cloudflare list", icon: Search },
+      { keys: "Shift R", label: "Refresh GitHub and Cloudflare", icon: Command },
+    ],
+  },
+  {
     title: "Work",
     items: [{ keys: "Focus button", label: "Start a focus session on any task", icon: Focus }],
   },

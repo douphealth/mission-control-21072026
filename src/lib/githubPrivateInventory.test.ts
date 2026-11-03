@@ -3,8 +3,8 @@ import {
   MANAGED_GITHUB_ACCOUNTS, collectPrivateGithubInventory,
 } from "@/lib/githubPrivateInventory.server";
 describe("protected GitHub repository inventory", () => {
-  it("has a deterministic three-account allowlist", () => {
-    expect(MANAGED_GITHUB_ACCOUNTS).toEqual(["douphealth", "Papalexios", "papalexios001-wq"]);
+  it("has a deterministic four-account allowlist", () => {
+    expect(MANAGED_GITHUB_ACCOUNTS).toEqual(["douphealth", "Papalexios", "papalexios01", "papalexios001-wq"]);
   });
   it("returns a truthful disconnected state with no secrets", async () => {
     expect(await collectPrivateGithubInventory({})).toMatchObject({

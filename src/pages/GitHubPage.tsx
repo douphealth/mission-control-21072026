@@ -43,9 +43,8 @@ import {
 import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
-import PrivateGitHubInventory from "@/components/github/PrivateGitHubInventory";
-import LiveGitHubCommandCenter from "@/components/github/LiveGitHubCommandCenter";
-import AssetRegistry from "@/components/github/AssetRegistry";
+import GitHubCommandCenter from "@/components/estate/GitHubCommandCenter";
+import type { RepoRow } from "@/lib/estate/model";
 import { UNIFIED_PUBLIC_GITHUB_CATALOG, UNIFIED_PUBLIC_GITHUB_COUNT, getGitHubRepoKey, getGitHubRepoOwner, mergeUnifiedGitHubRows } from "@/lib/unifiedGitHubCatalog";
 
 const langColors: Record<string, string> = {
@@ -274,6 +273,30 @@ export default function GitHubPage() {
     setForm(rest);
     setModalOpen(true);
   };
+  // "Full record" from the live command center: edit the saved record, the
+  // catalog row, or start a new record pre-filled from live GitHub data.
+  const openEditFromRow = (row: RepoRow) => {
+    const known = displayRepos.find((r) => getGitHubRepoKey(r.url) === row.key);
+    if (known) return openEdit(known);
+    setEditId(null);
+    setEditCatalogName(null);
+    setForm({
+      ...emptyRepo,
+      name: row.name,
+      url: row.url,
+      description: row.description ?? "",
+      language: row.primaryLanguage ?? "",
+      stars: row.stars,
+      forks: row.forks,
+      status: row.isArchived ? "archived" : "active",
+      demoUrl: row.homepage ?? "",
+      topics: row.topics,
+      lastUpdated: (row.pushedAt ?? row.updatedAt).slice(0, 10),
+      visibility: row.isPrivate ? "private" : "public",
+      defaultBranch: row.defaultBranch ?? undefined,
+    });
+    setModalOpen(true);
+  };
   const saveForm = async () => {
     if (!form.name.trim()) return;
     try {
@@ -333,61 +356,23 @@ export default function GitHubPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5 mc-print-github-page">
-      <section className="relative overflow-hidden rounded-[28px] border border-border/40 bg-card/80 p-4 shadow-sm backdrop-blur-xl sm:p-5">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-primary/10 blur-3xl" />
-        <div className="relative flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-          <div className="min-w-0">
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-primary/15 bg-primary/8 px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-primary">
-              <FolderGit2 size={11} /> Portfolio command center
-            </div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground sm:text-3xl">
-              GitHub Projects
-            </h1>
-            <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-              {UNIFIED_PUBLIC_GITHUB_COUNT} public repos in three-account snapshot ({GITHUB_REPO_CATALOG_GENERATED_AT}) · 76 curated douphealth planning records. Saved planning catalog; live account inventory is available below.
-            </p>
-            <a href="/portfolio-atlas" className="mt-3 inline-flex rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-xs font-bold text-primary hover:bg-primary/15">
-              View all three GitHub accounts in Portfolio Atlas ↗
-            </a>
-          </div>
-          <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
-            {[
-              { label: "Repos", value: portfolioStats.total },
-              { label: "App URLs", value: portfolioStats.live },
-              { label: "Site core", value: portfolioStats.core },
-              { label: "Origin gaps", value: portfolioStats.origin },
-              { label: "Repo only", value: portfolioStats.repoOnly },
-            ].map((stat) => (
-              <div key={stat.label} className="rounded-2xl border border-border/35 bg-background/55 px-3 py-2.5 text-center">
-                <div className="text-lg font-extrabold tabular-nums text-foreground">{stat.value}</div>
-                <div className="text-[8.5px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-        <div className="relative mt-4 flex flex-wrap gap-2">
-          <button
-            onClick={bulk.toggleBulkMode}
-            className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${bulk.bulkMode ? "border-destructive/20 bg-destructive/10 text-destructive" : "border-border/30 bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
-          >
-            <CheckSquare size={14} /> {bulk.bulkMode ? "Exit bulk mode" : "Bulk edit"}
-          </button>
-          <span className="rounded-xl border border-success/15 bg-success/8 px-3 py-2 text-[10px] font-bold text-success">
-            {UNIFIED_PUBLIC_GITHUB_COUNT} PUBLIC REPOSITORIES
-          </span>
-          <span className="rounded-xl border border-border/30 bg-secondary/40 px-3 py-2 text-[10px] font-semibold text-muted-foreground">
-            GitHub technical snapshot {GITHUB_REPO_CATALOG_GENERATED_AT}
-          </span>
-          <span className="rounded-xl border border-blue-500/15 bg-blue-500/8 px-3 py-2 text-[10px] font-semibold text-blue-600 dark:text-blue-300">
-            Dated public GitHub snapshot · Mission Control planning is editable
-          </span>
-        </div>
-      </section>
-
-      <AssetRegistry />
-      <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Repository cards and planning details</summary><div className="mt-3"><LiveGitHubCommandCenter repos={displayRepos} onEdit={openEdit} /></div></details>
-      <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Advanced planning tools · bulk editing, legacy filters and printable register</summary>
+      <GitHubCommandCenter onEditRecord={openEditFromRow} />
+      <details className="rounded-2xl border border-border/60 bg-card/60 p-4">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground">
+          Planning register · {displayRepos.length} saved and catalogued records, bulk editing and printable register
+        </summary>
       <div className="mt-4 space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={bulk.toggleBulkMode}
+          className={`flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold transition-all ${bulk.bulkMode ? "border-destructive/20 bg-destructive/10 text-destructive" : "border-border/30 bg-secondary/50 text-muted-foreground hover:text-foreground"}`}
+        >
+          <CheckSquare size={14} /> {bulk.bulkMode ? "Exit bulk mode" : "Bulk edit"}
+        </button>
+        <span className="text-[11px] text-muted-foreground">
+          {UNIFIED_PUBLIC_GITHUB_COUNT} public repositories from the dated catalog ({GITHUB_REPO_CATALOG_GENERATED_AT}) plus your saved planning records. Live data is in the command center above.
+        </span>
+      </div>
       {bulk.bulkMode && (
         <BulkActionBar
           selectedCount={bulk.selectedCount}
@@ -410,18 +395,18 @@ export default function GitHubPage() {
         />
       )}
 
-      <details className="rounded-xl border border-border/40 p-3"><summary className="cursor-pointer text-sm font-semibold">Load private GitHub repositories (authenticated)</summary><PrivateGitHubInventory /></details>
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center bg-secondary rounded-xl px-3 py-2 gap-2 w-full lg:max-w-sm">
           <Search size={14} className="text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            aria-label="Search planning register"
             placeholder={"Search " + displayRepos.length + " repositories..."}
             className="bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none w-full"
           />
         </div>
-        <select aria-label="Filter GitHub account" value={accountFilter} onChange={e => { setAccountFilter(e.target.value); setPage(0); }} className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm text-foreground"><option value="all">All GitHub accounts</option><option value="douphealth">douphealth</option><option value="Papalexios">Papalexios</option><option value="papalexios001-wq">papalexios001-wq</option><option value="other">Other / manual</option></select>
+        <select aria-label="Filter GitHub account" value={accountFilter} onChange={e => { setAccountFilter(e.target.value); setPage(0); }} className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm text-foreground"><option value="all">All GitHub accounts</option><option value="douphealth">douphealth</option><option value="Papalexios">Papalexios</option><option value="papalexios01">papalexios01</option><option value="papalexios001-wq">papalexios001-wq</option><option value="other">Other / manual</option></select>
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
           <button
             type="button"

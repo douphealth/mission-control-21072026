@@ -8,6 +8,7 @@ import DailyBriefingBanner from "@/components/DailyBriefingBanner";
 import WorkspacePulseBar from "@/components/WorkspacePulseBar";
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useGoShortcuts } from "@/hooks/useGoShortcuts";
 import { DashboardProvider, useDashboardOptional } from "@/contexts/DashboardContext";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -113,6 +114,7 @@ export default function DashboardLayout() {
   // Hooks must run before any early return so their order is identical on
   // every render (react-hooks/rules-of-hooks).
   const { activeSection } = useNavigationStore();
+  useGoShortcuts();
   const floatingCaptureDockVisible = useSettingsStore((state) => state.floatingCaptureDockVisible);
   const isMobile = useIsMobile();
   useEffect(() => {

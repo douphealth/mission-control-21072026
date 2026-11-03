@@ -42,7 +42,7 @@ export async function runPremiumChecks(page, check, engine) {
     await page.reload({ waitUntil: 'domcontentloaded' }); await page.locator('#main-content').waitFor(); await go('family-schedule'); await page.getByLabel('Timetable date', { exact: true }).fill('2026-10-26'); await page.getByRole('button', { name: 'Week', exact: true }).click(); await page.locator('.fs-week').getByRole('heading', { name: title, exact: true }).waitFor();
     await page.setViewportSize({ width: 1440, height: 1000 }); await page.screenshot({ path: `quality-artifacts/${engine}-family-week.png`, fullPage: true }); await page.getByRole('button', { name: 'Day', exact: true }).click(); await page.setViewportSize({ width: 390, height: 844 }); assert(await page.getByTestId('family-schedule').evaluate(el => el.scrollWidth <= el.clientWidth + 2)); await page.screenshot({ path: `quality-artifacts/${engine}-family-day-mobile.png`, fullPage: true }); await page.setViewportSize({ width: 1440, height: 1000 }); return { persisted: true, exceptionsApplied: true, mobileFit: true };
   });
-  await test('Unified GitHub inventory keeps saved plans and refreshes real API fields', async () => {
+  await test('GitHub section keeps saved plans and never shows unverified live data', async () => {
     const name = `QA-repository-${crypto.randomUUID()}`;
     const url = `https://github.com/douphealth/${name}`;
     await page.evaluate(async ({ name, url }) =>
@@ -51,42 +51,24 @@ export async function runPremiumChecks(page, check, engine) {
         pendingSummary: 'Retain this planned next action', stars: 0, forks: 0,
         language: 'TypeScript', defaultBranch: 'main', topics: [],
       }), { name, url });
-    await page.route(/https:\/\/api\.github\.com\/users\/[^/]+\/repos\?/, route => {
-      const target = new URL(route.request().url());
-      const isTestOwner = target.pathname === '/users/douphealth/repos' &&
-        target.searchParams.get('page') === '1';
-      return route.fulfill({
-        status: 200, headers: { 'access-control-allow-origin': '*' },
-        json: isTestOwner ? [{
-          name, html_url: url, owner: { login: 'douphealth' }, private: false,
-          description: 'Synthetic verified public response', stargazers_count: 7,
-          forks_count: 2, open_issues_count: 3, language: 'TypeScript',
-          default_branch: 'main', pushed_at: '2026-10-27T07:00:00Z',
-          updated_at: '2026-10-27T07:00:00Z',
-        }] : [],
-      });
-    });
+    // Live repository data is collected server-side behind Cloudflare Access.
+    // Without a verified viewer the command center must say so, not invent rows.
     await go('github');
-    await page.getByRole('region', { name: 'Apps and infrastructure registry' })
-      .getByRole('heading', { name: 'Apps & Infrastructure Registry' }).waitFor();
-    await page.getByText('Repository cards and planning details', { exact: true }).click();
     const workspace = page.getByRole('region', { name: 'Unified GitHub repository command center' });
-    await workspace.getByRole('textbox', { name: 'Find repository' }).fill(name);
-    const card = workspace.locator('article').filter({
+    await workspace.waitFor();
+    assert.equal(await workspace.getByRole('heading', { name, exact: true }).count(), 0);
+    await page.getByText(/^Planning register/).click();
+    await page.getByRole('textbox', { name: 'Search planning register' }).fill(name);
+    const card = page.getByTestId('repository-card').filter({
       has: page.getByRole('heading', { name, exact: true }),
     });
     await card.waitFor();
+    assert.equal(await card.count(), 1);
     assert.equal(await card.getByRole('link', { name: 'Code' }).getAttribute('href'), url);
-    await workspace.getByRole('button', { name: 'Refresh all accounts' }).click();
-    await card.getByText('Synthetic verified public response', { exact: true }).waitFor();
-    await card.getByText('7 stars', { exact: true }).waitFor();
     await card.getByText('Retain this planned next action', { exact: false }).waitFor();
-    assert.equal(await workspace.locator('article').filter({
-      has: page.getByRole('heading', { name, exact: true }),
-    }).count(), 1);
-    assert.equal(await card.getByRole('button', { name: 'Plan', exact: true }).count(), 1);
+    assert.equal(await card.getByRole('button', { name: 'Edit plan' }).count(), 1);
     await page.screenshot({ path: `quality-artifacts/${engine}-repository-command-card.png`, fullPage: true });
-    return { mockedApi: true, measuredStats: true, savedPlanRetained: true, noDuplicate: true };
+    return { savedPlanRetained: true, noDuplicate: true, liveDataGated: true };
   });
   await test('Intelligence status panels report missing access and do not expose secret values', async () => {
     await go('audience'); const panel = page.getByTestId('collector-status-audience'); await panel.waitFor(); await panel.locator('summary').first().click(); await panel.getByText(/Official audience integrations configured/).waitFor(); assert((await panel.innerText()).includes('Paid intelligence calls:')); await page.screenshot({ path: `quality-artifacts/${engine}-provider-connections.png`, fullPage: true }); return { capabilityCheck: true };
