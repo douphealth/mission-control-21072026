@@ -169,7 +169,7 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
     const env = { CLOUDFLARE_ACCOUNT_IDS: ACCOUNT, CLOUDFLARE_API_TOKEN: "synthetic-only" };
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       const url = new URL(String(input));
-      const path = url.pathname.replace(/^\\/client\\/v4(?=\\/)/, "");
+      const path = url.pathname.replace(/^\/client\/v4(?=\/)/, "");
       paths.push(path);
       const data = path.includes("/pages/projects") || path.endsWith("/workers/workers") ||
         path.endsWith("/workers/domains") ? [] : path === "/zones" ?
