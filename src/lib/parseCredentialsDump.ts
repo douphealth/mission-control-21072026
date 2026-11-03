@@ -1,3 +1,4 @@
+import { secureUuid } from "@/lib/recordId";
 /**
  * Robust parser for messy, tab/column-separated credential dumps like the
  * user's WordPress hosting export (one column per website, multiple labelled
@@ -297,7 +298,7 @@ export function parseCredentialsDump(text: string): SplitCategory[] | null {
     if (site.virusdie.length) notesLines.push("Virusdie protected");
 
     websites.push({
-      id: crypto.randomUUID(),
+      id: secureUuid(),
       name,
       url: siteUrl,
       wpAdminUrl: adminUrl ? normalizeUrl(adminUrl) : normalizeUrl(site.domain + "/wp-admin"),
@@ -322,7 +323,7 @@ export function parseCredentialsDump(text: string): SplitCategory[] | null {
     // ── Emit credential entries per section ──
     const pushCred = (c: Record<string, any>) =>
       credentials.push({
-        id: crypto.randomUUID(),
+        id: secureUuid(),
         category: "Infrastructure",
         createdAt: today,
         apiKey: "",

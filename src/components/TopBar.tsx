@@ -1,378 +1,312 @@
+import { forwardRef, lazy, Suspense, useEffect, useState } from "react";
+import {
+  Bell,
+  ChevronRight,
+  Download,
+  History,
+  LayoutGrid,
+  Menu,
+  Moon,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Sun,
+  Upload,
+  Rows3,
+  Rows4,
+} from "lucide-react";
+import { toast } from "sonner";
 import { useTasks, useExportAllData } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { todayISO } from "@/lib/overdue";
-import { CAPTURE_FOCUS_EVENT } from "@/components/dashboard/QuickCaptureBar";
-import AreaSwitch from "@/components/AreaSwitch";
-import { Search, Bell, Plus, Menu, Download, Mail, History, Moon, Sun } from "lucide-react";
-import { forwardRef, lazy, Suspense, useState, useEffect } from "react";
+import { workspaceById } from "@/lib/workspaceCatalog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const CommandPalette = lazy(() => import("./CommandPalette"));
 const BulkImportModal = lazy(() => import("./BulkImportModal"));
 const VersionsModal = lazy(() => import("./VersionsModal"));
-
-function formatDate() {
-  return new Date().toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function DeferredOverlayFallback() {
-  return null;
-}
-
-const quickAddItems = [
-  { id: "tasks", label: "Task", emoji: "✅" },
-  { id: "reminders", label: "Reminder", emoji: "⏰" },
-  { id: "habits", label: "Habit", emoji: "🔥" },
-  { id: "notes", label: "Note", emoji: "📝" },
-  { id: "ai-prompts", label: "AI Prompt", emoji: "\u2728" },
-  { id: "ideas", label: "Idea", emoji: "💡" },
-  { id: "projects", label: "Project", emoji: "📋" },
-  { id: "websites", label: "Website", emoji: "🌐" },
-  { id: "links", label: "Link", emoji: "🔗" },
-  { id: "payments", label: "Finance", emoji: "💰" },
-  { id: "builds", label: "Build", emoji: "🛠️" },
-];
+const QuickCaptureBar = lazy(() => import("./dashboard/QuickCaptureBar"));
 
 const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   const tasks = useTasks();
   const exportAllData = useExportAllData();
-  const { userName, resolvedTheme, toggleDayNight } = useSettingsStore();
+  const { resolvedTheme, toggleDayNight } = useSettingsStore();
   const {
+    activeSection,
     setSidebarOpen,
     setActiveSection,
+    setFocusTaskId,
     commandPaletteOpen,
     setCommandPaletteOpen,
     importModalOpen,
     setImportModalOpen,
+    density,
+    setDensity,
   } = useNavigationStore();
-  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [captureOpen, setCaptureOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
-
-  const shortcutLabel =
+  const [exporting, setExporting] = useState(false);
+  const [today, setToday] = useState(todayISO);
+  const section = workspaceById(activeSection);
+  const shortcut =
     typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || "")
-      ? "⌘K"
+      ? "⌘ K"
       : "Ctrl K";
-
-  // Local date — never toISOString() (UTC), which lied by a day in the
-  // evening for anyone outside UTC+0 (the overdue count was off).
-  const today = todayISO();
-  const overdueTasks = tasks.filter((t) => t.status !== "done" && t.dueDate && t.dueDate < today);
-  const dueTodayTasks = tasks.filter((t) => t.status !== "done" && t.dueDate === today);
-  const overdueCount = overdueTasks.length;
-  const dueTodayCount = dueTodayTasks.length;
-  const notifCount = overdueCount + dueTodayCount;
+  const due = tasks
+    .filter(
+      (task) => task.status !== "done" && !task.archived && task.dueDate && task.dueDate <= today,
+    )
+    .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
 
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
-        e.preventDefault();
+    const interval = window.setInterval(() => setToday(todayISO()), 30_000);
+    return () => window.clearInterval(interval);
+  }, []);
+  useEffect(() => {
+    const handler = (event: KeyboardEvent) => {
+      if (event.isComposing) return;
+      // Do not open another keyboard-driven overlay inside an active modal.
+      const dialogOpen = !!document.querySelector('[role="dialog"], [role="alertdialog"]');
+      if (dialogOpen) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
         setCommandPaletteOpen(true);
+        return;
       }
-      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
-        e.preventDefault();
-        setQuickAddOpen(true);
-      }
-      // Plain "N" outside any text field → jump to capture on the home screen.
-      if (e.key === "n" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        const el = document.activeElement as HTMLElement | null;
-        const typing =
-          !!el &&
-          (el.tagName === "INPUT" ||
-            el.tagName === "TEXTAREA" ||
-            el.tagName === "SELECT" ||
-            el.isContentEditable);
-        if (typing) return;
-        e.preventDefault();
-        setActiveSection("dashboard");
-        requestAnimationFrame(() => window.dispatchEvent(new Event(CAPTURE_FOCUS_EVENT)));
+      const element = document.activeElement as HTMLElement | null;
+      const typing =
+        !!element && (element.matches("input, textarea, select") || element.isContentEditable);
+      if (
+        !typing &&
+        !dialogOpen &&
+        event.key.toLowerCase() === "n" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey
+      ) {
+        event.preventDefault();
+        setCaptureOpen(true);
       }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  }, [setCommandPaletteOpen, setActiveSection]);
-
-  useEffect(() => {
-    if (!quickAddOpen) return;
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setQuickAddOpen(false);
-    };
-    document.addEventListener("keydown", handler);
-    return () => document.removeEventListener("keydown", handler);
-  }, [quickAddOpen]);
-
-  const handleQuickAdd = (sectionId: string) => {
-    setActiveSection(sectionId);
-    setQuickAddOpen(false);
-  };
+  }, [setCommandPaletteOpen]);
 
   const handleExport = async () => {
-    const data = await exportAllData();
-    const blob = new Blob([data], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `mission-control-backup-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const data = await exportAllData();
+      const url = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `mission-control-backup-${todayISO()}.json`;
+      document.body.append(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
+      toast.success("Backup download started");
+    } catch (error) {
+      toast.error("Backup could not be exported", {
+        description:
+          error instanceof Error
+            ? error.message
+            : "Please try again. Saved records have not been changed.",
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
     <>
-      <header
-        ref={ref}
-        className="mc13-topbar mobile-top-glass sm:enterprise-panel sticky top-0 z-30 px-3 sm:px-6 lg:px-8 h-[62px] sm:h-[72px] flex items-center gap-2 sm:gap-3 border-x-0 border-t-0 rounded-none shadow-none"
-      >
-        {/* Mobile menu */}
+      <header ref={ref} className="mc-topbar">
         <button
+          type="button"
+          className="mc-icon-button lg:hidden"
+          data-workspace-trigger
+          aria-label="Open navigation"
+          aria-haspopup="dialog"
           onClick={() => setSidebarOpen(true)}
-          className="lg:hidden text-muted-foreground hover:text-foreground p-2 -ml-1 rounded-2xl active:scale-90 active:bg-secondary/70 transition-all touch-manipulation"
         >
-          <Menu size={18} />
+          <Menu size={20} />
         </button>
-
-        {/* Search — Dribbble style with shortcut indicator */}
-        <button
-          onClick={() => setCommandPaletteOpen(true)}
-          className="mc13-global-search flex items-center gap-2 sm:gap-2.5 flex-1 max-w-xl h-10 sm:h-11 px-3 sm:px-4 rounded-2xl bg-card/62 border border-border/50 hover:border-primary/35 hover:bg-card/80 hover:shadow-[var(--shadow-glow)] transition-all duration-300 cursor-pointer group touch-manipulation"
-        >
-          <Search
-            size={14}
-            className="text-muted-foreground/40 group-hover:text-primary transition-colors flex-shrink-0 sm:w-4 sm:h-4"
-          />
-          <span className="text-xs sm:text-sm text-muted-foreground/50 flex-1 text-left truncate">
-            Search or jump to…
-          </span>
-          <div className="hidden md:flex items-center gap-1">
-            <kbd className="text-[10px] text-muted-foreground/50 bg-card px-2 py-1 rounded-lg font-medium border border-border/40">
-              {shortcutLabel}
-            </kbd>
-          </div>
-        </button>
-
-        <div className="hidden xl:block">
-          <AreaSwitch />
+        <div className="mc-breadcrumb" aria-label="Current workspace">
+          <span>{section?.group ?? "Workspace"}</span>
+          <ChevronRight size={14} />
+          <strong>{section?.label ?? "Custom workspace"}</strong>
         </div>
-
-        <div className="flex items-center gap-1 sm:gap-1.5 ml-auto">
-          {/* Mobile day/night — sidebar is hidden below lg, so this control must live in the top bar. */}
+        <button
+          type="button"
+          className="mc-command-search"
+          aria-label="Search everything"
+          onClick={() => setCommandPaletteOpen(true)}
+        >
+          <Search size={17} />
+          <span>Search anything…</span>
+          <kbd>{shortcut}</kbd>
+        </button>
+        <div className="mc-topbar-actions">
           <button
             type="button"
+            className="mc-icon-button"
             onClick={toggleDayNight}
-            className="flex h-10 w-10 items-center justify-center rounded-2xl text-muted-foreground/70 transition-all hover:bg-secondary/75 hover:text-foreground active:scale-90 touch-manipulation lg:hidden"
             aria-label={resolvedTheme === "dark" ? "Switch to day mode" : "Switch to night mode"}
             title={resolvedTheme === "dark" ? "Day mode" : "Night mode"}
           >
-            {resolvedTheme === "dark" ? <Sun size={17} /> : <Moon size={17} />}
+            {resolvedTheme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-
-          {/* Action buttons — hidden on mobile for cleaner bar */}
-          <button
-            onClick={() => setImportModalOpen(true)}
-            className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
-            title="Import"
-          >
-            <Mail size={16} />
-          </button>
-
-          <button
-            onClick={() => setVersionsOpen(true)}
-            className="flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
-            title="Versions — save & restore"
-          >
-            <History size={16} />
-          </button>
-
-          <button
-            onClick={handleExport}
-            className="hidden sm:flex items-center justify-center w-9 sm:w-10 h-9 sm:h-10 rounded-xl sm:rounded-2xl text-muted-foreground/55 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
-            title="Export"
-          >
-            <Download size={16} />
-          </button>
-
-          {/* Notifications */}
-          <div className="relative">
-            <button
-              onClick={() => setNotifOpen((o) => !o)}
-              className="relative flex items-center justify-center w-10 h-10 rounded-2xl text-muted-foreground/60 hover:text-foreground hover:bg-secondary/75 hover:shadow-sm transition-all touch-manipulation"
-              title="Notifications"
-            >
-              <Bell size={16} className="sm:w-[18px] sm:h-[18px]" />
-              {notifCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full bg-destructive text-white text-[9px] font-bold flex items-center justify-center shadow-md">
-                  {notifCount > 9 ? "9+" : notifCount}
-                </span>
-              )}
-            </button>
-
-            {notifOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                <div className="absolute right-0 top-full mt-3 z-50 w-80 max-h-[70vh] overflow-y-auto mobile-sheet-luxe rounded-[24px] p-2">
-                  <div className="px-4 py-2.5 flex items-center justify-between">
-                    <span className="text-[10px] font-semibold text-muted-foreground/50 uppercase tracking-widest">
-                      Notifications
-                    </span>
-                    <span className="text-[10px] text-muted-foreground/50">
-                      {notifCount} pending
-                    </span>
-                  </div>
-                  {notifCount === 0 ? (
-                    <div className="px-4 py-8 text-center text-sm text-muted-foreground/60">
-                      🎉 You're all caught up!
-                    </div>
-                  ) : (
-                    <div className="space-y-0.5">
-                      {overdueCount > 0 && (
-                        <div className="px-4 py-1.5 text-[10px] font-semibold text-destructive uppercase tracking-wider">
-                          Overdue ({overdueCount})
-                        </div>
-                      )}
-                      {overdueTasks.slice(0, 8).map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => {
-                            setNotifOpen(false);
-                            setActiveSection("tasks");
-                          }}
-                          className="w-full flex items-start gap-3 px-4 py-2.5 rounded-2xl text-left hover:bg-secondary/60 transition-all"
-                        >
-                          <span className="text-base">⚠️</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-medium text-foreground truncate">
-                              {t.title}
-                            </div>
-                            <div className="text-[10px] text-destructive">Due {t.dueDate}</div>
-                          </div>
-                        </button>
-                      ))}
-                      {dueTodayCount > 0 && (
-                        <div className="px-4 py-1.5 mt-2 text-[10px] font-semibold text-primary uppercase tracking-wider">
-                          Due Today ({dueTodayCount})
-                        </div>
-                      )}
-                      {dueTodayTasks.slice(0, 8).map((t) => (
-                        <button
-                          key={t.id}
-                          onClick={() => {
-                            setNotifOpen(false);
-                            setActiveSection("tasks");
-                          }}
-                          className="w-full flex items-start gap-3 px-4 py-2.5 rounded-2xl text-left hover:bg-secondary/60 transition-all"
-                        >
-                          <span className="text-base">📌</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="text-[13px] font-medium text-foreground truncate">
-                              {t.title}
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">Due today</div>
-                          </div>
-                        </button>
-                      ))}
-                      <div className="border-t border-border/20 mt-1 pt-1">
-                        <button
-                          onClick={() => {
-                            setNotifOpen(false);
-                            setActiveSection("tasks");
-                          }}
-                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-2xl text-[12px] font-medium text-primary hover:bg-secondary/60 transition-all"
-                        >
-                          View all tasks →
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="h-8 w-px bg-border/30 mx-1 hidden sm:block" />
-
-          {/* User avatar — larger, with details */}
-          <div className="hidden sm:flex items-center gap-3 pl-2">
-            <div className="w-10 h-10 rounded-2xl gradient-primary flex items-center justify-center text-[13px] font-bold text-primary-foreground shadow-[var(--shadow-primary)] cursor-pointer">
-              {userName.charAt(0)}
-            </div>
-            <div className="hidden lg:block min-w-0 mr-2">
-              <div className="text-sm font-semibold text-foreground truncate">{userName}</div>
-            </div>
-          </div>
-
-          {/* Create or capture — floating action button */}
-          <div className="relative">
-            <button
-              onClick={() => setQuickAddOpen(!quickAddOpen)}
-              className="mc13-new-button h-10 px-3 sm:px-4 rounded-xl bg-primary text-primary-foreground flex items-center gap-2 text-sm font-medium hover:opacity-90 transition touch-manipulation"
-            >
-              <Plus
-                size={16}
-                className={`transition-transform duration-200 ${quickAddOpen ? "rotate-45" : ""}`}
-              />
-              <span className="hidden sm:inline">New</span>
-            </button>
-
-            {quickAddOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40 bg-foreground/10 sm:bg-transparent"
-                  onClick={() => setQuickAddOpen(false)}
-                />
-                <div className="fixed sm:absolute inset-x-3 sm:inset-x-auto bottom-[92px] sm:bottom-auto sm:right-0 sm:top-full sm:mt-3 z-50 sm:w-60 mobile-sheet-luxe rounded-[28px] p-2 overflow-hidden">
-                  <div className="px-4 py-2.5 text-[10px] font-semibold text-muted-foreground/35 uppercase tracking-widest">
-                    Quick Add
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-1 gap-0.5">
-                    {quickAddItems.map((item, i) => (
-                      <button
-                        key={item.id}
-                        onClick={() => handleQuickAdd(item.id)}
-                        className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 rounded-2xl text-[13px] text-foreground hover:bg-secondary/60 active:bg-secondary transition-all touch-manipulation"
-                      >
-                        <span className="text-base sm:text-sm">{item.emoji}</span>
-                        <span className="font-medium">{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="border-t border-border/20 mt-1 pt-1">
+          <Popover open={notifOpen} onOpenChange={setNotifOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="mc-icon-button mc-notifications-trigger"
+                aria-label={`${due.length} tasks due or overdue`}
+                title="Tasks needing attention"
+              >
+                <Bell size={18} />
+                {due.length > 0 && <span>{due.length > 9 ? "9+" : due.length}</span>}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="mc-notifications">
+              <div className="mc-popover-heading">
+                <strong>Needs your attention</strong>
+                <span>{due.length} tasks</span>
+              </div>
+              {due.length === 0 ? (
+                <p className="mc-popover-empty">No open tasks are due today or overdue.</p>
+              ) : (
+                <div className="mc-notifications-list">
+                  {due.slice(0, 10).map((task) => (
                     <button
+                      type="button"
+                      key={task.id}
                       onClick={() => {
-                        setQuickAddOpen(false);
-                        setImportModalOpen(true);
+                        setFocusTaskId(task.id);
+                        setActiveSection("tasks");
+                        setNotifOpen(false);
                       }}
-                      className="w-full flex items-center gap-3 px-4 py-3 sm:py-2.5 rounded-2xl text-[13px] text-foreground hover:bg-secondary/60 active:bg-secondary transition-all touch-manipulation"
                     >
-                      <span className="text-base sm:text-sm">📥</span>
-                      <span className="font-medium">Bulk Import</span>
+                      <strong>{task.title}</strong>
+                      <span data-overdue={task.dueDate! < today}>
+                        {task.dueDate! < today ? "Overdue · " : "Due today · "}
+                        {task.dueDate}
+                      </span>
                     </button>
-                  </div>
+                  ))}
                 </div>
-              </>
-            )}
-          </div>
+              )}
+              <button
+                type="button"
+                className="mc-popover-link"
+                onClick={() => {
+                  setActiveSection("tasks");
+                  setNotifOpen(false);
+                }}
+              >
+                View all tasks <ChevronRight size={15} />
+              </button>
+            </PopoverContent>
+          </Popover>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="mc-icon-button mc-more-actions"
+                aria-label="Workspace actions"
+              >
+                <MoreHorizontal size={19} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-56">
+              <DropdownMenuLabel>Workspace actions</DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => setSidebarOpen(true)}>
+                <LayoutGrid size={16} />
+                All workspaces
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => setDensity(density === "comfortable" ? "compact" : "comfortable")}
+              >
+                {density === "comfortable" ? <Rows4 size={16} /> : <Rows3 size={16} />}
+                {density === "comfortable" ? "Use compact layout" : "Use comfortable layout"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => setImportModalOpen(true)}>
+                <Upload size={16} />
+                Import records
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setVersionsOpen(true)}>
+                <History size={16} />
+                Version history
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={exporting} onSelect={() => void handleExport()}>
+                <Download size={16} />
+                {exporting ? "Preparing backup…" : "Export backup"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <button
+            type="button"
+            className="mc-capture-button"
+            aria-label="Quick capture"
+            onClick={() => setCaptureOpen(true)}
+          >
+            <Plus size={18} />
+            <span>Quick capture</span>
+            <kbd>N</kbd>
+          </button>
         </div>
       </header>
-
-      <Suspense fallback={<DeferredOverlayFallback />}>
+      <Dialog open={captureOpen} onOpenChange={setCaptureOpen}>
+        <DialogContent className="mc-capture-dialog">
+          <DialogTitle>Get it out of your head.</DialogTitle>
+          <DialogDescription>
+            Capture a task, reminder, note, idea or link. Review the interpreted details before
+            saving.
+          </DialogDescription>
+          <Suspense fallback={<p role="status">Opening capture…</p>}>
+            <QuickCaptureBar autoFocus />
+          </Suspense>
+          <div className="mc-capture-help">
+            <span>
+              <kbd>&gt;</kbd> Task
+            </span>
+            <span>
+              <kbd>@</kbd> Reminder
+            </span>
+            <span>
+              <kbd>#</kbd> Note
+            </span>
+            <span>
+              <kbd>!</kbd> Idea
+            </span>
+            <span>Paste a URL to save a link</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Suspense fallback={null}>
         {commandPaletteOpen && (
           <CommandPalette
-            open={commandPaletteOpen}
+            open
             onClose={() => setCommandPaletteOpen(false)}
             onImport={() => setImportModalOpen(true)}
           />
         )}
-        {importModalOpen && (
-          <BulkImportModal open={importModalOpen} onClose={() => setImportModalOpen(false)} />
-        )}
-        {versionsOpen && (
-          <VersionsModal open={versionsOpen} onClose={() => setVersionsOpen(false)} />
-        )}
+        {importModalOpen && <BulkImportModal open onClose={() => setImportModalOpen(false)} />}
+        {versionsOpen && <VersionsModal open onClose={() => setVersionsOpen(false)} />}
       </Suspense>
     </>
   );
 });
-
 export default TopBar;

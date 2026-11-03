@@ -66,15 +66,33 @@ export const QUADRANTS: { id: Quadrant; label: string; hint: string; accent: str
 ];
 
 export function isUrgent(t: Task, today = todayISO()): boolean {
-  if (!t.dueDate) return false;
-  const due = new Date(`${t.dueDate}T00:00:00`).getTime();
+  // A real deadline always takes precedence over a planning choice.
   const now = new Date(`${today}T00:00:00`).getTime();
-  return (due - now) / 86_400_000 <= 2;
+  const due = t.dueDate ? new Date(`${t.dueDate}T00:00:00`).getTime() : NaN;
+  if (Number.isFinite(due) && (due - now) / 86_400_000 <= 2) return true;
+  if (t.committedOn === today) return true;
+  if (t.notBefore && t.notBefore > today) return false;
+  const planned = t.scheduledAt ? new Date(`${t.scheduledAt}T00:00:00`).getTime() : NaN;
+  return Number.isFinite(planned) && (planned - now) / 86_400_000 <= 2;
 }
 
 export function isImportant(t: Task): boolean {
-  if ((t as any).important === true) return true;
+  if (typeof t.important === "boolean") return t.important;
   return t.priority === "critical" || t.priority === "high";
+}
+
+/** Review changes work plans and importance, never the real deadline. */
+export function quadrantPlan(task: Task, quadrant: Quadrant, today = todayISO()): Partial<Task> {
+  const immediate = quadrant === "do" || quadrant === "delegate";
+  const planned = immediate ? today : addDaysISO(quadrant === "schedule" ? 7 : 21, today);
+  return {
+    important: quadrant === "do" || quadrant === "schedule",
+    scheduledAt: planned,
+    notBefore: immediate ? undefined : planned,
+    reviewAt: planned,
+    committedOn: immediate ? today : undefined,
+    touchedAt: today,
+  };
 }
 
 export function quadrantOf(t: Task, today = todayISO()): Quadrant {

@@ -1,7 +1,8 @@
 import { assertFeedDocument } from "./publicFeedFetch.server";
-import { audienceCapabilities } from "./audienceProviders.server";
 import { collectMentionCoverage, collectAudienceMetrics } from "./intelligenceCollectors.server";
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
+import { readIntelligenceConfiguration } from "./intelligenceConfiguration.server";
 import { z } from "zod";
 import {
   discoverFeed,
@@ -39,7 +40,7 @@ function evidenceStrength(input: {
   if (corroboration >= 1) {
     return {
       level: "high" as const,
-      reason: `A materially similar story appears across ${corroboration + 1} independent publisher domains. This corroborates coverage, not every factual claim in the story.`,
+      reason: `A similar headline appears across ${corroboration + 1} distinct publisher domains. Syndication and common ownership are not checked; this is coverage evidence, not independent fact verification.`,
     };
   }
   if (input.source || input.sourceUrl) {
@@ -81,7 +82,7 @@ export const collectIndustry = createServerFn({ method: "POST" })
           }
           const xml = await httpGet(feedUrl);
           assertFeedDocument(xml);
-          const items = parseFeed(xml)
+          const items = parseFeed(xml, feedUrl)
             .slice(0, 40)
             .map((i) => ({
               ...i,
@@ -220,7 +221,7 @@ export const searchIndustryTopic = createServerFn({ method: "POST" })
 
 const TermSchema = z.object({
   id: z.string(),
-  term: z.string().min(2),
+  term: z.string().trim().min(1).max(180),
   type: z.enum(["name", "brand", "handle", "domain"]),
   anchors: z.array(z.string()).max(24).optional(),
   negatives: z.array(z.string()).max(24).optional(),
@@ -314,8 +315,6 @@ export const rankStories = createServerFn({ method: "POST" })
     }
   });
 
-/** Capability flags only. Does not expose credentials or call paid services. */
-export const intelligenceCapabilities = createServerFn({ method: "GET" }).handler(async () => ({
-  audience: audienceCapabilities(), paidEnabled: process.env.MC_ALLOW_PAID_INTELLIGENCE === "true",
-  inspectedAt: new Date().toISOString(),
-}));
+/** Authenticated capability flags only. No measurements, secrets or paid provider calls. */
+export const intelligenceCapabilities = createServerFn({ method: "GET" })
+  .handler(async () => readIntelligenceConfiguration(getRequest()));

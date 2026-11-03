@@ -114,14 +114,17 @@ try {
       assert.deepEqual(overflow, [], `Overflow: ${overflow.join(', ')}`);
     });
   }
-  await check('Mobile More scrolls to Settings', async () => {
+  await check('Mobile workspace directory scrolls and navigates to Settings', async () => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.getByRole('button', { name: 'More', exact: true }).click();
-    const sheet = page.getByRole('dialog', { name: 'All workspaces' });
+    await page.getByRole('navigation', { name: 'Mobile navigation' })
+      .getByRole('button', { name: 'Open all workspaces', exact: true }).click();
+    const sheet = page.getByRole('dialog', { name: 'Everything, in one place.', exact: true });
     const settings = sheet.getByRole('button', { name: /Settings/ });
     await settings.scrollIntoViewIfNeeded();
     assert(await settings.isVisible());
     await settings.click();
+    await sheet.waitFor({ state: 'hidden' });
+    await page.locator('#main-content').getByRole('heading', { name: 'Settings', exact: true }).waitFor();
   });
   await check('Error diagnostics render untrusted text without HTML injection', async () => {
     const safe = await page.evaluate(async () => {

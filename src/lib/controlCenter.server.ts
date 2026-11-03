@@ -37,23 +37,38 @@ function tag(block: string, name: string): string | undefined {
   return m ? decodeEntities(m[1]).trim() : undefined;
 }
 
-function linkFrom(block: string): string | undefined {
+function safeArticleUrl(value: string | undefined, baseUrl?: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed = new URL(value, baseUrl);
+    if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password) return undefined;
+    return /^https?:\/\//i.test(value) ? value : parsed.toString();
+  } catch { return undefined; }
+}
+
+function linkFrom(block: string, baseUrl?: string): string | undefined {
   const plain = tag(block, "link");
-  if (plain && /^https?:/i.test(plain.trim())) return plain.trim();
-  const href = block.match(/<link[^>]*href=["']([^"']+)["'][^>]*>/i);
-  if (href) return decodeEntities(href[1]);
+  if (plain && safeArticleUrl(plain.trim(), baseUrl)) return safeArticleUrl(plain.trim(), baseUrl);
+  // Atom feeds commonly put their rel=self API URL before the article link.
+  for (const link of block.match(/<link\b[^>]*>/gi) ?? []) {
+    const relation = link.match(/\brel=["']([^"']+)["']/i)?.[1];
+    if (relation && relation.toLowerCase() !== "alternate") continue;
+    const href = link.match(/\bhref=["']([^"']+)["']/i)?.[1];
+    const url = safeArticleUrl(href ? decodeEntities(href) : undefined, baseUrl);
+    if (url) return url;
+  }
   const guid = tag(block, "guid");
-  if (guid && /^https?:/i.test(guid)) return guid;
+  if (guid && /^https?:/i.test(guid)) return safeArticleUrl(guid);
   return undefined;
 }
 
 /** Parse RSS 2.0 / Atom into items. Tolerant of malformed feeds. */
-export function parseFeed(xml: string): RawItem[] {
+export function parseFeed(xml: string, baseUrl?: string): RawItem[] {
   const blocks = xml.match(/<(item|entry)[\s>][\s\S]*?<\/\1>/gi) ?? [];
   const out: RawItem[] = [];
   for (const block of blocks) {
     const title = stripTags(tag(block, "title") ?? "");
-    const url = linkFrom(block);
+    const url = linkFrom(block, baseUrl);
     if (!title || !url) continue;
     const dateRaw =
       tag(block, "pubDate") ??
@@ -70,7 +85,7 @@ export function parseFeed(xml: string): RawItem[] {
       summary: desc ? stripTags(desc).slice(0, 400) : undefined,
       publishedAt: parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : undefined,
       source,
-      sourceUrl: sourceTag ? decodeEntities(sourceTag[1]) : undefined,
+      sourceUrl: sourceTag ? safeArticleUrl(decodeEntities(sourceTag[1]), baseUrl) : undefined,
     });
   }
   return out;

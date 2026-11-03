@@ -11,10 +11,13 @@ import {
   type StreamItem,
   type Task,
   type SyncHealth,
+  type Payment,
 } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { todayISO, addDaysLocal } from "@/lib/overdue";
 import { isRotten } from "@/lib/triage";
+import { isRecentIso } from "@/lib/intelligenceQuality";
+import { dueState } from "@/lib/financeLedger";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { fingerprint, isSuppressed, isRegression, cooldownFrom } from "@/lib/fingerprint";
 
@@ -133,47 +136,70 @@ export async function actOnDecision(
   opts?: { dueInDays?: number },
 ): Promise<string> {
   const due = addDaysLocal(todayISO(), opts?.dueInDays ?? 1);
-  const task: Task = {
-    id: genId(),
-    title: decision.recommendation?.slice(0, 140) || decision.title,
-    priority: decision.severity,
-    status: "todo",
-    dueDate: due,
-    category: decision.source,
-    description: `${decision.context}\n\nFrom Decision Center (${decision.source}).`,
-    linkedProject: decision.websiteId ?? "",
-    subtasks: [],
-    createdAt: nowISO(),
-    touchedAt: todayISO(),
-  };
-  await db.tasks.put(task);
-  try {
-    markCloudRecordDirty("tasks", task.id);
-  } catch {
-    /* offline-safe */
+  const result = await db.transaction("rw", db.decisions, db.tasks, async () => {
+    const current = await db.decisions.get(decision.id);
+    if (!current) throw new Error("This finding no longer exists. Refresh the findings list.");
+    const linked = current.linkedTaskId ? await db.tasks.get(current.linkedTaskId) : undefined;
+    if (linked && !linked.deletedAt && current.status === "acted")
+      return { id: linked.id, changed: false };
+    if (current.status !== "open")
+      throw new Error("This finding has already changed. Review its current status before acting.");
+    const taskId =
+      linked && !linked.deletedAt && !linked.archived && linked.status !== "done"
+        ? linked.id
+        : linked
+          ? `finding-task-${current.id}-${fingerprint("followup", [linked.id, linked.completedAt || linked.createdAt])}`
+          : `finding-task-${current.id}-${current.regressions || 0}`;
+    if (!linked || taskId !== linked.id) {
+      const task: Task = {
+        id: taskId,
+        title: current.recommendation?.slice(0, 140) || current.title,
+        priority: current.severity,
+        status: "todo",
+        dueDate: "",
+        scheduledAt: due,
+        reviewAt: due,
+        category: current.source,
+        description: `${current.context}\n\nFrom Findings (${current.source}). Planned for ${due}; confirm any real deadline separately.`,
+        linkedProject: current.websiteId ?? "",
+        subtasks: [],
+        createdAt: nowISO(),
+        touchedAt: todayISO(),
+      };
+      await db.tasks.put(task);
+    }
+    await db.decisions.put({
+      ...current,
+      status: "acted",
+      linkedTaskId: taskId,
+      resolvedAt: nowISO(),
+      cooldownUntil: cooldownFrom(current.cooldownDays ?? 7),
+      updatedAt: nowISO(),
+    });
+    return { id: taskId, changed: true };
+  });
+  if (result.changed) {
+    markCloudRecordDirty("tasks", result.id);
+    markCloudRecordDirty("decisions", decision.id);
+    queueCloudPush();
+    await logAudit({
+      action: "decision",
+      collection: "decisions",
+      recordId: decision.id,
+      label: `Acted: ${decision.title}`,
+      detail: `Task linked and planned for ${due}`,
+    });
   }
-
-  await persist({
-    ...decision,
-    status: "acted",
-    linkedTaskId: task.id,
-    resolvedAt: nowISO(),
-    cooldownUntil: cooldownFrom(decision.cooldownDays ?? 7),
-    updatedAt: nowISO(),
-  });
-  await logAudit({
-    action: "decision",
-    collection: "decisions",
-    recordId: decision.id,
-    label: `Acted: ${decision.title}`,
-    detail: `Task created for ${due}`,
-  });
-  return task.id;
+  return result.id;
 }
 
 export async function ignoreDecision(decision: Decision, reason: string): Promise<void> {
+  if (!reason.trim()) throw new Error("Add a reason before dismissing this finding.");
+  const current = await db.decisions.get(decision.id);
+  if (!current || current.status !== "open")
+    throw new Error("This finding has already changed. Review its current status.");
   await persist({
-    ...decision,
+    ...current,
     status: "ignored",
     resolutionNote: reason,
     resolvedAt: nowISO(),
@@ -190,8 +216,13 @@ export async function ignoreDecision(decision: Decision, reason: string): Promis
 }
 
 export async function deferDecision(decision: Decision, days = 7): Promise<void> {
+  const current = await db.decisions.get(decision.id);
+  if (!current || current.status !== "open")
+    throw new Error("This finding has already changed. Review its current status.");
+  if (!Number.isInteger(days) || days < 1 || days > 365)
+    throw new Error("Choose a deferral between 1 and 365 days.");
   const until = addDaysLocal(todayISO(), days);
-  await persist({ ...decision, status: "later", deferUntil: until, updatedAt: nowISO() });
+  await persist({ ...current, status: "later", deferUntil: until, updatedAt: nowISO() });
   await logAudit({
     action: "decision",
     collection: "decisions",
@@ -217,6 +248,7 @@ export async function generateDecisions(input: {
   mentions?: StreamItem[];
   tasks?: Task[];
   health?: SyncHealth[];
+  payments?: Payment[];
 }): Promise<number> {
   let created = 0;
   const before = await db.decisions.count();
@@ -225,7 +257,7 @@ export async function generateDecisions(input: {
     if (issue.status !== "open") continue;
     await upsertDecision({
       title: issue.title,
-      context: `SEO ${issue.category} issue observed ${issue.observedAt.slice(0, 10)}${issue.url ? ` on ${issue.url}` : ""}.`,
+      context: `SEO ${issue.category} issue observed ${(issue.observedAt || "date not recorded").slice(0, 19)}${issue.url ? ` on ${issue.url}` : ""}.`,
       source: "seo",
       severity: issue.severity,
       websiteId: issue.websiteId,
@@ -236,8 +268,19 @@ export async function generateDecisions(input: {
     });
   }
 
-  for (const m of (input.mentions ?? []).slice(0, 40)) {
-    if (m.kind !== "mention" || m.status === "archived") continue;
+  const actionableMentions = (input.mentions ?? [])
+    .filter(
+      (m) =>
+        m.kind === "mention" &&
+        m.status === "active" &&
+        ["exact-domain", "exact-handle", "anchored-name", "exact-brand"].includes(
+          m.verification || "",
+        ) &&
+        isRecentIso(m.dateBasis === "published" ? m.publishedAt : m.discoveredAt, 30),
+    )
+    .sort((a, b) => b.discoveredAt.localeCompare(a.discoveredAt))
+    .slice(0, 40);
+  for (const m of actionableMentions) {
     await upsertDecision({
       title: `Respond to mention: ${m.title.slice(0, 80)}`,
       context: `${m.source ?? "Web"} — ${m.url ?? ""}`,
@@ -252,8 +295,8 @@ export async function generateDecisions(input: {
 
   for (const t of (input.tasks ?? []).filter((x) => isRotten(x))) {
     await upsertDecision({
-      title: `Rotten task: ${t.title.slice(0, 80)}`,
-      context: `Overdue since ${t.dueDate} and untouched. Keep it honest: re-commit, rewrite, or drop it.`,
+      title: `Review overdue task: ${t.title.slice(0, 80)}`,
+      context: `The recorded deadline was ${t.dueDate}. Confirm whether to recommit, rewrite, or archive this task.`,
       source: "task",
       severity: t.priority,
       sourceRef: t.id,
@@ -274,6 +317,19 @@ export async function generateDecisions(input: {
       groupKey: `sync|${h.id}`,
       recommendation: `Reconnect ${h.label} or stop relying on its data`,
       options: ["Reconnect", "Retry", "Disable source"],
+    });
+  }
+
+  for (const payment of input.payments ?? []) {
+    if (dueState(payment, todayISO()) !== "overdue") continue;
+    await upsertDecision({
+      title: `Review overdue payment: ${payment.title.slice(0, 80)}`,
+      context: `Your recorded ${payment.type} was due ${payment.dueDate || "on an unspecified date"}. This is a ledger observation, not a bank-confirmed payment failure.`,
+      source: "payment",
+      severity: "medium",
+      sourceRef: payment.id,
+      groupKey: `payment-overdue|${payment.id}`,
+      recommendation: `Verify payment status and update the record for “${payment.title}”.`,
     });
   }
 

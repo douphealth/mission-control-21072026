@@ -1,16 +1,29 @@
-import { usePayments, useUpdateData, useDuplicateItem } from "@/hooks/useTableData";
-import { useState, useCallback } from "react";
-import { dueState, direction, financeCsv, localToday, moneySummary } from "@/lib/financeLedger";
+import {
+  usePayments,
+  useAddItem,
+  useUpdateItem,
+  useDeleteItem,
+  useBulkPatch,
+  useBulkDeleteItems,
+  useDuplicateItem,
+} from "@/hooks/useTableData";
+import { useState, useRef } from "react";
+import {
+  dueState,
+  direction,
+  financeCsv,
+  localToday,
+  moneySummary,
+  paymentStatus,
+  paymentStatusPatch,
+  validatePayment,
+} from "@/lib/financeLedger";
 import {
   Plus,
   Search,
   Edit2,
   Trash2,
   DollarSign,
-  TrendingUp,
-  TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight,
   RefreshCw,
   CheckSquare,
   Copy,
@@ -58,11 +71,19 @@ const emptyPayment: Omit<Payment, "id"> = {
 
 export default function PaymentsPage() {
   const payments = usePayments();
-  const updateData = useUpdateData();
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
+  const bulkPatch = useBulkPatch();
+  const bulkDeleteItems = useBulkDeleteItems();
+  const lock = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const duplicateItem = useDuplicateItem();
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [filterCurrency, setFilterCurrency] = useState("all");
   const today = localToday();
   const [modalOpen, setModalOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -72,124 +93,169 @@ export default function PaymentsPage() {
 
   const filtered = payments
     .filter((p) => filterType === "all" || p.type === filterType)
-    .filter((p) => filterStatus === "all" || (filterStatus === "overdue" ? dueState(p, today) === "overdue" : p.status === filterStatus))
-    .filter(
-      (p) =>
-        p.title.toLowerCase().includes(search.toLowerCase()) ||
-        p.category.toLowerCase().includes(search.toLowerCase()),
+    .filter((p) => filterCurrency === "all" || p.currency === filterCurrency)
+    .filter((p) => filterStatus === "all" || paymentStatus(p, today) === filterStatus)
+    .filter((p) =>
+      [p.title, p.category, p.from, p.to, p.sourceRef, p.linkedProject]
+        .join(" ")
+        .toLowerCase()
+        .includes(search.trim().toLowerCase()),
     )
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   const currencySummary = moneySummary(payments);
   const currencyRows = Object.entries(currencySummary).sort(([a], [b]) => a.localeCompare(b));
-  const overdueCount = payments.filter(p => dueState(p, today) === "overdue").length;
-  const upcoming = payments.filter(p => dueState(p, today) === "upcoming")
-    .sort((a, b) => a.dueDate.localeCompare(b.dueDate)).slice(0, 5);
+  const overdueCount = payments.filter((p) => dueState(p, today) === "overdue").length;
+  const upcoming = payments
+    .filter((p) => ["overdue", "upcoming"].includes(dueState(p, today)))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 5);
   const exportCsv = () => {
-    const url = URL.createObjectURL(new Blob([financeCsv(filtered)], { type: "text/csv;charset=utf-8" }));
+    const url = URL.createObjectURL(
+      new Blob([financeCsv(filtered)], { type: "text/csv;charset=utf-8" }),
+    );
     const anchor = document.createElement("a");
-    anchor.href = url; anchor.download = "mission-control-payments-" + today + ".csv"; anchor.click();
-    URL.revokeObjectURL(url);
+    anchor.href = url;
+    anchor.download = "mission-control-payments-" + today + ".csv";
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const openAdd = () => {
+    setError("");
     setEditId(null);
     setForm({ ...emptyPayment, dueDate: today, createdAt: today, currency: "EUR" });
     setModalOpen(true);
   };
   const openEdit = (p: Payment) => {
+    setError("");
     setEditId(p.id);
     const { id, ...rest } = p;
-    setForm(rest);
+    setForm({ ...emptyPayment, ...rest, currency: p.currency || "" });
     setModalOpen(true);
   };
-  const saveForm = () => {
-    if (!form.title.trim() || !Number.isFinite(form.amount) || form.amount <= 0 || !/^[A-Z]{3}$/.test(form.currency)) { toast.error("Enter title, positive amount and valid 3-letter currency."); return; }
-    if (editId) {
-      void updateData({ payments: payments.map((p) => (p.id === editId ? { ...p, ...form } : p)) });
-      toast.success("Payment updated");
-    } else {
-      updateData({
-        payments: [
-          {
-            id: Math.random().toString(36).slice(2, 10),
-            ...form,
-            createdAt: new Date().toISOString().split("T")[0],
-          },
-          ...payments,
-        ],
-      });
-      toast.success("Payment added");
-    }
-    setModalOpen(false);
-  };
-  const deletePayment = (id: string) => {
-    cd.confirm({
-      title: "Delete Payment",
-      description: "This payment record will be permanently removed.",
-      onConfirm: () => {
-        updateData({ payments: payments.filter((p) => p.id !== id) });
-        toast.success("Payment deleted");
-      },
-    });
-  };
-  const duplicatePayment = async (id: string) => {
-    const newId = await duplicateItem("payments", id, { status: "pending", paidDate: "" });
-    if (newId) toast.success("Payment duplicated");
-  };
-  const markPaid = (id: string) => {
-    updateData({
-      payments: payments.map((p) =>
-        p.id === id
-          ? { ...p, status: "paid" as const, paidDate: new Date().toISOString().split("T")[0] }
-          : p,
-      ),
-    });
-    toast.success("Ledger marked paid; no funds transferred");
-  };
-  const uf = (field: keyof typeof form, val: any) => setForm((f) => ({ ...f, [field]: val }));
-  const fmt = (n: number, currency = "USD") => {
+  async function operation(action: () => Promise<void>) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError("");
     try {
-      return new Intl.NumberFormat("en-US", {
-        style: "currency",
-        currency: currency || "USD",
-      }).format(n);
+      await action();
+    } catch (failure) {
+      const message =
+        failure instanceof Error
+          ? failure.message
+          : "The record could not be saved. Your draft is still available.";
+      setError(message);
+      toast.error("Not saved", { description: message });
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  const saveForm = () =>
+    void operation(async () => {
+      const record = {
+        ...form,
+        title: form.title.trim(),
+        currency: form.currency.trim().toUpperCase(),
+        source: form.source || ("manual" as const),
+        evidenceStatus: form.evidenceStatus || ("unverified" as const),
+        paidDate: form.status === "paid" ? form.paidDate : "",
+      };
+      const issue = validatePayment(record, today);
+      if (issue) throw new Error(issue);
+      if (editId) await updateItem<Payment>("payments", editId, record);
+      else await addItem<Payment>("payments", { ...record, createdAt: today });
+      setModalOpen(false);
+      toast.success(editId ? "Payment updated" : "Payment added");
+    });
+  const deletePayment = (id: string) =>
+    cd.confirm({
+      title: "Delete payment record?",
+      description:
+        "This removes the ledger entry. It does not cancel a subscription or a bank payment.",
+      onConfirm: () =>
+        void operation(async () => {
+          await deleteItem("payments", id);
+          toast.success("Payment record deleted");
+        }),
+    });
+  const duplicatePayment = (id: string) =>
+    void operation(async () => {
+      const newId = await duplicateItem("payments", id, {
+        status: "pending",
+        paidDate: "",
+        evidenceStatus: "unverified",
+        source: "manual",
+        sourceRef: "",
+        sourceUrl: "",
+        verifiedAt: undefined,
+      });
+      if (newId)
+        toast.success("New payment draft created", {
+          description: "Confirmation and receipt references were cleared for the new record.",
+        });
+    });
+  const markPaid = (id: string) =>
+    void operation(async () => {
+      await updateItem<Payment>("payments", id, paymentStatusPatch("paid", today));
+      toast.success("Payment recorded in the ledger", {
+        description: "No funds transferred. Add the receipt in Edit to confirm the evidence.",
+      });
+    });
+  const uf = (field: keyof typeof form, val: any) => setForm((f) => ({ ...f, [field]: val }));
+  const fmt = (amount: number, currency: string) => {
+    if (!Number.isFinite(amount)) return "Invalid amount";
+    const normalized = (currency || "").trim().toUpperCase();
+    if (!/^[A-Z]{3}$/.test(normalized)) return `${amount.toLocaleString()} · currency missing`;
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: normalized }).format(
+        amount,
+      );
     } catch {
-      return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+      return `${amount.toLocaleString()} ${normalized}`;
     }
   };
-
-  const bulkDelete = useCallback(() => {
-    if (bulk.selectedCount === 0) return;
+  const bulkDelete = () => {
+    if (!bulk.selectedCount) return;
     cd.confirm({
-      title: `Delete ${bulk.selectedCount} Payment(s)`,
-      description: `This will permanently remove ${bulk.selectedCount} payment records.`,
-      onConfirm: () => {
-        updateData({ payments: payments.filter((p) => !bulk.selectedIds.has(p.id)) });
-        toast.success(`${bulk.selectedCount} payments deleted`);
-        bulk.clearSelection();
-      },
+      title: `Delete ${bulk.selectedCount} payment records?`,
+      description:
+        "Selected ledger records will be removed. No bank transactions or subscriptions are changed.",
+      onConfirm: () =>
+        void operation(async () => {
+          await bulkDeleteItems("payments", [...bulk.selectedIds]);
+          toast.success(`${bulk.selectedCount} payment records deleted`);
+          bulk.clearSelection();
+        }),
     });
-  }, [bulk, payments, updateData, cd]);
-
-  const bulkUpdateStatus = useCallback(
-    (status: string) => {
-      updateData({
-        payments: payments.map((p) =>
-          bulk.selectedIds.has(p.id) ? { ...p, status: status as any } : p,
-        ),
-      });
-      toast.success(`${bulk.selectedCount} payments updated`);
+  };
+  const bulkUpdateStatus = (status: string) =>
+    void operation(async () => {
+      await bulkPatch(
+        "payments",
+        [...bulk.selectedIds],
+        paymentStatusPatch(status as Payment["status"], today),
+      );
+      toast.success(`${bulk.selectedCount} records updated`);
       bulk.clearSelection();
-    },
-    [bulk, payments, updateData],
-  );
+    });
+  const invalidCurrencyCount = payments.filter(
+    (p) => !/^[A-Z]{3}$/.test((p.currency || "").trim().toUpperCase()),
+  ).length;
+  const unverifiedCount = payments.filter((p) => p.evidenceStatus !== "confirmed").length;
 
   return (
     <div className="space-y-4 sm:space-y-5">
       <PageHeader
         icon={DollarSign}
         eyebrow="Finance"
-        title="Payments & Finance"
+        title="Finance"
+        stats={[
+          { label: "Recorded entries", value: payments.length },
+          { label: "Overdue", value: overdueCount, tone: "amber" },
+          { label: "Need confirmation", value: unverifiedCount },
+        ]}
         tone="accent"
         subtitle={
           overdueCount > 0
@@ -204,50 +270,40 @@ export default function PaymentsPage() {
             >
               <CheckSquare size={15} /> {bulk.bulkMode ? "Cancel" : "Bulk"}
             </button>
-            <button onClick={exportCsv} className="btn-secondary text-xs" disabled={!filtered.length}>Export CSV</button>
             <button
+              onClick={exportCsv}
+              className="btn-secondary text-xs"
+              disabled={!filtered.length}
+            >
+              Export CSV
+            </button>
+            <button
+              disabled={busy}
               onClick={openAdd}
               className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition shadow-lg shadow-primary/20"
             >
-              <Plus size={16} /> Add
+              <Plus size={16} /> New record
             </button>
           </>
         }
       />
 
-      {payments.length === 0 && (
-        <section className="relative overflow-hidden rounded-[26px] border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.08] via-card to-primary/[0.05] p-4 sm:p-5">
-          <div className="pointer-events-none absolute -right-12 -top-16 h-36 w-36 rounded-full bg-violet-500/10 blur-3xl" />
-          <div className="relative">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="inline-flex rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-1 text-[9px] font-black uppercase tracking-[0.15em] text-violet-600 dark:text-violet-300">
-                  Demo preview · not saved · excluded from totals
-                </div>
-                <h2 className="mt-2 text-sm font-extrabold text-foreground">How the finance workspace will look with records</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  These examples are visual-only. Add real transactions above to replace this preview.
-                </p>
-              </div>
-            </div>
-            <div className="mt-4 grid gap-2 sm:grid-cols-3">
-              {[
-                { title: "Affiliate commission", type: "Income", amount: "+€250", state: "Paid" },
-                { title: "Hosting subscription", type: "Subscription", amount: "−€29", state: "Paid" },
-                { title: "Client invoice", type: "Invoice", amount: "€500", state: "Pending" },
-              ].map((item) => (
-                <div key={item.title} className="rounded-2xl border border-border/40 bg-background/55 p-3">
-                  <div className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{item.type}</div>
-                  <div className="mt-1 text-xs font-bold text-foreground">{item.title}</div>
-                  <div className="mt-3 flex items-end justify-between gap-2">
-                    <span className="text-lg font-black tabular-nums text-foreground">{item.amount}</span>
-                    <span className="text-[9px] font-bold text-muted-foreground">{item.state}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+      {error && !modalOpen && (
+        <p
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          {error}
+        </p>
+      )}
+      {invalidCurrencyCount > 0 && (
+        <p
+          role="status"
+          className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-sm"
+        >
+          {invalidCurrencyCount} record(s) need a valid currency and are excluded from totals. Edit
+          the original records to correct them.
+        </p>
       )}
 
       {bulk.bulkMode && (
@@ -274,26 +330,45 @@ export default function PaymentsPage() {
 
       <section className="grid gap-3 md:grid-cols-2">
         <div className="card-glass p-4">
-          <h2 className="text-sm font-semibold">Upcoming payments &amp; collections</h2>
-          <p className="mt-1 text-xs text-muted-foreground">{overdueCount} overdue · settled income and outgoing costs are reported separately</p>
-          {upcoming.length ? <div className="mt-3 space-y-2">{upcoming.map(p =>
-            <div key={p.id} className="flex justify-between gap-3 border-t border-border/30 pt-2 text-xs">
-              <span className="min-w-0 truncate">{p.title} · {p.dueDate}</span>
-              <span className="shrink-0 font-semibold">{fmt(p.amount,p.currency)}</span>
-            </div>)}</div> : <p className="mt-3 text-xs text-muted-foreground">No upcoming recorded obligations.</p>}
+          <h2 className="text-sm font-semibold">Next payments &amp; collections</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {overdueCount} overdue · settled income and outgoing costs are reported separately
+          </p>
+          {upcoming.length ? (
+            <div className="mt-3 space-y-2">
+              {upcoming.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex justify-between gap-3 border-t border-border/30 pt-2 text-xs"
+                >
+                  <span className="min-w-0 truncate">
+                    {p.title} · {p.dueDate}
+                  </span>
+                  <span className="shrink-0 font-semibold">{fmt(p.amount, p.currency)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-muted-foreground">No upcoming recorded obligations.</p>
+          )}
         </div>
         <div className="card-glass p-4">
           <h2 className="text-sm font-semibold">Financial integrity</h2>
-          <p className="mt-2 text-xs text-muted-foreground">Only paid records count as settled cash flow. Outstanding invoices are receivables; unpaid operating costs are payables. A bill email is not a payment receipt. Updates here never transfer money.</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            This is your recorded ledger, not a live bank balance. Paid records contribute to
+            recorded cash flow; outstanding income and expenses remain separate. Marking an entry
+            paid does not confirm it with a provider or transfer money.
+          </p>
         </div>
       </section>
       {/* Currency-safe summary — never add unlike currencies together. */}
       <div className="card-elevated overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-3">
           <div>
-            <div className="text-sm font-bold text-foreground">Finance summary</div>
+            <div className="text-sm font-bold text-foreground">Recorded cash flow</div>
             <div className="text-[10px] text-muted-foreground">
-              Totals are grouped by currency. Mission Control never combines unlike currencies.
+              All saved records, grouped by currency. Confirmation status remains visible on each
+              entry.
             </div>
           </div>
           <span className="badge badge-primary">
@@ -366,8 +441,36 @@ export default function PaymentsPage() {
         </div>
       </div>
 
-      <select aria-label="Payment status" value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
-        className="rounded-xl bg-secondary px-3 py-2 text-xs"><option value="all">All statuses</option><option value="overdue">Overdue by due date</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="cancelled">Cancelled</option></select>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          aria-label="Payment status"
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="min-h-11 rounded-xl border border-border bg-secondary px-3 py-2 text-sm"
+        >
+          <option value="all">All statuses</option>
+          <option value="overdue">Overdue by due date</option>
+          <option value="pending">Pending</option>
+          <option value="paid">Paid</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+        <select
+          aria-label="Payment currency"
+          value={filterCurrency}
+          onChange={(event) => setFilterCurrency(event.target.value)}
+          className="min-h-11 rounded-xl border border-border bg-secondary px-3 py-2 text-sm"
+        >
+          <option value="all">All currencies</option>
+          {[...new Set(payments.map((p) => p.currency).filter(Boolean))].sort().map((currency) => (
+            <option key={currency} value={currency}>
+              {currency}
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-muted-foreground">
+          {filtered.length} of {payments.length} records
+        </span>
+      </div>
       {/* Payment List */}
       <div className="space-y-2">
         {filtered.map((payment, i) => (
@@ -418,19 +521,27 @@ export default function PaymentsPage() {
                 </div>
                 <div className="text-[10px] text-muted-foreground">
                   {payment.status === "paid"
-                    ? `Paid ${payment.paidDate || payment.dueDate || ""}`
+                    ? `Recorded paid ${payment.paidDate || "— date missing"}`
                     : payment.dueDate
                       ? `Due ${payment.dueDate}`
                       : ""}
                 </div>
               </div>
-              <span className={`${statusBadge[payment.status]} text-[10px] flex-shrink-0`}>
-                {payment.status}
-              </span>
+              <div className="flex flex-col gap-1">
+                <span
+                  className={`${statusBadge[paymentStatus(payment, today)]} text-[10px] flex-shrink-0`}
+                >
+                  {paymentStatus(payment, today)}
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  {payment.evidenceStatus === "confirmed" ? "Marked confirmed" : "Unconfirmed"}
+                </span>
+              </div>
               {!bulk.bulkMode && (
-                <div className="flex items-center gap-1 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                <div className="flex flex-wrap items-center gap-1">
                   {(payment.status === "pending" || payment.status === "overdue") && (
                     <button
+                      disabled={busy}
                       onClick={() => markPaid(payment.id)}
                       className="text-[11px] text-success hover:underline px-1.5"
                     >
@@ -438,6 +549,7 @@ export default function PaymentsPage() {
                     </button>
                   )}
                   <button
+                    disabled={busy}
                     onClick={() => duplicatePayment(payment.id)}
                     className="text-muted-foreground hover:text-blue-500 p-1"
                     title="Duplicate"
@@ -445,12 +557,16 @@ export default function PaymentsPage() {
                     <Copy size={12} />
                   </button>
                   <button
+                    aria-label={`Edit ${payment.title}`}
+                    disabled={busy}
                     onClick={() => openEdit(payment)}
                     className="text-muted-foreground hover:text-foreground p-1"
                   >
                     <Edit2 size={12} />
                   </button>
                   <button
+                    aria-label={`Delete ${payment.title}`}
+                    disabled={busy}
                     onClick={() => deletePayment(payment.id)}
                     className="text-muted-foreground hover:text-destructive p-1"
                   >
@@ -467,10 +583,14 @@ export default function PaymentsPage() {
         <EmptyState
           icon={DollarSign}
           title="No payments found"
-          description="Add income, expenses or subscriptions. Totals stay separate by currency."
+          description={
+            payments.length
+              ? "No records match these filters. Change the search, type, status or currency."
+              : "Add your first real income, expense, invoice or subscription. Amounts stay separate by currency and confirmation status."
+          }
           action={
             <button onClick={openAdd} className="btn-primary text-sm">
-              <Plus size={13} /> Add your first payment
+              <Plus size={13} /> Add payment record
             </button>
           }
         />
@@ -479,93 +599,163 @@ export default function PaymentsPage() {
       <ConfirmDialog {...cd.dialogProps} />
       <FormModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => {
+          if (!lock.current) setModalOpen(false);
+        }}
         title={editId ? "Edit Payment" : "Add Payment"}
         onSubmit={saveForm}
+        submitLabel={busy ? "Saving…" : "Save record"}
         size="lg"
       >
-        <FormField label="Title *">
-          <FormInput
-            value={form.title}
-            onChange={(v) => uf("title", v)}
-            placeholder="Payment description"
-          />
-        </FormField>
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Amount">
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
+        <fieldset disabled={busy} className="space-y-4">
+          <FormField label="Title *">
             <FormInput
-              value={String(form.amount)}
-              onChange={(v) => uf("amount", parseFloat(v) || 0)}
-              type="number"
-              placeholder="0.00"
+              value={form.title}
+              onChange={(v) => uf("title", v)}
+              placeholder="Payment description"
             />
           </FormField>
-          <FormField label="Type">
-            <FormSelect
-              value={form.type}
-              onChange={(v) => uf("type", v)}
-              options={[
-                { value: "income", label: "💰 Income" },
-                { value: "expense", label: "💸 Expense" },
-                { value: "invoice", label: "📄 Invoice" },
-                { value: "subscription", label: "🔄 Subscription" },
-              ]}
-            />
-          </FormField>
-          <FormField label="Status">
-            <FormSelect
-              value={form.status}
-              onChange={(v) => uf("status", v)}
-              options={[
-                { value: "paid", label: "Paid" },
-                { value: "pending", label: "Pending" },
-                { value: "overdue", label: "Overdue" },
-                { value: "cancelled", label: "Cancelled" },
-              ]}
-            />
-          </FormField>
-          <FormField label="Category">
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Amount">
+              <FormInput
+                value={String(form.amount)}
+                onChange={(v) => uf("amount", parseFloat(v) || 0)}
+                type="number"
+                placeholder="0.00"
+              />
+            </FormField>
+            <FormField label="Type">
+              <FormSelect
+                value={form.type}
+                onChange={(v) => uf("type", v)}
+                options={[
+                  { value: "income", label: "💰 Income" },
+                  { value: "expense", label: "💸 Expense" },
+                  { value: "invoice", label: "📄 Invoice" },
+                  { value: "subscription", label: "🔄 Subscription" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Status">
+              <FormSelect
+                value={form.status}
+                onChange={(v) =>
+                  setForm((f) => ({ ...f, ...paymentStatusPatch(v as Payment["status"], today) }))
+                }
+                options={[
+                  { value: "paid", label: "Paid" },
+                  { value: "pending", label: "Pending" },
+                  { value: "overdue", label: "Overdue" },
+                  { value: "cancelled", label: "Cancelled" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Category">
+              <FormInput
+                value={form.category}
+                onChange={(v) => uf("category", v)}
+                placeholder="Freelance, Hosting, etc."
+              />
+            </FormField>
+            <FormField label="Due Date">
+              <FormInput value={form.dueDate} onChange={(v) => uf("dueDate", v)} type="date" />
+            </FormField>
+            <FormField label="Paid Date">
+              <FormInput value={form.paidDate} onChange={(v) => uf("paidDate", v)} type="date" />
+            </FormField>
+            <FormField label="From">
+              <FormInput value={form.from} onChange={(v) => uf("from", v)} placeholder="Payer" />
+            </FormField>
+            <FormField label="To">
+              <FormInput value={form.to} onChange={(v) => uf("to", v)} placeholder="Payee" />
+            </FormField>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <FormField label="Currency">
+              <FormInput
+                value={form.currency}
+                onChange={(v) => uf("currency", v.trim().toUpperCase())}
+                placeholder="EUR"
+              />
+            </FormField>
+            <FormField label="Billing frequency">
+              <FormSelect
+                value={form.recurringInterval || ""}
+                onChange={(v) => setForm((f) => ({ ...f, recurring: !!v, recurringInterval: v }))}
+                options={[
+                  { value: "", label: "One-time / unknown" },
+                  { value: "monthly", label: "Monthly" },
+                  { value: "yearly", label: "Yearly" },
+                  { value: "weekly", label: "Weekly" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Evidence">
+              <FormSelect
+                value={form.evidenceStatus || "unverified"}
+                onChange={(v) => uf("evidenceStatus", v)}
+                options={[
+                  { value: "unverified", label: "Needs confirmation" },
+                  { value: "confirmed", label: "Confirmed with supporting reference" },
+                ]}
+              />
+            </FormField>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Record source">
+              <FormSelect
+                value={form.source || "manual"}
+                onChange={(v) => uf("source", v)}
+                options={[
+                  { value: "manual", label: "Manual entry" },
+                  { value: "email-receipt", label: "Email receipt" },
+                  { value: "email-invoice", label: "Email invoice" },
+                  { value: "stripe", label: "Stripe record" },
+                  { value: "bank", label: "Bank record" },
+                  { value: "other", label: "Other" },
+                ]}
+              />
+            </FormField>
+            <FormField label="Receipt / transaction reference">
+              <FormInput
+                value={form.sourceRef || ""}
+                onChange={(v) => uf("sourceRef", v)}
+                placeholder="Reference from the original source"
+              />
+            </FormField>
+          </div>
+          <FormField label="Evidence URL (optional)">
             <FormInput
-              value={form.category}
-              onChange={(v) => uf("category", v)}
-              placeholder="Freelance, Hosting, etc."
+              value={form.sourceUrl || ""}
+              onChange={(v) => uf("sourceUrl", v)}
+              placeholder="https://…"
             />
           </FormField>
-          <FormField label="Due Date">
-            <FormInput value={form.dueDate} onChange={(v) => uf("dueDate", v)} type="date" />
+          <p className="text-xs text-muted-foreground">
+            Source labels describe the evidence you recorded. They do not establish a live bank or
+            Stripe connection.
+          </p>
+          <FormField label="Linked Project">
+            <FormInput
+              value={form.linkedProject}
+              onChange={(v) => uf("linkedProject", v)}
+              placeholder="Project name"
+            />
           </FormField>
-          <FormField label="Paid Date">
-            <FormInput value={form.paidDate} onChange={(v) => uf("paidDate", v)} type="date" />
+          <FormField label="Notes">
+            <FormTextarea
+              value={form.notes}
+              onChange={(v) => uf("notes", v)}
+              placeholder="Additional notes..."
+              rows={2}
+            />
           </FormField>
-          <FormField label="From">
-            <FormInput value={form.from} onChange={(v) => uf("from", v)} placeholder="Payer" />
-          </FormField>
-          <FormField label="To">
-            <FormInput value={form.to} onChange={(v) => uf("to", v)} placeholder="Payee" />
-          </FormField>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <FormField label="Currency"><FormInput value={form.currency} onChange={v => uf("currency",v.trim().toUpperCase())} placeholder="EUR" /></FormField>
-          <FormField label="Billing frequency"><FormSelect value={form.recurringInterval || ""} onChange={v => setForm(f => ({...f,recurring:!!v,recurringInterval:v}))}
-            options={[{value:"",label:"One-time / unknown"},{value:"monthly",label:"Monthly"},{value:"yearly",label:"Yearly"},{value:"weekly",label:"Weekly"}]} /></FormField>
-          <FormField label="Evidence"><FormSelect value={form.evidenceStatus || "unverified"} onChange={v => uf("evidenceStatus",v)}
-            options={[{value:"unverified",label:"Needs confirmation"},{value:"confirmed",label:"Provider / bank confirmed"}]} /></FormField>
-        </div>
-        <FormField label="Linked Project">
-          <FormInput
-            value={form.linkedProject}
-            onChange={(v) => uf("linkedProject", v)}
-            placeholder="Project name"
-          />
-        </FormField>
-        <FormField label="Notes">
-          <FormTextarea
-            value={form.notes}
-            onChange={(v) => uf("notes", v)}
-            placeholder="Additional notes..."
-            rows={2}
-          />
-        </FormField>
+        </fieldset>
       </FormModal>
     </div>
   );

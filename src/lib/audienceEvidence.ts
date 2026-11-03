@@ -31,6 +31,11 @@ export function audienceProfile(platform: string, input: string) {
   if (platform !== 'facebook') u.search = '';
   return { handle, channelId, url: u.toString() };
 }
+/** URL aliases and tracking parameters must not create duplicate measurements. */
+export function audienceProfileKey(platform: string, input: string): string {
+  const profile = audienceProfile(platform, input);
+  return `${platform}:${profile.channelId ? `channel:${profile.channelId}` : profile.handle.toLowerCase()}`;
+}
 export function measuredCount(value: unknown): number | null {
   if (typeof value === 'string' && !/^\d+$/.test(value)) return null;
   if (typeof value !== 'number' && typeof value !== 'string') return null;

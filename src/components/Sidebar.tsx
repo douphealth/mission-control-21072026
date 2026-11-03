@@ -1,441 +1,272 @@
+import { useEffect, useState, type FormEvent } from "react";
 import {
-  useTasks,
-  usePayments,
-  useIdeas,
-  useCustomModules,
-  useAddItem,
-} from "@/hooks/useTableData";
+  ChevronDown,
+  ChevronsLeft,
+  ChevronsRight,
+  Layers3,
+  Plus,
+  Search,
+  Settings,
+} from "lucide-react";
+import { toast } from "sonner";
+import { useTasks, usePayments, useCustomModules, useAddItem } from "@/hooks/useTableData";
 import { useNavigationStore } from "@/stores/navigationStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import { usePlanStore } from "@/stores/planStore";
-import { useState } from "react";
+import { dueState, localToday } from "@/lib/financeLedger";
 import {
-  BookOpen,
-  Home,
-  CheckSquare,
-  Calendar,
-  FileText,
-  Globe,
-  Github,
-  Search,
-  Zap,
-  RefreshCcw,
-  Radar,
-  Bell,
-  DollarSign,
-  PanelsTopLeft,
-  Settings,
-  Cloud,
-  Rocket,
-  Hammer,
-  Link2,
-  Lightbulb,
-  Flame,
-  KeyRound,
-  Newspaper,
-  AtSign,
-  Users,
-  Timer,
-  Scale,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Check,
-  X,
-  Sun,
-  Moon,
-  Leaf,
-  Blocks,
-  AppWindow,
-  WandSparkles,
-} from "lucide-react";
-import { toast } from "sonner";
-
-const navGroups = [
-  {
-    label: "Focus",
-    hint: "Daily execution",
-    items: [
-      { id: "dashboard", label: "Today", icon: Home },
-      { id: "tasks", label: "Tasks", icon: CheckSquare },
-      { id: "projects", label: "Projects", icon: PanelsTopLeft },
-      { id: "calendar", label: "Calendar", icon: Calendar },
-      { id: "family-schedule", label: "Family Timetable", icon: Calendar },
-      { id: "notes", label: "Notes", icon: FileText },
-      { id: "ai-prompts", label: "AI Prompts", icon: BookOpen },
-      { id: "demo", label: "Guided Demo", icon: WandSparkles },
-    ],
-  },
-  {
-    label: "Growth",
-    hint: "Traffic & revenue",
-    items: [
-      { id: "websites", label: "Websites", icon: Globe },
-      { id: "apps-funnels", label: "Apps & Funnels", icon: AppWindow },
-      { id: "wp-manage", label: "WordPress", icon: Zap },
-      { id: "seo", label: "SEO / AI Visibility", icon: Search },
-      { id: "github", label: "GitHub Portfolio", icon: Github },
-    ],
-  },
-  {
-    label: "Operate",
-    hint: "Review & control",
-    items: [
-      { id: "review", label: "Review", icon: RefreshCcw },
-      { id: "decisions", label: "Findings", icon: Scale },
-      { id: "control-center", label: "Captures", icon: Radar },
-      { id: "reminders", label: "Reminders", icon: Bell },
-      { id: "payments", label: "Finance", icon: DollarSign },
-    ],
-  },
-];
-
-const systemItems = [
-  { id: "builds", label: "Build Projects", icon: Hammer },
-  { id: "google-tasks", label: "Google Tasks", icon: CheckSquare },
-  { id: "cloudflare", label: "Cloudflare", icon: Cloud },
-  { id: "vercel", label: "Vercel", icon: Rocket },
-  { id: "ideas", label: "Ideas", icon: Lightbulb },
-  { id: "habits", label: "Habits", icon: Flame },
-  { id: "credentials", label: "Credentials", icon: KeyRound },
-  { id: "links", label: "Links Hub", icon: Link2 },
-  { id: "industry", label: "Trends", icon: Newspaper },
-  { id: "mentions", label: "Mentions", icon: AtSign },
-  { id: "audience", label: "Audience", icon: Users },
-  { id: "focus", label: "Focus Timer", icon: Timer },
-  { id: "settings", label: "Settings", icon: Settings },
-];
+  WORKSPACE_GROUPS,
+  WORKSPACE_SECTIONS,
+  filterWorkspaces,
+  workspaceById,
+  type WorkspaceSection,
+} from "@/lib/workspaceCatalog";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import AreaSwitch from "@/components/AreaSwitch";
 
 export default function Sidebar() {
   const tasks = useTasks();
   const payments = usePayments();
-  const ideas = useIdeas();
-  const customModules = useCustomModules();
+  const custom = useCustomModules();
   const addItem = useAddItem();
   const {
     activeSection,
     setActiveSection,
-    sidebarOpen,
-    setSidebarOpen,
-    sidebarCollapsed,
+    sidebarCollapsed: collapsed,
     setSidebarCollapsed,
+    setSidebarOpen,
   } = useNavigationStore();
-  const { userName, userRole, theme, toggleTheme } = useSettingsStore();
+  const { userName, userRole } = useSettingsStore();
   const area = usePlanStore((state) => state.area);
+  const [closedGroups, setClosedGroups] = useState<string[]>(["Tools"]);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const sections = filterWorkspaces(WORKSPACE_SECTIONS, "", area === "personal");
+  const taskCount = tasks.filter((task) => task.status !== "done" && !task.archived).length;
+  const financeCount = payments.filter(
+    (payment) => dueState(payment, localToday()) === "overdue",
+  ).length;
+  const badge = (id: string) => (id === "tasks" ? taskCount : id === "payments" ? financeCount : 0);
+  useEffect(() => {
+    const group = workspaceById(activeSection)?.group;
+    if (group)
+      setClosedGroups((current) =>
+        current.includes(group) ? current.filter((value) => value !== group) : current,
+      );
+  }, [activeSection]);
 
-  const [systemsOpen, setSystemsOpen] = useState(false);
-  const [customOpen, setCustomOpen] = useState(false);
-  const [newModName, setNewModName] = useState("");
-  const [newModEmoji, setNewModEmoji] = useState("📁");
-
-  const openTasks = tasks.filter((t) => t.status !== "done").length;
-  const overduePayments = payments.filter((p) => p.status === "overdue").length;
-  const activeIdeas = ideas.filter((i) => i.status === "exploring" || i.status === "validated").length;
-
-  const getBadge = (id: string) => {
-    if (id === "tasks") return openTasks || null;
-    if (id === "payments") return overduePayments || null;
-    if (id === "ideas") return activeIdeas || null;
-    return null;
+  const addModule = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim() || saving) return;
+    setSaving(true);
+    try {
+      const id = await addItem("customModules", {
+        name: name.trim(),
+        icon: "📁",
+        description: "",
+        fields: [
+          { key: "name", label: "Name", type: "text" },
+          { key: "url", label: "URL", type: "url" },
+          { key: "notes", label: "Notes", type: "textarea" },
+        ],
+        data: [],
+        createdAt: new Date().toISOString(),
+        order: custom.length,
+        visible: true,
+        color: "",
+      });
+      if (!id) throw new Error("No saved workspace was returned.");
+      setAdding(false);
+      setName("");
+      setActiveSection(`custom-${id}`);
+      toast.success("Workspace created");
+    } catch (error) {
+      toast.error("Workspace was not saved", {
+        description:
+          error instanceof Error ? error.message : "Please try again. Your name is still here.",
+      });
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const go = (id: string) => {
-    setActiveSection(id);
-    setSidebarOpen(false);
-  };
-
-  const addCustomModule = async () => {
-    if (!newModName.trim()) return;
-    const id = await addItem("customModules", {
-      name: newModName.trim(),
-      icon: newModEmoji,
-      description: "",
-      fields: [
-        { key: "name", label: "Name", type: "text" },
-        { key: "url", label: "URL", type: "url" },
-        { key: "notes", label: "Notes", type: "textarea" },
-      ],
-      data: [],
-      createdAt: new Date().toISOString(),
-      order: customModules.length,
-      visible: true,
-      color: "",
-    });
-    if (id) toast.success(`${newModName.trim()} added`);
-    setNewModName("");
-    setNewModEmoji("📁");
-    setCustomOpen(false);
-  };
-
-  const collapsed = sidebarCollapsed;
-
-  const familyGroup = {
-    label: "Home",
-    hint: "Simple daily life",
-    items: [
-      { id: "dashboard", label: "Today", icon: Home },
-      { id: "tasks", label: "Tasks", icon: CheckSquare },
-      { id: "calendar", label: "Calendar", icon: Calendar },
-      { id: "family-schedule", label: "Family Timetable", icon: Calendar },
-      { id: "reminders", label: "Reminders", icon: Bell },
-      { id: "habits", label: "Habits", icon: Flame },
-      { id: "notes", label: "Notes", icon: FileText },
-      { id: "ai-prompts", label: "AI Prompts", icon: BookOpen },
-      { id: "payments", label: "Finance", icon: DollarSign },
-      { id: "ideas", label: "Ideas", icon: Lightbulb },
-    ],
-  };
-
-  const visibleGroups = area === "personal" ? [familyGroup] : navGroups;
-
-  const NavItem = ({
-    item,
-  }: {
-    item: { id: string; label: string; icon: React.ComponentType<{ size?: number; strokeWidth?: number }> };
-  }) => {
-    const active = activeSection === item.id;
-    const badge = getBadge(item.id);
-    return (
-      <button
-        type="button"
-        onClick={() => go(item.id)}
-        title={collapsed ? item.label : undefined}
-        className={`mc13-nav-item group relative flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition-all duration-150 ${
-          collapsed ? "justify-center px-0" : ""
-        } ${
-          active
-            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_10px_28px_-16px_hsl(var(--sidebar-primary)/0.9)]"
-            : "text-sidebar-foreground/68 hover:bg-sidebar-accent/75 hover:text-sidebar-accent-foreground"
-        }`}
-      >
-        <item.icon size={17} strokeWidth={active ? 2.25 : 1.7} />
-        {!collapsed && <span className="min-w-0 flex-1 truncate text-left">{item.label}</span>}
-        {badge && !collapsed && (
-          <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-extrabold ${
-            active ? "bg-white/16 text-current" : "bg-primary/10 text-primary"
-          }`}>
-            {badge > 99 ? "99+" : badge}
-          </span>
-        )}
-        {badge && collapsed && (
-          <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-destructive" />
-        )}
-      </button>
-    );
-  };
+  const navItem = (item: WorkspaceSection) => (
+    <button
+      key={item.id}
+      type="button"
+      className="mc-nav-link"
+      aria-current={activeSection === item.id ? "page" : undefined}
+      aria-label={item.label}
+      title={collapsed ? item.label : item.description}
+      onClick={() => setActiveSection(item.id)}
+    >
+      <item.icon size={18} strokeWidth={activeSection === item.id ? 2.1 : 1.7} aria-hidden="true" />
+      {!collapsed && (
+        <>
+          <span>{item.label}</span>
+          {badge(item.id) > 0 && (
+            <small className={item.id === "payments" ? "is-warning" : ""}>
+              {badge(item.id) > 99 ? "99+" : badge(item.id)}
+            </small>
+          )}
+        </>
+      )}
+    </button>
+  );
 
   return (
     <>
-      {sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <aside
-        className={`mc13-sidebar fixed left-0 top-0 z-50 flex h-full flex-col border-r border-sidebar-border/70 bg-sidebar/96 text-sidebar-foreground shadow-[20px_0_70px_-55px_hsl(var(--foreground)/0.7)] backdrop-blur-2xl transition-all duration-200 lg:relative lg:translate-x-0 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        }`}
-        style={{ width: collapsed ? 72 : 248 }}
-      >
-        <button
-          type="button"
-          onClick={() => setSidebarOpen(false)}
-          className="absolute right-4 top-4 rounded-lg p-2 text-sidebar-foreground/50 hover:bg-sidebar-accent lg:hidden"
-          aria-label="Close navigation"
-        >
-          <X size={17} />
-        </button>
-
-        <div className={`flex h-[72px] items-center border-b border-sidebar-border/60 ${
-          collapsed ? "justify-center px-3" : "gap-3 px-4"
-        }`}>
-          <div className="mc13-brand-mark grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-2xl shadow-[var(--shadow-primary)]">
-            <img src="/mission-control-mark.svg" alt="" className="h-10 w-10" />
-          </div>
+      <aside className="mc-sidebar" data-collapsed={collapsed} aria-label="Main navigation">
+        <div className="mc-sidebar-brand">
+          <span className="mc-brand-symbol">
+            <Layers3 size={23} strokeWidth={1.8} />
+          </span>
           {!collapsed && (
-            <div className="min-w-0">
-              <div className="truncate text-[14px] font-extrabold tracking-tight">Mission Control</div>
-              <div className="text-[10px] font-medium text-sidebar-foreground/42">Home. Work. One place.</div>
-            </div>
+            <span>
+              <strong>Mission Control</strong>
+              <small>YOUR OPERATING SPACE</small>
+            </span>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={() => setSidebarCollapsed(!collapsed)}
-          className="absolute -right-3.5 top-[88px] z-50 hidden h-7 w-7 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground/60 shadow-lg transition hover:text-sidebar-foreground lg:flex"
-          aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
-        >
-          {collapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
-        </button>
-
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
-          <div className="space-y-5">
-            {visibleGroups.map((group) => (
-              <section key={group.label}>
-                {!collapsed && (
-                  <div className="mb-1.5 px-3">
-                    <div className="text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/70">
-                      {group.label}
-                    </div>
-                    <div className="mt-0.5 text-[11px] text-sidebar-foreground/55">{group.hint}</div>
-                  </div>
-                )}
-                <div className="space-y-0.5">
-                  {group.items.map((item) => (
-                    <NavItem key={item.id} item={item} />
-                  ))}
-                </div>
-              </section>
-            ))}
-
-            {area !== "personal" && (
-            <section>
-              <button
-                type="button"
-                onClick={() => setSystemsOpen((v) => !v)}
-                className={`flex w-full items-center rounded-xl px-3 py-2 text-[11px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/40 transition hover:bg-sidebar-accent/50 hover:text-sidebar-foreground/70 ${
-                  collapsed ? "justify-center px-0" : "justify-between"
-                }`}
-                title={collapsed ? "Systems & tools" : undefined}
-              >
-                {collapsed ? (
-                  <Blocks size={17} />
-                ) : (
-                  <>
-                    <span className="flex items-center gap-2"><Blocks size={13} /> Systems & tools</span>
-                    <ChevronDown size={13} className={systemsOpen ? "rotate-180 transition-transform" : "transition-transform"} />
-                  </>
-                )}
-              </button>
-              {systemsOpen && !collapsed && (
-                <div className="mt-1 space-y-0.5 rounded-2xl border border-sidebar-border/40 bg-sidebar-accent/20 p-1.5">
-                  {systemItems.map((item) => (
-                    <NavItem key={item.id} item={item} />
-                  ))}
-                </div>
-              )}
-            </section>
+        <div className="mc-sidebar-controls">
+          <button
+            type="button"
+            data-workspace-trigger
+            className="mc-sidebar-search"
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open workspace directory"
+            title="Find any workspace"
+          >
+            <Search size={17} />
+            {!collapsed && (
+              <>
+                <span>Find a workspace</span>
+                <Layers3 size={14} />
+              </>
             )}
-
-            {area !== "personal" && customModules.filter((m) => m.visible).length > 0 && (
-              <section>
-                {!collapsed && (
-                  <div className="mb-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-sidebar-foreground/70">
-                    Custom
-                  </div>
-                )}
-                <div className="space-y-0.5">
-                  {customModules
-                    .filter((m) => m.visible)
-                    .sort((a, b) => a.order - b.order)
-                    .map((mod) => {
-                      const active = activeSection === `custom-${mod.id}`;
-                      return (
-                        <button
-                          key={mod.id}
-                          type="button"
-                          onClick={() => go(`custom-${mod.id}`)}
-                          title={collapsed ? mod.name : undefined}
-                          className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-semibold transition ${
-                            collapsed ? "justify-center px-0" : ""
-                          } ${
-                            active
-                              ? "bg-sidebar-primary text-sidebar-primary-foreground"
-                              : "text-sidebar-foreground/65 hover:bg-sidebar-accent/70"
-                          }`}
-                        >
-                          <span>{mod.icon}</span>
-                          {!collapsed && <span className="truncate">{mod.name}</span>}
-                        </button>
-                      );
-                    })}
-                </div>
-              </section>
-            )}
-
-            {!collapsed && area !== "personal" && (
-              <section>
-                {!customOpen ? (
+          </button>
+          {!collapsed && <AreaSwitch compact className="mc-sidebar-area" />}
+        </div>
+        <nav className="mc-sidebar-scroll" aria-label="Workspaces">
+          {WORKSPACE_GROUPS.filter((group) => group !== "Custom").map((group) => {
+            const items = sections.filter((section) => section.group === group);
+            if (!items.length) return null;
+            const isOpen = collapsed || !closedGroups.includes(group);
+            return (
+              <section key={group} className="mc-nav-group">
+                {!collapsed ? (
                   <button
                     type="button"
-                    onClick={() => setCustomOpen(true)}
-                    className="flex w-full items-center gap-2 rounded-xl border border-dashed border-sidebar-border/70 px-3 py-2 text-[11px] font-semibold text-sidebar-foreground/38 transition hover:border-sidebar-primary/30 hover:text-sidebar-primary"
+                    className="mc-nav-group-toggle"
+                    aria-expanded={isOpen}
+                    aria-controls={`nav-group-${group}`}
+                    onClick={() =>
+                      setClosedGroups((current) =>
+                        current.includes(group)
+                          ? current.filter((value) => value !== group)
+                          : [...current, group],
+                      )
+                    }
                   >
-                    <Plus size={13} /> Add custom module
+                    <span>{group}</span>
+                    <ChevronDown size={13} className={isOpen ? "" : "is-closed"} />
                   </button>
                 ) : (
-                  <div className="rounded-2xl border border-sidebar-border/60 bg-sidebar-accent/25 p-2.5">
-                    <div className="flex gap-2">
-                      <input
-                        value={newModEmoji}
-                        onChange={(e) => setNewModEmoji(e.target.value)}
-                        className="w-10 rounded-xl bg-sidebar px-2 text-center text-sm outline-none"
-                        aria-label="Module icon"
-                      />
-                      <input
-                        value={newModName}
-                        onChange={(e) => setNewModName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") void addCustomModule();
-                          if (e.key === "Escape") setCustomOpen(false);
-                        }}
-                        autoFocus
-                        placeholder="Module name"
-                        className="min-w-0 flex-1 rounded-xl bg-sidebar px-3 py-2 text-xs text-sidebar-foreground outline-none placeholder:text-sidebar-foreground/30"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => void addCustomModule()}
-                        disabled={!newModName.trim()}
-                        className="grid w-9 place-items-center rounded-xl bg-sidebar-primary text-sidebar-primary-foreground disabled:opacity-30"
-                      >
-                        <Check size={13} />
-                      </button>
-                    </div>
-                  </div>
+                  <div className="mc-nav-divider" />
                 )}
+                {isOpen && <div id={`nav-group-${group}`}>{items.map(navItem)}</div>}
               </section>
-            )}
-          </div>
-        </nav>
-
-        <div className="border-t border-sidebar-border/60 p-3">
-          {!collapsed ? (
-            <div className="flex items-center gap-2.5 rounded-2xl bg-sidebar-accent/40 px-3 py-2.5">
-              <div className="grid h-8 w-8 place-items-center rounded-xl bg-gradient-to-br from-primary to-accent text-xs font-black text-primary-foreground">
-                {userName.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-xs font-bold">{userName}</div>
-                <div className="truncate text-[9px] text-sidebar-foreground/40">
-                  {area === "personal" ? "Home mode" : area === "work" ? "Business mode" : userRole}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={toggleTheme}
-                className="rounded-xl p-2 text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                title={`Theme: ${theme}`}
-              >
-                {theme === "dark" ? <Sun size={14} /> : theme === "sage" ? <Leaf size={14} /> : <Moon size={14} />}
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              onClick={toggleTheme}
-              className="grid w-full place-items-center rounded-xl py-2.5 text-sidebar-foreground/55 hover:bg-sidebar-accent"
-              title={`Theme: ${theme}`}
-            >
-              {theme === "dark" ? <Sun size={15} /> : theme === "sage" ? <Leaf size={15} /> : <Moon size={15} />}
-            </button>
+            );
+          })}
+          {area !== "personal" && custom.some((module) => module.visible) && (
+            <section className="mc-nav-group">
+              {!collapsed && <div className="mc-nav-group-label">Custom</div>}
+              {custom
+                .filter((module) => module.visible)
+                .sort((a, b) => a.order - b.order)
+                .map((module) =>
+                  navItem({
+                    id: `custom-${module.id}`,
+                    label: module.name,
+                    description: module.description || "Custom workspace",
+                    group: "Custom",
+                    icon: Layers3,
+                  }),
+                )}
+            </section>
           )}
+          <button
+            type="button"
+            className="mc-sidebar-add"
+            onClick={() => setAdding(true)}
+            aria-label="Create a custom workspace"
+            title="Create a custom workspace"
+          >
+            <Plus size={16} />
+            {!collapsed && "Add workspace"}
+          </button>
+        </nav>
+        <div className="mc-sidebar-footer">
+          <button
+            type="button"
+            className="mc-sidebar-profile"
+            title="Open settings"
+            aria-label="Open settings"
+            onClick={() => setActiveSection("settings")}
+          >
+            <span className="mc-user-initial">{userName.slice(0, 1).toUpperCase()}</span>
+            {!collapsed && (
+              <span>
+                <strong>{userName}</strong>
+                <small>{userRole || "Personal workspace"}</small>
+              </span>
+            )}
+            {!collapsed && <Settings size={16} />}
+          </button>
+          <button
+            type="button"
+            className="mc-sidebar-collapse"
+            aria-label={collapsed ? "Expand navigation" : "Collapse navigation"}
+            onClick={() => setSidebarCollapsed(!collapsed)}
+          >
+            {collapsed ? (
+              <ChevronsRight size={17} />
+            ) : (
+              <>
+                <ChevronsLeft size={17} />
+                <span>Collapse sidebar</span>
+              </>
+            )}
+          </button>
         </div>
       </aside>
+      <Dialog open={adding} onOpenChange={setAdding}>
+        <DialogContent>
+          <DialogTitle>Create a workspace</DialogTitle>
+          <DialogDescription>Add a flexible space for records, links and notes.</DialogDescription>
+          <form onSubmit={(event) => void addModule(event)} className="space-y-4">
+            <label className="grid gap-2 text-sm font-medium">
+              Workspace name
+              <input
+                autoFocus
+                required
+                maxLength={80}
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="rounded-lg border border-border bg-background p-3"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={!name.trim() || saving}
+              className="btn-primary min-h-11 w-full"
+            >
+              {saving ? "Creating…" : "Create workspace"}
+            </button>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

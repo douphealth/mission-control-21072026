@@ -1,3 +1,4 @@
+import { secureUuid } from "@/lib/recordId";
 /**
  * Local-first, account-bound sync. Each writer owns its remote snapshot so a
  * phone upload cannot overwrite a desktop upload. All legacy and v2 files are
@@ -113,7 +114,7 @@ function writeDirty(records: DirtyRecordMap): boolean {
 }
 function newChange(operation: DirtyOperation): DirtyRecord {
   logicalTime = Math.max(Date.now(), logicalTime + 1);
-  return { operation, changedAt: new Date(logicalTime).toISOString(), revision: crypto.randomUUID() };
+  return { operation, changedAt: new Date(logicalTime).toISOString(), revision: secureUuid() };
 }
 function sameChange(a?: DirtyRecord, b?: DirtyRecord) {
   return !!a && !!b && (a.revision || a.changedAt) === (b.revision || b.changedAt);
@@ -185,9 +186,9 @@ function hasSession() {
 }
 function writerId() {
   let device = localStorage.getItem(DEVICE_KEY);
-  if (!device) { device = crypto.randomUUID(); localStorage.setItem(DEVICE_KEY, device); }
+  if (!device) { device = secureUuid(); localStorage.setItem(DEVICE_KEY, device); }
   if (navigator.locks) return device;
-  if (!tabWriter) tabWriter = crypto.randomUUID();
+  if (!tabWriter) tabWriter = secureUuid();
   return `${device}-${tabWriter}`;
 }
 async function bindIdentity(accessToken: string, currentEpoch: number) {
@@ -252,7 +253,7 @@ async function readRemote(accessToken: string, currentEpoch: number) {
 async function writeRemote(fileId: string | undefined, backup: RemoteBackup, accessToken: string, currentEpoch: number): Promise<string> {
   const name = `${PREFIX}${backup.writerId}.json`;
   const metadata = fileId ? { name } : { name, parents: ["appDataFolder"] };
-  const boundary = `mc_${crypto.randomUUID()}`;
+  const boundary = `mc_${secureUuid()}`;
   const body = [
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
     `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(backup)}\r\n`, `--${boundary}--`,

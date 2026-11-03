@@ -1,5 +1,7 @@
 import CollectorStatusPanel from "@/components/controlcenter/CollectorStatusPanel";
-import { audienceProfile } from "@/lib/audienceEvidence";
+import AudienceConnectionsPanel from "@/components/controlcenter/AudienceConnectionsPanel";
+import { audienceProfile, audienceProfileKey } from "@/lib/audienceEvidence";
+import { audienceMeasurementSummary } from "@/lib/audienceMeasurements";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BadgeCheck,
@@ -8,6 +10,7 @@ import {
   Minus,
   Plus,
   RefreshCw,
+  Search,
   ShieldCheck,
   Trash2,
   TrendingDown,
@@ -18,7 +21,7 @@ import { useAudienceAccounts, useAudienceReadings, genId } from "@/hooks/useTabl
 import { db, type AudiencePlatform, type AudienceReading } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import { runAudienceCollector } from "@/lib/controlCenter";
-import { isTrustedAudienceReading, isRecentIso } from "@/lib/intelligenceQuality";
+import { isTrustedAudienceReading } from "@/lib/intelligenceQuality";
 import { CCHeader, EmptyState, Panel, relTime } from "@/components/controlcenter/ui";
 
 const PLATFORMS: {
@@ -40,14 +43,6 @@ const PLATFORMS: {
 
 const nf = new Intl.NumberFormat("en-US");
 
-function hostOf(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "").toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
 function Sparkline({ readings }: { readings: AudienceReading[] }) {
   const values = readings
     .filter((reading) => isTrustedAudienceReading(reading))
@@ -67,7 +62,7 @@ function Sparkline({ readings }: { readings: AudienceReading[] }) {
     })
     .join(" ");
   return (
-    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="cc-audience-spark" aria-label="Follower trend">
+    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="cc-audience-spark" role="img" aria-label={`Follower measurements from the same provider and profile, ${values[0]} to ${values.at(-1)}`}>
       <polyline points={points} fill="none" vectorEffect="non-scaling-stroke" />
     </svg>
   );
@@ -79,6 +74,8 @@ export default function AudiencePage() {
   const [platform, setPlatform] = useState<AudiencePlatform>("youtube");
   const [url, setUrl] = useState("");
   const [busy, setBusy] = useState(false);
+  const [search, setSearch] = useState("");
+  const [view, setView] = useState<"all" | "current" | "attention">("all");
   const [report, setReport] = useState<Awaited<ReturnType<typeof runAudienceCollector>> | null>(null);
   const autoRefreshStarted = useRef(false);
 
@@ -96,9 +93,7 @@ export default function AudiencePage() {
   const latestValid = useMemo(() => {
     const map = new Map<string, AudienceReading>();
     accounts.forEach((account) => {
-      const latest = [...(byAccount.get(account.id) ?? [])]
-        .reverse()
-        .find((reading) => isTrustedAudienceReading(reading));
+      const { latest } = audienceMeasurementSummary(byAccount.get(account.id) ?? [], account);
       if (latest) map.set(account.id, latest);
     });
     return map;
@@ -107,12 +102,14 @@ export default function AudiencePage() {
   const officialCount = [...latestValid.values()].filter(
     (reading) => reading.method === "official-api",
   ).length;
-  const freshVerified = [...latestValid.values()].filter(
-    (reading) => isRecentIso(reading.capturedAt, 1),
+  const freshVerified = accounts.filter(account =>
+    audienceMeasurementSummary(byAccount.get(account.id) ?? [], account).current,
   ).length;
-  const unavailable = accounts.filter(
-    (account) => account.lastStatus === "limited" || account.lastStatus === "unavailable",
-  ).length;
+  const visibleAccounts = accounts.filter(account => {
+    const current = audienceMeasurementSummary(byAccount.get(account.id) ?? [], account).current;
+    return (view === "all" || (view === "current" ? current : !current)) &&
+      (!search.trim() || `${account.handle} ${account.label || ""} ${account.platform} ${account.url}`.toLowerCase().includes(search.trim().toLowerCase()));
+  });
 
   useEffect(() => {
     if (autoRefreshStarted.current || !accounts.length) return;
@@ -123,9 +120,10 @@ export default function AudiencePage() {
     );
     if (!stale) return;
     autoRefreshStarted.current = true;
-    void runAudienceCollector().catch(() => {
+    setBusy(true);
+    void runAudienceCollector().then(setReport).catch(() => {
       // Account/collector status surfaces failures; auto-refresh stays quiet.
-    });
+    }).finally(() => setBusy(false));
   }, [accounts]);
 
   const addAccount = async () => {
@@ -152,21 +150,26 @@ export default function AudiencePage() {
       return;
     }
 
-    try { audienceProfile(platform, normalised); }
+    let profile: ReturnType<typeof audienceProfile>;
+    try { profile = audienceProfile(platform, normalised); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Invalid profile URL"); return; }
 
-    const duplicate = accounts.find((account) => account.url.toLowerCase() === normalised.toLowerCase());
+    const key = audienceProfileKey(platform, normalised);
+    const duplicate = accounts.find((account) => {
+      try { return audienceProfileKey(account.platform, account.url) === key; }
+      catch { return account.url.toLowerCase() === profile.url.toLowerCase(); }
+    });
     if (duplicate) {
       toast.info("This profile is already tracked");
       return;
     }
 
-    const handle = parsed.pathname.replace(/^\/+|\/+$/g, "") || host;
+    const handle = profile.handle || profile.channelId || host;
     const record = {
       id: genId(),
       platform,
       handle,
-      url: normalised,
+      url: profile.url,
       createdAt: new Date().toISOString(),
     };
     await db.audienceAccounts.put(record);
@@ -195,7 +198,7 @@ export default function AudiencePage() {
     <div className="space-y-5">
       <CCHeader
         title="Audience Intelligence"
-        subtitle="Verified audience measurements with explicit provider, identity proof, freshness and metric semantics. Official APIs are preferred; unavailable data stays blank instead of being guessed."
+        subtitle="Track audience growth for your exact profiles. Compare measurements from the same provider, see when each count was checked, and resolve unavailable connections."
         actions={
           <button
             onClick={() => void refresh()}
@@ -203,7 +206,7 @@ export default function AudiencePage() {
             className="inline-flex items-center gap-2 rounded-xl gradient-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
           >
             <RefreshCw size={13} className={busy ? "animate-spin" : ""} />
-            Refresh metrics
+            {busy ? "Checking profiles…" : "Refresh metrics"}
           </button>
         }
       />
@@ -213,8 +216,8 @@ export default function AudiencePage() {
         {[
           ["Tracked profiles", accounts.length, "primary"],
           ["Fresh verified <24h", freshVerified, "success"],
-          ["Official API", officialCount, "info"],
-          ["Limited / unavailable", unavailable, unavailable ? "warning" : "success"],
+          ["Last valid via API", officialCount, "info"],
+          ["Needs attention", accounts.length - freshVerified, accounts.length - freshVerified ? "warning" : "success"],
         ].map(([label, value, tone]) => (
           <div key={String(label)} className="cc-intel-kpi" data-tone={String(tone)}>
             <span>{label}</span>
@@ -223,56 +226,34 @@ export default function AudiencePage() {
         ))}
       </section>
 
-      {report?.capabilities && (
-        <Panel>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground">
-                Measurement capability
-              </div>
-              <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted-foreground">
-                Official API measurements are preferred. Restricted networks never receive guessed follower counts;
-                Mission Control stores a public-page value only when the metric is bound to the exact requested identity.
-              </p>
-            </div>
-            <span className="rounded-full border border-success/20 bg-success/8 px-2.5 py-1 text-[9px] font-bold text-success">
-              Official: {report.capabilities.officialPlatforms.join(", ") || "none configured"}
-            </span>
-          </div>
-          {!!report.capabilities.configurationRequired.length && (
-            <div className="mt-3 rounded-xl border border-warning/20 bg-warning/7 p-3 text-[10px] leading-5 text-muted-foreground">
-              <strong className="text-warning">Optional official integrations:</strong>{" "}
-              {report.capabilities.configurationRequired.join(" · ")}
-            </div>
-          )}
-          <p className="mt-2 text-[9px] leading-4 text-muted-foreground">
-            {report.capabilities.publicPage}
-          </p>
-        </Panel>
-      )}
+      <AudienceConnectionsPanel />
+
+      {report && <div role="status" className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+        <strong className="text-foreground">Last refresh: {report.succeeded}/{report.updated} profiles measured.</strong>{" "}
+        {report.unavailable ? `${report.unavailable} need attention; each profile shows its provider response and next step.` : "Each measurement is tied to its stated source and capture time."}
+      </div>}
 
       <Panel>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2 text-sm font-extrabold text-foreground">
               <ShieldCheck size={15} className="text-success" />
-              Measurement policy
+              Track a profile
             </div>
-            <p className="mt-1 max-w-3xl text-[10px] leading-5 text-muted-foreground">
-              Official adapters are available for GitHub and Bluesky without credentials, plus YouTube, X,
-              Instagram Professional accounts, Facebook Pages, Threads, TikTok and LinkedIn organizations
-              when their authorized server credentials are configured. Public-page fallback is accepted only
-              when identity and metric occur in the same structured profile object. Hidden or uncertain counts
-              stay unavailable — never zero, never guessed.
+            <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
+              Add a public profile URL to track its followers or subscribers. GitHub and Bluesky support
+              public measurements; other networks may need an authorized integration. Open the connection
+              status panel for setup details. Missing counts stay unavailable; a confirmed zero remains zero.
             </p>
           </div>
-          <span className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-1 text-[9px] font-bold text-muted-foreground">
+          <span className="rounded-full border border-border/50 bg-secondary/50 px-2.5 py-1 text-xs font-bold text-muted-foreground">
             {freshVerified}/{accounts.length} fresh verified in last 24h
           </span>
         </div>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-[auto_1.6fr_auto]">
           <select
+            aria-label="Profile platform"
             value={platform}
             onChange={(event) => setPlatform(event.target.value as AudiencePlatform)}
             className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
@@ -284,6 +265,7 @@ export default function AudiencePage() {
             ))}
           </select>
           <input
+            aria-label="Public profile URL"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && void addAccount()}
@@ -296,42 +278,36 @@ export default function AudiencePage() {
         </div>
       </Panel>
 
+      {!!accounts.length && <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card p-4">
+        <div>
+          <h2 className="text-sm font-bold">Your audience profiles</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{visibleAccounts.length} of {accounts.length} profiles · Counts are per profile, not unique people across networks.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <label className="flex min-h-11 items-center gap-2 rounded-xl border border-border bg-background px-3">
+            <Search size={15} className="text-muted-foreground" />
+            <input aria-label="Find audience profiles" value={search} onChange={event => setSearch(event.target.value)} placeholder="Find a profile…" className="min-w-0 bg-transparent text-sm outline-none" />
+          </label>
+          <select aria-label="Filter audience measurement status" value={view} onChange={event => setView(event.target.value as typeof view)} className="min-h-11 rounded-xl border border-border bg-background px-3 text-sm">
+            <option value="all">All profiles</option>
+            <option value="current">Current measurements</option>
+            <option value="attention">Needs attention</option>
+          </select>
+        </div>
+      </div>}
+
       {accounts.length === 0 ? (
         <EmptyState
           title="No profiles tracked yet"
           hint="Add the exact public profile URL. Mission Control validates that the URL matches the selected platform before saving it."
         />
+      ) : !visibleAccounts.length ? (
+        <EmptyState title="No profiles match this view" hint="Clear the search or choose All profiles to see every tracked account." />
       ) : (
         <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-          {accounts.map((account) => {
+          {visibleAccounts.map((account) => {
             const list = byAccount.get(account.id) ?? [];
-            const valid = list.filter(
-              (reading) => isTrustedAudienceReading(reading),
-            );
-            const latest = valid.at(-1);
-            const previousComparable = latest
-              ? [...valid]
-                  .slice(0, -1)
-                  .reverse()
-                  .find(
-                    (reading) =>
-                      reading.method === latest.method &&
-                      reading.provider === latest.provider &&
-                      reading.providerAccountId === latest.providerAccountId &&
-                      reading.metricSemantics === latest.metricSemantics &&
-                      Boolean(reading.approximate) === Boolean(latest.approximate),
-                  )
-              : undefined;
-            const comparable = Boolean(
-              latest &&
-              previousComparable &&
-              latest.metricSemantics === "exact" &&
-              previousComparable.metricSemantics === "exact",
-            );
-            const delta =
-              latest && previousComparable && comparable
-                ? (latest.followers as number) - (previousComparable.followers as number)
-                : null;
+            const { latest, series, previous, current, delta } = audienceMeasurementSummary(list, account);
             const DeltaIcon =
               delta === null || delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown;
             const platformLabel =
@@ -339,24 +315,25 @@ export default function AudiencePage() {
 
             return (
               <article key={account.id} className="cc-audience-card">
-                {account.lastEvidence && <div className={`mb-3 rounded-xl border p-3 text-xs ${account.lastStatus === "ok" ? "border-border text-muted-foreground" : "border-warning/30 text-warning"}`} role="status">
-                  <strong>{account.lastStatus === "ok" ? "Current measurement available" : "Current measurement unavailable"}</strong>
+                <div className={`mb-3 rounded-xl border p-3 text-xs ${current ? "border-success/20 bg-success/5 text-success" : "border-warning/30 bg-warning/5 text-warning"}`} role="status">
+                  <strong>{current ? "Current · checked within 24 hours" : latest ? "Previous measurement · refresh needed" : "No verified measurement yet"}</strong>
                   <p className="mt-1">{account.lastEvidence}</p>
                   {account.lastAction && <p className="mt-1 font-semibold">{account.lastAction}</p>}
-                </div>}
+                  {!current && !account.lastAction && <p className="mt-1">Refresh metrics to check the provider and the latest available count.</p>}
+                </div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[9px] font-black uppercase tracking-[0.12em] text-muted-foreground">
+                      <span className="text-xs font-black uppercase tracking-[0.12em] text-muted-foreground">
                         {platformLabel}
                       </span>
                       {latest?.method === "official-api" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-1.5 py-0.5 text-[8px] font-bold text-success">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-1.5 py-0.5 text-xs font-bold text-success">
                           <BadgeCheck size={9} /> Official API
                         </span>
                       )}
                       {latest?.method === "public-page" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-1.5 py-0.5 text-[8px] font-bold text-info">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-info/10 px-1.5 py-0.5 text-xs font-bold text-info">
                           <ShieldCheck size={9} /> Identity-verified public page
                         </span>
                       )}
@@ -403,17 +380,18 @@ export default function AudiencePage() {
 
                 <div className="mt-4 flex items-end justify-between gap-3">
                   <div>
-                    <div className="text-[9px] font-bold uppercase tracking-wide text-muted-foreground">
-                      {account.lastStatus !== "ok" && latest ? "Last valid follower reading (not current)" : "Followers"}
+                    <div className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                      {!current && latest ? "Last valid count" : account.platform === "youtube" ? "Subscribers" : "Followers"}
                     </div>
                     <div className="mt-0.5 text-3xl font-black tabular-nums tracking-tight text-foreground">
                       {latest?.followers !== null && latest?.followers !== undefined
-                        ? `${latest.metricSemantics === "approximate" ? "~" : ""}${nf.format(latest.followers)}`
+                        ? `${latest.metricSemantics === "approximate" || latest.metricSemantics === "rounded" ? "~" : ""}${nf.format(latest.followers)}`
                         : "—"}
                     </div>
                   </div>
                   <div
-                    className={`flex items-center gap-1 rounded-xl px-2 py-1 text-[9px] font-bold ${
+                    title={previous ? `Change since ${new Date(previous.capturedAt).toLocaleString()}; same provider, profile and metric definition.` : "Two comparable measurements are needed to calculate growth."}
+                    className={`flex items-center gap-1 rounded-xl px-2 py-1 text-xs font-bold ${
                       delta !== null && delta > 0
                         ? "bg-success/10 text-success"
                         : delta !== null && delta < 0
@@ -423,18 +401,16 @@ export default function AudiencePage() {
                   >
                     <DeltaIcon size={11} />
                     {delta === null
-                      ? comparable
-                        ? "No change"
-                        : "No comparable prior"
+                      ? latest?.metricSemantics === "rounded" ? "Rounded count" : "Awaiting comparable history"
                       : `${delta > 0 ? "+" : ""}${nf.format(delta)}`}
                   </div>
                 </div>
 
                 <div className="mt-3 rounded-xl border border-border/35 bg-background/35 p-2">
-                  <Sparkline readings={valid} />
+                  <Sparkline readings={series} />
                 </div>
 
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[9px]">
+                <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                   <div className="rounded-xl bg-secondary/35 p-2">
                     <span className="block text-muted-foreground">Provider</span>
                     <strong className="mt-0.5 block truncate text-foreground">
@@ -454,7 +430,7 @@ export default function AudiencePage() {
                   </div>
                 </div>
 
-                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[9px] text-muted-foreground">
+                <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                   <Gauge size={10} />
                   <span>
                     {latest ? `valid reading ${relTime(latest.capturedAt)}` : "no valid metric yet"}
@@ -463,7 +439,7 @@ export default function AudiencePage() {
                 </div>
 
                 {account.lastStatus && account.lastStatus !== "ok" && (
-                  <div className="mt-2 rounded-xl border border-warning/20 bg-warning/7 p-2 text-[9px] leading-4 text-muted-foreground">
+                  <div className="mt-2 rounded-xl border border-warning/20 bg-warning/7 p-2 text-xs leading-4 text-muted-foreground">
                     Latest refresh was <strong className="text-warning">{account.lastStatus}</strong>.
                     {latest
                       ? " The previous valid metric is preserved above."
@@ -472,7 +448,7 @@ export default function AudiencePage() {
                 )}
 
                 {latest?.evidence && (
-                  <p className="mt-2 text-[8.5px] leading-4 text-muted-foreground/75">
+                  <p className="mt-2 text-xs leading-4 text-muted-foreground/75">
                     Evidence: {latest.evidence}
                     {latest.metricSemantics === "rounded"
                       ? " The platform reports this counter in rounded form, so exact growth deltas are disabled."

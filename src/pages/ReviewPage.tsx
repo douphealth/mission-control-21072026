@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useRef } from "react";
 import {
   RefreshCcw,
   Archive,
@@ -27,12 +27,15 @@ import {
   sortByPriority,
   STALE_DAYS,
   ROT_DAYS,
+  quadrantPlan,
+  quadrantOf,
 } from "@/lib/triage";
 import type { Quadrant } from "@/lib/triage";
 import { useReviewStore } from "@/stores/reviewStore";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import TaskQuickEditor from "@/components/TaskQuickEditor";
 import DayClose from "@/components/DayClose";
+import PageHeader from "@/components/PageHeader";
 
 function daysAgoLabel(iso: string | null) {
   if (!iso) return "never";
@@ -142,120 +145,141 @@ export default function ReviewPage() {
 
   const onOpen = useCallback((t: Task) => setEditingId(t.id), []);
 
-  // Drag & drop / tap-to-move between Eisenhower quadrants.
-  // Dropping rewrites urgency (due date) + importance so the task really moves,
-  // and every other view updates instantly through the live query.
+  const actionLock = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const perform = useCallback(async (action: () => Promise<void>) => {
+    if (actionLock.current) return;
+    actionLock.current = true;
+    setBusy(true);
+    setActionError("");
+    try {
+      await action();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "The update could not be saved. Please try again.";
+      setActionError(message);
+      toast.error("Not saved", { description: message });
+    } finally {
+      actionLock.current = false;
+      setBusy(false);
+    }
+  }, []);
   const moveToQuadrant = useCallback(
-    async (taskId: string, quad: Quadrant) => {
-      const t = tasks.find((x) => x.id === taskId);
-      if (!t) return;
-      const plan: Record<Quadrant, Partial<Task>> = {
-        do: {
-          important: true,
-          dueDate: today,
-          priority: t.priority === "low" ? "high" : t.priority,
-        },
-        schedule: { important: true, dueDate: addDaysISO(7, today) },
-        delegate: { important: false, dueDate: today },
-        later: { important: false, dueDate: addDaysISO(21, today) },
-      } as any;
-      await updateItem<Task>("tasks", taskId, { ...plan[quad], touchedAt: today } as Partial<Task>);
-      toast.success(`Moved to “${QUADRANTS.find((qd) => qd.id === quad)?.label}”`);
-    },
-    [tasks, updateItem, today],
+    (taskId: string, quad: Quadrant) =>
+      perform(async () => {
+        const task = tasks.find((item) => item.id === taskId);
+        if (!task) throw new Error("This task no longer exists. Refresh Review.");
+        const changes = quadrantPlan(task, quad, today);
+        await updateItem<Task>("tasks", taskId, changes);
+        if (quadrantOf({ ...task, ...changes }, today) !== quad)
+          toast.info("Plan saved; the deadline still needs attention", {
+            description:
+              "The real deadline was preserved, so this task remains in an urgent quadrant.",
+          });
+        else
+          toast.success(`Moved to ${QUADRANTS.find((item) => item.id === quad)?.label}`, {
+            description: "Work plan updated; the deadline is unchanged.",
+          });
+      }),
+    [tasks, today, updateItem, perform],
   );
-
   const onDone = useCallback(
-    async (t: Task) => {
-      await updateItem<Task>("tasks", t.id, {
-        status: "done",
-        completedAt: new Date().toISOString(),
-      });
-      toast.success("Closed ✓");
-    },
-    [updateItem],
+    (task: Task) =>
+      perform(async () => {
+        await updateItem<Task>("tasks", task.id, {
+          status: "done",
+          completedAt: new Date().toISOString(),
+        });
+        toast.success("Task completed");
+      }),
+    [updateItem, perform],
   );
-
   const onToday = useCallback(
-    async (t: Task) => {
-      await updateItem<Task>("tasks", t.id, {
-        status: "in-progress",
-        committedOn: today,
-        scheduledAt: today,
-        notBefore: undefined,
-        touchedAt: today,
-      });
-      toast.success("Committed to today — deadline unchanged");
-    },
-    [updateItem, today],
+    (task: Task) =>
+      perform(async () => {
+        await updateItem<Task>("tasks", task.id, {
+          status: "in-progress",
+          committedOn: today,
+          scheduledAt: today,
+          notBefore: undefined,
+          touchedAt: today,
+        });
+        toast.success("Planned for today — deadline unchanged");
+      }),
+    [updateItem, today, perform],
   );
-
   const onPush = useCallback(
-    async (t: Task, d: number) => {
-      const planned = addDaysISO(d, today);
-      await updateItem<Task>("tasks", t.id, {
-        notBefore: planned,
-        scheduledAt: planned,
-        reviewAt: planned,
-        committedOn: undefined,
-        touchedAt: today,
-      });
-      toast.success(`Planned +${d}d — deadline unchanged`);
-    },
-    [updateItem, today],
+    (task: Task, days: number) =>
+      perform(async () => {
+        const planned = addDaysISO(days, today);
+        await updateItem<Task>("tasks", task.id, {
+          notBefore: planned,
+          scheduledAt: planned,
+          reviewAt: planned,
+          committedOn: undefined,
+          touchedAt: today,
+        });
+        toast.success(`Planned for ${planned} — deadline unchanged`);
+      }),
+    [updateItem, today, perform],
   );
-
   const onArchive = useCallback(
-    async (t: Task) => {
-      await updateItem<Task>("tasks", t.id, { archived: true, archivedAt: today });
-      toast.success("Archived — out of the active list");
-    },
-    [updateItem, today],
+    (task: Task) =>
+      perform(async () => {
+        await updateItem<Task>("tasks", task.id, { archived: true, archivedAt: today });
+        toast.success("Archived — restore it from the archive below");
+      }),
+    [updateItem, today, perform],
   );
-
   const onRestore = useCallback(
-    async (t: Task) => {
-      await updateItem<Task>("tasks", t.id, {
-        archived: false,
-        archivedAt: undefined,
-        scheduledAt: today,
-        reviewAt: today,
-        touchedAt: today,
-      });
-      toast.success("Restored and planned for today — deadline unchanged");
-    },
-    [updateItem, today],
+    (task: Task) =>
+      perform(async () => {
+        await updateItem<Task>("tasks", task.id, {
+          archived: false,
+          archivedAt: undefined,
+          scheduledAt: today,
+          reviewAt: today,
+          touchedAt: today,
+        });
+        toast.success("Restored — deadline unchanged");
+      }),
+    [updateItem, today, perform],
   );
-
-  const onDelete = useCallback((t: Task) => softDeleteTasks([t.id]), []);
-
+  const onDelete = useCallback(
+    (task: Task) =>
+      perform(async () => {
+        await softDeleteTasks([task.id]);
+      }),
+    [perform],
+  );
   const onPurge = useCallback(
-    (t: Task) => {
+    (task: Task) =>
       cd.confirm({
         title: "Delete forever",
-        description: `"${t.title}" will be permanently removed. This cannot be undone.`,
-        onConfirm: async () => {
-          await purgeTasks([t.id]);
-          toast.success("Permanently deleted");
-        },
-      });
-    },
-    [cd],
+        description: `“${task.title}” will be permanently removed.`,
+        onConfirm: () =>
+          void perform(async () => {
+            await purgeTasks([task.id]);
+            toast.success("Permanently deleted");
+          }),
+      }),
+    [cd, perform],
   );
-
   const purgeAllRotten = useCallback(() => {
     if (!q.rotten.length) return;
     cd.confirm({
-      title: `Archive ${q.rotten.length} rotting task(s)`,
-      description: `Everything overdue by ${ROT_DAYS}+ days gets archived. Nothing is deleted — you can restore any of it below.`,
-      onConfirm: async () => {
-        for (const t of q.rotten) {
-          await updateItem<Task>("tasks", t.id, { archived: true, archivedAt: today });
-        }
-        toast.success(`Archived ${q.rotten.length} — graveyard cleared`);
-      },
+      title: `Archive ${q.rotten.length} long-overdue tasks?`,
+      description: `Tasks overdue by ${ROT_DAYS}+ days will leave the active list. They remain available in the archive.`,
+      confirmLabel: "Archive tasks",
+      onConfirm: () =>
+        void perform(async () => {
+          for (const task of q.rotten)
+            await updateItem<Task>("tasks", task.id, { archived: true, archivedAt: today });
+          toast.success(`${q.rotten.length} tasks archived`);
+        }),
     });
-  }, [q.rotten, cd, updateItem, today]);
+  }, [q.rotten, cd, updateItem, today, perform]);
 
   const finishWeekly = useCallback(() => {
     markWeeklyReview(today);
@@ -286,23 +310,31 @@ export default function ReviewPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold text-foreground sm:text-2xl">
-            <RefreshCcw size={20} className="text-primary" /> Review
-          </h1>
-          <p className="mt-0.5 text-xs text-muted-foreground sm:text-sm">
-            {q.openCount} open · {q.overdue.length} overdue · {q.stale.length} stale · last review{" "}
-            {daysAgoLabel(lastWeeklyReview)}
-          </p>
-        </div>
-        <button
-          onClick={finishWeekly}
-          className="flex items-center gap-1.5 rounded-xl bg-primary px-3 py-2.5 text-sm font-semibold text-primary-foreground shadow-lg shadow-primary/20 transition hover:opacity-90"
+      <PageHeader
+        icon={RefreshCcw}
+        eyebrow="Operate / Weekly decisions"
+        title="Review"
+        subtitle={`Decide what matters, protect real deadlines, and make room for the work ahead. Last review on this device: ${daysAgoLabel(lastWeeklyReview)}.`}
+        stats={[
+          { label: "Open tasks", value: q.openCount },
+          { label: "Overdue", value: q.overdue.length, tone: "amber" },
+          { label: "Need review", value: q.stale.length + q.rotten.length },
+        ]}
+        actions={
+          <button disabled={busy} onClick={finishWeekly} className="btn-primary min-h-11 text-sm">
+            <CheckCircle2 size={16} />
+            Mark review done
+          </button>
+        }
+      />
+      {actionError && (
+        <p
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
         >
-          <CheckCircle2 size={15} /> Mark review done
-        </button>
-      </div>
+          {actionError}
+        </p>
+      )}
 
       {reviewDue && (
         <div className="flex items-start gap-3 rounded-2xl border border-amber-500/20 bg-amber-500/5 p-4">
@@ -312,8 +344,8 @@ export default function ReviewPage() {
               Weekly review is due
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Work top to bottom: clear the graveyard, decide on stale items, then plan tomorrow. It
-              takes 10 minutes and it is the only thing that stops the backlog rotting.
+              Start with overdue commitments, decide which untouched tasks still matter, then choose
+              the next work to schedule.
             </p>
           </div>
         </div>
@@ -324,10 +356,10 @@ export default function ReviewPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="flex items-center gap-2 text-sm font-bold text-foreground">
-              <Trash2 size={15} className="text-red-500" /> Graveyard · {ROT_DAYS}d+ overdue
+              <Trash2 size={15} className="text-red-500" /> Long-overdue commitments · {ROT_DAYS}d+
             </h2>
             <p className="text-[11px] text-muted-foreground">
-              {q.rotten.length} task(s) that are not happening as written.
+              {q.rotten.length} task(s) with a real deadline that needs a fresh decision.
             </p>
           </div>
           {q.rotten.length > 0 && (
@@ -354,7 +386,9 @@ export default function ReviewPage() {
             />
           ))}
           {!q.rotten.length && (
-            <p className="py-4 text-center text-xs text-muted-foreground">Nothing rotting. ✅</p>
+            <p className="py-4 text-center text-xs text-muted-foreground">
+              No tasks are more than 30 days overdue.
+            </p>
           )}
         </div>
       </section>
@@ -366,7 +400,8 @@ export default function ReviewPage() {
             <Sparkles size={15} className="text-amber-500" /> Decide · untouched {STALE_DAYS}d+
           </h2>
           <p className="text-[11px] text-muted-foreground">
-            {q.stale.length} task(s) waiting on a decision, not on time.
+            {q.stale.length} task(s) have not been updated recently. Check whether the next action
+            is still useful.
           </p>
         </div>
         <div className="space-y-2">
@@ -399,8 +434,8 @@ export default function ReviewPage() {
               <Target size={15} className="text-primary" /> Priority matrix
             </h2>
             <p className="text-[11px] text-muted-foreground">
-              Drag on desktop, use Move on touch devices, or tap any task to fully edit it. Every
-              change is live everywhere.
+              Move tasks to change importance and planned work. Real deadlines stay unchanged; an
+              approaching or missed deadline remains urgent.
             </p>
           </div>
           <label className="relative block sm:w-64">
@@ -411,6 +446,7 @@ export default function ReviewPage() {
             <input
               value={matrixSearch}
               onChange={(e) => setMatrixSearch(e.target.value)}
+              aria-label="Search review tasks"
               placeholder="Find a task in Review…"
               className="w-full rounded-xl border border-border/40 bg-secondary/40 py-2 pl-8 pr-3 text-xs text-foreground outline-none focus:border-primary/50"
             />
@@ -459,7 +495,8 @@ export default function ReviewPage() {
                     </button>
                     {/* Mobile-friendly move menu (no drag needed) */}
                     <select
-                      aria-label="Move task"
+                      aria-label={`Move ${t.title}`}
+                      disabled={busy}
                       value={quad.id}
                       onChange={(e) => void moveToQuadrant(t.id, e.target.value as Quadrant)}
                       className="max-w-[104px] rounded-lg bg-secondary/70 px-1 py-1 text-[10px] font-semibold text-muted-foreground outline-none"
@@ -480,7 +517,9 @@ export default function ReviewPage() {
                   </div>
                 ))}
                 {!visibleMatrix[quad.id].length && (
-                  <p className="py-4 text-center text-[11px] opacity-60">Drop a task here</p>
+                  <p className="py-4 text-center text-[11px] opacity-60">
+                    No tasks in this quadrant
+                  </p>
                 )}
               </div>
             </div>
@@ -585,7 +624,12 @@ export default function ReviewPage() {
                   </span>
                 </span>
                 <button
-                  onClick={() => restoreTasks([t.id])}
+                  onClick={() =>
+                    void perform(async () => {
+                      await restoreTasks([t.id]);
+                      toast.success("Task restored");
+                    })
+                  }
                   className="flex items-center gap-1 rounded-xl bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-foreground transition hover:bg-secondary/70"
                 >
                   <Undo2 size={12} /> Restore

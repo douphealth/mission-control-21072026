@@ -139,6 +139,7 @@ describe("control-center intelligence evidence", () => {
         status: "ok",
         followers: 1200,
         method: "official-api",
+        identityVerified: true,
       }),
     ).toBe(true);
   });

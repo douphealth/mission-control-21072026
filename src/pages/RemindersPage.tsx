@@ -1,205 +1,449 @@
-import { useMemo, useState } from "react";
-import { Plus, Check, Trash2, Clock, Bell } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Check, Trash2, Clock, Bell, Edit2, RotateCcw, Search, Repeat2 } from "lucide-react";
 import { toast } from "sonner";
-import { useReminders, genId } from "@/hooks/useTableData";
-import { db, type Reminder } from "@/lib/db";
-import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
-import { CCHeader, EmptyState, Panel, relTime } from "@/components/controlcenter/ui";
+import { useReminders, useAddItem, useUpdateItem, useDeleteItem } from "@/hooks/useTableData";
+import type { Reminder } from "@/lib/db";
+import {
+  localReminderInput,
+  nextReminderOccurrence,
+  parseReminderInput,
+  reminderGroups,
+  type ScheduledReminder,
+} from "@/lib/reminderSchedule";
+import PageHeader from "@/components/PageHeader";
+import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 
-const RECURRENCES: NonNullable<Reminder["recurrence"]>[] = ["none", "daily", "weekly", "monthly"];
-
-function nextOccurrence(iso: string, recurrence: Reminder["recurrence"]): string {
-  const d = new Date(iso);
-  if (recurrence === "daily") d.setDate(d.getDate() + 1);
-  else if (recurrence === "weekly") d.setDate(d.getDate() + 7);
-  else if (recurrence === "monthly") d.setMonth(d.getMonth() + 1);
-  return d.toISOString();
-}
-
-function toLocalInput(iso: string) {
-  const d = new Date(iso);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
+const button =
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border px-3 py-2 text-sm font-medium transition hover:bg-secondary disabled:opacity-50";
+const input = "min-h-11 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm";
+const emptyDraft = () => ({
+  title: "",
+  notes: "",
+  when: localReminderInput(new Date(Date.now() + 3_600_000).toISOString()),
+  recurrence: "none" as NonNullable<Reminder["recurrence"]>,
+});
 
 export default function RemindersPage() {
   const reminders = useReminders();
-  const [title, setTitle] = useState("");
-  const [when, setWhen] = useState(() =>
-    toLocalInput(new Date(Date.now() + 3_600_000).toISOString()),
+  const addItem = useAddItem();
+  const updateItem = useUpdateItem();
+  const deleteItem = useDeleteItem();
+  const cd = useConfirmDialog();
+  const [draft, setDraft] = useState(emptyDraft);
+  const [editor, setEditor] = useState<"new" | Reminder | null>(null);
+  const [query, setQuery] = useState("");
+  const [view, setView] = useState<"active" | "done" | "all">("active");
+  const [now, setNow] = useState(Date.now);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const lock = useRef(false);
+
+  useEffect(() => {
+    const tick = () => setNow(Date.now());
+    const timer = window.setInterval(tick, 30_000);
+    window.addEventListener("focus", tick);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", tick);
+    };
+  }, []);
+
+  const all = useMemo(() => reminderGroups(reminders, now), [reminders, now]);
+  const matching = useMemo(
+    () =>
+      reminders.filter((row) =>
+        `${row.title} ${row.notes || ""}`
+          .toLocaleLowerCase()
+          .includes(query.trim().toLocaleLowerCase()),
+      ),
+    [reminders, query],
   );
-  const [recurrence, setRecurrence] = useState<NonNullable<Reminder["recurrence"]>>("none");
+  const groups = useMemo(() => reminderGroups(matching, now), [matching, now]);
 
-  const { due, upcoming, done } = useMemo(() => {
-    const now = Date.now();
-    const pending = reminders
-      .filter((r) => r.status !== "done")
-      .sort((a, b) => a.remindAt.localeCompare(b.remindAt));
-    return {
-      due: pending.filter((r) => new Date(r.remindAt).getTime() <= now),
-      upcoming: pending.filter((r) => new Date(r.remindAt).getTime() > now),
-      done: reminders
-        .filter((r) => r.status === "done")
-        .sort((a, b) => b.remindAt.localeCompare(a.remindAt))
-        .slice(0, 20),
-    };
-  }, [reminders]);
+  async function run(action: () => Promise<void>) {
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await action();
+    } catch (failure) {
+      const message =
+        failure instanceof Error ? failure.message : "The reminder could not be saved. Try again.";
+      setError(message);
+      toast.error("Not saved", { description: message });
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
 
-  const add = async () => {
-    const clean = title.trim();
-    if (!clean || !when) return;
-    const record: Reminder = {
-      id: genId(),
-      title: clean,
-      remindAt: new Date(when).toISOString(),
-      recurrence,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    };
-    await db.reminders.put(record);
-    markCloudRecordDirty("reminders", record.id);
-    queueCloudPush();
-    setTitle("");
-    toast.success("Reminder set");
-  };
+  function edit(row?: Reminder) {
+    setError("");
+    setDraft(
+      row
+        ? {
+            title: row.title,
+            notes: row.notes || "",
+            when: localReminderInput(row.remindAt),
+            recurrence: row.recurrence || "none",
+          }
+        : emptyDraft(),
+    );
+    setEditor(row || "new");
+  }
 
-  const complete = async (r: Reminder) => {
-    if (r.recurrence && r.recurrence !== "none") {
-      await db.reminders.update(r.id, {
-        remindAt: nextOccurrence(r.remindAt, r.recurrence),
+  function save() {
+    void run(async () => {
+      if (!draft.title.trim()) throw new Error("Enter what you want to be reminded about.");
+      const remindAt = parseReminderInput(draft.when);
+      const values = {
+        title: draft.title.trim(),
+        notes: draft.notes.trim(),
+        remindAt,
+        recurrence: draft.recurrence,
+        recurrenceAnchorAt: remindAt,
+      };
+      if (editor && editor !== "new") {
+        const unchangedSchedule =
+          editor.remindAt === remindAt && editor.recurrence === draft.recurrence;
+        await updateItem<ScheduledReminder>("reminders", editor.id, {
+          ...values,
+          recurrenceAnchorAt: unchangedSchedule
+            ? (editor as ScheduledReminder).recurrenceAnchorAt || remindAt
+            : remindAt,
+        });
+      } else {
+        await addItem<ScheduledReminder>("reminders", {
+          ...values,
+          status: "pending",
+          createdAt: new Date().toISOString(),
+        });
+      }
+      setEditor(null);
+      toast.success("Reminder saved");
+    });
+  }
+
+  function complete(row: Reminder) {
+    void run(async () => {
+      if (row.status === "done") {
+        await updateItem<Reminder>("reminders", row.id, { status: "pending" });
+        toast.success("Reminder reopened");
+      } else if (row.recurrence && row.recurrence !== "none") {
+        const remindAt = nextReminderOccurrence(row, new Date());
+        await updateItem<ScheduledReminder>("reminders", row.id, {
+          remindAt,
+          recurrenceAnchorAt: (row as ScheduledReminder).recurrenceAnchorAt || row.remindAt,
+          status: "pending",
+        });
+        toast.success("Occurrence completed", {
+          description: `Next reminder: ${new Date(remindAt).toLocaleString()}`,
+        });
+      } else {
+        await updateItem<Reminder>("reminders", row.id, { status: "done" });
+        toast.success("Reminder completed");
+      }
+    });
+  }
+
+  function snooze(row: Reminder) {
+    void run(async () => {
+      await updateItem<ScheduledReminder>("reminders", row.id, {
+        remindAt: new Date(Date.now() + 3_600_000).toISOString(),
+        recurrenceAnchorAt: (row as ScheduledReminder).recurrenceAnchorAt || row.remindAt,
         status: "pending",
       });
-      toast.success("Rescheduled", { description: "Recurring reminder moved to its next slot." });
-    } else {
-      await db.reminders.update(r.id, { status: "done" });
-    }
-    markCloudRecordDirty("reminders", r.id);
-    queueCloudPush();
-  };
+      toast.success("Reminder moved one hour from now");
+    });
+  }
 
-  const remove = async (id: string) => {
-    await db.reminders.delete(id);
-    markCloudRecordDirty("reminders", id, "delete");
-    queueCloudPush();
-  };
+  function remove(row: Reminder) {
+    cd.confirm({
+      title: "Delete reminder?",
+      description: `Remove “${row.title}” from your reminders.`,
+      onConfirm: () =>
+        void run(async () => {
+          await deleteItem("reminders", row.id);
+          toast.success("Reminder deleted");
+        }),
+    });
+  }
 
-  const Row = ({ r, overdue }: { r: Reminder; overdue?: boolean }) => (
-    <div
-      className={`flex items-center gap-3 rounded-xl border p-3 ${
-        overdue ? "border-rose-500/40 bg-rose-500/5" : "border-border/50 bg-background/40"
-      }`}
-    >
-      <button
-        onClick={() => complete(r)}
-        className="shrink-0 w-7 h-7 rounded-lg border border-border flex items-center justify-center hover:bg-emerald-500/15 hover:border-emerald-500/40 text-muted-foreground hover:text-emerald-500"
-        aria-label="Complete reminder"
+  function row(reminder: Reminder, due = false) {
+    const valid = Number.isFinite(Date.parse(reminder.remindAt));
+    return (
+      <article
+        key={reminder.id}
+        className={`flex flex-col gap-3 rounded-2xl border bg-card p-4 sm:flex-row sm:items-start ${due ? "border-amber-500/40" : "border-border"}`}
       >
-        <Check size={14} />
-      </button>
-      <div className="min-w-0 flex-1">
-        <p
-          className={`text-sm font-semibold ${r.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${due ? "bg-amber-500/10 text-amber-600" : "bg-secondary text-muted-foreground"}`}
         >
-          {r.title}
-        </p>
-        <p className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-          <Clock size={11} /> {new Date(r.remindAt).toLocaleString()} · {relTime(r.remindAt)}
-          {r.recurrence && r.recurrence !== "none" && (
-            <span className="text-primary">· {r.recurrence}</span>
+          <Bell size={18} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <h3
+            className={`break-words font-semibold ${reminder.status === "done" ? "text-muted-foreground line-through" : "text-foreground"}`}
+          >
+            {reminder.title}
+          </h3>
+          <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <Clock size={12} />
+            {valid ? new Date(reminder.remindAt).toLocaleString() : "Invalid date — edit to repair"}
+            {reminder.recurrence && reminder.recurrence !== "none" && (
+              <span className="inline-flex items-center gap-1 capitalize">
+                <Repeat2 size={12} />
+                {reminder.recurrence}
+              </span>
+            )}
+          </p>
+          {reminder.notes && (
+            <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-relaxed text-muted-foreground">
+              {reminder.notes}
+            </p>
           )}
-        </p>
-      </div>
-      <button
-        onClick={() => remove(r.id)}
-        className="p-1.5 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-        aria-label="Delete reminder"
-      >
-        <Trash2 size={14} />
-      </button>
-    </div>
-  );
-
-  return (
-    <div className="space-y-6">
-      <CCHeader
-        title="Reminders"
-        subtitle="Time-based nudges that live alongside your tasks — one-off or recurring."
-      />
-
-      <Panel>
-        <div className="grid gap-2 sm:grid-cols-[1.6fr_auto_auto_auto]">
-          <input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-            placeholder="Remind me to…"
-            className="px-3 py-2 rounded-xl bg-background border border-border text-sm"
-          />
-          <input
-            type="datetime-local"
-            value={when}
-            onChange={(e) => setWhen(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-background border border-border text-sm"
-          />
-          <select
-            value={recurrence}
-            onChange={(e) => setRecurrence(e.target.value as any)}
-            className="px-3 py-2 rounded-xl bg-background border border-border text-sm capitalize"
-          >
-            {RECURRENCES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
+        </div>
+        <div className="flex flex-wrap gap-2 sm:justify-end">
           <button
-            onClick={add}
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-primary text-primary-foreground"
+            disabled={busy || (!valid && reminder.status !== "done")}
+            onClick={() => complete(reminder)}
+            className={`${button} text-primary`}
           >
-            <Plus size={14} /> Add
+            {reminder.status === "done" ? <RotateCcw size={15} /> : <Check size={15} />}
+            {reminder.status === "done" ? "Reopen" : "Complete"}
+          </button>
+          {reminder.status !== "done" && (
+            <button disabled={busy} className={button} onClick={() => snooze(reminder)}>
+              <Clock size={15} />
+              +1 hour
+            </button>
+          )}
+          <button
+            disabled={busy}
+            className={button}
+            aria-label={`Edit ${reminder.title}`}
+            onClick={() => edit(reminder)}
+          >
+            <Edit2 size={15} />
+          </button>
+          <button
+            disabled={busy}
+            className={`${button} text-muted-foreground hover:text-destructive`}
+            aria-label={`Delete ${reminder.title}`}
+            onClick={() => remove(reminder)}
+          >
+            <Trash2 size={15} />
           </button>
         </div>
-      </Panel>
+      </article>
+    );
+  }
 
-      {due.length > 0 && (
-        <div className="space-y-2.5">
-          <p className="text-[11px] uppercase tracking-wide font-semibold text-rose-500 flex items-center gap-1.5">
-            <Bell size={12} /> Due now ({due.length})
-          </p>
-          {due.map((r) => (
-            <Row key={r.id} r={r} overdue />
+  const sections = [
+    ...(view !== "done"
+      ? [
+          { title: "Needs a valid date", items: groups.invalid, due: true },
+          { title: "Due now", items: groups.due, due: true },
+          { title: "Upcoming", items: groups.upcoming, due: false },
+        ]
+      : []),
+    ...(view !== "active" ? [{ title: "Completed", items: groups.done, due: false }] : []),
+  ];
+
+  return (
+    <div className="space-y-5">
+      <PageHeader
+        icon={Bell}
+        eyebrow="Operate / Time commitments"
+        title="Reminders"
+        subtitle="Keep time-sensitive follow-ups in view. Complete, snooze or reschedule without losing the context."
+        stats={[
+          { label: "Due now", value: all.due.length, tone: "amber" },
+          { label: "Upcoming", value: all.upcoming.length },
+          { label: "Completed", value: all.done.length },
+        ]}
+        actions={
+          <button className={`${button} bg-primary text-primary-foreground`} onClick={() => edit()}>
+            <Plus size={16} />
+            New reminder
+          </button>
+        }
+      />
+      <section className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:flex-row sm:items-center">
+        <label className="flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-border px-3">
+          <Search size={16} className="text-muted-foreground" />
+          <input
+            aria-label="Search reminders"
+            placeholder="Search reminders and notes"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+          />
+        </label>
+        <div className="flex flex-wrap gap-1">
+          {(["active", "done", "all"] as const).map((value) => (
+            <button
+              key={value}
+              aria-pressed={view === value}
+              onClick={() => setView(value)}
+              className={`${button} ${view === value ? "bg-primary/10 text-primary border-primary/30" : ""}`}
+            >
+              {value === "active" ? "Active" : value === "done" ? "Completed" : "All"}
+            </button>
           ))}
         </div>
+      </section>
+      {error && !editor && (
+        <p
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          {error}
+        </p>
       )}
-
-      {upcoming.length > 0 && (
-        <div className="space-y-2.5">
-          <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
-            Upcoming ({upcoming.length})
+      {sections.map(
+        (section) =>
+          section.items.length > 0 && (
+            <section key={section.title} className="space-y-3">
+              <h2 className="text-sm font-semibold">
+                {section.title}
+                <span className="ml-2 text-muted-foreground">{section.items.length}</span>
+              </h2>
+              {section.items.map((item) => row(item, section.due))}
+            </section>
+          ),
+      )}
+      {sections.every((section) => !section.items.length) && (
+        <section className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+          <Bell size={28} className="mx-auto text-primary" />
+          <h2 className="mt-3 text-lg font-semibold">
+            {query
+              ? "No matching reminders"
+              : view === "done"
+                ? "No completed reminders"
+                : "Your time commitments, together"}
+          </h2>
+          <p className="mx-auto mt-2 max-w-lg text-sm text-muted-foreground">
+            {query
+              ? "Try another search or show all reminders."
+              : "Add a follow-up, renewal or recurring check. Each item keeps its original note and next due time."}
           </p>
-          {upcoming.map((r) => (
-            <Row key={r.id} r={r} />
-          ))}
-        </div>
+          {!query && view !== "done" && (
+            <button className={`${button} mt-4`} onClick={() => edit()}>
+              <Plus size={15} />
+              Add a reminder
+            </button>
+          )}
+        </section>
       )}
-
-      {due.length === 0 && upcoming.length === 0 && (
-        <EmptyState
-          title="Nothing scheduled"
-          hint="Add a reminder above — it syncs to the cloud with the rest of your data."
-        />
-      )}
-
-      {done.length > 0 && (
-        <div className="space-y-2.5">
-          <p className="text-[11px] uppercase tracking-wide font-semibold text-muted-foreground">
-            Completed
-          </p>
-          {done.map((r) => (
-            <Row key={r.id} r={r} />
-          ))}
-        </div>
-      )}
+      <p className="text-xs leading-relaxed text-muted-foreground">
+        Times use this device’s local timezone. This list updates while Mission Control is open; it
+        does not guarantee an email or a push notification when the app is closed.
+      </p>
+      <Dialog
+        open={editor !== null}
+        onOpenChange={(open) => {
+          if (!open && !lock.current) setEditor(null);
+        }}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto rounded-2xl sm:max-w-xl">
+          <DialogTitle>{editor === "new" ? "New reminder" : "Edit reminder"}</DialogTitle>
+          <DialogDescription>
+            Set the time in your local timezone. Recurring items advance to their next future
+            occurrence when completed.
+          </DialogDescription>
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              save();
+            }}
+          >
+            <label className="block space-y-1.5 text-sm font-medium">
+              Reminder
+              <input
+                autoFocus
+                required
+                disabled={busy}
+                className={input}
+                value={draft.title}
+                onChange={(event) => setDraft({ ...draft, title: event.target.value })}
+                placeholder="What needs your attention?"
+              />
+            </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block space-y-1.5 text-sm font-medium">
+                Date and time
+                <input
+                  type="datetime-local"
+                  required
+                  disabled={busy}
+                  className={input}
+                  value={draft.when}
+                  onChange={(event) => setDraft({ ...draft, when: event.target.value })}
+                />
+              </label>
+              <label className="block space-y-1.5 text-sm font-medium">
+                Repeat
+                <select
+                  disabled={busy}
+                  className={input}
+                  value={draft.recurrence}
+                  onChange={(event) =>
+                    setDraft({
+                      ...draft,
+                      recurrence: event.target.value as typeof draft.recurrence,
+                    })
+                  }
+                >
+                  {["none", "daily", "weekly", "monthly"].map((value) => (
+                    <option key={value} value={value}>
+                      {value === "none"
+                        ? "Does not repeat"
+                        : value[0].toUpperCase() + value.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <label className="block space-y-1.5 text-sm font-medium">
+              Notes
+              <textarea
+                disabled={busy}
+                className={`${input} min-h-24`}
+                value={draft.notes}
+                onChange={(event) => setDraft({ ...draft, notes: event.target.value })}
+                placeholder="Add the details you will need later"
+              />
+            </label>
+            {error && (
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2 border-t border-border pt-4">
+              <button
+                type="button"
+                disabled={busy}
+                className={button}
+                onClick={() => setEditor(null)}
+              >
+                Cancel
+              </button>
+              <button
+                disabled={busy}
+                type="submit"
+                className={`${button} bg-primary text-primary-foreground`}
+              >
+                {busy ? "Saving…" : "Save reminder"}
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+      <ConfirmDialog {...cd.dialogProps} />
     </div>
   );
 }

@@ -60,214 +60,13 @@ import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_MASTER_LINKS } from "@/lib/repoMasterLinks";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
+import { WORKSPACE_SECTIONS } from "@/lib/workspaceCatalog";
 
-const sections = [
-  { id: "family-schedule", label: "Family Timetable", icon: Calendar, emoji: "", keywords: ["schedule", "routine", "weekly", "yearly", "family", "lessons", "practice"] },
-  { id: "ai-prompts", label: "AI Prompts", icon: FileText, emoji: "\u2728", keywords: ["prompts", "templates", "ai", "library"] },
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    icon: Home,
-    emoji: "🏠",
-    keywords: ["home", "overview", "main"],
-  },
-  {
-    id: "demo",
-    label: "Guided Demo",
-    icon: WandSparkles,
-    emoji: "✨",
-    keywords: ["demo", "guide", "tour", "tutorial", "workflow", "how to use"],
-  },
-  {
-    id: "tasks",
-    label: "Tasks",
-    icon: CheckSquare,
-    emoji: "✅",
-    keywords: ["todo", "checklist", "work"],
-  },
-  {
-    id: "review",
-    label: "Review",
-    icon: RefreshCcw,
-    emoji: "🔄",
-    keywords: ["weekly", "review", "reset", "control"],
-  },
-  {
-    id: "decisions",
-    label: "Findings",
-    icon: Scale,
-    emoji: "⚖️",
-    keywords: ["findings", "decisions", "issues", "recommendations"],
-  },
-  {
-    id: "control-center",
-    label: "Captures",
-    icon: Radar,
-    emoji: "🎯",
-    keywords: ["capture", "inbox", "control", "intake"],
-  },
-  {
-    id: "reminders",
-    label: "Reminders",
-    icon: Bell,
-    emoji: "⏰",
-    keywords: ["remind", "alerts", "recurring"],
-  },
-  {
-    id: "google-tasks",
-    label: "Google Tasks",
-    icon: CheckSquare,
-    emoji: "☑️",
-    keywords: ["google", "tasks", "sync"],
-  },
-  {
-    id: "calendar",
-    label: "Calendar",
-    icon: Calendar,
-    emoji: "📅",
-    keywords: ["date", "schedule", "events"],
-  },
-  {
-    id: "notes",
-    label: "Notes",
-    icon: FileText,
-    emoji: "📝",
-    keywords: ["write", "document", "memo"],
-  },
-  {
-    id: "habits",
-    label: "Habit Tracker",
-    icon: Flame,
-    emoji: "🔥",
-    keywords: ["streak", "daily", "routine"],
-  },
-  {
-    id: "focus",
-    label: "Focus Timer",
-    icon: Timer,
-    emoji: "🍅",
-    keywords: ["pomodoro", "timer", "concentrate"],
-  },
-  {
-    id: "websites",
-    label: "My Websites",
-    icon: Globe,
-    emoji: "🌐",
-    keywords: ["sites", "domains", "hosting"],
-  },
-  {
-    id: "wp-manage",
-    label: "WordPress Management",
-    icon: Zap,
-    emoji: "🟦",
-    keywords: ["wordpress", "plugins", "themes", "security", "site health"],
-  },
-  {
-    id: "apps-funnels",
-    label: "Apps & Funnels",
-    icon: AppWindow,
-    emoji: "🚀",
-    keywords: ["apps", "funnels", "revenue", "products", "tools"],
-  },
-  {
-    id: "github",
-    label: "GitHub Projects",
-    icon: Github,
-    emoji: "🐙",
-    keywords: ["repos", "code", "git"],
-  },
-  {
-    id: "builds",
-    label: "Build Projects",
-    icon: Hammer,
-    emoji: "🛠️",
-    keywords: ["deploy", "bolt", "lovable"],
-  },
-  {
-    id: "links",
-    label: "Links Hub",
-    icon: Link2,
-    emoji: "🔗",
-    keywords: ["bookmarks", "urls", "resources"],
-  },
-  {
-    id: "projects",
-    label: "Kanban Board",
-    icon: BarChart3,
-    emoji: "📊",
-    keywords: ["board", "kanban", "columns"],
-  },
-  {
-    id: "payments",
-    label: "Payments",
-    icon: DollarSign,
-    emoji: "💰",
-    keywords: ["money", "invoice", "billing"],
-  },
-  {
-    id: "ideas",
-    label: "Ideas Board",
-    icon: Lightbulb,
-    emoji: "💡",
-    keywords: ["brainstorm", "concepts", "innovation"],
-  },
-  {
-    id: "credentials",
-    label: "Credential Vault",
-    icon: KeyRound,
-    emoji: "🔐",
-    keywords: ["passwords", "secrets", "keys"],
-  },
-  {
-    id: "seo",
-    label: "SEO Center",
-    icon: TrendingUp,
-    emoji: "🔍",
-    keywords: ["search", "optimization", "ranking"],
-  },
-  {
-    id: "cloudflare",
-    label: "Cloudflare",
-    icon: Globe,
-    emoji: "☁️",
-    keywords: ["cdn", "dns", "protection"],
-  },
-  {
-    id: "vercel",
-    label: "Vercel",
-    icon: Globe,
-    emoji: "🚀",
-    keywords: ["deploy", "hosting", "nextjs"],
-  },
-  {
-    id: "industry",
-    label: "Trends",
-    icon: Newspaper,
-    emoji: "📰",
-    keywords: ["trends", "news", "industry", "feeds"],
-  },
-  {
-    id: "mentions",
-    label: "Mentions",
-    icon: AtSign,
-    emoji: "📣",
-    keywords: ["mentions", "brand", "watch", "monitor"],
-  },
-  {
-    id: "audience",
-    label: "Audience",
-    icon: Users,
-    emoji: "👥",
-    keywords: ["audience", "followers", "social", "growth"],
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    icon: Settings,
-    emoji: "⚙️",
-    keywords: ["preferences", "config", "account"],
-  },
-];
+const sections = WORKSPACE_SECTIONS.map((section) => ({
+  ...section,
+  emoji: "",
+  keywords: [section.group, section.description, ...(section.keywords ?? [])],
+}));
 
 interface CommandItem {
   id: string;
@@ -699,11 +498,22 @@ export default function CommandPalette({ open, onClose, onImport }: CommandPalet
       }),
     );
 
-    prompts.forEach(prompt => items.push({
-      id: `prompt-${prompt.id}`, type: "data", label: prompt.title, sub: "AI Prompts",
-      action: () => { setActiveSection("ai-prompts"); onClose(); }, icon: FileText,
-      emoji: "\u2728", keywords: [...prompt.tags, prompt.category || "", prompt.model || ""], priority: 12,
-    }));
+    prompts.forEach((prompt) =>
+      items.push({
+        id: `prompt-${prompt.id}`,
+        type: "data",
+        label: prompt.title,
+        sub: "AI Prompts",
+        action: () => {
+          setActiveSection("ai-prompts");
+          onClose();
+        },
+        icon: FileText,
+        emoji: "\u2728",
+        keywords: [...prompt.tags, prompt.category || "", prompt.model || ""],
+        priority: 12,
+      }),
+    );
     return items;
   }, [
     query,

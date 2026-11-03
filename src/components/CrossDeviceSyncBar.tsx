@@ -6,7 +6,8 @@ import { useGoogleSyncStatus } from '@/hooks/useGoogleSyncStatus';
 import { getCloudStatus, getCloudError, getCloudUserId, getLastCloudSync, getPendingCloudCount,
   onCloudStatus, onDirtyRecordsChange, signInToCloud, forceCloudSync, repairStaleCloudJournal } from '@/lib/cloudSync';
 import { requestGoogleSync } from '@/lib/googleSync';
-import type { GoogleSyncStatus } from '@/lib/googleSyncState';
+import { getGoogleSyncStatus, type GoogleSyncStatus } from '@/lib/googleSyncState';
+import { googleSyncFailure } from '@/lib/googleSyncOutcome';
 
 function snapshot() { return { status: getCloudStatus(), error: getCloudError(), email: getCloudUserId(), at: getLastCloudSync(), pending: getPendingCloudCount() }; }
 
@@ -54,7 +55,13 @@ export default function CrossDeviceSyncBar() {
           description: `Removed ${repaired} stale queue entr${repaired === 1 ? "y" : "ies"} and resumed cloud synchronization.`,
         });
       }
-    })();
+    })().catch(error => {
+      console.warn('Sync queue repair did not complete:', error);
+      if (!cancelled) toast.error('Sync queue needs attention', {
+        id: 'cloud-journal-repair-error',
+        description: error instanceof Error ? error.message : 'Queue repair could not be confirmed. Your saved records remain available.',
+      });
+    });
     return () => {
       cancelled = true;
     };
@@ -82,6 +89,8 @@ export default function CrossDeviceSyncBar() {
       // as a failure of a successfully verified Drive backup.
       try {
         await requestGoogleSync({ reason: 'manual' });
+        const failure = googleSyncFailure(getGoogleSyncStatus());
+        if (failure) throw new Error(failure);
       } catch (googleError) {
         toast.warning('Google Tasks / Calendar needs attention', {
           description: googleError instanceof Error ? googleError.message : 'See Google Tasks status for details.',
@@ -95,8 +104,20 @@ export default function CrossDeviceSyncBar() {
     setBusy(true);
     try {
       await requestGoogleSync({ reason: 'manual', confirmDeletions: true });
-      toast.success('Deletions applied', { description: 'They are in Trash for 30 days if you change your mind.' });
-    } finally { setBusy(false); }
+      const result = getGoogleSyncStatus();
+      const failure = googleSyncFailure(result, true);
+      if (failure) throw new Error(failure);
+      const deleted = result.lastCounts?.tasksDeleted || 0;
+      toast.success(deleted ? `${deleted} task${deleted === 1 ? '' : 's'} moved to Trash` : 'Google Tasks reviewed', {
+        description: deleted
+          ? 'They are in Trash for 30 days if you change your mind.'
+          : 'No further held deletions were reported. Tasks and Trash show the current state.',
+      });
+    } catch (error) {
+      toast.error('Deletion review could not be confirmed', {
+        description: error instanceof Error ? error.message : 'Check Google Tasks connection and retry.',
+      });
+    } finally { setBusy(false); setSync(snapshot()); }
   };
   const label = sync.status === 'synced' && !sync.pending ? 'Cloud confirmed' : sync.status === 'signed-out' ? 'This device only' : sync.status === 'error' ? 'Sync needs attention' : sync.status === 'offline' ? 'Offline - saved locally' : 'Synchronizing';
   return (
@@ -143,8 +164,8 @@ export default function CrossDeviceSyncBar() {
       {google.heldDeletions > 0 && (
         <p role="alert" className="mc20-sync-error">
           {google.heldDeletions} tasks are missing from Google and were kept here, because that many at once can be a bad response.{' '}
-          <button type="button" className="underline" onClick={() => void applyHeld()}>
-            Move them to Trash
+          <button type="button" className="underline disabled:opacity-50" disabled={busy} onClick={() => void applyHeld()}>
+            {busy ? 'Checking…' : 'Move them to Trash'}
           </button>
         </p>
       )}

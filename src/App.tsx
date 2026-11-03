@@ -5,20 +5,11 @@ import { DashboardProvider } from '@/contexts/DashboardContext';
 import DashboardLayout from '@/layouts/DashboardLayout';
 import React, { useEffect } from 'react';
 import { showFatalError } from '@/lib/fatalError';
+import { installRuntimeErrorHandlers } from '@/lib/runtimeErrorReporting';
+import { toast } from 'sonner';
 import { startNotificationLoop, stopNotificationLoop } from '@/lib/notifications';
 import { startAutoSnapshots, stopAutoSnapshots } from '@/lib/versions';
 
-// Keep errors visible without treating their messages or stacks as executable HTML.
-if (typeof window !== 'undefined') {
-  window.addEventListener('error', event => {
-    console.error('Fatal client error:', event.error ?? event.message);
-    showFatalError(event.message, event.error?.stack);
-  });
-  window.addEventListener('unhandledrejection', event => {
-    console.error('Unhandled promise rejection:', event.reason);
-    showFatalError(event.reason?.message ?? String(event.reason ?? 'Unknown error'), event.reason?.stack);
-  });
-}
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
   static getDerivedStateFromError(error: Error) { return { error }; }
@@ -41,6 +32,14 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { err
 }
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry:false } } });
 function NotificationStarter() {
+  useEffect(() => installRuntimeErrorHandlers(window, {
+    fatal: showFatalError,
+    recoverable: message => toast.error('An operation needs attention', {
+      id: 'workspace-operation-error',
+      description: message.slice(0, 500),
+      duration: 10_000,
+    }),
+  }), []);
   useEffect(() => {
     startNotificationLoop(); startAutoSnapshots();
     return () => { stopNotificationLoop(); stopAutoSnapshots(); };

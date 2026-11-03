@@ -269,13 +269,17 @@ export function isTrustedAudienceReading(reading: {
   followers: number | null;
   method?: string;
   identityVerified?: boolean;
+  provider?: string;
 }): boolean {
   return (
     reading.status === "ok" &&
     typeof reading.followers === "number" &&
     Number.isSafeInteger(reading.followers) &&
     reading.followers >= 0 &&
-    (reading.method === "official-api" ||
-      (reading.method === "public-page" && reading.identityVerified === true))
+    reading.identityVerified === true &&
+    // Older Facebook readings may contain Page likes substituted for followers.
+    // Preserve those records, but require a new followers-only observation to display them.
+    reading.provider !== "Facebook Graph API" &&
+    (reading.method === "official-api" || reading.method === "public-page")
   );
 }

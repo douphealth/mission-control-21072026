@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { useFeedSources, useStreamItems, genId } from "@/hooks/useTableData";
 import { db } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
-import { runIndustryCollector } from "@/lib/controlCenter";
+import { localScore, runIndustryCollector } from "@/lib/controlCenter";
 import { canonicalWebUrl, queryRelevance } from "@/lib/intelligenceQuality";
 import { searchIndustryTopic } from "@/lib/controlCenter.functions";
 import { CCHeader, EmptyState, Panel, StreamRow, relTime } from "@/components/controlcenter/ui";
@@ -43,6 +43,9 @@ export default function IndustryPage() {
   const [topics, setTopics] = useState("");
   const [busy, setBusy] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  const [streamQuery, setStreamQuery] = useState("");
+  const [streamDays, setStreamDays] = useState(0);
+  const [visibleCount, setVisibleCount] = useState(40);
   const [query, setQuery] = useState("");
   const [days, setDays] = useState(7);
   const [searching, setSearching] = useState(false);
@@ -50,6 +53,7 @@ export default function IndustryPage() {
   const [resolvedQuery, setResolvedQuery] = useState("");
   const [lookupStatus, setLookupStatus] = useState("");
   const [cachedResult, setCachedResult] = useState(false);
+  const [providerStatus, setProviderStatus] = useState<Awaited<ReturnType<typeof searchIndustryTopic>>["providers"]>([]);
   const searchLock = useRef(false);
   const [searchStories, setSearchStories] = useState<SearchStory[]>([]);
   const [evidenceFilter, setEvidenceFilter] = useState<"all" | "medium" | "high">("medium");
@@ -63,9 +67,11 @@ export default function IndustryPage() {
             item.kind === "industry" &&
             (showArchived ? item.status === "archived" : item.status === "active"),
         )
-        .sort((a, b) => b.score - a.score || b.publishedAt.localeCompare(a.publishedAt))
-        .slice(0, 120),
-    [items, showArchived],
+        .filter(item => !streamQuery.trim() || `${item.title} ${item.summary || ""} ${item.source}`.toLowerCase().includes(streamQuery.trim().toLowerCase()))
+        .filter(item => !streamDays || (item.dateBasis === "published" && Date.parse(item.publishedAt) >= Date.now() - streamDays * 86_400_000))
+        .map(item => ({ ...item, score: localScore(item, sources.filter(source => source.enabled).flatMap(source => source.topics || [])) }))
+        .sort((a, b) => b.score - a.score || b.publishedAt.localeCompare(a.publishedAt)),
+    [items, showArchived, streamQuery, streamDays, sources],
   );
 
   const enabled = sources.filter((source) => source.enabled);
@@ -85,10 +91,13 @@ export default function IndustryPage() {
     );
     if (!stale) return;
     autoRefreshStarted.current = true;
+    setBusy(true);
     void runIndustryCollector(false).catch(() => {
       // Collector health records the failure; avoid noisy auto-refresh toasts.
-    });
+    }).finally(() => setBusy(false));
   }, [enabled]);
+
+  useEffect(() => { setVisibleCount(40); }, [streamQuery, streamDays, showArchived]);
 
   const addSource = async () => {
     const clean = url.trim();
@@ -96,14 +105,16 @@ export default function IndustryPage() {
     const normalised = /^https?:\/\//i.test(clean) ? clean : `https://${clean}`;
     let host = "";
     try {
-      host = new URL(normalised).hostname.replace(/^www\./, "");
+      const parsed = new URL(normalised);
+      if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password) throw new Error("Use a public HTTP or HTTPS URL.");
+      host = parsed.hostname.replace(/^www\./, "");
     } catch {
       toast.error("That does not look like a valid URL");
       return;
     }
     const duplicate = sources.find((source) => {
       try {
-        return new URL(source.url).hostname.replace(/^www\./, "") === host;
+        return canonicalWebUrl(source.url) === canonicalWebUrl(normalised) || Boolean(source.feedUrl && canonicalWebUrl(source.feedUrl) === canonicalWebUrl(normalised));
       } catch {
         return source.url === normalised;
       }
@@ -161,9 +172,10 @@ export default function IndustryPage() {
     try {
       const response = await searchIndustryTopic({ data: { query: clean, days } });
       const minTime = Date.now() - days * 86_400_000;
-      const trackedMatches: SearchStory[] = stories
+      const trackedMatches: SearchStory[] = items
         .filter(
           (story) =>
+            story.kind === "industry" && story.status === "active" &&
             story.evidenceType === "direct-feed" &&
             story.dateBasis === "published" &&
             new Date(story.publishedAt).getTime() >= minTime,
@@ -201,6 +213,7 @@ export default function IndustryPage() {
       );
 
       setSearchStories(combined);
+      setProviderStatus(response.providers || []);
       setSearchedAt(response.fetchedAt); setResolvedQuery(clean); setCachedResult(response.cached); setLookupStatus(response.error || (response.degraded ? "Some providers failed. Coverage is incomplete; results are from remaining sources." : ""));
 
       const providerSummary = (response.providers ?? [])
@@ -253,7 +266,7 @@ export default function IndustryPage() {
     <div className="space-y-5">
       <CCHeader
         title="Trends Intelligence"
-        subtitle="Search the latest coverage by subject, then use your selected feeds for persistent monitoring. Every result keeps publisher and freshness evidence."
+        subtitle="Research topics that matter to your sites and apps. Compare current coverage, monitor trusted publishers, and turn useful signals into decisions."
         actions={
           <button
             onClick={refresh}
@@ -261,7 +274,7 @@ export default function IndustryPage() {
             className="inline-flex items-center gap-2 rounded-xl gradient-primary px-3.5 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50"
           >
             <RefreshCw size={13} className={busy ? "animate-spin" : ""} />
-            Refresh tracked feeds
+            {busy ? "Checking publishers…" : "Refresh tracked feeds"}
           </button>
         }
       />
@@ -270,22 +283,23 @@ export default function IndustryPage() {
       <section className="cc-intel-search">
         <div className="cc-intel-search-glow" />
         <div className="relative">
-          <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.14em] text-primary">
+          <div className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.14em] text-primary">
             <Sparkles size={12} />
             Live subject search
           </div>
           <h2 className="mt-1 font-display text-xl font-extrabold tracking-tight text-foreground">
             What do you need to know right now?
           </h2>
-          <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted-foreground">
+          <p className="mt-1 max-w-3xl text-xs leading-5 text-muted-foreground">
             Searches multiple current coverage providers for the subject you enter and merges them
             with your tracked publisher feeds. Results are deduplicated, freshness-filtered and
-            ranked by subject relevance, publication freshness, publisher-domain identity and independent-publisher corroboration. Search-engine duplication is never treated as independent evidence.
+            ranked by subject relevance, publication freshness and publisher attribution. Similar coverage across distinct domains is a discovery signal; syndication, ownership and factual claims are not independently verified.
           </p>
           <div className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto_auto]">
             <label className="flex min-h-11 items-center gap-2 rounded-2xl border border-border/50 bg-background/65 px-3">
               <Search size={15} className="text-muted-foreground" />
               <input
+                aria-label="Topic to research"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && void searchLatest()}
@@ -294,6 +308,7 @@ export default function IndustryPage() {
               />
             </label>
             <select
+              aria-label="Search publication window"
               value={days}
               onChange={(event) => setDays(Number(event.target.value))}
               className="rounded-2xl border border-border/50 bg-background/65 px-3 text-xs font-semibold text-foreground"
@@ -311,7 +326,7 @@ export default function IndustryPage() {
               className="btn-primary justify-center disabled:opacity-50"
             >
               <Search size={14} className={searching ? "animate-pulse" : ""} />
-              Search latest
+              {searching ? "Searching providers…" : "Search latest"}
             </button>
           </div>
         </div>
@@ -323,8 +338,13 @@ export default function IndustryPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <div className="text-sm font-extrabold text-foreground">{cachedResult ? "Recent cached search results" : "Search results"}</div>
-              <div className="mt-1 text-[10px] text-muted-foreground">
+              <div className="mt-1 text-xs text-muted-foreground">
                 “{resolvedQuery}” · {searchStories.length} evidence-qualified results · fetched {relTime(searchedAt)}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2" aria-label="Search provider coverage">
+                {providerStatus.filter(provider => provider.configured).map(provider => <span key={provider.provider} title={provider.error} className={`rounded-full border px-2.5 py-1 text-xs ${provider.ok ? "border-success/20 bg-success/5 text-success" : "border-warning/25 bg-warning/5 text-warning"}`}>
+                  {provider.provider === "google-news" ? "Google News" : provider.provider === "bing-news" ? "Bing News" : "DataForSEO"}: {provider.ok ? `${provider.itemCount} retrieved` : "unavailable"}
+                </span>)}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {(["medium", "high", "all"] as const).map((level) => (
@@ -332,22 +352,23 @@ export default function IndustryPage() {
                     key={level}
                     type="button"
                     onClick={() => setEvidenceFilter(level)}
-                    className={`rounded-full border px-2 py-1 text-[8px] font-bold transition ${
+                    aria-pressed={evidenceFilter === level}
+                    className={`rounded-full border px-2 py-1 text-xs font-bold transition ${
                       evidenceFilter === level
                         ? "border-primary/30 bg-primary/10 text-primary"
                         : "border-border/45 bg-background/45 text-muted-foreground"
                     }`}
                   >
                     {level === "medium"
-                      ? "Credible+"
+                      ? "Attributed coverage"
                       : level === "high"
-                        ? "High evidence"
+                        ? "Tracked / multiple domains"
                         : "All evidence"}
                   </button>
                 ))}
               </div>
             </div>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/8 px-2.5 py-1 text-[9px] font-bold text-success">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-success/20 bg-success/8 px-2.5 py-1 text-xs font-bold text-success">
               <ShieldCheck size={11} />
               Relevance + publisher + date evidence
             </span>
@@ -367,7 +388,7 @@ export default function IndustryPage() {
                 .slice(0, 30)
                 .map((story) => {
                 const publishedAt = story.publishedAt || searchedAt;
-                const score = story.relevanceScore ?? queryRelevance(query, story.title, story.summary);
+                const score = story.relevanceScore ?? queryRelevance(resolvedQuery, story.title, story.summary);
                 return (
                   <article key={story.url} className="cc-intel-result">
                     <div className="cc-intel-score" title="Subject relevance score">{score}</div>
@@ -380,14 +401,14 @@ export default function IndustryPage() {
                       >
                         {story.title}
                       </a>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[9px] text-muted-foreground">
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                         <span className="font-bold text-foreground/75">{story.source || "Publisher unavailable"}</span>
                         <span>·</span>
                         <span>{relTime(publishedAt)}</span>
                         {(story.corroborationCount || 0) > 0 && (
                           <>
                             <span>·</span>
-                            <span>{(story.corroborationCount ?? 0) + 1} independent publisher domains</span>
+                            <span>{(story.corroborationCount ?? 0) + 1} publisher domains with similar coverage</span>
                           </>
                         )}
                         {story.evidenceLevel && (
@@ -404,16 +425,16 @@ export default function IndustryPage() {
                               title={story.evidenceReason}
                             >
                               {story.evidenceLevel === "high"
-                                ? "High evidence"
+                                ? "Tracked / multiple domains"
                                 : story.evidenceLevel === "medium"
-                                  ? "Credible"
+                                  ? "Publisher attributed"
                                   : "Limited evidence"}
                             </span>
                           </>
                         )}
                       </div>
                       {story.summary && (
-                        <p className="mt-1 line-clamp-2 text-[10px] leading-4 text-muted-foreground">
+                        <p className="mt-1 line-clamp-2 text-xs leading-4 text-muted-foreground">
                           {story.summary}
                         </p>
                       )}
@@ -443,10 +464,10 @@ export default function IndustryPage() {
       <Panel>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-wide text-muted-foreground">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-muted-foreground">
               Persistent monitored sources
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               {enabled.length} enabled · {sourceErrors.length} errors
               {lastChecked ? ` · last checked ${relTime(lastChecked)}` : ""}
             </p>
@@ -461,6 +482,7 @@ export default function IndustryPage() {
 
         <div className="mt-4 grid gap-2 sm:grid-cols-[1.4fr_1fr_1.2fr_auto]">
           <input
+            aria-label="Publisher website or RSS feed URL"
             value={url}
             onChange={(event) => setUrl(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && void addSource()}
@@ -468,12 +490,14 @@ export default function IndustryPage() {
             className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
           />
           <input
+            aria-label="Publisher label"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="Publisher label"
             className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
           />
           <input
+            aria-label="Monitored topics, comma separated"
             value={topics}
             onChange={(event) => setTopics(event.target.value)}
             placeholder="Topics, comma separated"
@@ -489,7 +513,7 @@ export default function IndustryPage() {
             {sources.map((source) => (
               <span
                 key={source.id}
-                className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-[10px] ${
+                className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-xs ${
                   source.enabled
                     ? "border-border bg-background/60 text-foreground"
                     : "border-border/50 bg-muted/40 text-muted-foreground"
@@ -512,7 +536,8 @@ export default function IndustryPage() {
                     queueCloudPush();
                   }}
                   className="rounded-full p-1 hover:bg-secondary"
-                  aria-label="Toggle source"
+                  aria-label={`${source.enabled ? "Pause" : "Enable"} ${source.name}`}
+                  aria-pressed={source.enabled}
                 >
                   <Power size={11} />
                 </button>
@@ -522,9 +547,12 @@ export default function IndustryPage() {
                     await db.feedSources.delete(source.id);
                     markCloudRecordDirty("feedSources", source.id, "delete");
                     queueCloudPush();
+                    toast("Source removed", { description: source.name, action: { label: "Undo", onClick: async () => {
+                      await db.feedSources.put(source); markCloudRecordDirty("feedSources", source.id); queueCloudPush();
+                    } } });
                   }}
                   className="rounded-full p-1 hover:bg-destructive/15 hover:text-destructive"
-                  aria-label="Remove source"
+                  aria-label={`Remove ${source.name}`}
                 >
                   <Trash2 size={11} />
                 </button>
@@ -538,10 +566,19 @@ export default function IndustryPage() {
         <div className="mb-2 flex items-center justify-between gap-2">
           <div>
             <h2 className="text-sm font-extrabold text-foreground">Tracked intelligence stream</h2>
-            <p className="text-[10px] text-muted-foreground">
-              Ranked by recency, topic relevance and material-impact signals.
+            <p className="text-xs text-muted-foreground">
+              {stories.length} {showArchived ? "archived" : "active"} stories. Priority is recalculated from age, topic relevance and headline signals.
             </p>
           </div>
+        </div>
+        <div className="mb-4 flex flex-wrap gap-2">
+          <label className="flex min-h-11 flex-1 items-center gap-2 rounded-xl border border-border bg-card px-3">
+            <Search size={15} className="text-muted-foreground" />
+            <input aria-label="Filter saved trends" value={streamQuery} onChange={event => setStreamQuery(event.target.value)} placeholder="Find a story or publisher…" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+          </label>
+          <select aria-label="Filter saved publication dates" value={streamDays} onChange={event => setStreamDays(Number(event.target.value))} className="min-h-11 rounded-xl border border-border bg-card px-3 text-sm">
+            <option value={0}>All saved coverage</option><option value={7}>Published in 7 days</option><option value={30}>Published in 30 days</option>
+          </select>
         </div>
         {stories.length === 0 ? (
           <EmptyState
@@ -550,9 +587,10 @@ export default function IndustryPage() {
           />
         ) : (
           <div className="grid gap-2.5">
-            {stories.map((story) => (
+            {stories.slice(0, visibleCount).map((story) => (
               <StreamRow key={story.id} item={story} />
             ))}
+            {stories.length > visibleCount && <button type="button" onClick={() => setVisibleCount(count => count + 40)} className="btn-secondary justify-center min-h-11">Show more · {stories.length - visibleCount} remaining</button>}
           </div>
         )}
       </div>

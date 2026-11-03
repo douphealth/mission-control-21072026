@@ -217,7 +217,7 @@ async function readFacebookOfficial(profile: ReturnType<typeof audienceProfile>)
   const token = env('FACEBOOK_PAGE_ACCESS_TOKEN') || env('META_ACCESS_TOKEN');
   if (!token) return null;
 
-  const fields = 'id,name,username,followers_count,fan_count,link';
+  const fields = 'id,name,username,followers_count,link';
   const params = new URLSearchParams({ fields, access_token: token });
   const result = await get(
     `https://graph.facebook.com/${metaGraphVersion()}/${encodeURIComponent(profile.handle)}?${params}`,
@@ -246,10 +246,10 @@ async function readFacebookOfficial(profile: ReturnType<typeof audienceProfile>)
 
   return observed({
     url: profile.url,
-    provider: 'Facebook Graph API',
-    followers: result.followers_count ?? result.fan_count,
+    provider: 'Facebook Graph API — followers_count',
+    followers: result.followers_count,
     posts: null,
-    evidence: 'Official Facebook Page response; Page identity matched. followers_count is preferred, with fan_count used only when that is the available Page counter.',
+    evidence: 'Official Facebook Page response; Page identity matched. Only the followers_count field is accepted. Page likes are a different measurement and are never substituted.',
     verifiedHandle: result.username || linkHandle || profile.handle,
     providerAccountId: result.id ? String(result.id) : undefined,
   });
@@ -558,11 +558,19 @@ export async function readAudience(platform: string, url: string): Promise<Audie
     if (platform === 'facebook') {
       const official = await readFacebookOfficial(profile);
       if (official) return official;
+      return unavailable(profile.url,
+        'The Facebook Page integration is not configured. This app does not extract Facebook follower counts from public HTML.',
+        'Configure FACEBOOK_PAGE_ACCESS_TOKEN or META_ACCESS_TOKEN with access to this Page, then redeploy and refresh.',
+        'api-not-configured', 'Facebook Graph API — followers_count');
     }
 
     if (platform === 'threads') {
       const official = await readThreadsOfficial(profile);
       if (official) return official;
+      return unavailable(profile.url,
+        'The Threads integration is not configured. This app does not extract Threads follower counts from public HTML.',
+        'Configure THREADS_ACCESS_TOKEN for this exact profile, then redeploy and refresh.',
+        'api-not-configured', 'Threads API');
     }
 
     if (platform === 'tiktok') {
@@ -571,8 +579,18 @@ export async function readAudience(platform: string, url: string): Promise<Audie
     }
 
     if (platform === 'linkedin') {
+      if (new URL(url).pathname.split('/').filter(Boolean)[0] !== 'company') {
+        return unavailable(profile.url,
+          'Personal LinkedIn follower counts are not supported by this integration.',
+          'Track a LinkedIn company URL with authorized Organization API access.',
+          'unsupported-profile', 'LinkedIn Organization API');
+      }
       const official = await readLinkedInOfficial(profile, url);
       if (official) return official;
+      return unavailable(profile.url,
+        'The LinkedIn company integration is not configured. This app does not extract LinkedIn follower counts from public HTML.',
+        'Configure LINKEDIN_ACCESS_TOKEN with Organization API access, then redeploy and refresh.',
+        'api-not-configured', 'LinkedIn Organization API');
     }
 
     // Last-resort public HTML: never promise access to hidden or login-gated metrics.

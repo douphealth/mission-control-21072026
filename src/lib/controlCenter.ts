@@ -10,6 +10,8 @@ import {
   rankStories,
 } from "@/lib/controlCenter.functions";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
+import { buildIntelligenceCapture } from "./intelligenceCapture";
+import { groupWatchTerms, watchIdentityKey } from "./watchTerms";
 import {
   canonicalWebUrl,
   isTrustedAudienceReading,
@@ -61,10 +63,12 @@ function verifyMentionAgainstText(
 }
 
 export function localScore(
-  item: { title: string; summary?: string; publishedAt: string },
+  item: { title: string; summary?: string; publishedAt: string; dateBasis?: string },
   topics: string[] = [],
 ): number {
-  const ageHours = Math.max(0, (Date.now() - new Date(item.publishedAt).getTime()) / 3_600_000);
+  const published = Date.parse(item.publishedAt);
+  const dated = item.dateBasis !== "discovered" && Number.isFinite(published) && published <= Date.now() + 5 * 60_000;
+  const ageHours = dated ? Math.max(0, (Date.now() - published) / 3_600_000) : Infinity;
   const recency = Math.max(0, 45 - ageHours * 0.8);
   const hay = `${item.title} ${item.summary ?? ""}`.toLowerCase();
   const topicHits = topics.filter((t) => t && hay.includes(t.toLowerCase())).length;
@@ -82,10 +86,13 @@ async function persistItems(
 ) {
   if (!incoming.length) return 0;
   const existing = (await db.streamItems.toArray()).filter((item) => item.kind === kind);
-  const seen = new Set(existing.map((i) => `${canonicalUrl(i.url)}${kind === "mention" ? `::${i.sourceId || i.matchedTerm || ""}` : ""}`));
+  const watches = kind === "mention" ? await db.watchTerms.toArray() : [];
+  const identities = new Map(watches.map(watch => [watch.id, watchIdentityKey(watch)]));
+  const mentionIdentity = (item: { sourceId?: string; matchedTerm?: string }) => identities.get(item.sourceId || "") || item.sourceId || item.matchedTerm || "";
+  const seen = new Set(existing.map((i) => `${canonicalUrl(i.url)}${kind === "mention" ? `::${mentionIdentity(i)}` : ""}`));
   const fresh: StreamItem[] = [];
   for (const item of incoming) {
-    const key = `${canonicalUrl(item.url)}${kind === "mention" ? `::${item.sourceId || item.matchedTerm || ""}` : ""}`;
+    const key = `${canonicalUrl(item.url)}${kind === "mention" ? `::${mentionIdentity(item)}` : ""}`;
     if (!item.title || !item.url || seen.has(key)) continue;
     seen.add(key);
     fresh.push({
@@ -195,7 +202,7 @@ async function collectIndustryOnce(useAi: boolean) {
         summary: item.summary,
         publishedAt,
         dateBasis: sourcePublishedAt ? "published" : "discovered",
-        score: localScore({ ...item, publishedAt }, allTopics),
+        score: localScore({ ...item, publishedAt, dateBasis: sourcePublishedAt ? "published" : "discovered" }, allTopics),
         verification: src ? "feed" : "topic-search",
         confidence: src ? "high" : "medium",
         evidenceType: src
@@ -231,7 +238,7 @@ export function runMentionCollector(useAi = false) {
   return mentionFlight;
 }
 async function collectMentionsOnce(_useAi: boolean) {
-  const terms = (await db.watchTerms.toArray()).filter(t => t.enabled);
+  const terms = groupWatchTerms(await db.watchTerms.toArray()).filter(t => t.enabled);
   const errors: string[] = [];
   const results: Awaited<ReturnType<typeof collectMentions>>["results"] = [];
   for (const batch of chunksOf(terms, 3)) {
@@ -248,13 +255,15 @@ async function collectMentionsOnce(_useAi: boolean) {
   const payload: Omit<StreamItem, "id" | "kind" | "status" | "discoveredAt">[] = [];
   for (const result of results) {
     const watch = terms.find(t => t.id === result.termId);
-    await db.watchTerms.update(result.termId, { lastCheckedAt: now,
-      lastSuccessAt: result.checked ? result.fetchedAt : watch?.lastSuccessAt, lastError: result.error || undefined });
-    markCloudRecordDirty("watchTerms", result.termId);
+    for (const id of watch?.memberIds || [result.termId]) {
+      await db.watchTerms.update(id, { lastCheckedAt: now,
+        lastSuccessAt: result.checked ? result.fetchedAt : watch?.lastSuccessAt, lastError: result.error || undefined });
+      markCloudRecordDirty("watchTerms", id);
+    }
     if (result.error) errors.push(`${result.term}: ${result.error}`);
     for (const item of result.items) payload.push({ ...item, source: item.source || "Publisher unavailable",
       sourceId: result.termId, matchedTerm: result.term, publishedAt: item.publishedAt || result.fetchedAt,
-      dateBasis: item.publishedAt ? "published" : "discovered", score: localScore({ ...item, publishedAt: item.publishedAt || result.fetchedAt }),
+      dateBasis: item.publishedAt ? "published" : "discovered", score: localScore({ ...item, publishedAt: item.publishedAt || result.fetchedAt, dateBasis: item.publishedAt ? "published" : "discovered" }),
       evidenceType: item.retrievalProviders?.length > 1 ? "multi-news"
         : item.retrievalProviders?.includes("Google News RSS") ? "google-news"
         : item.retrievalProviders?.includes("DataForSEO web search") ? "dataforseo"
@@ -280,7 +289,7 @@ async function collectMentionsOnce(_useAi: boolean) {
   await writeCollectorHealth("mentions", "Mentions", outcome === "not-configured" ? "not-configured" : outcome === "unavailable" ? "error" : partial || outcome === "partial" ? "stale" : "ok",
     `${checked}/${terms.length} watch terms checked; ${matched} matching results; ${added} newly stored. Identity matching is not fact-checking.`, errors.join(" · ") || undefined);
   queueCloudPush();
-  return { added, errors, checked, failed, matched, total: terms.length, partial, outcome, details: results.map(r => ({ term: r.term, checked: r.checked, matches: r.items.length, candidates: r.candidates, excludedOwned: r.excludedOwned, error: r.error, cached: r.cached, providers: r.providers })) };
+  return { added, errors, checked, failed, matched, total: terms.length, partial, outcome, details: results.map(r => ({ termId: r.termId, term: r.term, checked: r.checked, matches: r.items.length, candidates: r.candidates, excludedOwned: r.excludedOwned, error: r.error, cached: r.cached, providers: r.providers })) };
 }
 
 let audienceFlight: Promise<Awaited<ReturnType<typeof collectAudienceOnce>>> | null = null;
@@ -291,12 +300,10 @@ export function runAudienceCollector() {
 async function collectAudienceOnce() {
   const accounts = await db.audienceAccounts.toArray();
   const readings: Awaited<ReturnType<typeof collectAudience>>["readings"] = [];
-  let capabilities: Awaited<ReturnType<typeof collectAudience>>["capabilities"] | null = null;
   for (const batch of chunksOf(accounts, 3)) {
     try {
     const response = await collectAudience({ data: { accounts: batch.map(a => ({ id: a.id, platform: a.platform, url: a.url })) } });
     readings.push(...response.readings);
-    capabilities = response.capabilities;
     } catch { for (const account of batch) readings.push({ accountId: account.id, followers: null, posts: null, status: "unavailable", method: "none", provider: "Audience service", confidence: "low", evidence: "Audience service did not respond. Previous verified readings are retained.", action: "Retry and inspect provider configuration.", errorCode: "service-unavailable", approximate: false, identityVerified: false, capturedAt: new Date().toISOString(), sourceUrl: account.url, metricSemantics: "unavailable" }); }
   }
   let succeeded = 0;
@@ -322,7 +329,7 @@ async function collectAudienceOnce() {
   await writeCollectorHealth("audience", "Audience", !accounts.length ? "not-configured" : !succeeded ? "error" : unavailable ? "stale" : "ok",
     `${succeeded}/${readings.length} profiles returned a current verified metric.`, unavailable ? details.filter(r => !isTrustedAudienceReading(r)).map(r => `${r.label}: ${r.evidence}`).join(" · ") : undefined);
   queueCloudPush();
-  return { updated: readings.length, succeeded, unavailable, details, capabilities };
+  return { updated: readings.length, succeeded, unavailable, details };
 }
 
 export async function runAllCollectors(useAi = false) {
@@ -358,4 +365,21 @@ export async function restoreStreamItem(id: string) {
   await db.streamItems.update(id, { status: "active" });
   markCloudRecordDirty("streamItems", id);
   queueCloudPush();
+}
+
+export async function captureStreamItem(id: string): Promise<"created" | "exists" | "trash"> {
+  const result = await db.transaction("rw", db.streamItems, db.tasks, async () => {
+    const item = await db.streamItems.get(id);
+    if (!item) throw new Error("This story is no longer saved. Refresh the stream before capturing it.");
+    const task = buildIntelligenceCapture(item);
+    const existing = await db.tasks.get(task.id);
+    if (existing) return { taskId: task.id, outcome: existing.deletedAt ? "trash" as const : "exists" as const };
+    await db.tasks.add(task);
+    return { taskId: task.id, outcome: "created" as const };
+  });
+  if (result.outcome === "created") {
+    markCloudRecordDirty("tasks", result.taskId);
+    queueCloudPush();
+  }
+  return result.outcome;
 }

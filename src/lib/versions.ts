@@ -1,3 +1,4 @@
+import { secureUuid } from "@/lib/recordId";
 // Durable IndexedDB snapshots. Portable exports omit credentials; local safety copies retain them.
 import { db } from './db';
 import { versionDb, prepareVersionStorage, validateSnapshot } from './versionStorage';
@@ -60,7 +61,7 @@ export async function saveVersion(opts: { name?: string; type?: SnapshotMeta['ty
   const type = opts.type ?? 'manual';
   const stamp = new Date().toLocaleString();
   const name = opts.name?.trim() || (type === 'auto' ? `Auto · ${stamp}` : type === 'safety' ? `Safety · before restore · ${stamp}` : `Manual · ${stamp} · ${total} items`);
-  const snapshot: Snapshot = { id: `snap_${crypto.randomUUID()}`, name, type, createdAt: new Date().toISOString(), device: getDeviceLabel(), counts,
+  const snapshot: Snapshot = { id: `snap_${secureUuid()}`, name, type, createdAt: new Date().toISOString(), device: getDeviceLabel(), counts,
     sizeBytes: new Blob([JSON.stringify({ payload, settings })]).size, payload, settings };
   await versionDb.snapshots.add(snapshot);
   if (!await versionDb.snapshots.get(snapshot.id)) throw new Error('The version could not be verified after saving.');
@@ -131,7 +132,7 @@ export async function downloadVersionFile(meta: SnapshotMeta) {
 export async function importVersionFile(file: File): Promise<SnapshotMeta> {
   const snapshot = JSON.parse(await file.text()) as Snapshot;
   validateSnapshot(snapshot);
-  snapshot.id = `snap_imported_${crypto.randomUUID()}`;
+  snapshot.id = `snap_imported_${secureUuid()}`;
   snapshot.createdAt = new Date().toISOString(); snapshot.type = 'manual';
   snapshot.name = snapshot.name ? `Imported · ${snapshot.name}` : `Imported · ${snapshot.createdAt}`;
   snapshot.counts = Object.fromEntries(Object.entries(snapshot.payload).map(([name, rows]) => [name, rows.length]));

@@ -1,6 +1,5 @@
 import {
   db,
-  genId,
   type BuildProject,
   type FeedSource,
   type GitHubRepo,
@@ -14,6 +13,8 @@ import {
 import { APP_FUNNEL_CATALOG } from "@/lib/appPortfolio";
 import { GITHUB_REPO_CATALOG } from "@/lib/repoCatalog";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
+import { ensureWatchTerm } from "@/lib/watchTerms";
+import { stableBootstrapId } from "@/lib/bootstrapIdentity";
 
 const now = () => new Date().toISOString();
 const today = () => now().slice(0, 10);
@@ -32,47 +33,50 @@ async function putIfMissing<T extends { id: string }>(
   exists: () => Promise<boolean>,
   record: Omit<T, "id">,
 ) {
-  if (await exists()) return false;
-  const id = genId();
-  await table.put({ ...record, id });
-  markCloudRecordDirty(collection, id);
-  return true;
+  const values = record as Record<string, unknown>;
+  const identity = collection === "buildProjects" ? values.githubRepo
+    : collection === "ideas" ? values.title : values.url;
+  if (typeof identity !== "string" || !identity.trim()) throw new Error(`Missing bootstrap identity for ${collection}`);
+  const id = await stableBootstrapId(`seed-${collection}`, identity.trim().toLowerCase());
+  const created = await db.transaction("rw", table, async () => {
+    if (await exists() || await table.get(id)) return false;
+    await table.add({ ...record, id });
+    return true;
+  });
+  if (created) markCloudRecordDirty(collection, id);
+  return created;
 }
 
 
 async function ensureGitHubCatalog() {
-  const existing = await db.repos.toArray();
-  const byUrl = new Map(existing.map((row) => [row.url.toLowerCase(), row]));
-  const byName = new Map(existing.map((row) => [row.name.toLowerCase(), row]));
-  let changed = false;
-
-  for (const catalog of GITHUB_REPO_CATALOG) {
-    const current =
-      byUrl.get(catalog.url.toLowerCase()) ?? byName.get(catalog.name.toLowerCase());
-
-    if (!current) {
-      const id = genId();
-      await db.repos.put({ ...catalog, id });
-      markCloudRecordDirty("repos", id);
-      changed = true;
-      continue;
+  const seeds = await Promise.all(GITHUB_REPO_CATALOG.map(async catalog => ({
+    catalog, id: await stableBootstrapId("seed-repos", catalog.url.toLowerCase()),
+  })));
+  const changedIds = await db.transaction("rw", db.repos, async () => {
+    const existing = await db.repos.toArray();
+    const byUrl = new Map(existing.map(row => [row.url.toLowerCase(), row]));
+    const byName = new Map(existing.map(row => [row.name.toLowerCase(), row]));
+    const changed: string[] = [];
+    for (const { catalog, id } of seeds) {
+      const current = byUrl.get(catalog.url.toLowerCase()) ?? byName.get(catalog.name.toLowerCase()) ?? await db.repos.get(id);
+      if (!current) {
+        const record = { ...catalog, id };
+        await db.repos.add(record);
+        byUrl.set(record.url.toLowerCase(), record); byName.set(record.name.toLowerCase(), record);
+        changed.push(id);
+        continue;
+      }
+      // Bootstrap may fill missing catalog metadata; it must not overwrite live/user values.
+      const patch: Partial<GitHubRepo> = {};
+      if (current.visibility == null && catalog.visibility != null) patch.visibility = catalog.visibility;
+      if (current.defaultBranch == null && catalog.defaultBranch != null) patch.defaultBranch = catalog.defaultBranch;
+      if (current.repoSizeKb == null && catalog.repoSizeKb != null) patch.repoSizeKb = catalog.repoSizeKb;
+      if (Object.keys(patch).length) { await db.repos.update(current.id, patch); changed.push(current.id); }
     }
-
-    const technicalPatch: Partial<GitHubRepo> = {};
-    if (current.visibility !== catalog.visibility) technicalPatch.visibility = catalog.visibility;
-    if (current.defaultBranch !== catalog.defaultBranch) {
-      technicalPatch.defaultBranch = catalog.defaultBranch;
-    }
-    if (current.repoSizeKb !== catalog.repoSizeKb) technicalPatch.repoSizeKb = catalog.repoSizeKb;
-
-    if (Object.keys(technicalPatch).length) {
-      await db.repos.update(current.id, technicalPatch);
-      markCloudRecordDirty("repos", current.id);
-      changed = true;
-    }
-  }
-
-  return changed;
+    return changed;
+  });
+  changedIds.forEach(id => markCloudRecordDirty("repos", id));
+  return changedIds.length > 0;
 }
 
 const INTERNAL_BUILDS: Array<Omit<BuildProject, "id">> = [
@@ -344,27 +348,20 @@ const WATCH_DOMAINS = [
 
 async function ensureSeoControlData(websites: Website[]) {
   for (const website of websites) {
-    const profileExists = await db.seoProfiles.where("websiteId").equals(website.id).first();
-    if (!profileExists) {
-      const priority = website.priority || "medium";
-      const record: Omit<SEOProfile, "id"> = {
-        websiteId: website.id,
-        priority,
-        gscProperty: "",
-        bingSiteUrl: website.url,
-        ga4Property: "",
-        primaryCountry: "",
-        targetLanguages: ["en"],
-        trackedQueries: [],
-        syncStatus: "not-configured",
+    const id = await stableBootstrapId("seed-seo-profile", website.id);
+    const created = await db.transaction("rw", db.seoProfiles, async () => {
+      if (await db.seoProfiles.where("websiteId").equals(website.id).first() || await db.seoProfiles.get(id)) return false;
+      const record: SEOProfile = {
+        id, websiteId: website.id, priority: website.priority || "medium",
+        gscProperty: "", bingSiteUrl: website.url, ga4Property: "", primaryCountry: "",
+        targetLanguages: ["en"], trackedQueries: [], syncStatus: "not-configured",
         notes: "Portfolio profile seeded from verified website inventory. Metrics remain empty until real GSC/Bing/GA4/crawl evidence is imported or connected.",
-        createdAt: now(),
-        updatedAt: now(),
+        createdAt: now(), updatedAt: now(),
       };
-      const id = genId();
-      await db.seoProfiles.put({ ...record, id });
-      markCloudRecordDirty("seoProfiles", id);
-    }
+      await db.seoProfiles.add(record);
+      return true;
+    });
+    if (created) markCloudRecordDirty("seoProfiles", id);
   }
 
   // Historical portfolio audits are useful context, but they are not live facts.
@@ -503,9 +500,12 @@ export async function ensureWorkspaceBootstrap() {
   }
 
   for (const health of SYNC_HEALTH_SEEDS) {
-    const existing = await db.syncHealth.get(health.id);
-    if (!existing) {
-      await db.syncHealth.put(health);
+    const created = await db.transaction("rw", db.syncHealth, async () => {
+      if (await db.syncHealth.get(health.id)) return false;
+      await db.syncHealth.add(health);
+      return true;
+    });
+    if (created) {
       markCloudRecordDirty("syncHealth", health.id);
       changed = true;
     }
@@ -520,13 +520,7 @@ export async function ensureWorkspaceBootstrap() {
       enabled: true,
       createdAt: now(),
     };
-    changed =
-      (await putIfMissing<WatchTerm>(
-        db.watchTerms,
-        "watchTerms",
-        async () => Boolean(await db.watchTerms.filter((row) => row.term.toLowerCase() === term.toLowerCase()).first()),
-        record,
-      )) || changed;
+    changed = (await ensureWatchTerm(record)).created || changed;
   }
 
   for (const idea of IDEAS) {

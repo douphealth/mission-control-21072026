@@ -1,7 +1,7 @@
 import { matchIdentity } from './intelligenceQuality';
 import { isOwnedDomainCoverage, mapLimited, mentionQuery } from './intelligenceRunQuality';
 import { searchExternalMentions } from './mentionSearch.server';
-import { readAudience, audienceCapabilities } from './audienceProviders.server';
+import { readAudience } from './audienceProviders.server';
 import type { RawItem } from './controlCenter.server';
 export interface MentionTerm { id: string; term: string; type: 'name' | 'brand' | 'handle' | 'domain'; anchors?: string[]; negatives?: string[] }
 export interface MatchedMention extends RawItem {
@@ -57,5 +57,5 @@ export async function collectMentionCoverage(terms: MentionTerm[]) {
 }
 export async function collectAudienceMetrics(accounts: Array<{ id: string; platform: string; url: string }>) {
   const readings = await mapLimited(accounts, 3, async account => ({ accountId: account.id, ...await readAudience(account.platform, account.url) }));
-  return { readings, capabilities: audienceCapabilities() };
+  return { readings };
 }

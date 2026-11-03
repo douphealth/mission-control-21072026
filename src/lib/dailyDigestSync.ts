@@ -1,3 +1,4 @@
+import { secureUuid } from "@/lib/recordId";
 import { db } from "@/lib/db";
 import {
   GMAIL_SEND_SCOPE,
@@ -99,7 +100,7 @@ async function sendDigestThroughGmail(snapshot: Awaited<ReturnType<typeof buildE
     throw new Error(rendered.error || "Could not prepare the executive email.");
   }
 
-  const boundary = `mc_${crypto.randomUUID().replace(/-/g, "")}`;
+  const boundary = `mc_${secureUuid().replace(/-/g, "")}`;
   const raw = [
     `From: Mission Control <${rendered.email}>`,
     `To: ${rendered.email}`,

@@ -1,3 +1,4 @@
+import { secureUuid } from "@/lib/recordId";
 export const MAX_CHECKLIST_ITEMS = 250;
 const MAX_CHECKLIST_TEXT_LENGTH = 50_000;
 const MAX_CHECKLIST_ITEM_LENGTH = 240;
@@ -35,7 +36,7 @@ export function parseChecklistItems(input: string): string[] {
 export function appendChecklistItems<T extends { id: string; title: string; done: boolean }>(existing: T[], text: string): Array<T | { id: string; title: string; done: boolean }> {
   if (existing.some(item => !item.title.trim())) throw new Error("Give each checklist item a name or remove the empty item.");
   const seen = new Set(existing.map(item => item.title.trim().normalize("NFC").toLocaleLowerCase()));
-  const additions = parseChecklistItems(text).filter(title => { const key = title.normalize("NFC").toLocaleLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; }).map(title => ({ id: crypto.randomUUID(), title, done: false }));
+  const additions = parseChecklistItems(text).filter(title => { const key = title.normalize("NFC").toLocaleLowerCase(); if (seen.has(key)) return false; seen.add(key); return true; }).map(title => ({ id: secureUuid(), title, done: false }));
   if (existing.length + additions.length > MAX_CHECKLIST_ITEMS) throw new Error(`A task can contain at most ${MAX_CHECKLIST_ITEMS} checklist items.`);
   return [...existing, ...additions];
 }

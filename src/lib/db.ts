@@ -4,6 +4,7 @@
 import "./bc-polyfill";
 import Dexie, { type Table } from "dexie";
 import { installTaskChangeHooks } from "@/lib/taskChangeHooks";
+import { secureUuid } from "@/lib/recordId";
 
 // ─── Core Entity Types ─────────────────────────────────────────────────────────
 
@@ -959,17 +960,6 @@ export async function migrateFromLocalStorage(): Promise<boolean> {
 
 // ─── ID Generator ─────────────────────────────────────────────────────────────
 
-let idCounter = 0;
-
 export function genId(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  // Collision-safe fallback: 12 bytes of CSPRNG + time + monotonic counter.
-  const bytes = new Uint8Array(12);
-  if (typeof crypto !== "undefined" && crypto.getRandomValues) crypto.getRandomValues(bytes);
-  else for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
-  const rand = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  idCounter = (idCounter + 1) % 0xffff;
-  return `${Date.now().toString(36)}-${rand}-${idCounter.toString(36)}`;
+  return secureUuid();
 }

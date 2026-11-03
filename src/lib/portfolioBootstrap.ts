@@ -1,4 +1,4 @@
-import { db, genId, type Task, type Website } from "@/lib/db";
+import { db, type Task, type Website } from "@/lib/db";
 import { markCloudRecordDirty } from "@/lib/cloudSync";
 
 type WebsiteSeed = Omit<Website, "id"> & { slug: string };
@@ -336,79 +336,111 @@ export interface PortfolioBootstrapResult {
 }
 
 export async function ensurePortfolioBootstrap(): Promise<PortfolioBootstrapResult> {
-  const websites = await db.websites.toArray();
-  const byDomain = new Map(websites.map((site) => [domainKey(site.url), site]));
-  let websitesAdded = 0;
-  let websitesUpdated = 0;
-  let tasksAdded = 0;
+  const dirty: Array<{ collection: "websites" | "tasks"; id: string }> = [];
+  // IndexedDB serializes overlapping readwrite transactions across tabs. Keep
+  // the existence checks and additions together; an in-memory Promise is not
+  // a lock when two tabs or frames start at the same time.
+  const result = await db.transaction("rw", db.websites, db.tasks, async () => {
+    const websites = await db.websites.toArray();
+    const byDomain = new Map(websites.map((site) => [domainKey(site.url), site]));
+    const websiteIds = new Set(websites.map((site) => site.id));
+    let websitesAdded = 0;
+    let websitesUpdated = 0;
+    let tasksAdded = 0;
 
-  for (const seed of WEBSITE_PORTFOLIO) {
-    const { slug: _slug, ...record } = seed;
-    const domain = domainKey(record.url);
-    const existing = byDomain.get(domain);
+    for (const seed of WEBSITE_PORTFOLIO) {
+      const { slug, ...record } = seed;
+      const domain = domainKey(record.url);
+      const existing = byDomain.get(domain);
+      const seedId = `portfolio-site-${slug}`;
 
-    if (!existing) {
-      const id = genId();
-      await db.websites.put({ ...record, id });
-      markCloudRecordDirty("websites", id);
-      byDomain.set(domain, { ...record, id });
-      websitesAdded += 1;
-      continue;
+      if (!existing) {
+        // Stable IDs also let independently bootstrapped devices converge when
+        // they later sync. Never overwrite a seed the user has edited or moved.
+        if (websiteIds.has(seedId)) continue;
+        await db.websites.add({ ...record, id: seedId });
+        dirty.push({ collection: "websites", id: seedId });
+        byDomain.set(domain, { ...record, id: seedId });
+        websiteIds.add(seedId);
+        websitesAdded += 1;
+        continue;
+      }
+
+      const additivePatch: Partial<Website> = {};
+      const optionalFields = [
+        "favicon",
+        "tags",
+        "priority",
+        "importance",
+        "niche",
+        "primaryGoal",
+        "revenueModel",
+        "appUrls",
+        "githubRepos",
+      ] as const satisfies ReadonlyArray<keyof Omit<Website, "id">>;
+      for (const field of optionalFields) {
+        const current = existing[field];
+        const incoming = record[field];
+        const empty =
+          current === undefined ||
+          current === "" ||
+          (Array.isArray(current) && current.length === 0);
+        const hasIncoming =
+          incoming !== undefined &&
+          incoming !== "" &&
+          !(Array.isArray(incoming) && incoming.length === 0);
+        if (empty && hasIncoming) (additivePatch as Record<string, unknown>)[field] = incoming;
+      }
+      if (!existing.wpAdminUrl && record.wpAdminUrl) additivePatch.wpAdminUrl = record.wpAdminUrl;
+      if (!existing.notes && record.notes) additivePatch.notes = record.notes;
+      if (Object.keys(additivePatch).length) {
+        await db.websites.update(existing.id, additivePatch);
+        dirty.push({ collection: "websites", id: existing.id });
+        byDomain.set(domain, { ...existing, ...additivePatch });
+        websitesUpdated += 1;
+      }
     }
 
-    const additivePatch: Partial<Website> = {};
-    const optionalFields = [
-      "favicon",
-      "tags",
-      "priority",
-      "importance",
-      "niche",
-      "primaryGoal",
-      "revenueModel",
-      "appUrls",
-      "githubRepos"
-    ] as const satisfies ReadonlyArray<keyof Omit<Website, "id">>;
-    for (const field of optionalFields) {
-      const current = existing[field];
-      const incoming = record[field];
-      const empty = current === undefined || current === "" || (Array.isArray(current) && current.length === 0);
-      // Only write when the seed actually has something to add, so restore never rewrites
-      // unchanged records or marks them dirty for cloud sync.
-      const hasIncoming =
-        incoming !== undefined && incoming !== "" && !(Array.isArray(incoming) && incoming.length === 0);
-      if (empty && hasIncoming) (additivePatch as any)[field] = incoming;
+    const tasks = await db.tasks.toArray();
+    // Old releases used random IDs; their explicit portfolio keys remain the
+    // identity. Keep all records, including completed, archived or deleted ones.
+    const existingKeys = new Set(
+      tasks.flatMap((task) =>
+        (task.tags || [])
+          .filter((tag) => tag.startsWith("portfolio-key:"))
+          .map((tag) => tag.slice("portfolio-key:".length)),
+      ),
+    );
+    const taskIds = new Set(tasks.map((task) => task.id));
+    for (const seed of PRIORITY_TASKS) {
+      const seedId = `portfolio-task-${seed.key}`;
+      if (existingKeys.has(seed.key) || taskIds.has(seedId)) continue;
+      const { key, subtasks = [], tags = [], dueDate, ...rest } = seed;
+      await db.tasks.add({
+        ...rest,
+        id: seedId,
+        createdAt: today(),
+        dueDate: dueDate || "",
+        subtasks,
+        tags: [...tags, `portfolio-key:${key}`],
+        area: "work",
+        inbox: false,
+      });
+      dirty.push({ collection: "tasks", id: seedId });
+      existingKeys.add(key);
+      taskIds.add(seedId);
+      tasksAdded += 1;
     }
-    if (!existing.wpAdminUrl && record.wpAdminUrl) additivePatch.wpAdminUrl = record.wpAdminUrl;
-    if (!existing.notes && record.notes) additivePatch.notes = record.notes;
-    if (Object.keys(additivePatch).length) {
-      await db.websites.update(existing.id, additivePatch);
-      markCloudRecordDirty("websites", existing.id);
-      websitesUpdated += 1;
-    }
-  }
 
-  const tasks = await db.tasks.toArray();
-  const existingKeys = new Set(
-    tasks.map((task) => task.tags?.find((tag) => tag.startsWith("portfolio-key:"))?.slice("portfolio-key:".length)).filter(Boolean),
-  );
+    return {
+      websitesAdded,
+      websitesUpdated,
+      tasksAdded,
+      websitesInPortfolio: WEBSITE_PORTFOLIO.length,
+    };
+  });
 
-  for (const seed of PRIORITY_TASKS) {
-    if (existingKeys.has(seed.key)) continue;
-    const id = genId();
-    const { key, subtasks = [], tags = [], dueDate, ...rest } = seed;
-    await db.tasks.put({
-      ...rest,
-      id,
-      createdAt: today(),
-      dueDate: dueDate || "",
-      subtasks,
-      tags: [...tags, `portfolio-key:${key}`],
-      area: "work",
-      inbox: false
-    });
-    markCloudRecordDirty("tasks", id);
-    tasksAdded += 1;
-  }
-
-  return { websitesAdded, websitesUpdated, tasksAdded, websitesInPortfolio: WEBSITE_PORTFOLIO.length };
+  // Side effects must describe committed records, never an aborted seed batch.
+  for (const { collection, id } of dirty) markCloudRecordDirty(collection, id);
+  return result;
 }

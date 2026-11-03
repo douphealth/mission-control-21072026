@@ -1,5 +1,13 @@
 import { X } from "lucide-react";
-import React, { useEffect, useRef, forwardRef } from "react";
+import React, { createContext, useContext, useEffect, useId, useRef, forwardRef } from "react";
+import { Content as DialogContent } from "@radix-ui/react-dialog";
+import {
+  Dialog,
+  DialogPortal,
+  DialogOverlay,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
 
 interface FormModalProps {
   open: boolean;
@@ -12,69 +20,102 @@ interface FormModalProps {
 }
 
 const FormModal = forwardRef<HTMLDivElement, FormModalProps>(
-  ({ open, onClose, title, children, onSubmit, submitLabel = "Save", size = "md" }, _ref) => {
+  (
+    { open, onClose, title, children, onSubmit, submitLabel = "Save", size = "md" },
+    forwardedRef,
+  ) => {
     const innerRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      const handler = (e: KeyboardEvent) => {
-        if (e.key === "Escape") onClose();
-      };
-      if (open) document.addEventListener("keydown", handler);
-      return () => document.removeEventListener("keydown", handler);
-    }, [open, onClose]);
-
+    const returnFocus = useRef<HTMLElement | null>(null);
+    const titleId = useId();
     const widthClass = size === "sm" ? "max-w-md" : size === "lg" ? "max-w-3xl" : "max-w-xl";
 
     return (
-      <>
-        {open && (
-          <div
-            className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4"
-            onClick={onClose}
+      <Dialog
+        open={open}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) onClose();
+        }}
+        modal
+      >
+        <DialogPortal>
+          <DialogOverlay className="z-[100] bg-foreground/20 backdrop-blur-sm" />
+          <DialogContent
+            ref={(node) => {
+              innerRef.current = node;
+              if (typeof forwardedRef === "function") forwardedRef(node);
+              else if (forwardedRef) forwardedRef.current = node;
+            }}
+            aria-modal="true"
+            aria-labelledby={titleId}
+            aria-describedby={undefined}
+            onOpenAutoFocus={(event) => {
+              // These dialogs are controlled by existing page buttons, without a
+              // DialogTrigger; remember that exact opener for keyboard return.
+              const active = document.activeElement;
+              if (active instanceof HTMLElement && !innerRef.current?.contains(active))
+                returnFocus.current = active;
+              const candidates = innerRef.current?.querySelectorAll<HTMLElement>(
+                'input:not([type="hidden"]):not(:disabled):not([readonly]), textarea:not(:disabled):not([readonly]), select:not(:disabled), [contenteditable="true"]',
+              );
+              const first = Array.from(candidates || []).find(
+                (element) => element.getClientRects().length > 0 && !element.closest("[inert]"),
+              );
+              if (first) {
+                event.preventDefault();
+                first.focus({ preventScroll: true });
+              }
+            }}
+            onCloseAutoFocus={(event) => {
+              if (returnFocus.current?.isConnected) {
+                event.preventDefault();
+                returnFocus.current.focus({ preventScroll: true });
+              }
+              returnFocus.current = null;
+            }}
+            className={`fixed bottom-0 left-1/2 z-[101] flex max-h-[95dvh] w-full -translate-x-1/2 flex-col overflow-hidden rounded-t-2xl bg-card shadow-2xl outline-none sm:bottom-auto sm:top-1/2 sm:max-h-[85dvh] sm:-translate-y-1/2 sm:rounded-2xl ${widthClass}`}
           >
-            <div className="absolute inset-0 bg-foreground/20 backdrop-blur-sm" />
-            <div
-              ref={innerRef}
-              className={`relative ${widthClass} w-full bg-card rounded-t-2xl sm:rounded-2xl shadow-2xl max-h-[95vh] sm:max-h-[85vh] flex flex-col`}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-border">
-                <h2 className="text-base sm:text-lg font-semibold text-card-foreground">{title}</h2>
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border px-4 py-3 sm:px-6 sm:py-4">
+              <DialogTitle
+                id={titleId}
+                className="text-base font-semibold text-card-foreground sm:text-lg"
+              >
+                {title}
+              </DialogTitle>
+              <DialogClose asChild>
                 <button
-                  onClick={onClose}
-                  className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors touch-manipulation"
+                  type="button"
+                  aria-label={`Close ${title}`}
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground touch-manipulation"
                 >
                   <X size={18} />
                 </button>
-              </div>
-
-              {/* Body */}
-              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-5 space-y-4">
-                {children}
-              </div>
-
-              {/* Footer */}
-              {onSubmit && (
-                <div className="flex items-center justify-end gap-2 px-4 sm:px-6 py-3 sm:py-4 border-t border-border pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4">
+              </DialogClose>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6 sm:py-5">
+              {children}
+            </div>
+            {onSubmit && (
+              <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
+                <DialogClose asChild>
                   <button
-                    onClick={onClose}
-                    className="px-4 py-2.5 sm:py-2 rounded-xl text-sm font-medium bg-secondary text-secondary-foreground hover:bg-secondary/80 transition-colors touch-manipulation"
+                    type="button"
+                    className="min-h-11 rounded-xl bg-secondary px-4 py-2.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-secondary/80 touch-manipulation"
                   >
                     Cancel
                   </button>
-                  <button
-                    onClick={onSubmit}
-                    className="px-5 py-2.5 sm:py-2 rounded-xl text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity touch-manipulation"
-                  >
-                    {submitLabel}
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </>
+                </DialogClose>
+                <button
+                  type="button"
+                  onClick={onSubmit}
+                  className="min-h-11 rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 touch-manipulation"
+                >
+                  {submitLabel}
+                </button>
+              </div>
+            )}
+          </DialogContent>
+        </DialogPortal>
+      </Dialog>
     );
   },
 );
@@ -83,12 +124,24 @@ FormModal.displayName = "FormModal";
 export default FormModal;
 
 /* Reusable form field components */
+const FormFieldContext = createContext<{ controlId: string; labelId: string } | null>(null);
+
 export function FormField({ label, children }: { label: string; children: React.ReactNode }) {
+  const controlId = useId();
+  const labelId = `${controlId}-label`;
   return (
-    <div>
-      <label className="text-xs font-medium text-muted-foreground mb-1.5 block">{label}</label>
-      {children}
-    </div>
+    <FormFieldContext.Provider value={{ controlId, labelId }}>
+      <div role="group" aria-labelledby={labelId}>
+        <label
+          id={labelId}
+          htmlFor={controlId}
+          className="mb-1.5 block text-xs font-medium text-muted-foreground"
+        >
+          {label}
+        </label>
+        {children}
+      </div>
+    </FormFieldContext.Provider>
   );
 }
 
@@ -103,8 +156,11 @@ export function FormInput({
   placeholder?: string;
   type?: string;
 }) {
+  const field = useContext(FormFieldContext);
   return (
     <input
+      id={field?.controlId}
+      aria-labelledby={field?.labelId}
       type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -125,6 +181,7 @@ export function FormTextarea({
   placeholder?: string;
   rows?: number;
 }) {
+  const field = useContext(FormFieldContext);
   const ref = useRef<HTMLTextAreaElement>(null);
   const autoResize = () => {
     const el = ref.current;
@@ -137,6 +194,8 @@ export function FormTextarea({
   }, [value]);
   return (
     <textarea
+      id={field?.controlId}
+      aria-labelledby={field?.labelId}
       ref={ref}
       value={value}
       onChange={(e) => onChange(e.target.value)}
@@ -158,8 +217,11 @@ export function FormSelect({
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
 }) {
+  const field = useContext(FormFieldContext);
   return (
     <select
+      id={field?.controlId}
+      aria-labelledby={field?.labelId}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       className="w-full px-3 py-2.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-shadow appearance-none cursor-pointer"
@@ -182,6 +244,7 @@ export function FormTagsInput({
   onChange: (v: string[]) => void;
   placeholder?: string;
 }) {
+  const field = useContext(FormFieldContext);
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
@@ -196,6 +259,8 @@ export function FormTagsInput({
   return (
     <div className="space-y-2">
       <input
+        id={field?.controlId}
+        aria-labelledby={field?.labelId}
         onKeyDown={handleKeyDown}
         placeholder={placeholder || "Type and press Enter"}
         className="w-full px-3 py-2.5 rounded-xl bg-secondary text-foreground text-sm outline-none focus:ring-2 focus:ring-primary/30 transition-shadow placeholder:text-muted-foreground"

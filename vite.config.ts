@@ -14,6 +14,8 @@ async function nitroPlugin() {
 }
 
 export default defineConfig({
+  // The managed development preview forwards this explicit host.
+  server: { allowedHosts: ["terminal.local"] },
   plugins: [
     tanstackStart({ server: { entry: "server" } }),
     viteReact(),
