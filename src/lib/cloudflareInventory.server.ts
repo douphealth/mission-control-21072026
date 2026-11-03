@@ -148,9 +148,11 @@ export function normalizeWorkerScript(
     domains: customDomains, routes, repoUrl: null, branch: null,
     commit: null,
     deploymentId: asString(deployment.id) || asString(version.version_id),
-    deployedAt: asString(deployment.created_on) || asString(script.modified_on),
-    status: Object.keys(deployment).length ? "serving (API deployment)" : "unknown",
-    statusSource: Object.keys(deployment).length ? "cloudflare-deployment" : "unavailable",
+    deployedAt: asString(deployment.created_on) || asString(script.deployed_on) || asString(script.modified_on),
+    status: Object.keys(deployment).length ? "serving (API deployment)" :
+      asString(script.deployed_on) ? "deployed (API metadata)" : "unknown",
+    statusSource: Object.keys(deployment).length || asString(script.deployed_on)
+      ? "cloudflare-deployment" : "unavailable",
   };
 }
 export function configuredAccounts(env: Record<string, string | undefined> = process.env): string[] {
@@ -216,7 +218,7 @@ export async function allPages(path: string, token: string, perPage = 100): Prom
       envelope = await cloudflareGet<Envelope>(
         path + glue + "page=" + page + "&per_page=" + perPage, token);
     } catch (error) {
-      // Cloudflare's documented Pages list example uses 20 per page. Some
+      // Some Cloudflare Pages accounts reject larger page sizes or optional query
       // accounts reject the page query entirely (HTTP 400). Probe bare GET
       // only on the first page, and accept it ONLY if completeness is proven.
       if (page !== 1 || !path.endsWith("/pages/projects") ||
@@ -261,6 +263,35 @@ export async function allPages(path: string, token: string, perPage = 100): Prom
       ? page >= envelope.result_info.total_pages : rows.length < perPage) return entries;
   }
   throw new Error("Cloudflare inventory page limit reached");
+}
+/** Cloudflare's current Workers API lists Workers by `name`; the older
+ * scripts endpoint does not necessarily enumerate the complete estate.
+ * A fallback is explicitly marked partial instead of silently counted as full. */
+async function listAccountWorkers(accountId: string, token: string): Promise<{
+  scripts: unknown[]; usedLegacy: boolean;
+}> {
+  try {
+    const modern = await allPages("/accounts/" + accountId + "/workers/workers", token, 50);
+    return { scripts: modern.map(raw => {
+      const worker = asObject(raw);
+      return { ...worker, id: asString(worker.name) || asString(worker.id) };
+    }), usedLegacy: false };
+  } catch {
+    const legacy = await cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token);
+    if (!Array.isArray(legacy.result)) throw new Error("Invalid legacy Workers API payload");
+    return { scripts: legacy.result, usedLegacy: true };
+  }
+}
+/** Worker Domains listing does not support the Pages-style page/per_page query.
+ * Reject an incomplete first page rather than silently undercount resources. */
+async function listWorkerDomains(accountId: string, token: string): Promise<unknown[]> {
+  const response = await cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/domains", token);
+  if (!Array.isArray(response.result)) throw new Error("Invalid Worker Domains API payload");
+  if (typeof response.result_info?.total_count === "number" &&
+      response.result_info.total_count > response.result.length) {
+    throw new Error("Worker Domains API returned an incomplete inventory");
+  }
+  return response.result;
 }
 async function parallelMap<T, U>(
   data: T[], task: (item: T) => Promise<U>, concurrency = 6,
@@ -314,8 +345,8 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
   const errors: string[] = [];
   const [pages, scripts, domains, zones] = await Promise.allSettled([
     allPages("/accounts/" + accountId + "/pages/projects", pagesToken, 10),
-    cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token),
-    allPages("/accounts/" + accountId + "/workers/domains", token),
+    listAccountWorkers(accountId, token),
+    listWorkerDomains(accountId, token),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
     allPages("/zones?account.id=" + encodeURIComponent(accountId), token, 50),
   ]);
@@ -343,8 +374,11 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
       const zone = normalizeZone(accountId, raw);
       if (zone) zoneRows.push(zone);
     }
-    const ids = zones.value.map(asObject).map(z => asString(z.id))
-      .filter((id): id is string => typeof id === "string" && ACCOUNT_ID.test(id));
+    // Route association is only useful for Workers actually listed by the API.
+    // Avoid making many unnecessary zone-scoped calls for accounts with no Workers.
+    const ids = scripts.status === "fulfilled" && scripts.value.scripts.length > 0
+      ? zones.value.map(asObject).map(z => asString(z.id))
+        .filter((id): id is string => typeof id === "string" && ACCOUNT_ID.test(id)) : [];
     const routeResults = await parallelMap(ids, id =>
       cloudflareGet<Envelope>("/zones/" + id + "/workers/routes", token));
     routeResults.forEach(result => {
@@ -361,28 +395,30 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
     const failures = routeResults.filter(r => r.status === "rejected" ||
       r.status === "fulfilled" && !Array.isArray(r.value.result)).length;
     if (failures) errors.push("Worker route inventory unavailable in " + failures +
-      " zone(s) for account " + accountId.slice(-6));
+      " zone(s) for account " + accountId.slice(-6) +
+      "; verify Zone > Workers Routes > Read permissions for these zones");
   }
   if (scripts.status === "fulfilled") {
-    if (!Array.isArray(scripts.value.result)) {
-      errors.push("Unexpected Workers API response for account " + accountId.slice(-6));
-    } else {
-      const normalizedScripts = scripts.value.result.filter((s: any) =>
-        SCRIPT_NAME.test(asString(s?.id) || ""));
+    if (scripts.value.usedLegacy) {
+      errors.push("New Workers API inaccessible for account " + accountId.slice(-6) +
+        "; legacy Scripts fallback used — Worker coverage may be incomplete");
+    }
+    const normalizedScripts = scripts.value.scripts.filter((s: any) =>
+      SCRIPT_NAME.test(asString(s?.id) || ""));
       // Worker deployments are loaded only when History is opened. Fetching
       // each script's deployment during the inventory listing is an N+1
       // request pattern and does not scale to large Cloudflare accounts.
-      normalizedScripts.forEach((script: any) => {
-        const row = normalizeWorkerScript(
-          accountId,
-          { ...script, routes: (routesByScript.get(String(script.id)) || [])
-              .map(pattern => ({ pattern, script: script.id })) },
-          workerDomains,
-        );
-        if (row) rows.push(row);
-      });
-    }
-  } else errors.push("Worker scripts unavailable for account " + accountId.slice(-6));
+    normalizedScripts.forEach((script: any) => {
+      const row = normalizeWorkerScript(
+        accountId,
+        { ...script, routes: (routesByScript.get(String(script.id)) || [])
+            .map(pattern => ({ pattern, script: script.id })) },
+        workerDomains,
+      );
+      if (row) rows.push(row);
+    });
+  } else errors.push("Worker inventory unavailable for account " + accountId.slice(-6) +
+    "; verify account Workers read permissions");
   return { rows, zones: zoneRows, errors };
 }
 /** Caller must pass Cloudflare Access authorization before invoking. */

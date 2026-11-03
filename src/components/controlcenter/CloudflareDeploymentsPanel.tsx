@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Cloud, ExternalLink, GitBranch, History, RefreshCw, Search, Server, ShieldCheck } from "lucide-react";
+import { AlertTriangle, ArrowDownUp, Cloud, ExternalLink, GitBranch, History, LayoutGrid, List, RefreshCw, Search, Server, ShieldCheck, X } from "lucide-react";
 import {
   getCloudflareDeploymentHistory,
   type CloudflareDeploymentRow,
@@ -12,6 +12,8 @@ import { freshness, type TruthState } from "@/lib/truth";
 import { cloudflareTruthState, type CloudflareConnectionStatus } from "@/lib/cloudflareControlState";
 
 type Filter = "all" | "pages" | "worker";
+type SortBy = "name" | "recent" | "account" | "status";
+type Layout = "cards" | "compact";
 const shorten = (id: string) => id.slice(-6);
 const date = (value: string | null) =>
   value && !Number.isNaN(Date.parse(value))
@@ -44,6 +46,9 @@ export default function CloudflareDeploymentsPanel({
   const [filter, setFilter] = useState<Filter>("all");
   const [account, setAccount] = useState("all");
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("name");
+  const [layout, setLayout] = useState<Layout>("compact");
+  const [onlyUnverified, setOnlyUnverified] = useState(false);
   const [visible, setVisible] = useState(48);
   const [selected, setSelected] = useState<CloudflareDeploymentRow | null>(null);
   const [history, setHistory] = useState<DeploymentHistoryItem[]>([]);
@@ -62,14 +67,46 @@ export default function CloudflareDeploymentsPanel({
   const rows = useMemo(() => (inventory?.rows || []).filter(row => {
     if (filter !== "all" && row.kind !== filter) return false;
     if (account !== "all" && row.accountId !== account) return false;
+    if (onlyUnverified && row.statusSource !== "unavailable" && row.repoUrl) return false;
     const needle = query.trim().toLowerCase();
-    return !needle || [row.name, row.kind, row.repoUrl || "", ...row.domains, ...row.routes]
+    return !needle || [row.name, row.kind, row.status, row.repoUrl || "", row.accountId, ...row.domains, ...row.routes]
       .join(" ").toLowerCase().includes(needle);
-  }), [inventory, filter, account, query]);
+  }).sort((a, b) => {
+    if (sortBy === "account") return a.accountId.localeCompare(b.accountId) || a.name.localeCompare(b.name);
+    if (sortBy === "status") return a.status.localeCompare(b.status) || a.name.localeCompare(b.name);
+    if (sortBy === "recent") {
+      const bTime = b.deployedAt ? Date.parse(b.deployedAt) || 0 : 0;
+      const aTime = a.deployedAt ? Date.parse(a.deployedAt) || 0 : 0;
+      return bTime - aTime || a.name.localeCompare(b.name);
+    }
+    return a.name.localeCompare(b.name);
+  }), [inventory, filter, account, query, onlyUnverified, sortBy]);
   const totalPages = inventory?.rows.filter(row => row.kind === "pages").length || 0;
   const totalWorkers = inventory?.rows.filter(row => row.kind === "worker").length || 0;
   const mapped = inventory?.rows.filter(row => Boolean(row.repoUrl)).length || 0;
   const accountName = (id: string) => inventory?.accountDetails.find(a => a.accountId === id)?.label || "Account …" + shorten(id);
+  const partialWorkers = Boolean(inventory?.accountDetails.some(a =>
+    a.errors.some(e => /worker/i.test(e))));
+  const clearFilters = () => {
+    setFilter("all"); setAccount("all"); setQuery(""); setSortBy("name");
+    setOnlyUnverified(false); setVisible(48);
+  };
+  const exportCsv = () => {
+    if (!rows.length) return;
+    const fields = ["account", "kind", "name", "status", "deployed_at", "branch", "commit", "repo", "domains", "routes", "dashboard"];
+    const quote = (value: string) => '"' + value.replace(/"/g, '""') + '"';
+    const data = rows.map(r => [
+      accountName(r.accountId), r.kind, r.name, r.status,
+      r.deployedAt || "", r.branch || "", r.commit || "", r.repoUrl || "",
+      r.domains.join("; "), r.routes.join("; "), r.projectUrl,
+    ].map(quote).join(","));
+    const csv = [fields.join(","), ...data].join("\\r\\n");
+    const url = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = "mission-control-cloudflare-inventory.csv";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   const requestHistory = async (row: CloudflareDeploymentRow, page = 1) => {
     const requestId = ++requestNumber.current;
@@ -121,13 +158,16 @@ export default function CloudflareDeploymentsPanel({
         />
       )}
       {!loading && inventory?.errors.length ? (
-        <div role="alert" className="rounded-xl border border-amber-500/40 p-4 text-sm">
-          <strong>Partial or failed Cloudflare sync:</strong>
-          <p className="mt-1 text-xs text-muted-foreground">Counts below cover only the successfully fetched records. Missing resources are not assumed healthy or absent.</p>
-          <ul className="mt-2 list-inside list-disc text-xs">
-            {inventory.errors.map((error, index) => <li key={index}>{error}</li>)}
+        <details className="rounded-2xl border border-amber-500/35 bg-amber-500/5 p-4 text-sm" open>
+          <summary className="cursor-pointer font-semibold text-foreground">
+            <AlertTriangle size={15} className="mr-2 inline text-amber-500" />
+            {inventory.errors.length} Cloudflare coverage warning(s) — inspect affected endpoints
+          </summary>
+          <p className="mt-2 text-xs text-muted-foreground">Verified resources remain usable. Unavailable routes or services are not treated as zero. Credentials never appear here.</p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {inventory.errors.map((error, index) => <li key={index} className="rounded-lg border border-border/60 bg-background/50 px-3 py-2">{error}</li>)}
           </ul>
-        </div>
+        </details>
       ) : null}
       {inventory && inventory.truthState !== "not_connected" && (
         <>
@@ -135,7 +175,7 @@ export default function CloudflareDeploymentsPanel({
             {[
               { label: "Accounts", count: inventory.accounts.length, icon: ShieldCheck },
               { label: "Pages projects", count: totalPages, icon: Cloud },
-              { label: "Worker scripts", count: totalWorkers, icon: Server },
+              { label: partialWorkers ? "Workers (partial)" : "Workers", count: totalWorkers, icon: Server },
               { label: "Confirmed GitHub sources", count: mapped, icon: GitBranch },
             ].map(stat => <div key={stat.label} className="card-glass rounded-2xl p-4">
               <stat.icon size={16} className="text-primary" />
@@ -143,7 +183,27 @@ export default function CloudflareDeploymentsPanel({
               <p className="text-xs text-muted-foreground">{stat.label}</p>
             </div>)}
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{inventory.accountDetails.map(a => <div key={a.accountId} className="rounded-xl border border-border p-3 text-xs"><p className="font-semibold break-all">{a.label}</p><p className="mt-1 text-muted-foreground">{a.truthState.toUpperCase()} · {a.pagesCount} Pages · {a.workersCount} Workers · {a.zonesCount} zones</p>{a.errors.length > 0 && <p className="mt-1 text-amber-500">{a.errors.length} sync issue(s)</p>}</div>)}</div>
+          <div className="grid gap-3 md:grid-cols-2">{inventory.accountDetails.map(a =>
+            <div key={a.accountId} className="rounded-2xl border border-border bg-card/70 p-4 text-xs shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="break-words text-sm font-semibold">{a.label}</h3>
+                <span className={a.truthState === "live" ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}>
+                  {a.truthState.toUpperCase()}
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/30 px-3 py-3 text-center">
+                <span><strong className="block text-lg tabular-nums">{a.pagesCount}</strong>Pages</span>
+                <span><strong className="block text-lg tabular-nums">{a.workersCount}{a.errors.some(e => /worker/i.test(e)) ? "+" : ""}</strong>Workers</span>
+                <span><strong className="block text-lg tabular-nums">{a.zonesCount}</strong>Zones</span>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-muted-foreground">{a.errors.length ? a.errors.length + " unresolved API check(s)" : "All reported inventory checks passed"}</span>
+                <a href={"https://dash.cloudflare.com/" + a.accountId + "/workers-and-pages"}
+                   target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 font-semibold text-primary">
+                  Manage account <ExternalLink size={12}/>
+                </a>
+              </div>
+            </div>)}</div>
           <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_11rem_13rem]">
             <label className="relative">
               <Search size={16} className="pointer-events-none absolute left-3 top-3 text-muted-foreground" />
@@ -166,20 +226,52 @@ export default function CloudflareDeploymentsPanel({
               {inventory.accounts.map(id => <option value={id} key={id}>{accountName(id)}</option>)}
             </select>
           </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-card/60 px-3 py-2">
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <ArrowDownUp size={13}/>
+              <span className="sr-only">Sort projects</span>
+              <select aria-label="Sort Cloudflare projects" value={sortBy}
+                onChange={e => { setSortBy(e.target.value as SortBy); setVisible(48); }}
+                className="rounded-lg bg-background px-2 py-1.5 text-foreground">
+                <option value="name">Name A–Z</option>
+                <option value="recent">Recently deployed</option>
+                <option value="account">Account</option>
+                <option value="status">Deployment status</option>
+              </select>
+            </label>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs">
+              <input type="checkbox" checked={onlyUnverified} onChange={e => {setOnlyUnverified(e.target.checked);setVisible(48);}} />
+              Needs verification
+            </label>
+            <div className="ml-auto flex items-center gap-1">
+              <button type="button" onClick={() => setLayout("compact")} aria-label="Compact project view"
+                aria-pressed={layout === "compact"} className={`rounded-lg p-2 ${layout === "compact" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
+                <List size={16}/>
+              </button>
+              <button type="button" onClick={() => setLayout("cards")} aria-label="Card project view"
+                aria-pressed={layout === "cards"} className={`rounded-lg p-2 ${layout === "cards" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"}`}>
+                <LayoutGrid size={16}/>
+              </button>
+              <button type="button" onClick={exportCsv} disabled={!rows.length} className="btn-secondary text-xs">
+                Export CSV
+              </button>
+              <button type="button" onClick={clearFilters} className="btn-secondary text-xs"><X size={12}/> Reset</button>
+            </div>
+          </div>
           <p className="text-xs text-muted-foreground" aria-live="polite">
             {rows.length} matching resources · showing {Math.min(rows.length, visible)} · API inventory, not a deployment or health test
           </p>
           {rows.length === 0 && <p className="card-glass p-6 text-sm text-muted-foreground">No resources returned for these filters. Check sync errors before assuming the account is empty.</p>}
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className={layout === "compact" ? "grid gap-2" : "grid gap-3 lg:grid-cols-2"}>
             {rows.slice(0, visible).map(row => {
               const repo = repoRelationship(row);
-              return <article key={row.key} className="card-elevated min-w-0 rounded-xl p-4">
+              return <article key={row.key} className={layout === "compact" ? "card-elevated min-w-0 rounded-xl px-4 py-3" : "card-elevated min-w-0 rounded-xl p-4"}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="badge badge-muted">{row.kind === "pages" ? "Pages project" : "Worker script"}</span>
                   <span className="text-[11px] text-muted-foreground">{accountName(row.accountId)}</span>
                 </div>
-                <h3 className="mt-2 break-all text-base font-semibold">{row.name}</h3>
-                <dl className="mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+                <h3 className={layout === "compact" ? "mt-1 break-all text-sm font-semibold" : "mt-2 break-all text-base font-semibold"}>{row.name}</h3>
+                <dl className={layout === "compact" ? "mt-2 hidden grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs sm:grid" : "mt-3 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs"}>
                   <dt className="text-muted-foreground">Deployment</dt><dd className="break-words">{row.status} {row.statusSource === "unavailable" ? "(not independently confirmed)" : "(API metadata)"}</dd>
                   <dt className="text-muted-foreground">Deployed</dt><dd>{date(row.deployedAt)}</dd>
                   <dt className="text-muted-foreground">Branch</dt><dd className="break-all">{row.branch || "Not provided by Cloudflare"}</dd>
@@ -189,7 +281,7 @@ export default function CloudflareDeploymentsPanel({
                   <dt className="text-muted-foreground">GitHub</dt>
                   <dd>{row.repoUrl ? "Cloudflare source mapping" : repo ? "Name match only — unverified" : "No source link available"}</dd>
                 </dl>
-                <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-xs font-semibold">
+                <div className={layout === "compact" ? "mt-2 flex flex-wrap items-center gap-3 border-t border-border pt-2 text-xs font-semibold" : "mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3 text-xs font-semibold"}>
                   <a href={row.projectUrl} target="_blank" rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-primary">Manage in Cloudflare <ExternalLink size={12} /></a>
                   {row.publicUrl && <a href={row.publicUrl} target="_blank" rel="noopener noreferrer"

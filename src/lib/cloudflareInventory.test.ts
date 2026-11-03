@@ -118,7 +118,7 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
         source: { type:"github", config:{owner:"example-org",repo_name:"app",production_branch:"main"}},
         canonical_deployment: { id:"depl-prod",latest_stage:{status:"success"} },
       }],
-      ["/accounts/" + ACCOUNT + "/workers/scripts"]: [{id:"api-worker"}],
+      ["/accounts/" + ACCOUNT + "/workers/workers"]: [{name:"api-worker",deployed_on:"2026-11-01T11:30:00Z"}],
       ["/accounts/" + ACCOUNT + "/workers/domains"]: [{
         service:"api-worker",hostname:"api.example.com",enabled:true,
       }],
@@ -151,8 +151,11 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
     const worker = inventory.rows.find(row=>row.kind==="worker");
     expect(worker?.routes).toEqual(["example.com/api/*"]);
     expect(worker?.domains).toEqual(["api.example.com"]);
-    expect(worker?.statusSource).toBe("unavailable");
+    expect(worker?.statusSource).toBe("cloudflare-deployment");
+    expect(worker?.status).toBe("deployed (API metadata)");
     expect(paths.some(path=>path.includes("/deployments"))).toBe(false);
+    expect(paths.some(path=>path.endsWith("/workers/workers"))).toBe(true);
+    expect(paths.some(path=>path.includes("/workers/domains") && path.includes("?"))).toBe(false);
     const history = await loadDeploymentHistory({
       accountId:ACCOUNT,kind:"worker",name:"api-worker",page:1,
     });
@@ -161,4 +164,24 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
     expect(paths.filter(path=>path.includes("/deployments"))).toHaveLength(1);
     expect(JSON.stringify(inventory)).not.toContain("synthetic-read-token-only");
   });
+  it("skips zone routes when a modern Workers API confirms no Workers", async () => {
+    const paths: string[] = [];
+    const env = { CLOUDFLARE_ACCOUNT_IDS: ACCOUNT, CLOUDFLARE_API_TOKEN: "synthetic-only" };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input));
+      const path = url.pathname.replace(/^\\/client\\/v4(?=\\/)/, "");
+      paths.push(path);
+      const data = path.includes("/pages/projects") || path.endsWith("/workers/workers") ||
+        path.endsWith("/workers/domains") ? [] : path === "/zones" ?
+        [{id:ACCOUNT,name:"example.com"}] : null;
+      if (data === null) return new Response(JSON.stringify({success:false}), {status:404});
+      return new Response(JSON.stringify({success:true,result:data,result_info:{total_pages:1}}));
+    }));
+    const inventory = await collectCloudflareInventory(env);
+    expect(inventory.truthState).toBe("live");
+    expect(inventory.zones).toHaveLength(1);
+    expect(inventory.rows).toHaveLength(0);
+    expect(paths.some(path => path.endsWith("/workers/routes"))).toBe(false);
+  });
+
 });
