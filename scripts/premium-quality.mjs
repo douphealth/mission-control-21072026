@@ -67,24 +67,28 @@ export async function runPremiumChecks(page, check, engine) {
       });
     });
     await go('github');
+    // The registry lives in a collapsible section; it must still render when opened.
+    await page.getByText(/^Apps & infrastructure registry/).click();
     await page.getByRole('region', { name: 'Apps and infrastructure registry' })
       .getByRole('heading', { name: 'Apps & Infrastructure Registry' }).waitFor();
-    await page.getByText('Repository cards and planning details', { exact: true }).click();
-    const workspace = page.getByRole('region', { name: 'Unified GitHub repository command center' });
-    await workspace.getByRole('textbox', { name: 'Find repository' }).fill(name);
-    const card = workspace.locator('article').filter({
-      has: page.getByRole('heading', { name, exact: true }),
-    });
-    await card.waitFor();
-    assert.equal(await card.getByRole('link', { name: 'Code' }).getAttribute('href'), url);
-    await workspace.getByRole('button', { name: 'Refresh all accounts' }).click();
-    await card.getByText('Synthetic verified public response', { exact: true }).waitFor();
-    await card.getByText('7 stars', { exact: true }).waitFor();
-    await card.getByText('Retain this planned next action', { exact: false }).waitFor();
-    assert.equal(await workspace.locator('article').filter({
-      has: page.getByRole('heading', { name, exact: true }),
-    }).count(), 1);
-    assert.equal(await card.getByRole('button', { name: 'Plan', exact: true }).count(), 1);
+    const workspace = page.getByRole('region', { name: 'GitHub repository operations' });
+    await workspace.getByRole('searchbox', { name: 'Search repositories' }).fill(name);
+    const repoLink = page.getByRole('link', { name: 'douphealth/' + name, exact: true });
+    const row = workspace.locator('li').filter({ has: repoLink });
+    await row.waitFor();
+    assert.equal(await repoLink.getAttribute('href'), url);
+    assert.equal(await row.getByRole('link', { name: /^Code for /i }).getAttribute('href'), url);
+    await workspace.getByRole('button', { name: /Refresh all/ }).click();
+    await row.getByText('Synthetic verified public response', { exact: false }).waitFor();
+    // Live API fields: 7 stars and 3 open issues/PRs from the mocked GitHub response.
+    await row.getByText(/★ 7 · 3 open/).waitFor();
+    // The saved plan (next action + priority) survives the live refresh.
+    await row.getByText('Retain this planned next action', { exact: false }).waitFor();
+    assert.equal(await row.getByRole('combobox', { name: /^Priority for /i }).inputValue(), 'high');
+    assert.equal(await workspace.locator('li').filter({ has: repoLink }).count(), 1);
+    await row.getByRole('button', { name: /^More actions for /i }).click();
+    assert.equal(await page.getByRole('menuitem', { name: 'Edit plan & links' }).count(), 1);
+    await page.keyboard.press('Escape');
     await page.screenshot({ path: `quality-artifacts/${engine}-repository-command-card.png`, fullPage: true });
     return { mockedApi: true, measuredStats: true, savedPlanRetained: true, noDuplicate: true };
   });
