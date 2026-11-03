@@ -237,7 +237,7 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
         result_info:{total_pages:1,total_count:0}}));
     }));
     const inventory=await collectCloudflareInventory(env);
-    expect(inventory.truthState).toBe("partial");
+    expect(inventory.truthState).toBe("error");
     expect(inventory.accountDetails[0].errors.some(x=>x.includes("HTTP 403"))).toBe(true);
     expect(inventory.accountDetails[0].workersCount).toBe(0);
     expect(inventory.accountDetails[0].truthState).toBe("error");
