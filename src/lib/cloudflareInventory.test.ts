@@ -75,16 +75,18 @@ describe("Cloudflare production inventory normalization", () => {
 
 describe("multi-account scoped API credentials", () => {
   it("preserves each account and can use a separate Pages token", async () => {
-    const { apiTokenFor, pagesTokenFor } = await import("@/lib/cloudflareInventory.server");
+    const { apiTokenFor, pagesTokenFor, workersTokenFor } = await import("@/lib/cloudflareInventory.server");
     const first = "a".repeat(32), second = "b".repeat(32);
     const env = { CLOUDFLARE_ACCOUNT_TOKENS_JSON: JSON.stringify({
-      [first]: { default: "first-general", pages: "first-pages" },
-      [second]: { default: "second-general", pages: "second-pages" },
+      [first]: { default: "first-general", pages: "first-pages", workers: "first-workers" },
+      [second]: { default: "second-general", pages: "second-pages", workers: "second-workers" },
     }) };
     expect(apiTokenFor(first, env)).toBe("first-general");
     expect(pagesTokenFor(first, env)).toBe("first-pages");
     expect(apiTokenFor(second, env)).toBe("second-general");
     expect(pagesTokenFor(second, env)).toBe("second-pages");
+    expect(workersTokenFor(first, env)).toBe("first-workers");
+    expect(workersTokenFor(second, env)).toBe("second-workers");
   });
 });
 
@@ -182,6 +184,74 @@ describe("real Cloudflare API inventory with synthetic responses", () => {
     expect(inventory.zones).toHaveLength(1);
     expect(inventory.rows).toHaveLength(0);
     expect(paths.some(path => path.endsWith("/workers/routes"))).toBe(false);
+  });
+
+  it("retrieves all 85 Workers over multiple pages rather than stopping at Pages project count", async () => {
+    const paths: string[] = [];
+    const workers = Array.from({length:85}, (_, index) => ({
+      name:"worker-" + (index+1), deployed_on:"2026-11-03T10:00:00Z",
+    }));
+    const env = {
+      CLOUDFLARE_ACCOUNT_IDS: ACCOUNT,
+      CLOUDFLARE_ACCOUNT_TOKENS_JSON: JSON.stringify({
+        [ACCOUNT]: {default:"pages-read", workers:"workers-read"},
+      }),
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const u = new URL(String(input));
+      const path = u.pathname.replace(/^\/client\/v4(?=\/)/, "");
+      paths.push(path);
+      if (path.endsWith("/workers/workers")) {
+        expect((init?.headers as Record<string,string>)?.Authorization).toBe("Bearer workers-read");
+        const page = Number(u.searchParams.get("page") || 1);
+        const data = workers.slice((page-1)*50, page*50);
+        return new Response(JSON.stringify({success:true,result:data,
+          result_info:{page,per_page:50,total_pages:2,total_count:85}}));
+      }
+      const data = path.endsWith("/pages/projects") || path.endsWith("/workers/domains") ||
+        path === "/zones" ? [] : null;
+      if (data === null) return new Response(JSON.stringify({success:false}),{status:404});
+      return new Response(JSON.stringify({success:true,result:data,
+        result_info:{total_pages:1,total_count:0}}));
+    }));
+    const inventory = await collectCloudflareInventory(env);
+    expect(inventory.truthState).toBe("live");
+    expect(inventory.accountDetails[0].workersCount).toBe(85);
+    expect(inventory.accountDetails[0].pagesCount).toBe(0);
+    expect(paths.filter(x=>x.endsWith("/workers/workers"))).toHaveLength(2);
+    expect(JSON.stringify(inventory)).not.toContain("workers-read");
+  });
+
+  it("reports a missing modern Workers scope without claiming the fallback is complete", async () => {
+    const env = { CLOUDFLARE_ACCOUNT_IDS: ACCOUNT, CLOUDFLARE_API_TOKEN:"synthetic-only" };
+    vi.stubGlobal("fetch", vi.fn(async(input:string|URL|Request) => {
+      const u = new URL(String(input));
+      const path = u.pathname.replace(/^\/client\/v4(?=\/)/, "");
+      if (path.endsWith("/workers/workers")) return new Response(JSON.stringify({
+        success:false,errors:[{code:10000,message:"not authorized"}],
+      }),{status:403});
+      const data = path.endsWith("/pages/projects") || path.endsWith("/workers/scripts") ||
+        path.endsWith("/workers/domains") || path === "/zones" ? [] : null;
+      if (data===null) return new Response(JSON.stringify({success:false}),{status:404});
+      return new Response(JSON.stringify({success:true,result:data,
+        result_info:{total_pages:1,total_count:0}}));
+    }));
+    const inventory=await collectCloudflareInventory(env);
+    expect(inventory.truthState).toBe("error");
+    expect(inventory.accountDetails[0].errors.some(x=>x.includes("HTTP 403"))).toBe(true);
+    expect(inventory.accountDetails[0].workersCount).toBe(0);
+    expect(inventory.accountDetails[0].truthState).toBe("error");
+    expect(JSON.stringify(inventory)).not.toContain("synthetic-only");
+  });
+
+  it("rejects a truncated final page even when the provider claims pagination ended", async () => {
+    const { allPages } = await import("@/lib/cloudflareInventory.server");
+    vi.stubGlobal("fetch",vi.fn(async()=>new Response(JSON.stringify({
+      success:true,result:[{name:"only-one"}],
+      result_info:{total_pages:1,total_count:85},
+    }))));
+    await expect(allPages("/accounts/" + ACCOUNT + "/workers/workers","synthetic-only",50))
+      .rejects.toThrow(/incomplete/);
   });
 
 });

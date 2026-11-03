@@ -179,6 +179,12 @@ export function pagesTokenFor(accountId: string, env: Record<string, string | un
   const configured = accountTokenConfig(accountId, env);
   return asString(asObject(configured).pages) || apiTokenFor(accountId, env);
 }
+/** Optional per-account Workers read token. Pages-only tokens may list Pages successfully
+ * while Workers APIs return 403. Do not reuse tokens from another Cloudflare account. */
+export function workersTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  const configured = accountTokenConfig(accountId, env);
+  return asString(asObject(configured).workers) || apiTokenFor(accountId, env);
+}
 export async function cloudflareGet<T>(path: string, token: string): Promise<T> {
   const response = await fetch(API + path, {
     method: "GET",
@@ -256,30 +262,52 @@ export async function allPages(path: string, token: string, perPage = 100): Prom
     const rows = envelope.result;
     if (!Array.isArray(rows)) throw new Error("Invalid Cloudflare pagination payload");
     entries.push(...rows);
+    if (typeof envelope.result_info?.total_count === "number" &&
+        entries.length > envelope.result_info.total_count) {
+      throw new Error("Cloudflare inventory exceeds API-reported total");
+    }
     if (envelope.result_info?.total_pages && envelope.result_info.total_pages > MAX_PAGES) {
       throw new Error("Cloudflare inventory exceeds the configured page limit");
     }
     if (envelope.result_info?.total_pages
-      ? page >= envelope.result_info.total_pages : rows.length < perPage) return entries;
+      ? page >= envelope.result_info.total_pages : rows.length < perPage) {
+      const expected = envelope.result_info?.total_count;
+      if (typeof expected === "number" && entries.length !== expected) {
+        throw new Error("Cloudflare pagination incomplete: reported total differs from fetched records");
+      }
+      return entries;
+    }
   }
   throw new Error("Cloudflare inventory page limit reached");
 }
 /** Cloudflare's current Workers API lists Workers by `name`; the older
  * scripts endpoint does not necessarily enumerate the complete estate.
  * A fallback is explicitly marked partial instead of silently counted as full. */
+function safeApiReason(error: unknown): string {
+  if (!(error instanceof Error)) return "request failed";
+  const match = /^Cloudflare HTTP (\d{3})(?: \(CF code (\d+)\))?$/.exec(error.message);
+  return match ? "HTTP " + match[1] + (match[2] ? " / code " + match[2] : "") :
+    error.message.includes("pagination") || error.message.includes("incomplete")
+      ? "incomplete pagination" : "request failed";
+}
 async function listAccountWorkers(accountId: string, token: string): Promise<{
-  scripts: unknown[]; usedLegacy: boolean;
+  scripts: unknown[]; usedLegacy: boolean; modernError: string | null;
 }> {
   try {
     const modern = await allPages("/accounts/" + accountId + "/workers/workers", token, 50);
     return { scripts: modern.map(raw => {
       const worker = asObject(raw);
       return { ...worker, id: asString(worker.name) || asString(worker.id) };
-    }), usedLegacy: false };
-  } catch {
-    const legacy = await cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token);
-    if (!Array.isArray(legacy.result)) throw new Error("Invalid legacy Workers API payload");
-    return { scripts: legacy.result, usedLegacy: true };
+    }), usedLegacy: false, modernError: null };
+  } catch (error) {
+    const reason = safeApiReason(error);
+    try {
+      const legacy = await cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/scripts", token);
+      if (!Array.isArray(legacy.result)) throw new Error("Invalid legacy Workers API payload");
+      return { scripts: legacy.result, usedLegacy: true, modernError: reason };
+    } catch (legacyError) {
+      throw new Error("Modern Workers " + reason + "; legacy Scripts " + safeApiReason(legacyError));
+    }
   }
 }
 /** Worker Domains listing does not support the Pages-style page/per_page query.
@@ -339,14 +367,14 @@ function normalizeZone(accountId: string, raw: unknown): CloudflareZone | null {
     dnsUrl: prefix + "/dns/records",
   };
 }
-async function accountInventory(accountId: string, token: string, pagesToken: string) {
+async function accountInventory(accountId: string, token: string, pagesToken: string, workersToken: string) {
   const rows: CloudflareDeploymentRow[] = [];
   const zoneRows: CloudflareZone[] = [];
   const errors: string[] = [];
   const [pages, scripts, domains, zones] = await Promise.allSettled([
     allPages("/accounts/" + accountId + "/pages/projects", pagesToken, 10),
-    listAccountWorkers(accountId, token),
-    listWorkerDomains(accountId, token),
+    listAccountWorkers(accountId, workersToken),
+    listWorkerDomains(accountId, workersToken),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
     allPages("/zones?account.id=" + encodeURIComponent(accountId), token, 50),
   ]);
@@ -362,7 +390,8 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
       (match ? " (" + match[0] + ")" : ""));
   }
   const workerDomains = domains.status === "fulfilled" ? domains.value : [];
-  if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6));
+  if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6) +
+    " (" + safeApiReason(domains.reason) + "); verify Workers read permission for this account");
 
   // Worker routes are zone-scoped, not fields on a script. Discover all zones
   // of this account and map real route patterns back to Worker script names.
@@ -380,7 +409,7 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
       ? zones.value.map(asObject).map(z => asString(z.id))
         .filter((id): id is string => typeof id === "string" && ACCOUNT_ID.test(id)) : [];
     const routeResults = await parallelMap(ids, id =>
-      cloudflareGet<Envelope>("/zones/" + id + "/workers/routes", token));
+      cloudflareGet<Envelope>("/zones/" + id + "/workers/routes", workersToken));
     routeResults.forEach(result => {
       if (result.status !== "fulfilled" || !Array.isArray(result.value.result)) return;
       for (const raw of result.value.result) {
@@ -400,8 +429,9 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
   }
   if (scripts.status === "fulfilled") {
     if (scripts.value.usedLegacy) {
-      errors.push("New Workers API inaccessible for account " + accountId.slice(-6) +
-        "; legacy Scripts fallback used — Worker coverage may be incomplete");
+      errors.push("New Workers API unavailable for account " + accountId.slice(-6) +
+        " (" + scripts.value.modernError + "); legacy Scripts fallback used — Worker count is unverified. " +
+        "Create an account-scoped Workers Read token or configure the per-account workers token.");
     }
     const normalizedScripts = scripts.value.scripts.filter((s: any) =>
       SCRIPT_NAME.test(asString(s?.id) || ""));
@@ -418,7 +448,8 @@ async function accountInventory(accountId: string, token: string, pagesToken: st
       if (row) rows.push(row);
     });
   } else errors.push("Worker inventory unavailable for account " + accountId.slice(-6) +
-    "; verify account Workers read permissions");
+    " (" + (scripts.reason instanceof Error ? scripts.reason.message : "request failed") +
+    "); verify account-scoped Workers Read permissions");
   return { rows, zones: zoneRows, errors };
 }
 /** Caller must pass Cloudflare Access authorization before invoking. */
@@ -440,7 +471,8 @@ export async function collectCloudflareInventory(
   // Cap simultaneous account inventories to prevent API request bursts.
   const results = await parallelMap(accounts, async id => {
     const token = apiTokenFor(id, environment);
-    return token ? await accountInventory(id, token, pagesTokenFor(id, environment) || token) : null;
+    return token ? await accountInventory(id, token, pagesTokenFor(id, environment) || token,
+      workersTokenFor(id, environment) || token) : null;
   }, 2);
   results.forEach((entry, index) => {
     const id = accounts[index];
