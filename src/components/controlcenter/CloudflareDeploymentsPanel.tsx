@@ -100,7 +100,7 @@ export default function CloudflareDeploymentsPanel({
       r.deployedAt || "", r.branch || "", r.commit || "", r.repoUrl || "",
       r.domains.join("; "), r.routes.join("; "), r.projectUrl,
     ].map(quote).join(","));
-    const csv = [fields.join(","), ...data].join("\\r\\n");
+    const csv = [fields.join(","), ...data].join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], {type:"text/csv;charset=utf-8"}));
     const anchor = document.createElement("a");
     anchor.href = url; anchor.download = "mission-control-cloudflare-inventory.csv";
