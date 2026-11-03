@@ -175,7 +175,7 @@ export default function CloudflareDeploymentsPanel({
             {[
               { label: "Accounts", count: inventory.accounts.length, icon: ShieldCheck },
               { label: "Pages projects", count: totalPages, icon: Cloud },
-              { label: partialWorkers ? "Workers (partial)" : "Workers", count: totalWorkers, icon: Server },
+              { label: partialWorkers ? "Workers (unverified)" : "Workers", count: partialWorkers && totalWorkers === 0 ? "—" : partialWorkers ? totalWorkers + "+" : totalWorkers, icon: Server },
               { label: "Confirmed GitHub sources", count: mapped, icon: GitBranch },
             ].map(stat => <div key={stat.label} className="card-glass rounded-2xl p-4">
               <stat.icon size={16} className="text-primary" />
@@ -183,6 +183,10 @@ export default function CloudflareDeploymentsPanel({
               <p className="text-xs text-muted-foreground">{stat.label}</p>
             </div>)}
           </div>
+          {partialWorkers && <p role="note" className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+            Worker API access is incomplete. The visible Worker count is a lower bound, not a verified total.
+            Pages and Workers are separate Cloudflare products; missing Workers must not be inferred from the Pages count.
+          </p>}
           <div className="grid gap-3 md:grid-cols-2">{inventory.accountDetails.map(a =>
             <div key={a.accountId} className="rounded-2xl border border-border bg-card/70 p-4 text-xs shadow-sm">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -193,7 +197,7 @@ export default function CloudflareDeploymentsPanel({
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 rounded-xl bg-muted/30 px-3 py-3 text-center">
                 <span><strong className="block text-lg tabular-nums">{a.pagesCount}</strong>Pages</span>
-                <span><strong className="block text-lg tabular-nums">{a.workersCount}{a.errors.some(e => /worker/i.test(e)) ? "+" : ""}</strong>Workers</span>
+                <span><strong className="block text-lg tabular-nums">{a.errors.some(e => /worker/i.test(e)) && a.workersCount === 0 ? "—" : a.workersCount}{a.errors.some(e => /worker/i.test(e)) && a.workersCount > 0 ? "+" : ""}</strong>Workers {a.errors.some(e => /worker/i.test(e)) ? "(unverified)" : ""}</span>
                 <span><strong className="block text-lg tabular-nums">{a.zonesCount}</strong>Zones</span>
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
