@@ -26,6 +26,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { portfolioPage, type PortfolioPageSize } from "@/lib/portfolioPaging";
+import PortfolioPager from "@/components/controlcenter/PortfolioPager";
 import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
 import {
@@ -190,6 +192,8 @@ export default function CloudflareDeploymentsPanel({
 }) {
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PortfolioPageSize>(50);
   const [selected, setSelected] = useState<CloudflareDeploymentRow | null>(null);
   const [history, setHistory] = useState<DeploymentHistoryItem[]>([]);
   const [historyPage, setHistoryPage] = useState(0);
@@ -203,12 +207,14 @@ export default function CloudflareDeploymentsPanel({
   useEffect(() => {
     setPrefs(readPrefs());
   }, []);
-  const update = (patch: Partial<Prefs>) =>
+  const update = (patch: Partial<Prefs>) => {
+    setPage(1);
     setPrefs((old) => {
       const next = { ...old, ...patch };
       writePrefs(next);
       return next;
     });
+  };
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -262,6 +268,7 @@ export default function CloudflareDeploymentsPanel({
       )
       .sort((a, b) => compareRows(a, b, prefs.sort, accountName));
   }, [scoped, prefs.quick, prefs.sort, prefs.facets, query, accountName]);
+  const current = portfolioPage(rows, page, pageSize);
   const totalPages = inventory?.rows.filter((r) => r.kind === "pages").length || 0;
   const totalWorkers = inventory?.rows.filter((r) => r.kind === "worker").length || 0;
   const workerGap = (a: CloudflareAccountSummary) => a.errors.some((e) => /worker/i.test(e));
@@ -733,7 +740,7 @@ export default function CloudflareDeploymentsPanel({
                 ref={searchRef}
                 type="search"
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {setQuery(e.target.value);setPage(1);}}
                 placeholder="Search name, domain, repo, branch, commit…  ( / )"
                 className="w-full rounded-xl border border-border bg-background py-2 pl-10 pr-3 text-sm"
               />
@@ -812,13 +819,12 @@ export default function CloudflareDeploymentsPanel({
           </div>
 
           <SavedFilterViews storageKey="mc.cloudflare.saved-views.v1" state={{prefs,query}}
-            onApply={view=>{update(view.prefs);setQuery(view.query);}} />
+            onApply={view=>{update(view.prefs);setQuery(view.query);setPage(1);}} />
 
           <p className="text-xs text-muted-foreground" aria-live="polite">
             Showing <strong className="text-foreground">{rows.length}</strong> of {scoped.length}{" "}
             resources
-            {accountId !== "all" ? " in " + accountName(accountId) : ""} · all results rendered, no
-            paging
+            {accountId !== "all" ? " in " + accountName(accountId) : ""} · {current.from}–{current.to} on this page
           </p>
 
           {rows.length === 0 ? (
@@ -837,7 +843,7 @@ export default function CloudflareDeploymentsPanel({
                 <span className="text-right">Manage</span>
               </div>
               <ul className="divide-y divide-border/60">
-                {rows.map((row) => {
+                {current.items.map((row) => {
                   const health = healthOf(row);
                   const sha = commitUrl(row);
                   const failedSha = row.latestProduction
@@ -1159,6 +1165,8 @@ export default function CloudflareDeploymentsPanel({
               </ul>
             </div>
           )}
+          <PortfolioPager id="Cloudflare resources" {...current}
+            onPage={setPage} onSize={size => {setPageSize(size);setPage(1);}} />
         </>
       )}
 
