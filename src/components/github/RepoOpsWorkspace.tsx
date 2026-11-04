@@ -255,7 +255,7 @@ export default function RepoOpsWorkspace({
     const owner = validOwners.find(o => o.toLowerCase() === row.owner.toLowerCase());
     if (!owner) {setInspected({repo:row.key,loading:false,result:null,error:"Unsupported GitHub account."}); return;}
     try {
-      const result = await getRepositoryDiagnostics({data:{owner,repo:row.name}});
+      const result = await getRepositoryDiagnostics({data:{owner,repo:row.key.split("/")[1]}});
       setInspected(current => current?.repo === row.key ? {...current,loading:false,result,error:null} : current);
     } catch {
       setInspected(current => current?.repo === row.key ? {...current,loading:false,error:"GitHub diagnostics unavailable. Sign in via Cloudflare Access and configure an account-specific read token."} : current);
