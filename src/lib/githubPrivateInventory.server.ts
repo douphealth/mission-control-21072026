@@ -5,7 +5,7 @@
  * Tokens MUST be installed in server secrets. ChatGPT-connected GitHub tokens
  * do not automatically authorize deployed Mission Control.
  */
-export const MANAGED_GITHUB_ACCOUNTS = ["douphealth", "Papalexios", "papalexios001-wq"] as const;
+export const MANAGED_GITHUB_ACCOUNTS = ["douphealth", "Papalexios", "papalexios001-wq", "papalexios01"] as const;
 export type ManagedGitHubAccount = typeof MANAGED_GITHUB_ACCOUNTS[number];
 export type GitHubInventoryState = "live" | "partial" | "error" | "not_connected";
 export type PrivateRepoSnapshot = {
