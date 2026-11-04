@@ -108,7 +108,7 @@ const CHIPS: Array<{ id: RepoQuick; label: string; tone?: "danger" | "warn" }> =
   { id: "attention", label: "Needs action", tone: "warn" },
   { id: "failing", label: "Deploy problems", tone: "danger" },
   { id: "cloudflare", label: "On Cloudflare" },
-  { id: "undeployed", label: "Not deployed" },
+  { id: "undeployed", label: "No verified app link" },
   { id: "recent", label: "Pushed ≤7d" },
   { id: "stale", label: "Stale >180d" },
   { id: "issues", label: "Open issues/PRs" },
@@ -155,13 +155,13 @@ function CloudflareCell({
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex max-w-full items-center gap-1 text-primary hover:underline"
-        title="App URL from your plan or GitHub homepage"
+        title="App URL from saved plan or GitHub homepage; Cloudflare deployment not independently verified"
       >
         <Globe size={12} className="shrink-0" />
         <span className="truncate">{hostOf(appUrl)}</span>
       </a>
     ) : known ? (
-      <span className="text-muted-foreground">Not deployed</span>
+      <span className="text-muted-foreground" title="No matched Cloudflare source or recorded app URL; deployment is not disproved">No verified app link</span>
     ) : (
       <span
         className="text-muted-foreground"
@@ -235,8 +235,9 @@ export default function RepoOpsWorkspace({
   const searchRef = useRef<HTMLInputElement>(null);
   const cf = useCloudflareControl();
   const loadCloudflare = cf.load;
-  // Without a Cloudflare inventory, "not deployed" / "deploy problems" are unknowable.
+  // Without complete Cloudflare coverage, unmatched repositories are unknown, not undeployed.
   const cfKnown = Boolean(cf.snapshot?.inventory);
+  const cfComplete = cf.snapshot?.inventory?.truthState === "live";
 
   const refresh = useCallback(
     async (force = false) => {
@@ -315,8 +316,8 @@ export default function RepoOpsWorkspace({
     [all, prefs.owner],
   );
   const quick: RepoQuick =
-    !cfKnown &&
-    (prefs.quick === "undeployed" || prefs.quick === "failing" || prefs.quick === "cloudflare")
+    !cfComplete &&
+    (prefs.quick === "undeployed" || prefs.quick === "failing")
       ? "all"
       : prefs.quick;
   const counts = useMemo(() => repoQuickCounts(ownerScoped), [ownerScoped]);
@@ -454,7 +455,8 @@ export default function RepoOpsWorkspace({
         {CHIPS.filter(
           (c) =>
             (c.id === "all" || counts[c.id] > 0 || quick === c.id) &&
-            (cfKnown || (c.id !== "undeployed" && c.id !== "failing" && c.id !== "cloudflare")),
+            ((cfKnown || c.id !== "cloudflare") &&
+              (cfComplete || (c.id !== "undeployed" && c.id !== "failing"))),
         ).map((chip) => {
           const active = quick === chip.id;
           const tone =
@@ -693,7 +695,7 @@ export default function RepoOpsWorkspace({
                     {relativeTime(row.pushedAt)}
                   </div>
                   <div className="col-span-2 col-start-2 min-w-0 md:col-span-1 md:col-start-auto">
-                    <CloudflareCell items={row.cloudflare} appUrl={row.appUrl} known={cfKnown} />
+                    <CloudflareCell items={row.cloudflare} appUrl={row.appUrl} known={cfComplete} />
                   </div>
                   <div className="col-span-2 col-start-2 flex min-w-0 items-center gap-2 md:col-span-1 md:col-start-auto">
                     <select
