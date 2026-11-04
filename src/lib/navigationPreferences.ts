@@ -1,7 +1,20 @@
 const validSection = (value: unknown): value is string =>
   typeof value === "string" && /^[a-zA-Z0-9_-]{1,128}$/.test(value);
 const groups = ["Focus", "Growth", "Intelligence", "Operate", "Tools", "Custom"];
-export const DEFAULT_PINNED_SECTIONS = ["dashboard", "tasks", "industry", "review"];
+/** Pins every device started with before GitHub and Cloudflare were pinned by default. */
+export const LEGACY_DEFAULT_PINNED_SECTIONS = ["dashboard", "tasks", "industry", "review"];
+/** Your two most-managed workspaces live one click away instead of inside collapsed groups. */
+export const DEFAULT_PINNED_SECTIONS = [...LEGACY_DEFAULT_PINNED_SECTIONS, "github", "cloudflare"];
+/**
+ * Devices that never customised their pins still hold the old default; give
+ * them the new one. Any customised pin list (different set or order) is kept.
+ */
+export function upgradeLegacyPins(pins: readonly string[]): string[] {
+  const untouched =
+    pins.length === LEGACY_DEFAULT_PINNED_SECTIONS.length &&
+    pins.every((pin, index) => pin === LEGACY_DEFAULT_PINNED_SECTIONS[index]);
+  return untouched ? [...DEFAULT_PINNED_SECTIONS] : [...pins];
+}
 export function sanitizeNavigation(value: unknown) {
   const input = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
   const recent = Array.isArray(input.recentSections)

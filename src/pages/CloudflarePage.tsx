@@ -7,6 +7,7 @@ import {
   Cloud,
   Copy,
   ExternalLink,
+  Github,
   Globe,
   Lock,
   RefreshCw,
@@ -27,6 +28,7 @@ import CloudflareDeploymentsPanel from "@/components/controlcenter/CloudflareDep
 import CloudflareEstatePanel from "@/components/controlcenter/CloudflareEstatePanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HealthTile, TileRow, ctl, ctlPrimary } from "@/components/console/ConsoleUI";
+import { useNavigationStore } from "@/stores/navigationStore";
 
 type Shortcut = { label: string; url: string; icon: typeof Cloud; desc: string };
 /** Account-level destinations. Zone-level ones live on each zone row. */
@@ -104,6 +106,7 @@ function readTab(): Tab {
 
 export default function CloudflarePage() {
   const credentials = useCredentials();
+  const setSection = useNavigationStore((s) => s.setActiveSection);
   // One shared, deduplicated snapshot powers zones, deployments and the GitHub console.
   const { snapshot: control, loading, failure, load } = useCloudflareControl();
   const inventory = control?.inventory ?? null;
@@ -217,6 +220,14 @@ export default function CloudflarePage() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={ctl}
+            onClick={() => setSection("github")}
+            title="Open the GitHub repository console"
+          >
+            <Github size={13} /> GitHub repos
+          </button>
           <a
             className={ctl}
             href="https://www.cloudflarestatus.com"

@@ -1,7 +1,11 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { resilientWebStorage } from "@/lib/resilientStorage";
-import { DEFAULT_PINNED_SECTIONS, sanitizeNavigation } from "@/lib/navigationPreferences";
+import {
+  DEFAULT_PINNED_SECTIONS,
+  sanitizeNavigation,
+  upgradeLegacyPins,
+} from "@/lib/navigationPreferences";
 export { sanitizeNavigation } from "@/lib/navigationPreferences";
 
 interface NavigationState {
@@ -87,8 +91,14 @@ export const useNavigationStore = create<NavigationState>()(
     {
       name: "mc-navigation-v1",
       storage: createJSONStorage(() => resilientWebStorage),
-      version: 3,
-      migrate: (persisted) => sanitizeNavigation(persisted),
+      version: 4,
+      migrate: (persisted, version) => {
+        const clean = sanitizeNavigation(persisted);
+        // v4: GitHub and Cloudflare join the default pins (only for untouched defaults).
+        return version < 4
+          ? { ...clean, pinnedSections: upgradeLegacyPins(clean.pinnedSections) }
+          : clean;
+      },
       merge: (persisted, current) => ({ ...current, ...sanitizeNavigation(persisted) }),
       partialize: (state) => ({
         activeSection: state.activeSection,

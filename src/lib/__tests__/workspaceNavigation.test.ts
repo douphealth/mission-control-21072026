@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { filterWorkspaces, sectionFromHash, WORKSPACE_SECTIONS } from "../workspaceCatalog";
-import { sanitizeNavigation } from "../navigationPreferences";
+import {
+  DEFAULT_PINNED_SECTIONS,
+  sanitizeNavigation,
+  upgradeLegacyPins,
+} from "../navigationPreferences";
 
 describe("workspace discovery", () => {
   it("makes previously inaccessible hosting, WordPress and Google workspaces discoverable", () => {
@@ -67,7 +71,7 @@ describe("section links and saved layout", () => {
       recentSections: [],
       sidebarCollapsed: false,
       density: "comfortable",
-      pinnedSections: ["dashboard", "tasks", "industry", "review"],
+      pinnedSections: ["dashboard", "tasks", "industry", "review", "github", "cloudflare"],
       closedGroups: ["Growth", "Tools"],
     });
   });
@@ -79,5 +83,23 @@ describe("section links and saved layout", () => {
     expect(state.pinnedSections).toEqual(["payments", "tasks"]);
     expect(state.closedGroups).toEqual(["Tools"]);
     expect(sanitizeNavigation({ pinnedSections: [] }).pinnedSections).toEqual([]);
+  });
+  it("upgrades only untouched default pins to include GitHub and Cloudflare", () => {
+    const legacy = ["dashboard", "tasks", "industry", "review"];
+    expect(upgradeLegacyPins(legacy)).toEqual([...legacy, "github", "cloudflare"]);
+    // Anything the user changed — a different set, order, or an emptied list — is theirs and stays.
+    expect(upgradeLegacyPins(["tasks", "dashboard", "industry", "review"])).toEqual([
+      "tasks",
+      "dashboard",
+      "industry",
+      "review",
+    ]);
+    expect(upgradeLegacyPins(["payments", "tasks"])).toEqual(["payments", "tasks"]);
+    expect(upgradeLegacyPins([])).toEqual([]);
+    expect(upgradeLegacyPins(legacy)).not.toBe(legacy);
+  });
+  it("keeps the default pin list within the eight-pin limit", () => {
+    expect(DEFAULT_PINNED_SECTIONS.length).toBeLessThanOrEqual(8);
+    expect(new Set(DEFAULT_PINNED_SECTIONS).size).toBe(DEFAULT_PINNED_SECTIONS.length);
   });
 });

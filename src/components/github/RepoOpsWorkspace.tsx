@@ -10,6 +10,7 @@ import {
   CircleDot,
   CircleX,
   Cloud,
+  Code2,
   Copy,
   Download,
   Ellipsis,
@@ -535,7 +536,7 @@ export default function RepoOpsWorkspace({
   const bulkCount = selectedRows.length;
 
   return (
-    <section aria-label="GitHub repository console" className="space-y-3.5">
+    <section aria-label="GitHub repository operations" className="space-y-3.5">
       {/* ───── header ───── */}
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
@@ -966,7 +967,7 @@ export default function RepoOpsWorkspace({
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card/70">
-          <div className="hidden grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_5.25rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_7.75rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
             <input
               type="checkbox"
               aria-label="Select all repositories on this page"
@@ -1013,7 +1014,7 @@ export default function RepoOpsWorkspace({
                         return;
                       openRow(row);
                     }}
-                    className={`grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_5.25rem] md:items-center ${
+                    className={`grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_7.75rem] md:items-center ${
                       compact ? "py-1.5" : "py-3"
                     } ${selected.has(row.key) ? "bg-primary/5" : ""} ${isCursor ? "relative z-[1] ring-2 ring-inset ring-primary/55" : ""}`}
                   >
@@ -1026,15 +1027,29 @@ export default function RepoOpsWorkspace({
                     />
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => openRow(row)}
+                        <a
+                          href={row.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => {
+                            // Plain click opens the details drawer; Ctrl/Cmd/Shift/middle-click still follow the link.
+                            if (
+                              e.button === 0 &&
+                              !e.metaKey &&
+                              !e.ctrlKey &&
+                              !e.shiftKey &&
+                              !e.altKey
+                            ) {
+                              e.preventDefault();
+                              openRow(row);
+                            }
+                          }}
                           className="min-w-0 truncate text-left text-sm font-semibold hover:text-primary"
-                          title={"Open details · " + row.key}
+                          title="Open details (Ctrl/Cmd-click opens GitHub)"
                         >
                           <span className="font-normal text-muted-foreground">{row.owner}/</span>
                           {row.plan.name || repoPath}
-                        </button>
+                        </a>
                         {row.visibility === "private" && (
                           <Lock
                             size={11}
@@ -1056,7 +1071,7 @@ export default function RepoOpsWorkspace({
                             aria-label="Fork"
                           />
                         )}
-                        {row.openIssues ? (
+                        {compact && row.openIssues ? (
                           <span
                             className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/10 px-1.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300"
                             title={row.openIssues + " open issues and pull requests"}
@@ -1070,7 +1085,12 @@ export default function RepoOpsWorkspace({
                           className="truncate text-[11px] text-muted-foreground"
                           title={row.description}
                         >
-                          {[row.language, row.stars ? "★ " + row.stars : "", row.description]
+                          {[
+                            row.language,
+                            row.stars ? "★ " + row.stars : "",
+                            row.openIssues ? row.openIssues + " open" : "",
+                            row.description,
+                          ]
                             .filter(Boolean)
                             .join(" · ") ||
                             (row.source === "snapshot"
@@ -1147,6 +1167,16 @@ export default function RepoOpsWorkspace({
                       </select>
                     </div>
                     <div className="flex items-center justify-end gap-0.5 md:col-span-1">
+                      <a
+                        className={iconBtn}
+                        href={row.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        aria-label={"Code for " + row.key}
+                        title="Open on GitHub"
+                      >
+                        <Code2 size={15} />
+                      </a>
                       <button
                         type="button"
                         className={ctl + " !h-8 !px-2.5"}
