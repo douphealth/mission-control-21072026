@@ -141,3 +141,54 @@ describe("unified repository operations model", () => {
     expect(csv).toContain('"\'=HYPERLINK(x)"');
   });
 });
+
+describe("GitHub Portfolio app link evidence resolution", () => {
+  it("shows operator-curated app links even if Cloudflare inventory lacks Git provenance", () => {
+    const rows = buildRepoOps({
+      displayRepos: [plan({ id: "index", name: "index-engine", url: "https://github.com/douphealth/index-engine", demoUrl: "" })],
+      savedRepos: [],
+      live: [], owned: [], cloud: [],
+    });
+    expect(rows[0].appUrl).toBe("https://index-engine-dashboard.papalexios.workers.dev/");
+    expect(rows[0].appEvidence?.origin).toBe("app-catalog");
+    expect(rows[0].appEvidence?.providerAttested).toBe(false);
+  });
+
+  it("resolves direct-upload Cloudflare deployments only by exact known endpoint", () => {
+    const app = "https://acme-test.pages.dev/";
+    const direct = { ...cf, key: "pages:a:acme-test", name: "acme-test",
+      repoUrl: null, publicUrl: app, pagesDevUrl: app, domains: [] };
+    const row = buildRepoOps({
+      displayRepos: [plan({ id: "custom", name: "some-repo", url: "https://github.com/douphealth/some-repo", demoUrl: app })],
+      savedRepos: [], live: [], owned: [], cloud: [direct],
+    })[0];
+    expect(row.cloudflare.map(c => c.key)).toEqual([direct.key]);
+    expect(row.appUrl).toBe(app);
+    expect(row.appEvidence?.origin).toBe("cloudflare-endpoint");
+  });
+
+  it("refuses to associate ambiguous Cloudflare resource endpoints", () => {
+    const url = "https://same.example.com/";
+    const twins = [{ ...cf, key: "pages:a:one", repoUrl: null, publicUrl: url },
+      { ...cf, key: "worker:a:two", repoUrl: null, publicUrl: url }];
+    const row = buildRepoOps({ displayRepos: [plan({ demoUrl: url })], savedRepos: [],
+      live: [], owned: [], cloud: twins })[0];
+    expect(row.cloudflare).toHaveLength(0);
+    expect(row.appUrl).toBe(url);
+    expect(row.appEvidence?.origin).toBe("saved-plan");
+  });
+
+  it("keeps an unmatched repo without invented Pages or Workers URL", () => {
+    const row = buildRepoOps({ displayRepos: [plan({ demoUrl: "" })], savedRepos: [],
+      live: [], owned: [], cloud: [] })[0];
+    expect(row.appUrl).toBeNull();
+    expect(row.appEvidence).toBeNull();
+  });
+
+  it("prefers Cloudflare-reported Git source to historical or saved app URLs", () => {
+    const row = buildRepoOps({ displayRepos: [plan({ demoUrl: "https://old.example.com/" })],
+      savedRepos: [], live: [], owned: [], cloud: [cf] })[0];
+    expect(row.appUrl).toBe("https://alpha.example.com/");
+    expect(row.appEvidence?.origin).toBe("cloudflare-source");
+  });
+});
