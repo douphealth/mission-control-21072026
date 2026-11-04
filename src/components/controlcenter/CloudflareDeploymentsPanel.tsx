@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { recentOperatorActivity } from "@/lib/operatorActivity";
 import {
   getCloudflareDeploymentHistory,
   type CloudflareDeploymentRow,
@@ -247,6 +248,7 @@ export default function CloudflareDeploymentsPanel({
   const counts = useMemo(() => quickCounts(scoped), [scoped]);
   const stats = useMemo(() => cloudflareInventoryStats(inventory?.rows || []), [inventory]);
   const coverage = useMemo(() => inventory ? cloudflareCoverage(inventory) : null, [inventory]);
+  const recentDeployments = useMemo(() => recentOperatorActivity([],inventory?.rows||[],6),[inventory]);
   const setFacet = (patch: Partial<CloudflareFacets>) => update({facets: {...prefs.facets,...patch}});
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -450,6 +452,19 @@ export default function CloudflareDeploymentsPanel({
         </div>
       )}
 
+      {inventory && (
+        <details className="rounded-xl border border-border/60 bg-card/65 p-3">
+          <summary className="cursor-pointer text-sm font-semibold">Recent Cloudflare deployment records · {recentDeployments.length} observed</summary>
+          <div className="mt-3 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {recentDeployments.map(a => <a key={a.key} href={a.url} target="_blank" rel="noopener noreferrer"
+              className="min-w-0 rounded-lg border border-border/40 p-2 hover:border-primary/40">
+              <span className="block truncate text-xs font-medium text-primary">{a.name}</span>
+              <span className="block text-[11px] text-muted-foreground">{a.action} · {relativeTime(a.at)}</span>
+            </a>)}
+            {!recentDeployments.length && <p className="text-xs text-muted-foreground">No timestamped deployment records returned.</p>}
+          </div>
+        </details>
+      )}
       {loading && !inventory && (
         <p role="status" className="card-glass p-4 text-sm text-muted-foreground">
           Loading every Cloudflare project across your accounts…
