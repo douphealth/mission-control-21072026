@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
 import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -647,6 +648,9 @@ export default function RepoOpsWorkspace({
         <span>Filters are saved locally on this device · {rows.length} matching repositories</span>
         <button type="button" className="text-primary hover:underline" onClick={resetFilters}>Clear all filters</button>
       </div>
+
+      <SavedFilterViews storageKey="mc.github.saved-views.v1" state={{prefs,query}}
+        onApply={view=>{update(view.prefs);setQuery(view.query);}} />
 
       {selectedRows.length > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
