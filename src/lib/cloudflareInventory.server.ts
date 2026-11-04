@@ -4,6 +4,7 @@
  * Deployments are API-observed states, NOT independent uptime checks.
  */
 import { accountTruth, overallTruth } from "@/lib/cloudflareInventoryMerge";
+import { workersDevEndpoint, workerRouteEntry, workerBuildSource } from "@/lib/workerProvenance";
 export type InfraKind = "pages" | "worker";
 export type InfraTruth = "live" | "partial" | "error" | "not_connected";
 /** Where a token comes from in configuration — a label only, never the secret. */
@@ -39,10 +40,14 @@ export interface CloudflareDeploymentRow {
   deployedAt: string | null;
   status: string;
   statusSource: "cloudflare-deployment" | "unavailable";
-  /** Pages build source; null for Workers or when Cloudflare omits it. */
+  /** Verified git connection from Pages or Cloudflare Workers Builds; null when unknown. */
   sourceType?: "github" | "gitlab" | "direct_upload" | null;
   /** Canonical *.pages.dev hostname URL, independent of custom domains. */
   pagesDevUrl?: string | null;
+  /** API-confirmed, enabled workers.dev endpoint (if present). */
+  workersDevUrl?: string | null;
+  /** How the repository link was established; never a name-only guess. */
+  repoEvidence?: "pages-source" | "worker-build" | null;
   createdAt?: string | null;
   health?: DeployHealth;
   /** Newest production attempt when it differs from the serving deployment. */
@@ -181,6 +186,7 @@ export function normalizePagesProject(accountId: string, raw: unknown): Cloudfla
     publicUrl: customDomains.length ? validHttps(customDomains[0]) : canonical,
     domains: customDomains, routes: [],
     repoUrl: githubSource(source),
+    repoEvidence: githubSource(source) ? "pages-source" : null,
     branch: asString(asObject(source.config).production_branch) ||
       asString(asObject(asObject(deployment.deployment_trigger).metadata).branch) ||
       asString(deployment.production_branch) || asString(project.production_branch),
@@ -198,6 +204,7 @@ export function normalizePagesProject(accountId: string, raw: unknown): Cloudfla
 }
 export function normalizeWorkerScript(
   accountId: string, raw: unknown, domains: unknown[], activeDeployment?: unknown,
+  accountSubdomain?: string | null, buildSource?: unknown,
 ): CloudflareDeploymentRow | null {
   const script = asObject(raw);
   const name = asString(script.id);
@@ -212,21 +219,26 @@ export function normalizeWorkerScript(
   const version = Array.isArray(deployment.versions) && deployment.versions.length
     ? asObject(deployment.versions[0]) : {};
   const deployed = Object.keys(deployment).length > 0 || Boolean(asString(script.deployed_on));
+  const workerDev = workersDevEndpoint(name, script.subdomain, accountSubdomain);
+  const source = workerBuildSource(buildSource);
+  const routeUrl = routes.map(workerRouteEntry).find(Boolean) || null;
   return {
     key: "worker:" + accountId + ":" + name,
     kind: "worker", accountId, name,
     // Cloudflare's Worker service view (production environment).
     projectUrl: "https://dash.cloudflare.com/" + accountId + "/workers/services/view/" +
       encodeURIComponent(name) + "/production",
-    publicUrl: customDomains.length ? validHttps(customDomains[0]) : null,
-    domains: customDomains, routes, repoUrl: null, branch: null,
+    publicUrl: (customDomains.length ? validHttps(customDomains[0]) : null) || workerDev || routeUrl,
+    domains: customDomains, routes, repoUrl: source.repoUrl, branch: null,
+    repoEvidence: source.repoUrl ? "worker-build" : null,
+    workersDevUrl: workerDev,
     commit: null,
     deploymentId: asString(deployment.id) || asString(version.version_id),
     deployedAt: asString(deployment.created_on) || asString(script.deployed_on) || asString(script.modified_on),
     status: Object.keys(deployment).length ? "serving (API deployment)" :
       asString(script.deployed_on) ? "deployed (API metadata)" : "unknown",
     statusSource: deployed ? "cloudflare-deployment" : "unavailable",
-    sourceType: null, pagesDevUrl: null,
+    sourceType: source.sourceType, pagesDevUrl: null,
     createdAt: asString(script.created_on),
     health: deployed ? "live" : "unknown",
     latestProduction: null,
@@ -546,12 +558,14 @@ async function accountInventory(
   const result: AccountInventoryResult = { rows, zones: zoneRows, errors };
   const wantPages = sections.has("pages");
   const wantPlatform = sections.has("platform");
-  const [pages, scripts, domains, zones] = await Promise.allSettled([
+  const [pages, scripts, domains, zones, subdomain] = await Promise.allSettled([
     wantPages ? listAllPagesProjects(accountId, pagesToken) : Promise.resolve(null),
     wantPlatform ? listAccountWorkers(accountId, workersToken) : Promise.resolve(null),
     wantPlatform ? listWorkerDomains(accountId, workersToken) : Promise.resolve(null),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
     wantPlatform ? allPages("/zones?account.id=" + encodeURIComponent(accountId), token, 50)
+      : Promise.resolve(null),
+    wantPlatform ? cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/subdomain", workersToken)
       : Promise.resolve(null),
   ]);
   if (wantPages) {
@@ -571,6 +585,10 @@ async function accountInventory(
   }
   if (!wantPlatform) return result;
   const workerDomains = domains.status === "fulfilled" && domains.value ? domains.value : [];
+  const accountSubdomain = subdomain.status === "fulfilled" && subdomain.value
+    ? asString(asObject(subdomain.value.result).subdomain) : null;
+  if (subdomain.status === "rejected") errors.push("Worker account subdomain unavailable for account " +
+    accountId.slice(-6) + " (" + safeApiReason(subdomain.reason) + "); workers.dev URLs may be missing");
   if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6) +
     " (" + safeApiReason(domains.reason) + "); verify Workers read permission for this account");
 
@@ -624,7 +642,7 @@ async function accountInventory(
         accountId,
         { ...script, routes: (routesByScript.get(String(script.id)) || [])
             .map(pattern => ({ pattern, script: script.id })) },
-        workerDomains,
+        workerDomains, undefined, accountSubdomain,
       );
       if (row) rows.push(row);
     });
