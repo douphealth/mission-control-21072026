@@ -28,6 +28,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { portfolioPage, type PortfolioPageSize } from "@/lib/portfolioPaging";
+import PortfolioPager from "@/components/controlcenter/PortfolioPager";
 import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
 import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
@@ -249,6 +251,8 @@ export default function RepoOpsWorkspace({
   const [busy, setBusy] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PortfolioPageSize>(50);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [inspected, setInspected] = useState<{repo:string; loading:boolean; result:RepositoryDiagnostics|null; error:string|null}|null>(null);
   const inspectRepo = async (row: RepoOpsRow) => {
@@ -319,12 +323,14 @@ export default function RepoOpsWorkspace({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const update = (patch: Partial<Prefs>) =>
+  const update = (patch: Partial<Prefs>) => {
+    setPage(1);
     setPrefs((old) => {
       const next = { ...old, ...patch };
       writePrefs(next);
       return next;
     });
+  };
 
   const live = useMemo(() => OWNERS.flatMap((o) => owners[o]?.repositories || []), [owners]);
   const cloud = cf.snapshot?.inventory?.rows;
@@ -369,8 +375,9 @@ export default function RepoOpsWorkspace({
     for (const r of all) names.set(r.owner, (names.get(r.owner) || 0) + 1);
     return [...names.entries()].sort((a, b) => b[1] - a[1]);
   }, [all]);
+  const current = portfolioPage(rows, page, pageSize);
   const selectedRows = rows.filter((r) => selected.has(r.key));
-  const allVisibleSelected = rows.length > 0 && rows.every((r) => selected.has(r.key));
+  const allVisibleSelected = current.items.length > 0 && current.items.every((r) => selected.has(r.key));
   const recentActivity = useMemo(() => recentOperatorActivity(all,cloud||[],8),[all,cloud]);
   const linkedRepos = stats.cloudflareMatches;
   const rateLimited = ownersRateLimitedUntil();
@@ -420,6 +427,7 @@ export default function RepoOpsWorkspace({
   const resetFilters = () => {
     setQuery("");
     update(DEFAULT_PREFS);
+    setPage(1);
   };
 
   return (
@@ -566,7 +574,7 @@ export default function RepoOpsWorkspace({
             ref={searchRef}
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {setQuery(e.target.value);setPage(1);}}
             placeholder="Search repo, description, next action, domain…  ( / )"
             className="w-full rounded-xl border border-border bg-background py-2 pl-10 pr-3 text-sm"
           />
@@ -650,7 +658,7 @@ export default function RepoOpsWorkspace({
       </div>
 
       <SavedFilterViews storageKey="mc.github.saved-views.v1" state={{prefs,query}}
-        onApply={view=>{update(view.prefs);setQuery(view.query);}} />
+        onApply={view=>{update(view.prefs);setQuery(view.query);setPage(1);}} />
 
       {selectedRows.length > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
@@ -704,7 +712,7 @@ export default function RepoOpsWorkspace({
 
       <p className="text-xs text-muted-foreground" aria-live="polite">
         Showing <strong className="text-foreground">{rows.length}</strong> of {ownerScoped.length}{" "}
-        repositories · all results rendered
+        repositories · {current.from}–{current.to} on this page
       </p>
 
       {rows.length === 0 ? (
@@ -719,7 +727,12 @@ export default function RepoOpsWorkspace({
               aria-label="Select all visible repositories"
               checked={allVisibleSelected}
               onChange={() =>
-                setSelected(allVisibleSelected ? new Set() : new Set(rows.map((r) => r.key)))
+                setSelected(old => {
+                  const next = new Set(old);
+                  if (allVisibleSelected) current.items.forEach(r => next.delete(r.key));
+                  else current.items.forEach(r => next.add(r.key));
+                  return next;
+                })
               }
               className="h-4 w-4 accent-primary"
             />
@@ -730,7 +743,7 @@ export default function RepoOpsWorkspace({
             <span className="text-right">Manage</span>
           </div>
           <ul className="divide-y divide-border/60">
-            {rows.map((row) => {
+            {current.items.map((row) => {
               const repoPath = row.key.split("/")[1];
               return (
                 <li
@@ -984,6 +997,8 @@ export default function RepoOpsWorkspace({
           </ul>
         </div>
       )}
+      <PortfolioPager id="GitHub repositories" {...current}
+        onPage={setPage} onSize={size => {setPageSize(size);setPage(1);}} />
       <Sheet open={Boolean(inspected)} onOpenChange={open=>{if(!open)setInspected(null);}}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
           <SheetHeader>
