@@ -22,14 +22,14 @@ export function workerBuildSource(raw: unknown): WorkerBuildSource {
   const build = obj(raw);
   const metadata = obj(build.build_trigger_metadata);
   const trigger = obj(build.trigger);
-  const connection = obj(metadata.repo_connection || trigger.repo_connection);
+  const connection = obj(build.repo_connection || metadata.repo_connection || trigger.repo_connection);
   const provider = str(connection.provider_type) || str(metadata.provider_type);
   const sourceType = provider === "github" || provider === "gitlab" ? provider : null;
   const name = str(connection.repo_name) || str(metadata.repo_name);
   const account = str(connection.provider_account_name) || str(metadata.provider_account_name);
   let repoUrl: string | null = null;
   if (sourceType && name) {
-    const parts = name.replace(/\\.git$/i, "").split("/");
+    const parts = name.replace(/\.git$/i, "").split("/");
     if (parts.length === 2 && parts.every(p => repoPart.test(p))) {
       repoUrl = "https://" + (sourceType === "github" ? "github.com/" : "gitlab.com/") + parts.join("/");
     } else if (account && repoPart.test(account) && repoPart.test(name)) {
@@ -64,7 +64,7 @@ export function workersDevEndpoint(name: string, subdomainRaw: unknown, accountS
   }
   const raw = str(accountSubdomain);
   if (!raw) return null;
-  const suffix = raw.replace(/\\.workers\\.dev$/i, "");
+  const suffix = raw.replace(/\.workers\.dev$/i, "");
   if (!/^[a-z0-9-]{1,63}$/i.test(suffix)) return null;
   return "https://" + name + "." + suffix + ".workers.dev/";
 }
@@ -76,10 +76,10 @@ export function workersDevEndpoint(name: string, subdomainRaw: unknown, accountS
  */
 export function workerRouteEntry(pattern: string): string | null {
   if (!pattern || /[?#]/.test(pattern)) return null;
-  const withoutScheme = pattern.replace(/^https?:\\/\\//i, "");
+  const withoutScheme = pattern.replace(/^https?:\/\//i, "");
   const slash = withoutScheme.indexOf("/");
   const host = slash < 0 ? withoutScheme : withoutScheme.slice(0, slash);
-  if (!/^[a-z0-9][a-z0-9.-]+\\.[a-z]{2,}$/i.test(host) || host.includes("*") || host.includes("..")) return null;
+  if (!/^[a-z0-9][a-z0-9.-]+\.[a-z]{2,}$/i.test(host) || host.includes("*") || host.includes("..")) return null;
   const path = slash < 0 ? "/" : withoutScheme.slice(slash);
   if (path.includes("*") && !path.endsWith("*")) return null;
   const pathPrefix = path.endsWith("*") ? path.slice(0, -1) : path;
