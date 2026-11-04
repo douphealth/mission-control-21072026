@@ -30,6 +30,7 @@ import {
 import { toast } from "sonner";
 import { portfolioPage, type PortfolioPageSize } from "@/lib/portfolioPaging";
 import PortfolioPager from "@/components/controlcenter/PortfolioPager";
+import { githubTriage } from "@/lib/portfolioTriage";
 import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
 import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
@@ -360,6 +361,7 @@ export default function RepoOpsWorkspace({
       : prefs.quick;
   const counts = useMemo(() => repoQuickCounts(ownerScoped), [ownerScoped]);
   const stats = useMemo(() => repositoryPortfolioStats(all), [all]);
+  const triage = useMemo(() => githubTriage(ownerScoped,cf.snapshot?.inventory?.truthState || null),[ownerScoped,cf.snapshot?.inventory?.truthState]);
   const languages = useMemo(() => [...new Set(ownerScoped.map(r => r.language || "Unknown"))]
     .sort((a,b) => a.localeCompare(b)), [ownerScoped]);
   const setFacet = (patch: Partial<RepositoryFacets>) => update({facets:{...prefs.facets,...patch}});
@@ -515,6 +517,41 @@ export default function RepoOpsWorkspace({
         deployment failures are Cloudflare build metadata, not HTTP uptime checks.
       </p>
 
+      <section className="rounded-2xl border border-border/60 bg-card/75 p-4" aria-label="GitHub reconciliation queue">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold">Resolve what matters</h3>
+          <span className="text-[11px] text-muted-foreground">
+            {triage.complete ? "Cloudflare inventory complete" : "Cloudflare inventory partial or unavailable"}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Observed issues, not guessed outages. Select a group to filter the full repository list.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <button type="button" onClick={()=>update({quick:"failing",facets:REPOSITORY_FACETS_DEFAULT})}
+            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+            <span className="block text-xl font-bold tabular-nums">{triage.failedBuild.length}</span>
+            <span className="block text-xs font-semibold">Failed Cloudflare production builds</span>
+            <span className="block text-[11px] text-muted-foreground">Review the latest build and serving deployment separately</span>
+          </button>
+          <button type="button" onClick={()=>update({quick:"all",facets:{...REPOSITORY_FACETS_DEFAULT,deployment:"missing-app"}})}
+            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+            <span className="block text-xl font-bold tabular-nums">{triage.missingApp.length}</span>
+            <span className="block text-xs font-semibold">Unresolved app URLs</span>
+            <span className="block text-[11px] text-muted-foreground">Missing evidence does not mean undeployed</span>
+          </button>
+          <button type="button" onClick={()=>update({quick:"all",facets:{...REPOSITORY_FACETS_DEFAULT,evidence:"recorded"}})}
+            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+            <span className="block text-xl font-bold tabular-nums">{triage.unconfirmedApp.length}</span>
+            <span className="block text-xs font-semibold">Recorded links without provider proof</span>
+            <span className="block text-[11px] text-muted-foreground">Verify current Cloudflare source and URL before relying on it</span>
+          </button>
+        </div>
+        {triage.conflicting.length > 0 && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          {triage.conflicting.length} recorded app hostname(s) differ from their matched Cloudflare endpoint.
+          This can be legitimate custom-domain routing; investigate before changing links.
+        </p>}
+      </section>
       <details className="rounded-xl border border-border/60 bg-card/65 p-3">
         <summary className="cursor-pointer text-sm font-semibold">Recent GitHub pushes and Cloudflare deployments · {recentActivity.length} observed</summary>
         <div className="mt-3 grid gap-2 lg:grid-cols-2">
