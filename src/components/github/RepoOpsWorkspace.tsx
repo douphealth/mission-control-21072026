@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Activity,
   ArrowDownUp,
   Archive,
   CircleCheck,
@@ -27,6 +28,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { matchesRepositoryFacets, repositoryPortfolioStats, REPOSITORY_FACETS_DEFAULT, type RepositoryFacets } from "@/lib/repositoryFacets";
 import type { GitHubRepo } from "@/lib/db";
 import { useBuildProjects } from "@/hooks/useTableData";
@@ -245,6 +248,19 @@ export default function RepoOpsWorkspace({
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [inspected, setInspected] = useState<{repo:string; loading:boolean; result:RepositoryDiagnostics|null; error:string|null}|null>(null);
+  const inspectRepo = async (row: RepoOpsRow) => {
+    setInspected({repo:row.key,loading:true,result:null,error:null});
+    const validOwners = ["douphealth","Papalexios","papalexios001-wq","papalexios01"] as const;
+    const owner = validOwners.find(o => o.toLowerCase() === row.owner.toLowerCase());
+    if (!owner) {setInspected({repo:row.key,loading:false,result:null,error:"Unsupported GitHub account."}); return;}
+    try {
+      const result = await getRepositoryDiagnostics({data:{owner,repo:row.name}});
+      setInspected(current => current?.repo === row.key ? {...current,loading:false,result,error:null} : current);
+    } catch {
+      setInspected(current => current?.repo === row.key ? {...current,loading:false,error:"GitHub diagnostics unavailable. Sign in via Cloudflare Access and configure an account-specific read token."} : current);
+    }
+  };
   const searchRef = useRef<HTMLInputElement>(null);
   const cf = useCloudflareControl();
   const loadCloudflare = cf.load;
@@ -861,6 +877,9 @@ export default function RepoOpsWorkspace({
                         <DropdownMenuItem onSelect={() => onEdit(row.plan)}>
                           <Pencil size={14} /> Edit plan & links
                         </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => void inspectRepo(row)}>
+                          <Activity size={14} /> Inspect CI, PRs & deployments
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <a
                             href={"https://github.dev/" + row.owner + "/" + repoPath}
@@ -948,6 +967,48 @@ export default function RepoOpsWorkspace({
           </ul>
         </div>
       )}
+      <Sheet open={Boolean(inspected)} onOpenChange={open=>{if(!open)setInspected(null);}}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Repository operational evidence</SheetTitle>
+            <SheetDescription>{inspected?.repo} · GitHub API, inspected only when requested</SheetDescription>
+          </SheetHeader>
+          <div className="mt-5 space-y-4 text-sm">
+            {inspected?.loading && <p role="status">Retrieving current GitHub workflow, PR and deployment records…</p>}
+            {inspected?.error && <p role="alert" className="text-amber-600 dark:text-amber-400">{inspected.error}</p>}
+            {inspected?.result && (()=>{
+              const d=inspected.result;
+              return <>
+                <p className="text-xs text-muted-foreground">{d.state} · {d.source} · {new Date(d.fetchedAt).toLocaleString()} · default branch: {d.defaultBranch || "unavailable"}</p>
+                {d.errors.map((e,i)=><p key={i} className="rounded-lg border border-amber-500/30 p-2 text-xs text-amber-600 dark:text-amber-400">{e}</p>)}
+                <article className="rounded-xl border border-border p-3">
+                  <h3 className="font-semibold">Latest workflow run</h3>
+                  {d.latestCI ? <div className="mt-2 space-y-1 text-xs">
+                    <p>{d.latestCI.name} · {d.latestCI.status} / {d.latestCI.conclusion || "pending"}</p>
+                    <p>Event: {d.latestCI.event || "unknown"} · commit: {d.latestCI.sha?.slice(0,7) || "not reported"}</p>
+                    <a className="text-primary hover:underline" href={d.latestCI.url} target="_blank" rel="noopener noreferrer">Open GitHub Actions run</a>
+                  </div> : <p className="mt-2 text-xs text-muted-foreground">No verified workflow run returned for this repository.</p>}
+                </article>
+                <article className="rounded-xl border border-border p-3">
+                  <h3 className="font-semibold">Most recently updated open pull requests</h3>
+                  {d.recentOpenPRs.length ? <ul className="mt-2 space-y-2 text-xs">
+                    {d.recentOpenPRs.map(p=><li key={p.number}><a className="text-primary hover:underline" href={p.url} target="_blank" rel="noopener noreferrer">#{p.number} {p.title}</a></li>)}
+                  </ul> : <p className="mt-2 text-xs text-muted-foreground">No open PRs returned by the API.</p>}
+                  {d.openPRsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing the three newest; this is not the total open PR count.</p>}
+                </article>
+                <article className="rounded-xl border border-border p-3">
+                  <h3 className="font-semibold">Recent GitHub deployment records</h3>
+                  {d.deployments.length ? <ul className="mt-2 space-y-2 text-xs">{d.deployments.map((p,i)=><li key={p.url+i}>
+                    <a className="text-primary hover:underline" href={p.url} target="_blank" rel="noopener noreferrer">{p.environment}</a>
+                    {" · "}{p.ref || "ref unavailable"}{" · "}{p.createdAt ? new Date(p.createdAt).toLocaleString() : "date unavailable"}
+                  </li>)}</ul> : <p className="mt-2 text-xs text-muted-foreground">No GitHub deployment records returned. Cloudflare direct uploads may not appear here.</p>}
+                  <p className="mt-2 text-xs text-muted-foreground">Deployment records and CI outcomes do not establish that a public URL is responding.</p>
+                </article>
+              </>;
+            })()}
+          </div>
+        </SheetContent>
+      </Sheet>
       <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
         <AlertTriangle size={12} className="mt-px shrink-0" />
         Repository-to-Cloudflare links use provider-reported Git sources or unique exact URLs already
