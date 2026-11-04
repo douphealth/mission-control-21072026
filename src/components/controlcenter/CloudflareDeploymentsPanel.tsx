@@ -70,19 +70,6 @@ import {
 } from "@/components/ui/sheet";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { logAudit } from "@/lib/audit";
-import { PUBLIC_PORTFOLIO_REPOS } from "@/lib/portfolioAtlas";
-
-/** Unique exact-name match against the public repo snapshot — a hint, never proof. */
-const reposByName = new Map<string, string[]>();
-for (const repo of PUBLIC_PORTFOLIO_REPOS) {
-  const key = repo.name.toLowerCase();
-  reposByName.set(key, [...(reposByName.get(key) || []), repo.url]);
-}
-const possibleRepo = (row: CloudflareDeploymentRow) => {
-  const matches = row.repoUrl ? [] : reposByName.get(row.name.toLowerCase()) || [];
-  return matches.length === 1 ? matches[0] : null;
-};
-
 const PREFS_KEY = "mc.cloudflare.workspace.v2";
 const TOKEN_SOURCE_LABEL: Record<
   NonNullable<CloudflareAccountSummary["workersTokenSource"]>,
@@ -869,7 +856,7 @@ export default function CloudflareDeploymentsPanel({
                           </a>
                         ) : (
                           <span className="text-muted-foreground">
-                            {row.kind === "worker" ? "No custom domain" : "Not published"}
+                            {row.kind === "worker" ? "URL not verified (check routing)" : "Not published"}
                           </span>
                         )}
                         {extraDomains > 0 && (
@@ -879,6 +866,13 @@ export default function CloudflareDeploymentsPanel({
                           >
                             +{extraDomains}
                           </span>
+                        )}
+                        {row.workersDevUrl && row.workersDevUrl !== row.publicUrl && (
+                          <a href={row.workersDevUrl} target="_blank" rel="noopener noreferrer"
+                            className="block truncate text-[10px] text-muted-foreground hover:text-primary"
+                            title="workers.dev endpoint, confirmed enabled by Cloudflare">
+                            {hostOf(row.workersDevUrl)}
+                          </a>
                         )}
                         {row.domains.length > 0 && row.pagesDevUrl && (
                           <a
@@ -950,18 +944,15 @@ export default function CloudflareDeploymentsPanel({
                             "Source not reported"
                           )
                         ) : (
-                          row.routes[0] || "—"
+                          <span title="Worker source is not reported by the available Cloudflare API scopes">
+                            {row.routes.length ? "Route: " + row.routes[0] : "Git source not verified"}
+                          </span>
                         )}
-                        {possibleRepo(row) && (
-                          <a
-                            href={possibleRepo(row)!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Same name as a public repo — unverified link"
-                            className="block truncate text-[10px] hover:text-primary"
-                          >
-                            possible repo: {possibleRepo(row)!.replace("https://github.com/", "")}
-                          </a>
+                        {row.repoEvidence === "worker-build" && row.repoUrl && (
+                          <span className="block text-[10px] text-emerald-600 dark:text-emerald-400"
+                            title="Repository reported by Cloudflare Workers Builds, not proof of the currently serving commit">
+                            Source: Cloudflare Workers Builds
+                          </span>
                         )}
                       </div>
                       <div className="col-span-2 flex items-center justify-end gap-0.5 md:col-span-1">

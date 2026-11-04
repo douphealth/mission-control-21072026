@@ -4,6 +4,7 @@
  * Deployments are API-observed states, NOT independent uptime checks.
  */
 import { accountTruth, overallTruth } from "@/lib/cloudflareInventoryMerge";
+import { workersDevEndpoint, workerRouteEntry, workerBuildSource } from "@/lib/workerProvenance";
 export type InfraKind = "pages" | "worker";
 export type InfraTruth = "live" | "partial" | "error" | "not_connected";
 /** Where a token comes from in configuration — a label only, never the secret. */
@@ -39,10 +40,14 @@ export interface CloudflareDeploymentRow {
   deployedAt: string | null;
   status: string;
   statusSource: "cloudflare-deployment" | "unavailable";
-  /** Pages build source; null for Workers or when Cloudflare omits it. */
+  /** Verified git connection from Pages or Cloudflare Workers Builds; null when unknown. */
   sourceType?: "github" | "gitlab" | "direct_upload" | null;
   /** Canonical *.pages.dev hostname URL, independent of custom domains. */
   pagesDevUrl?: string | null;
+  /** API-confirmed, enabled workers.dev endpoint (if present). */
+  workersDevUrl?: string | null;
+  /** How the repository link was established; never a name-only guess. */
+  repoEvidence?: "pages-source" | "worker-build" | null;
   createdAt?: string | null;
   health?: DeployHealth;
   /** Newest production attempt when it differs from the serving deployment. */
@@ -181,6 +186,7 @@ export function normalizePagesProject(accountId: string, raw: unknown): Cloudfla
     publicUrl: customDomains.length ? validHttps(customDomains[0]) : canonical,
     domains: customDomains, routes: [],
     repoUrl: githubSource(source),
+    repoEvidence: githubSource(source) ? "pages-source" : null,
     branch: asString(asObject(source.config).production_branch) ||
       asString(asObject(asObject(deployment.deployment_trigger).metadata).branch) ||
       asString(deployment.production_branch) || asString(project.production_branch),
@@ -198,6 +204,7 @@ export function normalizePagesProject(accountId: string, raw: unknown): Cloudfla
 }
 export function normalizeWorkerScript(
   accountId: string, raw: unknown, domains: unknown[], activeDeployment?: unknown,
+  accountSubdomain?: string | null, buildSource?: unknown,
 ): CloudflareDeploymentRow | null {
   const script = asObject(raw);
   const name = asString(script.id);
@@ -212,21 +219,26 @@ export function normalizeWorkerScript(
   const version = Array.isArray(deployment.versions) && deployment.versions.length
     ? asObject(deployment.versions[0]) : {};
   const deployed = Object.keys(deployment).length > 0 || Boolean(asString(script.deployed_on));
+  const workerDev = workersDevEndpoint(name, script.subdomain, accountSubdomain);
+  const source = workerBuildSource(buildSource);
+  const routeUrl = routes.map(workerRouteEntry).find(Boolean) || null;
   return {
     key: "worker:" + accountId + ":" + name,
     kind: "worker", accountId, name,
     // Cloudflare's Worker service view (production environment).
     projectUrl: "https://dash.cloudflare.com/" + accountId + "/workers/services/view/" +
       encodeURIComponent(name) + "/production",
-    publicUrl: customDomains.length ? validHttps(customDomains[0]) : null,
-    domains: customDomains, routes, repoUrl: null, branch: null,
+    publicUrl: (customDomains.length ? validHttps(customDomains[0]) : null) || workerDev || routeUrl,
+    domains: customDomains, routes, repoUrl: source.repoUrl, branch: null,
+    repoEvidence: source.repoUrl ? "worker-build" : null,
+    workersDevUrl: workerDev,
     commit: null,
     deploymentId: asString(deployment.id) || asString(version.version_id),
     deployedAt: asString(deployment.created_on) || asString(script.deployed_on) || asString(script.modified_on),
     status: Object.keys(deployment).length ? "serving (API deployment)" :
       asString(script.deployed_on) ? "deployed (API metadata)" : "unknown",
     statusSource: deployed ? "cloudflare-deployment" : "unavailable",
-    sourceType: null, pagesDevUrl: null,
+    sourceType: source.sourceType, pagesDevUrl: null,
     createdAt: asString(script.created_on),
     health: deployed ? "live" : "unknown",
     latestProduction: null,
@@ -261,6 +273,12 @@ export function pagesTokenFor(accountId: string, env: Record<string, string | un
 export function workersTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
   const configured = accountTokenConfig(accountId, env);
   return asString(asObject(configured).workers) || apiTokenFor(accountId, env);
+}
+/** Optional user-scoped token with Workers CI Read for Builds provenance. */
+export function buildsTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  const configured = accountTokenConfig(accountId, env);
+  return asString(asObject(configured).builds) || asString(env["CLOUDFLARE_BUILDS_API_TOKEN"]) ||
+    workersTokenFor(accountId, env);
 }
 /** Mirrors the token resolution order of pagesTokenFor / workersTokenFor. */
 export function tokenSourceFor(
@@ -459,7 +477,7 @@ async function listAccountWorkers(accountId: string, token: string): Promise<{
     const modern = await allPages("/accounts/" + accountId + "/workers/workers", token, 50);
     return { scripts: modern.map(raw => {
       const worker = asObject(raw);
-      return { ...worker, id: asString(worker.name) || asString(worker.id) };
+      return { ...worker, tag: asString(worker.tag) || asString(worker.id), id: asString(worker.name) || asString(worker.id) };
     }), usedLegacy: false, modernError: null };
   } catch (error) {
     const reason = safeApiReason(error);
@@ -537,7 +555,7 @@ interface AccountInventoryResult {
   pagesReportedTotal?: number | null;
 }
 async function accountInventory(
-  accountId: string, token: string, pagesToken: string, workersToken: string,
+  accountId: string, token: string, pagesToken: string, workersToken: string, buildsToken: string,
   sections: ReadonlySet<InventorySection> = new Set(["pages", "platform"]),
 ): Promise<AccountInventoryResult> {
   const rows: CloudflareDeploymentRow[] = [];
@@ -546,12 +564,14 @@ async function accountInventory(
   const result: AccountInventoryResult = { rows, zones: zoneRows, errors };
   const wantPages = sections.has("pages");
   const wantPlatform = sections.has("platform");
-  const [pages, scripts, domains, zones] = await Promise.allSettled([
+  const [pages, scripts, domains, zones, subdomain] = await Promise.allSettled([
     wantPages ? listAllPagesProjects(accountId, pagesToken) : Promise.resolve(null),
     wantPlatform ? listAccountWorkers(accountId, workersToken) : Promise.resolve(null),
     wantPlatform ? listWorkerDomains(accountId, workersToken) : Promise.resolve(null),
     // Cloudflare Zone list caps per_page at 50 (unlike Pages).
     wantPlatform ? allPages("/zones?account.id=" + encodeURIComponent(accountId), token, 50)
+      : Promise.resolve(null),
+    wantPlatform ? cloudflareGet<Envelope>("/accounts/" + accountId + "/workers/subdomain", workersToken)
       : Promise.resolve(null),
   ]);
   if (wantPages) {
@@ -571,6 +591,11 @@ async function accountInventory(
   }
   if (!wantPlatform) return result;
   const workerDomains = domains.status === "fulfilled" && domains.value ? domains.value : [];
+  const accountSubdomain = subdomain.status === "fulfilled" && subdomain.value
+    ? asString(asObject(subdomain.value.result).subdomain) : null;
+  // Older tokens can list scripts but not the account workers.dev suffix.
+  // Preserve inventory completeness; the affected URL stays unverified rather
+  // than asserting this Worker has no public URL.
   if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6) +
     " (" + safeApiReason(domains.reason) + "); verify Workers read permission for this account");
 
@@ -609,6 +634,23 @@ async function accountInventory(
       "; verify Zone > Workers Routes > Read permissions for these zones");
   }
   if (scripts.status === "fulfilled" && scripts.value) {
+    // Fetch up to 20 Workers Builds records in one Cloudflare request.
+    // Builds scopes are optional: a missing CI permission must not hide Workers.
+    const buildByTag = new Map<string, unknown>();
+    const tags = [...new Set(scripts.value.scripts.map(raw => asString(asObject(raw).tag))
+      .filter((tag): tag is string => typeof tag === "string" && /^[a-f0-9]{32}$/i.test(tag)))];
+    const buildResults = await parallelMap(
+      Array.from({ length: Math.ceil(tags.length / 20) }, (_, n) => tags.slice(n * 20, n * 20 + 20)),
+      batch => cloudflareGet<Envelope>("/accounts/" + accountId + "/builds/builds/latest?external_script_ids=" +
+        encodeURIComponent(batch.join(",")), buildsToken),
+      3,
+    );
+    for (const response of buildResults) {
+      if (response.status !== "fulfilled") continue;
+      for (const [tag, build] of Object.entries(asObject(asObject(response.value.result).builds))) {
+        if (tags.includes(tag)) buildByTag.set(tag, build);
+      }
+    }
     if (scripts.value.usedLegacy) {
       errors.push("New Workers API unavailable for account " + accountId.slice(-6) +
         " (" + scripts.value.modernError + "); legacy Scripts fallback used — Worker count is unverified. " +
@@ -624,7 +666,8 @@ async function accountInventory(
         accountId,
         { ...script, routes: (routesByScript.get(String(script.id)) || [])
             .map(pattern => ({ pattern, script: script.id })) },
-        workerDomains,
+        workerDomains, undefined, accountSubdomain,
+        buildByTag.get(asString(asObject(script).tag) || "") || asObject(script).build,
       );
       if (row) rows.push(row);
     });
@@ -666,7 +709,7 @@ export async function collectCloudflareInventory(
   const results = await parallelMap(accounts, async id => {
     const token = apiTokenFor(id, environment);
     return token ? await accountInventory(id, token, pagesTokenFor(id, environment) || token,
-      workersTokenFor(id, environment) || token, sections) : null;
+      workersTokenFor(id, environment) || token, buildsTokenFor(id, environment) || token, sections) : null;
   }, 2);
   results.forEach((entry, index) => {
     const id = accounts[index];
