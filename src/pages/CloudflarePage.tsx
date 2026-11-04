@@ -1,6 +1,21 @@
 import { useCredentials } from "@/hooks/useTableData";
-import { useEffect } from "react";
-import { Cloud, Globe, Zap, ExternalLink, Copy, RefreshCw, Lock, Activity } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  BookOpen,
+  Boxes,
+  Cloud,
+  Copy,
+  ExternalLink,
+  Globe,
+  Lock,
+  RefreshCw,
+  Rocket,
+  Search,
+  ServerCog,
+  ShieldCheck,
+  Zap,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useCloudflareControl } from "@/lib/cloudflareControlClient";
 import { cloudflareTruthState, cloudflareSetupRequired } from "@/lib/cloudflareControlState";
@@ -10,79 +25,59 @@ import { db } from "@/lib/db";
 import { markCloudRecordDirty, queueCloudPush } from "@/lib/cloudSync";
 import CloudflareDeploymentsPanel from "@/components/controlcenter/CloudflareDeploymentsPanel";
 import CloudflareEstatePanel from "@/components/controlcenter/CloudflareEstatePanel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { HealthTile, TileRow, ctl, ctlPrimary } from "@/components/console/ConsoleUI";
 
-const cfTools = [
+type Shortcut = { label: string; url: string; icon: typeof Cloud; desc: string };
+/** Account-level destinations. Zone-level ones live on each zone row. */
+const ACCOUNT_SHORTCUTS: Shortcut[] = [
   {
-    label: "Cloudflare Dashboard",
+    label: "Cloudflare dashboard",
     url: "https://dash.cloudflare.com",
-    icon: "☁️",
-    desc: "Main account & zone management",
+    icon: Cloud,
+    desc: "Account & zone management",
   },
   {
-    label: "DNS Management",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/dns/records",
-    icon: "🌐",
-    desc: "Manage DNS records",
-  },
-  {
-    label: "SSL/TLS Settings",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/ssl-tls",
-    icon: "🔒",
-    desc: "HTTPS & certificate config",
-  },
-  {
-    label: "Firewall Rules",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/security/waf",
-    icon: "🛡️",
-    desc: "Firewall & security rules",
-  },
-  {
-    label: "Page Rules",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/rules/page-rules",
-    icon: "📋",
-    desc: "URL redirects & caching",
-  },
-  {
-    label: "Analytics",
-    url: "https://dash.cloudflare.com/?to=/:account/:zone/analytics",
-    icon: "📊",
-    desc: "Traffic & bandwidth stats",
+    label: "Workers & Pages",
+    url: "https://dash.cloudflare.com/?to=/:account/workers-and-pages",
+    icon: Rocket,
+    desc: "Every Worker and Pages project",
   },
   {
     label: "Workers",
     url: "https://dash.cloudflare.com/?to=/:account/workers",
-    icon: "⚡",
-    desc: "Edge computing & serverless",
+    icon: Zap,
+    desc: "Edge compute & serverless",
   },
   {
-    label: "Pages",
-    url: "https://dash.cloudflare.com/?to=/:account/pages",
-    icon: "🚀",
-    desc: "Static site deployments",
-  },
-  {
-    label: "R2 Storage",
+    label: "R2 storage",
     url: "https://dash.cloudflare.com/?to=/:account/r2",
-    icon: "📦",
-    desc: "Object storage, S3-compatible",
+    icon: Boxes,
+    desc: "S3-compatible object storage",
   },
   {
     label: "Turnstile",
     url: "https://dash.cloudflare.com/?to=/:account/turnstile",
-    icon: "🤖",
-    desc: "CAPTCHA alternative",
+    icon: ShieldCheck,
+    desc: "Bot protection without CAPTCHAs",
   },
   {
-    label: "Status Page",
+    label: "API tokens",
+    url: "https://dash.cloudflare.com/profile/api-tokens",
+    icon: Lock,
+    desc: "Create or edit read/deploy tokens",
+  },
+  {
+    label: "System status",
     url: "https://www.cloudflarestatus.com",
-    icon: "💚",
-    desc: "Cloudflare system status",
+    icon: Activity,
+    desc: "Cloudflare incident history",
   },
   {
-    label: "API Docs",
+    label: "API reference",
     url: "https://developers.cloudflare.com/api",
-    icon: "📖",
-    desc: "Cloudflare API reference",
+    icon: BookOpen,
+    desc: "Endpoints and permissions",
   },
 ];
 
@@ -95,19 +90,44 @@ const dotFor = (status: string) =>
         ? "bg-zinc-400"
         : "bg-red-500";
 
+const TAB_KEY = "mc.cloudflare.tab.v1";
+const TABS = ["projects", "infrastructure", "zones", "shortcuts"] as const;
+type Tab = (typeof TABS)[number];
+function readTab(): Tab {
+  try {
+    const value = localStorage.getItem(TAB_KEY);
+    return TABS.includes(value as Tab) ? (value as Tab) : "projects";
+  } catch {
+    return "projects";
+  }
+}
+
 export default function CloudflarePage() {
   const credentials = useCredentials();
-  // One shared, deduplicated snapshot powers zones, deployments and the GitHub
-  // workspace. Each account/section is fetched in its own server invocation.
+  // One shared, deduplicated snapshot powers zones, deployments and the GitHub console.
   const { snapshot: control, loading, failure, load } = useCloudflareControl();
   const inventory = control?.inventory ?? null;
   const zones = inventory?.zones ?? [];
+  const [tab, setTab] = useState<Tab>("projects");
+  const [zoneQuery, setZoneQuery] = useState("");
+  useEffect(() => setTab(readTab()), []);
+  const changeTab = (value: string) => {
+    const next = TABS.includes(value as Tab) ? (value as Tab) : "projects";
+    setTab(next);
+    try {
+      localStorage.setItem(TAB_KEY, next);
+    } catch {
+      /* per-viewer convenience only */
+    }
+  };
+
   const meta: TruthMeta = {
     truthState: failure ? "unavailable" : cloudflareTruthState(control?.status ?? null),
     source: "Cloudflare API",
     fetchedAt: control?.fetchedAt,
     error: failure ?? control?.message ?? undefined,
   };
+  const connected = meta.truthState === "live" || meta.truthState === "partial";
 
   useEffect(() => {
     if (!control) return;
@@ -117,10 +137,19 @@ export default function CloudflarePage() {
         await db.syncHealth.put({
           id: "cloudflare",
           label: "Cloudflare",
-          status: control.status === "live" ? "ok" : control.status === "partial" ? "partial" :
-            control.status === "error" ? "error" : "not-configured",
+          status:
+            control.status === "live"
+              ? "ok"
+              : control.status === "partial"
+                ? "partial"
+                : control.status === "error"
+                  ? "error"
+                  : "not-configured",
           lastAttemptAt: control.fetchedAt,
-          lastSuccessAt: control.status === "live" || control.status === "partial" ? control.fetchedAt : previous?.lastSuccessAt,
+          lastSuccessAt:
+            control.status === "live" || control.status === "partial"
+              ? control.fetchedAt
+              : previous?.lastSuccessAt,
           error: control.message ?? undefined,
           detail: "Authenticated Cloudflare Pages, Workers and DNS snapshot.",
         });
@@ -132,20 +161,23 @@ export default function CloudflarePage() {
     })();
   }, [control]);
 
-  // Never send unresolved :account/:zone placeholders to Cloudflare.
-  // With more than one possible target, go to its account selector.
-  const resolveToolUrl = (url: string) => {
-    if (url.includes("/:account/:zone")) {
-      const zone = zones.length === 1 ? zones[0] : null;
-      return zone
-        ? url.replace("/:account/:zone", "/" + zone.accountId + "/" + encodeURIComponent(zone.name))
-        : "https://dash.cloudflare.com";
-    }
-    if (url.includes("/:account")) {
-      const account = inventory?.accounts.length === 1 ? inventory.accounts[0] : null;
-      return account ? url.replace("/:account", "/" + account) : "https://dash.cloudflare.com";
-    }
-    return url;
+  // Never send unresolved :account/:zone placeholders to Cloudflare. With more
+  // than one possible target, go to its account selector instead of guessing.
+  const resolveAccountUrl = (url: string) => {
+    if (!url.includes("/:account")) return url;
+    const account = inventory?.accounts.length === 1 ? inventory.accounts[0] : null;
+    return account ? url.replace("/:account", "/" + account) : "https://dash.cloudflare.com";
+  };
+  const zoneLinks = (zone: (typeof zones)[number]) => {
+    const base =
+      "https://dash.cloudflare.com/?to=/" + zone.accountId + "/" + encodeURIComponent(zone.name);
+    return [
+      { label: "DNS records", url: zone.dnsUrl },
+      { label: "Analytics", url: base + "/analytics" },
+      { label: "SSL/TLS", url: base + "/ssl-tls" },
+      { label: "Security", url: base + "/security/waf" },
+      { label: "Rules", url: base + "/rules" },
+    ];
   };
 
   const cfCreds = credentials.filter(
@@ -153,123 +185,156 @@ export default function CloudflarePage() {
       c.service.toLowerCase().includes("cloudflare") ||
       c.label.toLowerCase().includes("cloudflare"),
   );
+  const filteredZones = useMemo(() => {
+    const needle = zoneQuery.trim().toLowerCase();
+    return zones.filter(
+      (z) => !needle || [z.name, z.status, z.plan].join(" ").toLowerCase().includes(needle),
+    );
+  }, [zones, zoneQuery]);
 
   const copyNs = (ns: string) => {
-    navigator.clipboard.writeText(ns);
-    toast.success("Nameservers copied");
+    void navigator.clipboard.writeText(ns).then(
+      () => toast.success("Nameservers copied"),
+      () => toast.error("Clipboard access unavailable"),
+    );
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
-            <Cloud size={20} className="text-orange-500" /> Cloudflare
+    <div className="space-y-4">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+            <ServerCog size={12} /> Tools / Edge & hosting
+          </p>
+          <h1 className="mt-0.5 flex items-center gap-2 text-2xl font-extrabold tracking-tight sm:text-3xl">
+            <Cloud size={26} className="shrink-0 text-orange-500" /> Cloudflare
           </h1>
-          <div className="mt-1 flex items-center gap-2">
-            <p className="text-sm text-muted-foreground">
-              DNS, security and CDN across configured Cloudflare accounts
-            </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <TruthBadge meta={meta} />
+            <p className="text-xs text-muted-foreground">
+              Pages, Workers, infrastructure and DNS across every configured account.
+            </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => void load(true)} disabled={loading} className="btn-secondary text-sm">
-            <RefreshCw size={13} className={loading ? "animate-spin" : ""} /> Refresh
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
           <a
+            className={ctl}
             href="https://www.cloudflarestatus.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 rounded-xl bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-500 transition-colors hover:bg-emerald-500/15"
           >
-            <Activity size={12} /> System Status
+            <Activity size={13} className="text-emerald-500" /> System status
           </a>
           <a
+            className={ctl}
             href="https://dash.cloudflare.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-primary text-sm"
           >
-            Open Dashboard <ExternalLink size={13} />
+            Dashboard <ExternalLink size={12} />
           </a>
+          <button
+            type="button"
+            className={ctlPrimary}
+            disabled={loading}
+            onClick={() => void load(true)}
+          >
+            <RefreshCw size={13} className={loading ? "animate-spin" : ""} />{" "}
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
         </div>
-      </div>
+      </header>
 
       {!loading && cloudflareSetupRequired(control?.status ?? null) && (
         <section className="card-glass space-y-2 border border-amber-500/30 p-4" role="status">
           <h2 className="text-sm font-semibold">Cloudflare connection setup required</h2>
           <p className="text-xs text-muted-foreground">{control?.message}</p>
           <p className="text-xs text-muted-foreground">
-            Connect the Cloudflare Access application and install the read-only account tokens
-            as encrypted secrets in the actual production Pages runtime. Browser Credential Vault entries
-            do not authorize this server integration.
+            Connect the Cloudflare Access application and install the read-only account tokens as
+            encrypted secrets in the actual production Pages runtime. Browser Credential Vault
+            entries do not authorize this server integration.
           </p>
-          <a href="https://one.dash.cloudflare.com/" target="_blank" rel="noopener noreferrer"
-            className="inline-flex text-xs font-semibold text-primary">Cloudflare Zero Trust / Access <ExternalLink size={12} /></a>
+          <a
+            href="https://one.dash.cloudflare.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-xs font-semibold text-primary"
+          >
+            Cloudflare Zero Trust / Access <ExternalLink size={12} />
+          </a>
         </section>
       )}
-      <CloudflareDeploymentsPanel inventory={inventory} status={control?.status ?? null} loading={loading}
-        failure={failure ?? (control?.status === "error" ? control.message : null)}
-        onRefresh={() => void load(true)} />
 
-      <CloudflareEstatePanel inventory={inventory} enabled={Boolean(inventory && (control?.status === "live" || control?.status === "partial"))} />
+      <Tabs value={tab} onValueChange={changeTab}>
+        <TabsList className="grid h-11 w-full grid-cols-4 rounded-xl sm:inline-grid sm:w-auto">
+          <TabsTrigger value="projects" className="gap-1.5">
+            <Rocket size={13} /> <span>Projects</span>
+          </TabsTrigger>
+          <TabsTrigger value="infrastructure" className="gap-1.5">
+            <ServerCog size={13} /> <span className="hidden sm:inline">Infrastructure</span>
+            <span className="sm:hidden">Infra</span>
+          </TabsTrigger>
+          <TabsTrigger value="zones" className="gap-1.5">
+            <Globe size={13} /> <span>Zones{zones.length ? " · " + zones.length : ""}</span>
+          </TabsTrigger>
+          <TabsTrigger value="shortcuts" className="gap-1.5">
+            <Zap size={13} /> <span className="hidden sm:inline">Shortcuts</span>
+            <span className="sm:hidden">Links</span>
+          </TabsTrigger>
+        </TabsList>
 
-      {(meta.truthState === "live" || meta.truthState === "partial") && (
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {[
-            {
-              label: "Active Zones",
-              value: zones.filter((z) => z.status === "active").length,
-              icon: Globe,
-              color: "text-blue-500 bg-blue-500/10",
-            },
-            {
-              label: "Paid Zones",
-              value: zones.filter((z) => !/free/i.test(z.plan)).length,
-              icon: Zap,
-              color: "text-amber-500 bg-amber-500/10",
-            },
-            {
-              label: "Saved Credentials",
-              value: cfCreds.length,
-              icon: Lock,
-              color: "text-violet-500 bg-violet-500/10",
-            },
-            {
-              label: "Total Zones",
-              value: zones.length,
-              icon: Cloud,
-              color: "text-emerald-500 bg-emerald-500/10",
-            },
-          ].map((stat) => (
-            <div key={stat.label} className="card-glass flex items-center gap-3 p-4">
-              <div
-                className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${stat.color}`}
-              >
-                <stat.icon size={17} />
-              </div>
-              <div>
-                <div className="text-xl font-bold text-foreground">{stat.value}</div>
-                <div className="text-xs text-muted-foreground">{stat.label}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        <TabsContent value="projects" className="mt-4">
+          <CloudflareDeploymentsPanel
+            inventory={inventory}
+            status={control?.status ?? null}
+            loading={loading}
+            failure={failure ?? (control?.status === "error" ? control.message : null)}
+            onRefresh={() => void load(true)}
+          />
+        </TabsContent>
 
-      <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3">
-        <div className="space-y-3 lg:col-span-2">
-          <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
-            <Globe size={15} className="text-primary" /> DNS Zones
-          </h2>
+        <TabsContent value="infrastructure" className="mt-4">
+          <CloudflareEstatePanel inventory={inventory} enabled={Boolean(inventory && connected)} />
+        </TabsContent>
 
-          {loading && (
+        <TabsContent value="zones" className="mt-4 space-y-3.5">
+          {connected && (
+            <TileRow label="Zone summary">
+              <HealthTile
+                label="Total zones"
+                value={zones.length}
+                hint="Across authorized accounts"
+              />
+              <HealthTile
+                label="Active"
+                value={zones.filter((z) => z.status === "active").length}
+                hint="Serving through Cloudflare"
+                tone="good"
+              />
+              <HealthTile
+                label="Pending / paused"
+                value={zones.filter((z) => z.status !== "active").length}
+                hint="Needs nameserver or plan attention"
+                tone="warn"
+              />
+              <HealthTile
+                label="Paid plans"
+                value={zones.filter((z) => !/free/i.test(z.plan)).length}
+                hint="Anything not on Free"
+              />
+              <HealthTile
+                label="Saved credentials"
+                value={cfCreds.length}
+                hint="Browser vault entries (not API access)"
+              />
+            </TileRow>
+          )}
+
+          {loading && !zones.length && (
             <div className="card-glass p-6 text-center text-sm text-muted-foreground">
               Loading zones from Cloudflare…
             </div>
           )}
-
           {!loading && control?.status === "not_connected" && (
             <ConnectorEmpty
               title="Cloudflare is not connected"
@@ -278,117 +343,169 @@ export default function CloudflarePage() {
               onRetry={() => void load(true)}
             />
           )}
-
           {!loading && (meta.truthState === "error" || Boolean(failure)) && (
-            <ConnectorError message={meta.error ?? "Unknown error"} onRetry={() => void load(true)} />
+            <ConnectorError
+              message={meta.error ?? "Unknown error"}
+              onRetry={() => void load(true)}
+            />
           )}
-
-          {!loading && (meta.truthState === "live" || meta.truthState === "partial") && zones.length === 0 && (
+          {!loading && connected && zones.length === 0 && (
             <div className="card-glass p-6 text-center text-sm text-muted-foreground">
               No zones returned from configured Cloudflare accounts.
             </div>
           )}
 
-          <div className="space-y-2">
-            {zones.map((zone) => (
-              <div key={zone.id} className="card-elevated group flex items-center gap-4 p-4">
-                <span className={`inline-block h-2 w-2 rounded-full ${dotFor(zone.status)}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-foreground">{zone.name}</span>
-                    <span className="badge badge-muted">{zone.plan}</span>
+          {zones.length > 0 && (
+            <>
+              <label className="relative block max-w-md">
+                <Search
+                  size={15}
+                  className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground"
+                />
+                <span className="sr-only">Search zones</span>
+                <input
+                  type="search"
+                  value={zoneQuery}
+                  onChange={(e) => setZoneQuery(e.target.value)}
+                  placeholder="Search zones by domain, status or plan…"
+                  className="h-9 w-full rounded-xl border border-border bg-background pl-9 pr-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+              </label>
+              <ul className="divide-y divide-border/60 overflow-hidden rounded-2xl border border-border bg-card/70">
+                {filteredZones.map((zone) => (
+                  <li
+                    key={zone.id}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3"
+                  >
                     <span
-                      className={`badge capitalize ${zone.status === "active" ? "badge-success" : "badge-warning"}`}
-                    >
-                      {zone.status}
-                    </span>
-                  </div>
-                  {zone.nameservers.length > 0 && (
-                    <div className="mt-1 font-mono text-[10px] text-muted-foreground">
-                      ns: {zone.nameservers.join(" / ")}
-                      <button
-                        className="ml-2 transition-colors hover:text-foreground"
-                        onClick={() => copyNs(zone.nameservers.join("\n"))}
-                      >
-                        <Copy size={9} />
-                      </button>
+                      className={`inline-block h-2 w-2 shrink-0 rounded-full ${dotFor(zone.status)}`}
+                      aria-hidden
+                    />
+                    <div className="min-w-0 flex-1 basis-56">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <a
+                          href={zone.dashboardUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-semibold hover:text-primary"
+                        >
+                          {zone.name}
+                        </a>
+                        <span className="badge badge-muted">{zone.plan}</span>
+                        <span
+                          className={`badge capitalize ${zone.status === "active" ? "badge-success" : "badge-warning"}`}
+                        >
+                          {zone.status}
+                        </span>
+                      </div>
+                      {zone.nameservers.length > 0 && (
+                        <button
+                          type="button"
+                          className="mt-1 inline-flex items-center gap-1 font-mono text-[10px] text-muted-foreground hover:text-foreground"
+                          onClick={() => copyNs(zone.nameservers.join("\n"))}
+                          title="Copy nameservers"
+                        >
+                          ns: {zone.nameservers.join(" / ")} <Copy size={9} />
+                        </button>
+                      )}
                     </div>
-                  )}
-                </div>
-                <a
-                  href={zone.dashboardUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="shrink-0 text-muted-foreground/40 transition-colors hover:text-primary"
-                >
-                  <ExternalLink size={13} />
-                </a>
-                <a href={zone.dnsUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 text-xs font-semibold text-primary">DNS records</a>
-              </div>
-            ))}
-          </div>
-        </div>
+                    <nav aria-label={"Links for " + zone.name} className="flex flex-wrap gap-1">
+                      {zoneLinks(zone).map((l) => (
+                        <a
+                          key={l.label}
+                          href={l.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg border border-border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+                        >
+                          {l.label}
+                        </a>
+                      ))}
+                    </nav>
+                  </li>
+                ))}
+                {filteredZones.length === 0 && (
+                  <li className="p-6 text-center text-sm text-muted-foreground">
+                    No zones match “{zoneQuery}”.
+                  </li>
+                )}
+              </ul>
+            </>
+          )}
 
-        <div className="space-y-3">
-          <h2 className="flex items-center gap-2 text-base font-bold text-foreground">
-            <Lock size={15} className="text-primary" /> Saved Accounts
-          </h2>
-          {cfCreds.length > 0 ? (
-            cfCreds.map((cred) => (
-              <div key={cred.id} className="card-glass space-y-1.5 p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-semibold text-foreground">{cred.label}</div>
-                  <TruthBadge state="manual" />
-                </div>
-                <div className="truncate text-xs text-muted-foreground">{cred.username}</div>
-                {cred.url && (
+          <section
+            aria-label="Saved Cloudflare accounts"
+            className="rounded-2xl border border-border/70 bg-card/60 p-4"
+          >
+            <h2 className="flex items-center gap-2 text-sm font-bold">
+              <Lock size={14} className="text-primary" /> Saved browser credentials
+            </h2>
+            {cfCreds.length > 0 ? (
+              <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                {cfCreds.map((cred) => (
+                  <li key={cred.id} className="rounded-xl border border-border/60 p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold">{cred.label}</span>
+                      <TruthBadge state="manual" />
+                    </div>
+                    <p className="truncate text-xs text-muted-foreground">{cred.username}</p>
+                    {cred.url && (
+                      <a
+                        href={cred.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-1 inline-flex items-center gap-1 text-[11px] text-primary hover:underline"
+                      >
+                        Open <ExternalLink size={9} />
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                No Cloudflare entries in the browser vault. API access uses secure server secrets,
+                not this vault.
+              </p>
+            )}
+          </section>
+        </TabsContent>
+
+        <TabsContent value="shortcuts" className="mt-4">
+          <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {ACCOUNT_SHORTCUTS.map((s) => {
+              const url = resolveAccountUrl(s.url);
+              const needsPick = s.url.includes(":account") && url === "https://dash.cloudflare.com";
+              return (
+                <li key={s.label}>
                   <a
-                    href={cred.url}
+                    href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-[11px] text-primary hover:underline"
+                    className="group flex h-full items-start gap-3 rounded-2xl border border-border/70 bg-card/70 p-3.5 transition hover:border-primary/40"
                   >
-                    Open <ExternalLink size={9} />
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                      <s.icon size={16} />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold group-hover:text-primary">
+                        {s.label}
+                      </span>
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                        {needsPick ? "Pick the account in the Cloudflare dashboard" : s.desc}
+                      </span>
+                    </span>
                   </a>
-                )}
-              </div>
-            ))
-          ) : (
-            <div className="card-glass p-4 text-center text-sm text-muted-foreground">
-              <Lock size={20} className="mx-auto mb-2 opacity-40" />
-              <div>No browser credentials saved</div>
-              <div className="mt-1 text-xs">Cloudflare API access is configured using secure server secrets, not this vault.</div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <h2 className="mb-3 flex items-center gap-2 text-base font-bold">
-          <Zap size={15} className="text-primary" /> Quick Access
-        </h2>
-        <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:grid-cols-4">
-          {cfTools.map((tool) => (
-            <a
-              key={tool.label}
-              href={resolveToolUrl(tool.url)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="card-glass group block p-3.5 transition-all hover:border-primary/20"
-            >
-              <div className="mb-2 text-xl">{tool.icon}</div>
-              <div className="text-xs font-semibold text-foreground transition-colors group-hover:text-primary">
-                {tool.label}
-              </div>
-              <div className="mt-0.5 line-clamp-2 text-[10px] text-muted-foreground">
-                {tool.url.includes(":account") && resolveToolUrl(tool.url) === "https://dash.cloudflare.com"
-                  ? "Select the account or zone in Cloudflare Dashboard"
-                  : tool.desc}
-              </div>
-            </a>
-          ))}
-        </div>
-      </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            Zone-specific pages (DNS, Analytics, SSL/TLS, Security) are on each row of the Zones
+            tab, so links always open the right domain.
+          </p>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

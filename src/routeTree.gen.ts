@@ -11,27 +11,27 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as PortfolioAtlasRouteImport } from './routes/portfolio-atlas'
-import { Route as ApiVoiceTranscribeRouteImport } from './routes/api/voice/transcribe'
 import { Route as ApiPublicDigestRouteImport } from './routes/api/public/digest'
+import { Route as ApiVoiceTranscribeRouteImport } from './routes/api/voice/transcribe'
 
-const PortfolioAtlasRoute = PortfolioAtlasRouteImport.update({
-  id: '/portfolio-atlas',
-  path: '/portfolio-atlas',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiVoiceTranscribeRoute = ApiVoiceTranscribeRouteImport.update({
-  id: '/api/voice/transcribe',
-  path: '/api/voice/transcribe',
+const PortfolioAtlasRoute = PortfolioAtlasRouteImport.update({
+  id: '/portfolio-atlas',
+  path: '/portfolio-atlas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicDigestRoute = ApiPublicDigestRouteImport.update({
   id: '/api/public/digest',
   path: '/api/public/digest',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVoiceTranscribeRoute = ApiVoiceTranscribeRouteImport.update({
+  id: '/api/voice/transcribe',
+  path: '/api/voice/transcribe',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -56,10 +56,16 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/portfolio-atlas' | '/api/public/digest' | '/api/voice/transcribe'
+  fullPaths:
+    '/' | '/portfolio-atlas' | '/api/public/digest' | '/api/voice/transcribe'
   fileRoutesByTo: FileRoutesByTo
   to: '/' | '/portfolio-atlas' | '/api/public/digest' | '/api/voice/transcribe'
-  id: '__root__' | '/' | '/portfolio-atlas' | '/api/public/digest' | '/api/voice/transcribe'
+  id:
+    | '__root__'
+    | '/'
+    | '/portfolio-atlas'
+    | '/api/public/digest'
+    | '/api/voice/transcribe'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -85,18 +91,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortfolioAtlasRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/voice/transcribe': {
-      id: '/api/voice/transcribe'
-      path: '/api/voice/transcribe'
-      fullPath: '/api/voice/transcribe'
-      preLoaderRoute: typeof ApiVoiceTranscribeRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/public/digest': {
       id: '/api/public/digest'
       path: '/api/public/digest'
       fullPath: '/api/public/digest'
       preLoaderRoute: typeof ApiPublicDigestRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/voice/transcribe': {
+      id: '/api/voice/transcribe'
+      path: '/api/voice/transcribe'
+      fullPath: '/api/voice/transcribe'
+      preLoaderRoute: typeof ApiVoiceTranscribeRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
