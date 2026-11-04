@@ -70,19 +70,6 @@ import {
 } from "@/components/ui/sheet";
 import ConfirmDialog, { useConfirmDialog } from "@/components/ConfirmDialog";
 import { logAudit } from "@/lib/audit";
-import { PUBLIC_PORTFOLIO_REPOS } from "@/lib/portfolioAtlas";
-
-/** Unique exact-name match against the public repo snapshot — a hint, never proof. */
-const reposByName = new Map<string, string[]>();
-for (const repo of PUBLIC_PORTFOLIO_REPOS) {
-  const key = repo.name.toLowerCase();
-  reposByName.set(key, [...(reposByName.get(key) || []), repo.url]);
-}
-const possibleRepo = (row: CloudflareDeploymentRow) => {
-  const matches = row.repoUrl ? [] : reposByName.get(row.name.toLowerCase()) || [];
-  return matches.length === 1 ? matches[0] : null;
-};
-
 const PREFS_KEY = "mc.cloudflare.workspace.v2";
 const TOKEN_SOURCE_LABEL: Record<
   NonNullable<CloudflareAccountSummary["workersTokenSource"]>,
@@ -966,17 +953,6 @@ export default function CloudflareDeploymentsPanel({
                             title="Repository reported by Cloudflare Workers Builds, not proof of the currently serving commit">
                             Source: Cloudflare Workers Builds
                           </span>
-                        )}
-                        {possibleRepo(row) && (
-                          <a
-                            href={possibleRepo(row)!}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Same name as a public repo — unverified link"
-                            className="block truncate text-[10px] hover:text-primary"
-                          >
-                            possible repo: {possibleRepo(row)!.replace("https://github.com/", "")}
-                          </a>
                         )}
                       </div>
                       <div className="col-span-2 flex items-center justify-end gap-0.5 md:col-span-1">
