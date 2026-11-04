@@ -471,7 +471,7 @@ async function listAccountWorkers(accountId: string, token: string): Promise<{
     const modern = await allPages("/accounts/" + accountId + "/workers/workers", token, 50);
     return { scripts: modern.map(raw => {
       const worker = asObject(raw);
-      return { ...worker, id: asString(worker.name) || asString(worker.id) };
+      return { ...worker, tag: asString(worker.tag) || asString(worker.id), id: asString(worker.name) || asString(worker.id) };
     }), usedLegacy: false, modernError: null };
   } catch (error) {
     const reason = safeApiReason(error);
@@ -627,6 +627,23 @@ async function accountInventory(
       "; verify Zone > Workers Routes > Read permissions for these zones");
   }
   if (scripts.status === "fulfilled" && scripts.value) {
+    // Fetch up to 20 Workers Builds records in one Cloudflare request.
+    // Builds scopes are optional: a missing CI permission must not hide Workers.
+    const buildByTag = new Map<string, unknown>();
+    const tags = [...new Set(scripts.value.scripts.map(raw => asString(asObject(raw).tag))
+      .filter((tag): tag is string => Boolean(tag) && /^[a-f0-9]{32}$/i.test(tag)))];
+    const buildResults = await parallelMap(
+      Array.from({ length: Math.ceil(tags.length / 20) }, (_, n) => tags.slice(n * 20, n * 20 + 20)),
+      batch => cloudflareGet<Envelope>("/accounts/" + accountId + "/builds/builds/latest?external_script_ids=" +
+        encodeURIComponent(batch.join(",")), workersToken),
+      3,
+    );
+    for (const response of buildResults) {
+      if (response.status !== "fulfilled") continue;
+      for (const [tag, build] of Object.entries(asObject(asObject(response.value.result).builds))) {
+        if (tags.includes(tag)) buildByTag.set(tag, build);
+      }
+    }
     if (scripts.value.usedLegacy) {
       errors.push("New Workers API unavailable for account " + accountId.slice(-6) +
         " (" + scripts.value.modernError + "); legacy Scripts fallback used — Worker count is unverified. " +
@@ -643,6 +660,7 @@ async function accountInventory(
         { ...script, routes: (routesByScript.get(String(script.id)) || [])
             .map(pattern => ({ pattern, script: script.id })) },
         workerDomains, undefined, accountSubdomain,
+        buildByTag.get(asString(asObject(script).tag) || "") || asObject(script).build,
       );
       if (row) rows.push(row);
     });
