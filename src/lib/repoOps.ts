@@ -197,7 +197,7 @@ export function buildRepoOps(input: {
       fork: owned.fork,
       stars: owned.stars,
       openIssues: owned.openIssues,
-      homepage: httpsUrl(owned.homepage),
+      homepage: appPublicUrl(owned.homepage),
       source: "authenticated" as const,
     });
     rows.set(key, row);
