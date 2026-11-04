@@ -4,7 +4,7 @@ import { healthOf } from "@/lib/cloudflareWorkspace";
 
 /** Read-only, evidence-grounded reconciliation. No URL guesses or uptime assertions. */
 export function githubTriage(rows: readonly RepoOpsRow[], cloudTruth: InfraTruth | null) {
-  const missingApp = rows.filter(r => !r.archived && !r.appUrl);
+  const missingApp = rows.filter(r => !r.appUrl);
   const failedBuild = rows.filter(r => r.cloudflare.some(c => healthOf(c) === "failing"));
   const unconfirmedApp = rows.filter(r => r.appUrl && !r.appEvidence?.providerAttested);
   const conflicting = rows.filter(r => {
