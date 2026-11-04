@@ -120,7 +120,7 @@ function loadOwned(force = false): Promise<GitHubPrivateInventory> {
 const CHIPS: Array<{ id: RepoQuick; label: string; tone?: "danger" | "warn" }> = [
   { id: "all", label: "All" },
   { id: "attention", label: "Needs action", tone: "warn" },
-  { id: "failing", label: "Deploy problems", tone: "danger" },
+  { id: "failing", label: "Failed builds", tone: "danger" },
   { id: "cloudflare", label: "On Cloudflare" },
   { id: "undeployed", label: "No verified app link" },
   { id: "recent", label: "Pushed ≤7d" },
