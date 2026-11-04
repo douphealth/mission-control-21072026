@@ -75,10 +75,10 @@ describe("Cloudflare production inventory normalization", () => {
 
 describe("multi-account scoped API credentials", () => {
   it("preserves each account and can use a separate Pages token", async () => {
-    const { apiTokenFor, pagesTokenFor, workersTokenFor } = await import("@/lib/cloudflareInventory.server");
+    const { apiTokenFor, pagesTokenFor, workersTokenFor, buildsTokenFor } = await import("@/lib/cloudflareInventory.server");
     const first = "a".repeat(32), second = "b".repeat(32);
     const env = { CLOUDFLARE_ACCOUNT_TOKENS_JSON: JSON.stringify({
-      [first]: { default: "first-general", pages: "first-pages", workers: "first-workers" },
+      [first]: { default: "first-general", pages: "first-pages", workers: "first-workers", builds: "first-ci-read" },
       [second]: { default: "second-general", pages: "second-pages", workers: "second-workers" },
     }) };
     expect(apiTokenFor(first, env)).toBe("first-general");
@@ -86,6 +86,8 @@ describe("multi-account scoped API credentials", () => {
     expect(apiTokenFor(second, env)).toBe("second-general");
     expect(pagesTokenFor(second, env)).toBe("second-pages");
     expect(workersTokenFor(first, env)).toBe("first-workers");
+    expect(buildsTokenFor(first, env)).toBe("first-ci-read");
+    expect(buildsTokenFor(second, env)).toBe("second-workers");
     expect(workersTokenFor(second, env)).toBe("second-workers");
   });
 });
