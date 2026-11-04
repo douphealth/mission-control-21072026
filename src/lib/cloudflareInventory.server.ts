@@ -587,8 +587,9 @@ async function accountInventory(
   const workerDomains = domains.status === "fulfilled" && domains.value ? domains.value : [];
   const accountSubdomain = subdomain.status === "fulfilled" && subdomain.value
     ? asString(asObject(subdomain.value.result).subdomain) : null;
-  if (subdomain.status === "rejected") errors.push("Worker account subdomain unavailable for account " +
-    accountId.slice(-6) + " (" + safeApiReason(subdomain.reason) + "); workers.dev URLs may be missing");
+  // Older tokens can list scripts but not the account workers.dev suffix.
+  // Preserve inventory completeness; the affected URL stays unverified rather
+  // than asserting this Worker has no public URL.
   if (domains.status === "rejected") errors.push("Worker domains unavailable for account " + accountId.slice(-6) +
     " (" + safeApiReason(domains.reason) + "); verify Workers read permission for this account");
 
