@@ -28,6 +28,9 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { portfolioPage, type PortfolioPageSize } from "@/lib/portfolioPaging";
+import PortfolioPager from "@/components/controlcenter/PortfolioPager";
+import { githubTriage } from "@/lib/portfolioTriage";
 import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
 import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
@@ -117,7 +120,7 @@ function loadOwned(force = false): Promise<GitHubPrivateInventory> {
 const CHIPS: Array<{ id: RepoQuick; label: string; tone?: "danger" | "warn" }> = [
   { id: "all", label: "All" },
   { id: "attention", label: "Needs action", tone: "warn" },
-  { id: "failing", label: "Deploy problems", tone: "danger" },
+  { id: "failing", label: "Failed builds", tone: "danger" },
   { id: "cloudflare", label: "On Cloudflare" },
   { id: "undeployed", label: "No verified app link" },
   { id: "recent", label: "Pushed ≤7d" },
@@ -249,6 +252,8 @@ export default function RepoOpsWorkspace({
   const [busy, setBusy] = useState(false);
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PortfolioPageSize>(50);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [inspected, setInspected] = useState<{repo:string; loading:boolean; result:RepositoryDiagnostics|null; error:string|null}|null>(null);
   const inspectRepo = async (row: RepoOpsRow) => {
@@ -319,12 +324,14 @@ export default function RepoOpsWorkspace({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
-  const update = (patch: Partial<Prefs>) =>
+  const update = (patch: Partial<Prefs>) => {
+    setPage(1);
     setPrefs((old) => {
       const next = { ...old, ...patch };
       writePrefs(next);
       return next;
     });
+  };
 
   const live = useMemo(() => OWNERS.flatMap((o) => owners[o]?.repositories || []), [owners]);
   const cloud = cf.snapshot?.inventory?.rows;
@@ -354,6 +361,7 @@ export default function RepoOpsWorkspace({
       : prefs.quick;
   const counts = useMemo(() => repoQuickCounts(ownerScoped), [ownerScoped]);
   const stats = useMemo(() => repositoryPortfolioStats(all), [all]);
+  const triage = useMemo(() => githubTriage(ownerScoped,cf.snapshot?.inventory?.truthState || null),[ownerScoped,cf.snapshot?.inventory?.truthState]);
   const languages = useMemo(() => [...new Set(ownerScoped.map(r => r.language || "Unknown"))]
     .sort((a,b) => a.localeCompare(b)), [ownerScoped]);
   const setFacet = (patch: Partial<RepositoryFacets>) => update({facets:{...prefs.facets,...patch}});
@@ -369,8 +377,9 @@ export default function RepoOpsWorkspace({
     for (const r of all) names.set(r.owner, (names.get(r.owner) || 0) + 1);
     return [...names.entries()].sort((a, b) => b[1] - a[1]);
   }, [all]);
+  const current = portfolioPage(rows, page, pageSize);
   const selectedRows = rows.filter((r) => selected.has(r.key));
-  const allVisibleSelected = rows.length > 0 && rows.every((r) => selected.has(r.key));
+  const allVisibleSelected = current.items.length > 0 && current.items.every((r) => selected.has(r.key));
   const recentActivity = useMemo(() => recentOperatorActivity(all,cloud||[],8),[all,cloud]);
   const linkedRepos = stats.cloudflareMatches;
   const rateLimited = ownersRateLimitedUntil();
@@ -420,6 +429,7 @@ export default function RepoOpsWorkspace({
   const resetFilters = () => {
     setQuery("");
     update(DEFAULT_PREFS);
+    setPage(1);
   };
 
   return (
@@ -507,6 +517,41 @@ export default function RepoOpsWorkspace({
         deployment failures are Cloudflare build metadata, not HTTP uptime checks.
       </p>
 
+      <section className="rounded-2xl border border-border/60 bg-card/75 p-4" aria-label="GitHub reconciliation queue">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-bold">Resolve what matters</h3>
+          <span className="text-[11px] text-muted-foreground">
+            {triage.complete ? "Cloudflare inventory complete" : "Cloudflare inventory partial or unavailable"}
+          </span>
+        </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Observed issues, not guessed outages. Select a group to filter the full repository list.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <button type="button" onClick={()=>update({quick:"failing",facets:REPOSITORY_FACETS_DEFAULT})}
+            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+            <span className="block text-xl font-bold tabular-nums">{triage.failedBuild.length}</span>
+            <span className="block text-xs font-semibold">Failed Cloudflare production builds</span>
+            <span className="block text-[11px] text-muted-foreground">Review the latest build and serving deployment separately</span>
+          </button>
+          <button type="button" onClick={()=>update({quick:"all",facets:{...REPOSITORY_FACETS_DEFAULT,deployment:"missing-app"}})}
+            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+            <span className="block text-xl font-bold tabular-nums">{triage.missingApp.length}</span>
+            <span className="block text-xs font-semibold">Unresolved app URLs</span>
+            <span className="block text-[11px] text-muted-foreground">Missing evidence does not mean undeployed</span>
+          </button>
+          <button type="button" onClick={()=>update({quick:"all",facets:{...REPOSITORY_FACETS_DEFAULT,evidence:"recorded"}})}
+            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+            <span className="block text-xl font-bold tabular-nums">{triage.unconfirmedApp.length}</span>
+            <span className="block text-xs font-semibold">Recorded links without provider proof</span>
+            <span className="block text-[11px] text-muted-foreground">Verify current Cloudflare source and URL before relying on it</span>
+          </button>
+        </div>
+        {triage.conflicting.length > 0 && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
+          {triage.conflicting.length} recorded app hostname(s) differ from their matched Cloudflare endpoint.
+          This can be legitimate custom-domain routing; investigate before changing links.
+        </p>}
+      </section>
       <details className="rounded-xl border border-border/60 bg-card/65 p-3">
         <summary className="cursor-pointer text-sm font-semibold">Recent GitHub pushes and Cloudflare deployments · {recentActivity.length} observed</summary>
         <div className="mt-3 grid gap-2 lg:grid-cols-2">
@@ -566,7 +611,7 @@ export default function RepoOpsWorkspace({
             ref={searchRef}
             type="search"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {setQuery(e.target.value);setPage(1);}}
             placeholder="Search repo, description, next action, domain…  ( / )"
             className="w-full rounded-xl border border-border bg-background py-2 pl-10 pr-3 text-sm"
           />
@@ -650,7 +695,7 @@ export default function RepoOpsWorkspace({
       </div>
 
       <SavedFilterViews storageKey="mc.github.saved-views.v1" state={{prefs,query}}
-        onApply={view=>{update(view.prefs);setQuery(view.query);}} />
+        onApply={view=>{update(view.prefs);setQuery(view.query);setPage(1);}} />
 
       {selectedRows.length > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
@@ -704,7 +749,7 @@ export default function RepoOpsWorkspace({
 
       <p className="text-xs text-muted-foreground" aria-live="polite">
         Showing <strong className="text-foreground">{rows.length}</strong> of {ownerScoped.length}{" "}
-        repositories · all results rendered
+        repositories · {current.from}–{current.to} on this page
       </p>
 
       {rows.length === 0 ? (
@@ -719,7 +764,12 @@ export default function RepoOpsWorkspace({
               aria-label="Select all visible repositories"
               checked={allVisibleSelected}
               onChange={() =>
-                setSelected(allVisibleSelected ? new Set() : new Set(rows.map((r) => r.key)))
+                setSelected(old => {
+                  const next = new Set(old);
+                  if (allVisibleSelected) current.items.forEach(r => next.delete(r.key));
+                  else current.items.forEach(r => next.add(r.key));
+                  return next;
+                })
               }
               className="h-4 w-4 accent-primary"
             />
@@ -730,7 +780,7 @@ export default function RepoOpsWorkspace({
             <span className="text-right">Manage</span>
           </div>
           <ul className="divide-y divide-border/60">
-            {rows.map((row) => {
+            {current.items.map((row) => {
               const repoPath = row.key.split("/")[1];
               return (
                 <li
@@ -984,6 +1034,8 @@ export default function RepoOpsWorkspace({
           </ul>
         </div>
       )}
+      <PortfolioPager id="GitHub repositories" {...current}
+        onPage={setPage} onSize={size => {setPageSize(size);setPage(1);}} />
       <Sheet open={Boolean(inspected)} onOpenChange={open=>{if(!open)setInspected(null);}}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
           <SheetHeader>

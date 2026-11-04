@@ -141,6 +141,8 @@ const BUILDING_STAGE = /^(active|idle|queued|running|in_progress)$/i;
 function sourceTypeOf(source: Record<string, any>): CloudflareDeploymentRow["sourceType"] {
   const type = asString(source.type);
   if (type === "github" || type === "gitlab") return type;
+  if (type === "direct_upload") return "direct_upload";
+  // If Cloudflare provides an unrecognized source type, preserve uncertainty.
   return Object.keys(source).length ? null : "direct_upload";
 }
 export function normalizePagesProject(accountId: string, raw: unknown): CloudflareDeploymentRow | null {

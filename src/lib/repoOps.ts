@@ -256,7 +256,7 @@ export function matchesRepoQuick(row: RepoOpsRow, quick: RepoQuick, now = Date.n
     case "cloudflare":
       return row.cloudflare.length > 0;
     case "failing":
-      return row.cloudflare.some((c) => healthOf(c) === "failing" || healthOf(c) === "none");
+      return row.cloudflare.some((c) => healthOf(c) === "failing");
     case "undeployed":
       return !row.archived && !row.cloudflare.length && !row.appUrl;
     case "recent":

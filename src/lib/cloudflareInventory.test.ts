@@ -36,6 +36,12 @@ describe("Cloudflare production inventory normalization", () => {
       "https://dash.cloudflare.com/" + ACCOUNT + "/pages/view/example-product");
     expect(p?.repoUrl).toBe("https://github.com/example-owner/example-repo");
   });
+  it("recognizes explicit direct uploads and leaves unknown source types unverified", () => {
+    const direct = normalizePagesProject(ACCOUNT, {name:"upload", source:{type:"direct_upload"}});
+    const unknown = normalizePagesProject(ACCOUNT, {name:"novel", source:{type:"unfamiliar_adapter"}});
+    expect(direct?.sourceType).toBe("direct_upload");
+    expect(unknown?.sourceType).toBeNull();
+  });
   it("never marks a missing deployment as healthy", () => {
     const result = normalizePagesProject(ACCOUNT, { name: "empty-project" });
     expect(result?.status).toBe("unknown");
