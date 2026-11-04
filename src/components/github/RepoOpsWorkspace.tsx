@@ -204,16 +204,17 @@ function CloudflareCell({
           </span>
         )}
       </div>
-      {first.publicUrl && (
+      {appUrl && (
         <a
-          href={first.publicUrl}
+          href={appUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="block truncate text-[10px] text-primary hover:underline"
         >
-          {hostOf(first.publicUrl)}
+          {hostOf(appUrl)}
         </a>
       )}
+      {evidence && <span className="block truncate text-[10px] text-muted-foreground" title={evidence.label}>{evidence.label}</span>}
     </div>
   );
 }
