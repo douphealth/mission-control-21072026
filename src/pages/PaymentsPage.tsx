@@ -214,7 +214,7 @@ export default function PaymentsPage() {
       if (editId) await updateItem<Payment>("payments", editId, record);
       else await addItem<Payment>("payments", { ...record, createdAt: today });
       setModalOpen(false);
-      toast.success(editId ? "Payment updated" : "Payment added");
+      toast.success(editId ? "Finance record updated" : "Finance record added");
     });
   const deletePayment = (id: string) =>
     cd.confirm({
@@ -801,7 +801,7 @@ export default function PaymentsPage() {
         onClose={() => {
           if (!lock.current) setModalOpen(false);
         }}
-        title={editId ? "Edit Payment" : "Add Payment"}
+        title={editId ? "Edit finance record" : "Add finance record"}
         onSubmit={saveForm}
         submitLabel={busy ? "Saving…" : "Save record"}
         size="lg"

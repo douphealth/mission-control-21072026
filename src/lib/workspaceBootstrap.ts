@@ -29,6 +29,34 @@ function domainOf(url: string) {
   }
 }
 
+/**
+ * Stable identity for a seeded build project: its repository when it has one,
+ * otherwise its deployed URL, otherwise its name. Repository-backed seeds keep
+ * the exact identity (and therefore the exact record id) they always had.
+ */
+export function buildIdentity(build: {
+  githubRepo?: string;
+  deployedUrl?: string;
+  projectUrl?: string;
+  name?: string;
+}): string {
+  return (
+    [build.githubRepo, build.deployedUrl, build.projectUrl, build.name]
+      .map((value) => (value || "").trim())
+      .find(Boolean) || ""
+  );
+}
+/** Does a stored build already represent this seed? Uses the same identity ladder. */
+export function isSameBuild(
+  row: { githubRepo?: string; deployedUrl?: string; name?: string },
+  seed: { githubRepo?: string; deployedUrl?: string; name?: string },
+): boolean {
+  const norm = (value?: string) => (value || "").trim().toLowerCase();
+  if (norm(seed.githubRepo)) return norm(row.githubRepo) === norm(seed.githubRepo);
+  if (norm(seed.deployedUrl)) return norm(row.deployedUrl) === norm(seed.deployedUrl);
+  return norm(row.name) === norm(seed.name);
+}
+
 async function putIfMissing<T extends { id: string }>(
   table: any,
   collection: string,
@@ -37,9 +65,18 @@ async function putIfMissing<T extends { id: string }>(
   preferenceId?: string,
 ) {
   const values = record as Record<string, unknown>;
-  const identity = collection === "buildProjects" ? values.githubRepo
-    : collection === "ideas" ? values.title : values.url;
-  if (typeof identity !== "string" || !identity.trim()) throw new Error(`Missing bootstrap identity for ${collection}`);
+  const identity =
+    collection === "buildProjects"
+      ? buildIdentity(values as Parameters<typeof buildIdentity>[0])
+      : collection === "ideas"
+        ? values.title
+        : values.url;
+  // A seed with no identity can never be recognised again, so it is not created.
+  // It must also never abort the stages after it (feeds, watch rules, SEO profiles).
+  if (typeof identity !== "string" || !identity.trim()) {
+    console.warn(`Skipped a starter record without an identity (${collection})`);
+    return false;
+  }
   const id = await stableBootstrapId(`seed-${collection}`, identity.trim().toLowerCase());
   const created = await db.transaction("rw", table, db.settings, async () => {
     if (preferenceId && (await db.settings.get(preferenceId))?.bootstrapSeedPreference?.dismissed) return false;
@@ -421,7 +458,7 @@ export async function ensureWorkspaceBootstrap() {
       (await putIfMissing<BuildProject>(
         db.buildProjects,
         "buildProjects",
-        async () => Boolean(await db.buildProjects.filter((row) => row.githubRepo.toLowerCase() === app.githubRepo.toLowerCase()).first()),
+        async () => Boolean(await db.buildProjects.filter((row) => isSameBuild(row, app)).first()),
         app,
       )) || changed;
   }
@@ -431,7 +468,7 @@ export async function ensureWorkspaceBootstrap() {
       (await putIfMissing<BuildProject>(
         db.buildProjects,
         "buildProjects",
-        async () => Boolean(await db.buildProjects.filter((row) => row.githubRepo.toLowerCase() === build.githubRepo.toLowerCase()).first()),
+        async () => Boolean(await db.buildProjects.filter((row) => isSameBuild(row, build)).first()),
         build,
       )) || changed;
   }
