@@ -1,4 +1,5 @@
-import type { GitHubRepo } from "@/lib/db";
+import type { BuildProject, GitHubRepo } from "@/lib/db";
+import { recordedRepoAppLinks, appPublicUrl, endpointIdentity, type RepoAppEvidence } from "@/lib/repoAppLinks";
 import type { LiveRepo } from "@/lib/liveGitHub";
 import type { OwnedRepoSnapshot } from "@/lib/githubPrivateInventory.server";
 import type { CloudflareDeploymentRow } from "@/lib/cloudflareInventory.server";
@@ -32,6 +33,7 @@ export interface RepoOpsRow {
   saved: boolean;
   cloudflare: CloudflareDeploymentRow[];
   appUrl: string | null;
+  appEvidence: RepoAppEvidence | null;
 }
 export type RepoQuick =
   | "all"
@@ -85,8 +87,21 @@ export function buildRepoOps(input: {
   live: LiveRepo[];
   owned: OwnedRepoSnapshot[];
   cloud: CloudflareDeploymentRow[];
+  apps?: Pick<BuildProject, "githubRepo" | "deployedUrl">[];
 }): RepoOpsRow[] {
   const persisted = new Set(input.savedRepos.map((r) => r.id));
+  const recorded = recordedRepoAppLinks(input.apps);
+  // Exact endpoint identity is useful for direct-upload Pages / Wrangler Workers,
+  // whose Cloudflare API records often omit a Git source. Reject ambiguous URLs.
+  const byEndpoint = new Map<string, CloudflareDeploymentRow[]>();
+  for (const deployment of input.cloud) {
+    for (const url of [deployment.publicUrl, deployment.pagesDevUrl, deployment.workersDevUrl]) {
+      const id = endpointIdentity(url);
+      if (!id) continue;
+      const prior = byEndpoint.get(id) || [];
+      if (!prior.some(x => x.key === deployment.key)) byEndpoint.set(id, [...prior, deployment]);
+    }
+  }
   const savedByKey = new Map<string, GitHubRepo>();
   for (const repo of input.savedRepos) {
     const key = getGitHubRepoKey(repo.url);
@@ -124,6 +139,7 @@ export function buildRepoOps(input: {
     saved: persisted.has(plan.id),
     cloudflare: [],
     appUrl: null,
+    appEvidence: null,
   });
   for (const repo of input.displayRepos) {
     const key = getGitHubRepoKey(repo.url);
@@ -190,15 +206,37 @@ export function buildRepoOps(input: {
     rows.set(key, row);
   }
   for (const row of rows.values()) {
-    row.cloudflare = (cfByRepo.get(row.key) || []).sort(
+    const recordedLink = recorded.get(row.key) || null;
+    const fromPlan = appPublicUrl(row.plan.demoUrl);
+    const fromGithub = appPublicUrl(row.homepage);
+    const candidate = recordedLink?.url || fromPlan || fromGithub;
+    const endpointMatch = candidate ? byEndpoint.get(endpointIdentity(candidate) || "") || [] : [];
+    // Only a single provider resource with that exact URL is sufficient to
+    // associate a direct-upload Worker/Pages project with this repository record.
+    const exactMatch = endpointMatch.length === 1 ? endpointMatch : [];
+    const linked = new Map<string, CloudflareDeploymentRow>();
+    for (const resource of [...(cfByRepo.get(row.key) || []), ...exactMatch]) linked.set(resource.key, resource);
+    row.cloudflare = [...linked.values()].sort(
       (a, b) =>
         Number(Boolean(b.domains.length)) - Number(Boolean(a.domains.length)) ||
         a.name.localeCompare(b.name),
     );
-    row.appUrl =
-      row.cloudflare.find((c) => c.publicUrl)?.publicUrl ||
-      httpsUrl(row.plan.demoUrl) ||
-      row.homepage;
+    const authoritative = row.cloudflare.find(c =>
+      getGitHubRepoKey(c.repoUrl) === row.key && appPublicUrl(c.publicUrl));
+    const matched = row.cloudflare.find(c => appPublicUrl(c.publicUrl));
+    const chosen = authoritative?.publicUrl || matched?.publicUrl || candidate || null;
+    row.appUrl = appPublicUrl(chosen);
+    row.appEvidence = authoritative && row.appUrl
+      ? {url: row.appUrl, origin: "cloudflare-source", label: "Cloudflare-reported Git source", providerAttested: true}
+      : matched && row.appUrl
+        ? {url: row.appUrl, origin: "cloudflare-endpoint", label: "Cloudflare endpoint + exact recorded app URL", providerAttested: true}
+        : recordedLink && row.appUrl === recordedLink.url
+          ? recordedLink
+          : fromPlan && row.appUrl === fromPlan
+            ? {url: fromPlan, origin: "saved-plan", label: "Saved repository app URL", providerAttested: false}
+            : fromGithub && row.appUrl === fromGithub
+              ? {url: fromGithub, origin: "github-homepage", label: "GitHub repository homepage", providerAttested: false}
+              : null;
   }
   return [...rows.values()];
 }
@@ -290,6 +328,7 @@ export function repoSearchText(row: RepoOpsRow): string {
     row.plan.doneSummary,
     row.plan.priority,
     row.appUrl,
+    row.appEvidence?.label,
     ...row.plan.topics,
     ...row.cloudflare.flatMap((c) => [c.name, c.publicUrl || "", ...c.domains]),
   ]
@@ -314,6 +353,7 @@ export function repoOpsCsv(rows: RepoOpsRow[]): string {
     "priority",
     "next_action",
     "app_url",
+    "app_url_evidence",
     "cloudflare_projects",
     "cloudflare_health",
   ];
@@ -332,6 +372,7 @@ export function repoOpsCsv(rows: RepoOpsRow[]): string {
         r.plan.priority || "",
         r.plan.pendingSummary || "",
         r.appUrl || "",
+        r.appEvidence?.label || "",
         r.cloudflare.map((c) => c.name).join("; "),
         r.cloudflare.map((c) => healthOf(c)).join("; "),
       ]
