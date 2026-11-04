@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import { recentOperatorActivity } from "@/lib/operatorActivity";
 import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { matchesRepositoryFacets, repositoryPortfolioStats, REPOSITORY_FACETS_DEFAULT, type RepositoryFacets } from "@/lib/repositoryFacets";
@@ -369,6 +370,7 @@ export default function RepoOpsWorkspace({
   }, [all]);
   const selectedRows = rows.filter((r) => selected.has(r.key));
   const allVisibleSelected = rows.length > 0 && rows.every((r) => selected.has(r.key));
+  const recentActivity = useMemo(() => recentOperatorActivity(all,cloud||[],8),[all,cloud]);
   const linkedRepos = stats.cloudflareMatches;
   const rateLimited = ownersRateLimitedUntil();
 
@@ -504,6 +506,17 @@ export default function RepoOpsWorkspace({
         deployment failures are Cloudflare build metadata, not HTTP uptime checks.
       </p>
 
+      <details className="rounded-xl border border-border/60 bg-card/65 p-3">
+        <summary className="cursor-pointer text-sm font-semibold">Recent GitHub pushes and Cloudflare deployments · {recentActivity.length} observed</summary>
+        <div className="mt-3 grid gap-2 lg:grid-cols-2">
+          {recentActivity.map(a => <a key={a.key} href={a.url} target="_blank" rel="noopener noreferrer"
+            className="min-w-0 rounded-lg border border-border/40 p-2 hover:border-primary/40">
+            <span className="block truncate text-xs font-medium text-primary">{a.name}</span>
+            <span className="block text-[11px] text-muted-foreground">{a.source} · {a.action} · {relativeTime(a.at)}</span>
+          </a>)}
+          {!recentActivity.length && <p className="text-xs text-muted-foreground">No timestamped GitHub pushes or Cloudflare deployments were returned.</p>}
+        </div>
+      </details>
       <div
         className="flex gap-1.5 overflow-x-auto pb-1"
         role="toolbar"
