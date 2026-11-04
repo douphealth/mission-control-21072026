@@ -869,7 +869,7 @@ export default function CloudflareDeploymentsPanel({
                           </a>
                         ) : (
                           <span className="text-muted-foreground">
-                            {row.kind === "worker" ? "No custom domain" : "Not published"}
+                            {row.kind === "worker" ? "URL not verified (check routing)" : "Not published"}
                           </span>
                         )}
                         {extraDomains > 0 && (
@@ -879,6 +879,13 @@ export default function CloudflareDeploymentsPanel({
                           >
                             +{extraDomains}
                           </span>
+                        )}
+                        {row.workersDevUrl && row.workersDevUrl !== row.publicUrl && (
+                          <a href={row.workersDevUrl} target="_blank" rel="noopener noreferrer"
+                            className="block truncate text-[10px] text-muted-foreground hover:text-primary"
+                            title="workers.dev endpoint, confirmed enabled by Cloudflare">
+                            {hostOf(row.workersDevUrl)}
+                          </a>
                         )}
                         {row.domains.length > 0 && row.pagesDevUrl && (
                           <a
@@ -950,7 +957,15 @@ export default function CloudflareDeploymentsPanel({
                             "Source not reported"
                           )
                         ) : (
-                          row.routes[0] || "—"
+                          <span title="Worker source is not reported by the available Cloudflare API scopes">
+                            {row.routes.length ? "Route: " + row.routes[0] : "Git source not verified"}
+                          </span>
+                        )}
+                        {row.repoEvidence === "worker-build" && row.repoUrl && (
+                          <span className="block text-[10px] text-emerald-600 dark:text-emerald-400"
+                            title="Repository reported by Cloudflare Workers Builds, not proof of the currently serving commit">
+                            Source: Cloudflare Workers Builds
+                          </span>
                         )}
                         {possibleRepo(row) && (
                           <a
