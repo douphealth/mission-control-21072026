@@ -1,30 +1,32 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
-  Activity,
   ArrowDownUp,
   Archive,
+  ChevronsUpDown,
+  CircleAlert,
   CircleCheck,
   CircleDashed,
   CircleDot,
   CircleX,
   Cloud,
-  Code2,
   Copy,
   Download,
   Ellipsis,
   ExternalLink,
+  FolderGit2,
   GitFork,
   GitPullRequest,
-  Globe,
+  Github,
+  Keyboard,
   LoaderCircle,
   Lock,
   Pencil,
-  Play,
+  Plus,
   RefreshCw,
   Search,
-  Settings,
-  Star,
+  SlidersHorizontal,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -33,12 +35,19 @@ import PortfolioPager from "@/components/controlcenter/PortfolioPager";
 import { githubTriage } from "@/lib/portfolioTriage";
 import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
-import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
-import { matchesRepositoryFacets, repositoryPortfolioStats, REPOSITORY_FACETS_DEFAULT, type RepositoryFacets } from "@/lib/repositoryFacets";
+import {
+  matchesRepositoryFacets,
+  repositoryPortfolioStats,
+  type RepositoryFacets,
+} from "@/lib/repositoryFacets";
 import type { GitHubRepo } from "@/lib/db";
-import { useBuildProjects } from "@/hooks/useTableData";
-import { useAddItem, useBulkAddItems, useBulkPatch, useUpdateItem } from "@/hooks/useTableData";
+import {
+  useAddItem,
+  useBuildProjects,
+  useBulkAddItems,
+  useBulkPatch,
+  useUpdateItem,
+} from "@/hooks/useTableData";
 import {
   OWNERS,
   cachedOwners,
@@ -51,8 +60,7 @@ import {
   type GitHubPrivateInventory,
 } from "@/lib/githubPrivateInventory.functions";
 import { useCloudflareControl } from "@/lib/cloudflareControlClient";
-import type { CloudflareDeploymentRow, DeployHealth } from "@/lib/cloudflareInventory.server";
-import { healthOf, hostOf, relativeTime } from "@/lib/cloudflareWorkspace";
+import { relativeTime, hostOf } from "@/lib/cloudflareWorkspace";
 import {
   buildRepoOps,
   compareRepoRows,
@@ -62,8 +70,49 @@ import {
   repoSearchText,
   type RepoOpsRow,
   type RepoQuick,
-  type RepoSort,
 } from "@/lib/repoOps";
+import {
+  REPO_DEPLOY_LABEL,
+  REPO_PREFS_DEFAULT,
+  clearRepoFilter,
+  normalizeRepoPrefs,
+  repoCloneCommand,
+  repoDeployState,
+  repoFilterChips,
+  repoGroup,
+  type RepoDeployState,
+  type RepoGroupBy,
+  type RepoPrefs,
+} from "@/lib/repoConsole";
+import {
+  BULK_OPEN_LIMIT,
+  flattenGroups,
+  groupRows,
+  limitOpen,
+  markdownList,
+  safeUrls,
+} from "@/lib/consoleKit";
+import { useConsoleFocus } from "@/stores/consoleFocusStore";
+import { useNavigationStore } from "@/stores/navigationStore";
+import {
+  ActiveFilters,
+  BulkBar,
+  DensityToggle,
+  GroupHeader,
+  HealthTile,
+  Pill,
+  ShortcutHelp,
+  TileRow,
+  ctl,
+  ctlPrimary,
+  iconBtn,
+  selectCls,
+  useListKeyboard,
+  type Shortcut,
+  type Tone,
+} from "@/components/console/ConsoleUI";
+import RepoDrawer from "@/components/github/RepoDrawer";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -75,23 +124,14 @@ import {
 
 type Priority = NonNullable<GitHubRepo["priority"]>;
 const PREFS_KEY = "mc.github.workspace.v1";
-type Prefs = { quick: RepoQuick; owner: string; sort: RepoSort; facets: RepositoryFacets };
-const DEFAULT_PREFS: Prefs = { quick: "all", owner: "all", sort: "pushed", facets: REPOSITORY_FACETS_DEFAULT };
-function readPrefs(): Prefs {
+function readPrefs(): RepoPrefs {
   try {
-    return {
-      ...DEFAULT_PREFS,
-      ...(JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<Prefs>),
-      facets: {
-        ...REPOSITORY_FACETS_DEFAULT,
-        ...((JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<Prefs>).facets || {}),
-      },
-    };
+    return normalizeRepoPrefs(JSON.parse(localStorage.getItem(PREFS_KEY) || "{}"));
   } catch {
-    return DEFAULT_PREFS;
+    return REPO_PREFS_DEFAULT;
   }
 }
-function writePrefs(prefs: Prefs) {
+function writePrefs(prefs: RepoPrefs) {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
   } catch {
@@ -117,157 +157,112 @@ function loadOwned(force = false): Promise<GitHubPrivateInventory> {
   return ownedInflight;
 }
 
-const CHIPS: Array<{ id: RepoQuick; label: string; tone?: "danger" | "warn" }> = [
-  { id: "all", label: "All" },
-  { id: "attention", label: "Needs action", tone: "warn" },
-  { id: "failing", label: "Failed builds", tone: "danger" },
+const QUICK_VIEWS: Array<{ id: RepoQuick; label: string }> = [
+  { id: "all", label: "All repositories" },
+  { id: "attention", label: "Needs action" },
+  { id: "failing", label: "Failed Cloudflare builds" },
   { id: "cloudflare", label: "On Cloudflare" },
   { id: "undeployed", label: "No verified app link" },
-  { id: "recent", label: "Pushed ≤7d" },
-  { id: "stale", label: "Stale >180d" },
-  { id: "issues", label: "Open issues/PRs" },
+  { id: "recent", label: "Pushed in 7 days" },
+  { id: "stale", label: "Stale over 180 days" },
+  { id: "issues", label: "Open issues / PRs" },
   { id: "private", label: "Private" },
   { id: "unplanned", label: "No plan yet" },
   { id: "forks", label: "Forks" },
   { id: "archived", label: "Archived" },
 ];
+
+const DEPLOY_UI: Record<
+  RepoDeployState,
+  { tone: Tone; icon: typeof CircleCheck; spin?: boolean } | null
+> = {
+  failing: { tone: "danger", icon: CircleX },
+  building: { tone: "info", icon: LoaderCircle, spin: true },
+  deployed: { tone: "good", icon: CircleCheck },
+  idle: { tone: "neutral", icon: CircleDashed },
+  linked: { tone: "neutral", icon: CircleDot },
+  none: null,
+};
 const PRIORITY_CLS: Record<string, string> = {
-  critical: "border-red-500/40 text-red-700 dark:text-red-300",
-  high: "border-amber-500/40 text-amber-700 dark:text-amber-300",
-  medium: "border-border text-foreground",
-  low: "border-border text-muted-foreground",
-  "": "border-dashed border-border text-muted-foreground",
+  critical: "border-red-500/45 bg-red-500/10 text-red-700 dark:text-red-300",
+  high: "border-amber-500/45 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+  medium: "border-border bg-muted/40 text-foreground",
+  low: "border-border bg-transparent text-muted-foreground",
+  "": "border-dashed border-border bg-transparent text-muted-foreground",
 };
-const CF_ICON: Record<DeployHealth, { icon: typeof CircleCheck; cls: string; label: string }> = {
-  live: { icon: CircleCheck, cls: "text-emerald-500", label: "Live" },
-  failing: { icon: CircleX, cls: "text-red-500", label: "Build failed" },
-  building: { icon: LoaderCircle, cls: "text-sky-500 animate-spin", label: "Building" },
-  none: { icon: CircleDashed, cls: "text-amber-500", label: "No deployment" },
-  unknown: { icon: CircleDot, cls: "text-muted-foreground", label: "Unverified" },
-};
-const iconBtn =
-  "inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground";
+const SHORTCUTS: Shortcut[] = [
+  { keys: ["/"], label: "Search repositories" },
+  { keys: ["j", "↓"], label: "Next repository" },
+  { keys: ["k", "↑"], label: "Previous repository" },
+  { keys: ["Enter", "o"], label: "Open details drawer" },
+  { keys: ["x"], label: "Select / unselect repository" },
+  { keys: ["r"], label: "Refresh all sources" },
+  { keys: ["Esc"], label: "Close drawer, then clear selection" },
+  { keys: ["?"], label: "Show this help" },
+];
+
 const copyText = (text: string, what: string) =>
   void navigator.clipboard.writeText(text).then(
     () => toast.success(what + " copied"),
     () => toast.error("Clipboard access unavailable"),
   );
-
-function CloudflareCell({
-  items,
-  appUrl,
-  known,
-  evidence,
-  onEdit,
-}: {
-  items: CloudflareDeploymentRow[];
-  appUrl: string | null;
-  known: boolean;
-  evidence: RepoOpsRow["appEvidence"];
-  onEdit: () => void;
-}) {
-  if (!items.length) {
-    return appUrl ? (
-      <div className="min-w-0"><a
-        href={appUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex max-w-full items-center gap-1 text-primary hover:underline"
-        title={evidence?.label || "Recorded app URL; not independently verified"}
-      >
-        <Globe size={12} className="shrink-0" />
-        <span className="truncate">{hostOf(appUrl)}</span>
-      </a>
-      <span className="block truncate text-[10px] text-muted-foreground" title={evidence?.label}>{evidence?.label || "Recorded URL"}</span></div>
-    ) : known ? (
-      <button type="button" className="text-left text-primary hover:underline" onClick={onEdit} title="No verified app deployment URL; add a known URL to the repository plan.">+ Link app URL</button>
-    ) : (
-      <span
-        className="text-muted-foreground"
-        title="Cloudflare inventory unavailable — deployment unknown"
-      >
-        Cloudflare n/a
-      </span>
-    );
+const openAll = (urls: ReadonlyArray<string | null | undefined>, what: string) => {
+  const { open, skipped } = limitOpen(safeUrls(urls), BULK_OPEN_LIMIT);
+  if (!open.length) {
+    toast.info("No " + what + " to open for the selection");
+    return;
   }
-  const first = items[0];
-  const ui = CF_ICON[healthOf(first)];
-  return (
-    <div className="min-w-0">
-      <div className="flex min-w-0 items-center gap-1">
-        <ui.icon size={12} className={"shrink-0 " + ui.cls} aria-label={ui.label} />
-        <a
-          href={first.projectUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          title={ui.label + " · manage in Cloudflare"}
-          className="truncate font-medium hover:text-primary"
-        >
-          {first.name}
-        </a>
-        {items.length > 1 && (
-          <span
-            className="shrink-0 text-[10px] text-muted-foreground"
-            title={items
-              .slice(1)
-              .map((i) => i.name)
-              .join(", ")}
-          >
-            +{items.length - 1}
-          </span>
-        )}
-      </div>
-      {appUrl && (
-        <a
-          href={appUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block truncate text-[10px] text-primary hover:underline"
-        >
-          {hostOf(appUrl)}
-        </a>
-      )}
-      {evidence && <span className="block truncate text-[10px] text-muted-foreground" title={evidence.label}>{evidence.label}</span>}
-    </div>
+  open.forEach((url) => window.open(url, "_blank", "noopener,noreferrer"));
+  toast.success(
+    "Opened " +
+      open.length +
+      " " +
+      what +
+      (skipped ? " — " + skipped + " more skipped (limit " + BULK_OPEN_LIMIT + ")" : ""),
+    {
+      description:
+        open.length > 1 ? "If only one tab opened, allow pop-ups for this site." : undefined,
+    },
   );
-}
+};
+
+const ownerDot = (state: OwnerResult["state"] | undefined) =>
+  state === "live"
+    ? "bg-emerald-500"
+    : state === "error"
+      ? "bg-amber-500"
+      : "bg-muted-foreground/40";
 
 export default function RepoOpsWorkspace({
   displayRepos,
   savedRepos,
   onEdit,
+  onAdd,
 }: {
   displayRepos: GitHubRepo[];
   savedRepos: GitHubRepo[];
   onEdit: (repo: GitHubRepo) => void;
+  onAdd: () => void;
 }) {
   const apps = useBuildProjects();
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const bulkAddItems = useBulkAddItems();
   const bulkPatch = useBulkPatch();
+  const setSection = useNavigationStore((s) => s.setActiveSection);
+  const focusCloudflare = useConsoleFocus((s) => s.open);
+  const focusRequest = useConsoleFocus((s) => s.request);
   const [owners, setOwners] = useState<Record<string, OwnerResult>>(cachedOwners);
   const [owned, setOwned] = useState<GitHubPrivateInventory | null>(ownedCache?.value ?? null);
   const [ownedNote, setOwnedNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
+  const [prefs, setPrefs] = useState<RepoPrefs>(REPO_PREFS_DEFAULT);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PortfolioPageSize>(50);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [inspected, setInspected] = useState<{repo:string; loading:boolean; result:RepositoryDiagnostics|null; error:string|null}|null>(null);
-  const inspectRepo = async (row: RepoOpsRow) => {
-    setInspected({repo:row.key,loading:true,result:null,error:null});
-    const validOwners = ["douphealth","Papalexios","papalexios001-wq","papalexios01"] as const;
-    const owner = validOwners.find(o => o.toLowerCase() === row.owner.toLowerCase());
-    if (!owner) {setInspected({repo:row.key,loading:false,result:null,error:"Unsupported GitHub account."}); return;}
-    try {
-      const result = await getRepositoryDiagnostics({data:{owner,repo:row.key.split("/")[1]}});
-      setInspected(current => current?.repo === row.key ? {...current,loading:false,result,error:null} : current);
-    } catch {
-      setInspected(current => current?.repo === row.key ? {...current,loading:false,error:"GitHub diagnostics unavailable. Sign in via Cloudflare Access and configure an account-specific read token."} : current);
-    }
-  };
+  const [drawerKey, setDrawerKey] = useState<string | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const cf = useCloudflareControl();
   const loadCloudflare = cf.load;
@@ -309,22 +304,8 @@ export default function RepoOpsWorkspace({
     setPrefs(readPrefs());
     void refresh();
   }, [refresh]);
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (
-        event.key === "/" &&
-        !/^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName || "") &&
-        !target?.isContentEditable
-      ) {
-        event.preventDefault();
-        searchRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-  const update = (patch: Partial<Prefs>) => {
+
+  const update = (patch: Partial<RepoPrefs>) => {
     setPage(1);
     setPrefs((old) => {
       const next = { ...old, ...patch };
@@ -332,7 +313,10 @@ export default function RepoOpsWorkspace({
       return next;
     });
   };
+  const setFacet = (patch: Partial<RepositoryFacets>) =>
+    update({ facets: { ...prefs.facets, ...patch } });
 
+  /* ───────────── data model ───────────── */
   const live = useMemo(() => OWNERS.flatMap((o) => owners[o]?.repositories || []), [owners]);
   const cloud = cf.snapshot?.inventory?.rows;
   const all = useMemo(
@@ -355,35 +339,70 @@ export default function RepoOpsWorkspace({
     [all, prefs.owner],
   );
   const quick: RepoQuick =
-    !cfComplete &&
-    (prefs.quick === "undeployed" || prefs.quick === "failing")
+    !cfComplete && (prefs.quick === "undeployed" || prefs.quick === "failing")
       ? "all"
       : prefs.quick;
+  const effectivePrefs = quick === prefs.quick ? prefs : { ...prefs, quick };
   const counts = useMemo(() => repoQuickCounts(ownerScoped), [ownerScoped]);
   const stats = useMemo(() => repositoryPortfolioStats(all), [all]);
-  const triage = useMemo(() => githubTriage(ownerScoped,cf.snapshot?.inventory?.truthState || null),[ownerScoped,cf.snapshot?.inventory?.truthState]);
-  const languages = useMemo(() => [...new Set(ownerScoped.map(r => r.language || "Unknown"))]
-    .sort((a,b) => a.localeCompare(b)), [ownerScoped]);
-  const setFacet = (patch: Partial<RepositoryFacets>) => update({facets:{...prefs.facets,...patch}});
+  const triage = useMemo(
+    () => githubTriage(ownerScoped, cf.snapshot?.inventory?.truthState || null),
+    [ownerScoped, cf.snapshot?.inventory?.truthState],
+  );
+  const languages = useMemo(
+    () =>
+      [...new Set(ownerScoped.map((r) => r.language || "Unknown"))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [ownerScoped],
+  );
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return ownerScoped
-      .filter((r) => matchesRepoQuick(r, quick) &&
-        matchesRepositoryFacets(r, prefs.facets) && (!needle || repoSearchText(r).includes(needle)))
+      .filter(
+        (r) =>
+          matchesRepoQuick(r, quick) &&
+          matchesRepositoryFacets(r, prefs.facets) &&
+          (!needle || repoSearchText(r).includes(needle)),
+      )
       .sort((a, b) => compareRepoRows(a, b, prefs.sort));
   }, [ownerScoped, quick, prefs.sort, prefs.facets, query]);
+  const groups = useMemo(
+    () => (prefs.groupBy === "none" ? null : groupRows(rows, (r) => repoGroup(r, prefs.groupBy))),
+    [rows, prefs.groupBy],
+  );
+  const ordered = useMemo(() => (groups ? flattenGroups(groups) : rows), [groups, rows]);
+  const groupCounts = useMemo(
+    () => new Map((groups || []).map((g) => [g.key, g.rows.length])),
+    [groups],
+  );
+  const current = portfolioPage(ordered, page, pageSize);
   const ownerOptions = useMemo(() => {
     const names = new Map<string, number>();
     for (const r of all) names.set(r.owner, (names.get(r.owner) || 0) + 1);
     return [...names.entries()].sort((a, b) => b[1] - a[1]);
   }, [all]);
-  const current = portfolioPage(rows, page, pageSize);
-  const selectedRows = rows.filter((r) => selected.has(r.key));
-  const allVisibleSelected = current.items.length > 0 && current.items.every((r) => selected.has(r.key));
-  const recentActivity = useMemo(() => recentOperatorActivity(all,cloud||[],8),[all,cloud]);
-  const linkedRepos = stats.cloudflareMatches;
+  const recentActivity = useMemo(() => recentOperatorActivity(all, cloud || [], 8), [all, cloud]);
   const rateLimited = ownersRateLimitedUntil();
+  const chips = repoFilterChips(effectivePrefs, query);
 
+  const resetAll = () => {
+    setQuery("");
+    update({ ...REPO_PREFS_DEFAULT, density: prefs.density, groupBy: prefs.groupBy });
+  };
+  const clearChip = (id: string) => {
+    const next = clearRepoFilter(effectivePrefs, id);
+    if (next.clearQuery) setQuery("");
+    else update(next.prefs);
+  };
+
+  /* ───────────── selection + saving ───────────── */
+  const selectedRows = useMemo(
+    () => ordered.filter((r) => selected.has(r.key)),
+    [ordered, selected],
+  );
+  const allVisibleSelected =
+    current.items.length > 0 && current.items.every((r) => selected.has(r.key));
   const toggle = (key: string) =>
     setSelected((old) => {
       const next = new Set(old);
@@ -391,31 +410,42 @@ export default function RepoOpsWorkspace({
       else next.add(key);
       return next;
     });
-  const setPriority = async (targets: RepoOpsRow[], priority: Priority) => {
+
+  /** Saved plans are patched in place; repositories without a plan get one created. */
+  const savePlan = async (
+    targets: RepoOpsRow[],
+    patch: Partial<GitHubRepo>,
+    successLabel: string,
+  ) => {
     const savedIds = targets.filter((r) => r.saved).map((r) => r.plan.id);
     const fresh = targets
       .filter((r) => !r.saved)
       .map((r) => {
         const { id: _id, ...plan } = r.plan;
-        return { ...plan, name: r.name, url: r.url, visibility: r.visibility, priority };
+        return { ...plan, name: r.name, url: r.url, visibility: r.visibility, ...patch };
       });
     try {
       if (savedIds.length === 1 && !fresh.length)
-        await updateItem<GitHubRepo>("repos", savedIds[0], { priority });
-      else if (savedIds.length) await bulkPatch("repos", savedIds, { priority });
+        await updateItem<GitHubRepo>("repos", savedIds[0], patch);
+      else if (savedIds.length) await bulkPatch("repos", savedIds, patch);
       if (fresh.length === 1) await addItem<GitHubRepo>("repos", fresh[0]);
       else if (fresh.length) await bulkAddItems<GitHubRepo>("repos", fresh);
       toast.success(
         targets.length === 1
-          ? targets[0].name + " → " + priority
-          : targets.length + " repositories → " + priority,
+          ? targets[0].name + " · " + successLabel
+          : targets.length + " repositories · " + successLabel,
       );
     } catch {
-      toast.error("Priority was not saved. Try again.");
+      toast.error("That change was not saved. Nothing was modified on GitHub — try again.");
+      throw new Error("save failed");
     }
   };
-  const exportCsv = () => {
-    const data = selectedRows.length ? selectedRows : rows;
+  const setPriority = (targets: RepoOpsRow[], priority: Priority) =>
+    savePlan(targets, { priority }, "priority " + priority).catch(() => undefined);
+  const setStatus = (targets: RepoOpsRow[], status: GitHubRepo["status"]) =>
+    savePlan(targets, { status }, "status " + status).catch(() => undefined);
+
+  const exportCsv = (data: RepoOpsRow[]) => {
     if (!data.length) return;
     const url = URL.createObjectURL(
       new Blob([repoOpsCsv(data)], { type: "text/csv;charset=utf-8" }),
@@ -426,66 +456,113 @@ export default function RepoOpsWorkspace({
     anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
-  const resetFilters = () => {
-    setQuery("");
-    update(DEFAULT_PREFS);
-    setPage(1);
+
+  /* ───────────── drawer + keyboard ───────────── */
+  const drawerRow = useMemo(
+    () => (drawerKey ? (all.find((r) => r.key === drawerKey) ?? null) : null),
+    [all, drawerKey],
+  );
+  const drawerIndex = drawerKey ? ordered.findIndex((r) => r.key === drawerKey) : -1;
+  const pageOf = (index: number) => Math.floor(index / pageSize) + 1;
+
+  const kb = useListKeyboard<RepoOpsRow>({
+    items: ordered,
+    enabled: !helpOpen,
+    keyOf: (r) => r.key,
+    onOpen: (r) => setDrawerKey(r.key),
+    onToggleSelect: (r) => toggle(r.key),
+    onSearch: () => searchRef.current?.focus(),
+    onHelp: () => setHelpOpen(true),
+    onRefresh: () => void refresh(true),
+    onEscape: () => {
+      if (selected.size && !drawerKey) {
+        setSelected(new Set());
+        return true;
+      }
+    },
+    onMove: (index) => {
+      setPage(pageOf(index));
+      // While the drawer is open, j/k step it through the list.
+      setDrawerKey((open) => (open ? (ordered[index]?.key ?? open) : open));
+    },
+  });
+  const openRow = (row: RepoOpsRow) => {
+    const index = ordered.findIndex((r) => r.key === row.key);
+    if (index >= 0) kb.setCursor(index);
+    setDrawerKey(row.key);
+  };
+  const stepDrawer = (delta: number) => {
+    if (drawerIndex < 0) return;
+    const index = Math.min(ordered.length - 1, Math.max(0, drawerIndex + delta));
+    kb.setCursor(index);
+    setPage(pageOf(index));
+    setDrawerKey(ordered[index].key);
   };
 
+  // "Manage in GitHub console" hand-off from the Cloudflare console.
+  useEffect(() => {
+    if (focusRequest?.console !== "github" || !all.length) return;
+    const key = useConsoleFocus.getState().consume("github");
+    if (!key) return;
+    const hit = all.find((r) => r.key.toLowerCase() === key.toLowerCase());
+    if (hit) setDrawerKey(hit.key);
+    else toast.info("That repository is not in the GitHub inventory yet — refresh and try again.");
+  }, [focusRequest, all]);
+
+  /* ───────────── header status ───────────── */
+  const cfSummary = cf.snapshot?.inventory
+    ? (cloud?.length || 0) + " projects · " + stats.cloudflareMatches + " linked"
+    : cf.loading
+      ? "loading…"
+      : "not connected";
+  const ownedSummary = owned
+    ? owned.truthState === "not_connected"
+      ? "not configured"
+      : owned.repositories.length + " private"
+    : ownedNote
+      ? "unavailable"
+      : "checking…";
+
+  const tile = (id: RepoQuick) => ({
+    active: effectivePrefs.quick === id && prefs.facets.deployment === "all",
+    onClick: () =>
+      update({
+        quick: effectivePrefs.quick === id ? "all" : id,
+        facets: { ...prefs.facets, deployment: "all" },
+      }),
+  });
+  const compact = prefs.density === "compact";
+  const bulkCount = selectedRows.length;
+
   return (
-    <section aria-label="GitHub repository operations" className="space-y-3">
-      <div className="rounded-2xl border border-border/60 bg-card/85 p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-primary">
-              Repository operations
-            </p>
-            <h2 className="mt-0.5 text-lg font-bold">
-              Every repo, its deployment, and its next action
-            </h2>
-            <p className="mt-1 text-xs text-muted-foreground" role="status">
-              {OWNERS.map((o) => {
-                const r = owners[o];
-                return (
-                  o +
-                  " " +
-                  (r?.state === "live"
-                    ? "✓ " + r.repositories.length
-                    : r?.state === "error"
-                      ? "⚠ retained"
-                      : "…")
-                );
-              }).join(" · ")}
-              {" · "}Authenticated:{" "}
-              {owned
-                ? owned.truthState === "not_connected"
-                  ? "not configured"
-                  : owned.truthState +
-                    " (" +
-                    owned.ownedRepositories.length +
-                    " repos, " +
-                    owned.repositories.length +
-                    " private)"
-                : ownedNote
-                  ? "unavailable"
-                  : "checking…"}
-              {" · "}Cloudflare:{" "}
-              {cf.snapshot?.inventory
-                ? (cloud?.length || 0) + " projects → " + linkedRepos + " repos"
-                : cf.loading
-                  ? "loading…"
-                  : "unavailable"}
-            </p>
-            {rateLimited > 0 && (
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                GitHub public API rate-limited until {new Date(rateLimited).toLocaleTimeString()};
-                showing last verified data.
-              </p>
-            )}
-          </div>
+    <section aria-label="GitHub repository console" className="space-y-3.5">
+      {/* ───── header ───── */}
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] text-primary">
+            <FolderGit2 size={12} /> Growth / Repositories
+          </p>
+          <h1 className="mt-0.5 flex items-center gap-2 text-2xl font-extrabold tracking-tight sm:text-3xl">
+            <Github size={26} className="shrink-0" /> GitHub
+            <span className="text-base font-semibold tabular-nums text-muted-foreground">
+              {all.length}
+            </span>
+          </h1>
+          <p className="mt-1 text-xs text-muted-foreground" role="status">
+            Every repository across {ownerOptions.length || OWNERS.length} accounts, its deployment
+            evidence and your next action.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <a className={ctl} href="/portfolio-atlas" title="Compare all three GitHub accounts">
+            Portfolio Atlas <ExternalLink size={12} />
+          </a>
+          <button type="button" className={ctl} onClick={onAdd}>
+            <Plus size={14} /> Add repository
+          </button>
           <button
             type="button"
-            className="btn-secondary text-xs"
+            className={ctlPrimary}
             disabled={busy}
             onClick={() => void refresh(true)}
           >
@@ -493,117 +570,139 @@ export default function RepoOpsWorkspace({
             {busy ? "Refreshing…" : "Refresh all"}
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8" aria-label="GitHub portfolio operational summary">
-        {([
-          ["Repositories", stats.total],
-          ["Private", stats.private],
-          ["Pushed 7d", stats.pushed7d],
-          ["App URLs", stats.appLinks],
-          ["Cloudflare linked", stats.cloudflareMatches],
-          ["Git source proof", stats.cloudflareSourceLinks],
-          ["Deployment failures", stats.failedDeploys],
-          ["Missing app link", stats.missingApps],
-        ] as const).map(([label, value]) => (
-          <div key={label} className="rounded-xl border border-border/60 bg-card/70 px-3 py-3">
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
-            <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
-          </div>
-        ))}
-      </div>
-      <p className="text-[11px] text-muted-foreground">
-        Counters reflect the currently collected GitHub and Cloudflare records. GitHub's open issues field includes pull requests;
-        deployment failures are Cloudflare build metadata, not HTTP uptime checks.
-      </p>
-
-      <section className="rounded-2xl border border-border/60 bg-card/75 p-4" aria-label="GitHub reconciliation queue">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-bold">Resolve what matters</h3>
-          <span className="text-[11px] text-muted-foreground">
-            {triage.complete ? "Cloudflare inventory complete" : "Cloudflare inventory partial or unavailable"}
-          </span>
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Observed issues, not guessed outages. Select a group to filter the full repository list.
-        </p>
-        <div className="mt-3 grid gap-2 sm:grid-cols-3">
-          <button type="button" onClick={()=>update({quick:"failing",facets:REPOSITORY_FACETS_DEFAULT})}
-            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
-            <span className="block text-xl font-bold tabular-nums">{triage.failedBuild.length}</span>
-            <span className="block text-xs font-semibold">Failed Cloudflare production builds</span>
-            <span className="block text-[11px] text-muted-foreground">Review the latest build and serving deployment separately</span>
-          </button>
-          <button type="button" onClick={()=>update({quick:"all",facets:{...REPOSITORY_FACETS_DEFAULT,deployment:"missing-app"}})}
-            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
-            <span className="block text-xl font-bold tabular-nums">{triage.missingApp.length}</span>
-            <span className="block text-xs font-semibold">Unresolved app URLs</span>
-            <span className="block text-[11px] text-muted-foreground">Missing evidence does not mean undeployed</span>
-          </button>
-          <button type="button" onClick={()=>update({quick:"all",facets:{...REPOSITORY_FACETS_DEFAULT,evidence:"recorded"}})}
-            className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
-            <span className="block text-xl font-bold tabular-nums">{triage.unconfirmedApp.length}</span>
-            <span className="block text-xs font-semibold">Recorded links without provider proof</span>
-            <span className="block text-[11px] text-muted-foreground">Verify current Cloudflare source and URL before relying on it</span>
-          </button>
-        </div>
-        {triage.conflicting.length > 0 && <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
-          {triage.conflicting.length} recorded app hostname(s) differ from their matched Cloudflare endpoint.
-          This can be legitimate custom-domain routing; investigate before changing links.
-        </p>}
-      </section>
-      <details className="rounded-xl border border-border/60 bg-card/65 p-3">
-        <summary className="cursor-pointer text-sm font-semibold">Recent GitHub pushes and Cloudflare deployments · {recentActivity.length} observed</summary>
-        <div className="mt-3 grid gap-2 lg:grid-cols-2">
-          {recentActivity.map(a => <a key={a.key} href={a.url} target="_blank" rel="noopener noreferrer"
-            className="min-w-0 rounded-lg border border-border/40 p-2 hover:border-primary/40">
-            <span className="block truncate text-xs font-medium text-primary">{a.name}</span>
-            <span className="block text-[11px] text-muted-foreground">{a.source} · {a.action} · {relativeTime(a.at)}</span>
-          </a>)}
-          {!recentActivity.length && <p className="text-xs text-muted-foreground">No timestamped GitHub pushes or Cloudflare deployments were returned.</p>}
-        </div>
-      </details>
+      {/* source health: one line, not a panel */}
       <div
-        className="flex gap-1.5 overflow-x-auto pb-1"
-        role="toolbar"
-        aria-label="Repository quick filters"
+        className="flex flex-wrap items-center gap-1.5 text-[11px]"
+        aria-label="Data source status"
       >
-        {CHIPS.filter(
-          (c) =>
-            (c.id === "all" || counts[c.id] > 0 || quick === c.id) &&
-            ((cfKnown || c.id !== "cloudflare") &&
-              (cfComplete || (c.id !== "undeployed" && c.id !== "failing"))),
-        ).map((chip) => {
-          const active = quick === chip.id;
-          const tone =
-            chip.tone === "danger" && counts[chip.id]
-              ? "text-red-600 dark:text-red-400"
-              : chip.tone === "warn" && counts[chip.id]
-                ? "text-amber-600 dark:text-amber-400"
-                : "";
+        {OWNERS.map((o) => {
+          const r = owners[o];
           return (
-            <button
-              key={chip.id}
-              type="button"
-              aria-pressed={active}
-              onClick={() => update({ quick: chip.id })}
-              className={`shrink-0 rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${
-                active
-                  ? "border-primary/40 bg-primary/10 text-primary"
-                  : "border-border/50 bg-card/60 text-muted-foreground hover:text-foreground"
-              }`}
+            <span
+              key={o}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/70 px-2.5 py-1"
+              title={
+                r?.state === "error" ? "Live fetch failed; showing last verified data" : undefined
+              }
             >
-              {chip.label}{" "}
-              <span className={`ml-1 tabular-nums ${active ? "" : tone}`}>{counts[chip.id]}</span>
-            </button>
+              <span className={"h-1.5 w-1.5 rounded-full " + ownerDot(r?.state)} />
+              <span className="font-semibold">{o}</span>
+              <span className="tabular-nums text-muted-foreground">
+                {r?.state === "live"
+                  ? r.repositories.length
+                  : r?.state === "error"
+                    ? "retained"
+                    : "…"}
+              </span>
+            </span>
           );
         })}
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/70 px-2.5 py-1">
+          <Lock size={10} className="text-muted-foreground" />{" "}
+          <span className="font-semibold">Authenticated</span>
+          <span className="text-muted-foreground">{ownedSummary}</span>
+        </span>
+        <button
+          type="button"
+          onClick={() => setSection("cloudflare")}
+          className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-card/70 px-2.5 py-1 hover:border-primary/40"
+          title="Open the Cloudflare console"
+        >
+          <Cloud size={10} className="text-orange-500" />{" "}
+          <span className="font-semibold">Cloudflare</span>
+          <span className="text-muted-foreground">{cfSummary}</span>
+        </button>
+        {rateLimited > 0 && (
+          <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
+            <TriangleAlert size={12} /> GitHub public API rate-limited until{" "}
+            {new Date(rateLimited).toLocaleTimeString()} — showing last verified data
+          </span>
+        )}
       </div>
 
-      <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_13rem_12rem_auto]">
-        <label className="relative">
+      {!cfKnown && !cf.loading && (
+        <p className="flex items-start gap-2 rounded-xl border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+          <CircleAlert size={14} className="mt-px shrink-0" />
+          <span>
+            Cloudflare isn’t connected here, so deployment shows recorded app links only — missing
+            evidence is never reported as “undeployed”.{" "}
+            <button
+              type="button"
+              className="font-semibold text-primary hover:underline"
+              onClick={() => setSection("cloudflare")}
+            >
+              Open Cloudflare setup →
+            </button>
+          </span>
+        </p>
+      )}
+
+      {/* ───── health tiles (also filters) ───── */}
+      <TileRow label="Repository health. Select a tile to filter the list.">
+        <HealthTile
+          label="Needs action"
+          value={counts.attention}
+          hint="High priority, or a next action set"
+          tone="warn"
+          {...tile("attention")}
+        />
+        <HealthTile
+          label="Build failures"
+          value={cfComplete ? counts.failing : "—"}
+          hint={cfComplete ? "Cloudflare production builds" : "Needs complete Cloudflare data"}
+          tone="danger"
+          disabled={!cfComplete}
+          {...tile("failing")}
+        />
+        <HealthTile
+          label="Open issues / PRs"
+          value={counts.issues}
+          hint="Repos with at least one open"
+          tone="info"
+          {...tile("issues")}
+        />
+        <HealthTile
+          label="No app link"
+          value={triage.missingApp.length}
+          hint="Unresolved — not “undeployed”"
+          tone="warn"
+          active={prefs.facets.deployment === "missing-app" && effectivePrefs.quick === "all"}
+          onClick={() =>
+            update({
+              quick: "all",
+              facets: {
+                ...prefs.facets,
+                deployment: prefs.facets.deployment === "missing-app" ? "all" : "missing-app",
+              },
+            })
+          }
+        />
+        <HealthTile
+          label="Pushed · 7 days"
+          value={counts.recent}
+          hint="Recently active"
+          tone="good"
+          {...tile("recent")}
+        />
+        <HealthTile
+          label="Stale · 180d+"
+          value={counts.stale}
+          hint="Candidates to archive"
+          {...tile("stale")}
+        />
+      </TileRow>
+
+      {/* ───── toolbar ───── */}
+      <div
+        className="flex flex-wrap items-center gap-2"
+        role="toolbar"
+        aria-label="Repository tools"
+      >
+        <label className="relative min-w-[13rem] flex-1">
           <Search
-            size={16}
+            size={15}
             className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground"
           />
           <span className="sr-only">Search repositories</span>
@@ -611,16 +710,23 @@ export default function RepoOpsWorkspace({
             ref={searchRef}
             type="search"
             value={query}
-            onChange={(e) => {setQuery(e.target.value);setPage(1);}}
-            placeholder="Search repo, description, next action, domain…  ( / )"
-            className="w-full rounded-xl border border-border bg-background py-2 pl-10 pr-3 text-sm"
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search repositories…"
+            className="h-9 w-full rounded-xl border border-border bg-background pl-9 pr-9 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
+          <kbd className="pointer-events-none absolute right-2.5 top-2 hidden rounded border border-border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:block">
+            /
+          </kbd>
         </label>
+
         <select
           aria-label="Filter GitHub account"
           value={prefs.owner}
           onChange={(e) => update({ owner: e.target.value })}
-          className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+          className={selectCls}
         >
           <option value="all">All accounts ({all.length})</option>
           {ownerOptions.map(([name, n]) => (
@@ -629,14 +735,15 @@ export default function RepoOpsWorkspace({
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-2 rounded-xl border border-border bg-background px-3 text-sm">
+
+        <label className="flex items-center gap-1.5">
           <ArrowDownUp size={14} className="text-muted-foreground" />
-          <span className="sr-only">Sort</span>
+          <span className="sr-only">Sort repositories</span>
           <select
             aria-label="Sort repositories"
             value={prefs.sort}
-            onChange={(e) => update({ sort: e.target.value as RepoSort })}
-            className="w-full bg-transparent py-2"
+            onChange={(e) => update({ sort: e.target.value as RepoPrefs["sort"] })}
+            className={selectCls}
           >
             <option value="pushed">Latest push</option>
             <option value="priority">My priority</option>
@@ -645,129 +752,230 @@ export default function RepoOpsWorkspace({
             <option value="name">Name A–Z</option>
           </select>
         </label>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={!rows.length}
-            className="btn-secondary text-xs"
-            title="Export selected rows, or the filtered list"
-          >
-            <Download size={13} /> CSV
-          </button>
-          <button type="button" onClick={resetFilters} className="btn-secondary text-xs">
-            <X size={13} /> Reset
-          </button>
-        </div>
-      </div>
 
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="Advanced repository filters">
-        <select aria-label="Filter repository language" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          value={prefs.facets.language} onChange={e=>setFacet({language:e.target.value})}>
-          <option value="all">Any language</option>
-          {languages.map(language=><option key={language} value={language}>{language}</option>)}
-        </select>
-        <select aria-label="Filter repository visibility" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          value={prefs.facets.visibility} onChange={e=>setFacet({visibility:e.target.value as RepositoryFacets["visibility"]})}>
-          <option value="all">Public + private</option><option value="public">Public</option><option value="private">Private</option>
-        </select>
-        <select aria-label="Filter deployment linkage" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          value={prefs.facets.deployment} onChange={e=>setFacet({deployment:e.target.value as RepositoryFacets["deployment"]})}>
-          <option value="all">Any deployment linkage</option><option value="cloudflare">Linked to Cloudflare</option>
-          <option value="app">Recorded app URL</option><option value="missing-app">Missing app URL</option>
-          <option value="no-cloudflare">No Cloudflare source match</option>
-        </select>
-        <select aria-label="Filter last push activity" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          value={prefs.facets.activity} onChange={e=>setFacet({activity:e.target.value as RepositoryFacets["activity"]})}>
-          <option value="all">Any activity</option><option value="7d">Pushed in 7 days</option><option value="30d">Pushed in 30 days</option>
-          <option value="180d">Pushed in 180 days</option><option value="stale">Not pushed in 180+ days</option>
-          <option value="unknown">Push date unavailable</option>
-        </select>
-        <select aria-label="Filter app link evidence" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
-          value={prefs.facets.evidence} onChange={e=>setFacet({evidence:e.target.value as RepositoryFacets["evidence"]})}>
-          <option value="all">Any link evidence</option><option value="provider">Provider-attested link</option>
-          <option value="recorded">Recorded link (not verified live)</option><option value="missing">No app link evidence</option>
-        </select>
-      </div>
-      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>Filters are saved locally on this device · {rows.length} matching repositories</span>
-        <button type="button" className="text-primary hover:underline" onClick={resetFilters}>Clear all filters</button>
-      </div>
-
-      <SavedFilterViews storageKey="mc.github.saved-views.v1" state={{prefs,query}}
-        onApply={view=>{update(view.prefs);setQuery(view.query);setPage(1);}} />
-
-      {selectedRows.length > 0 && (
-        <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
-          <strong>{selectedRows.length} selected</strong>
+        <label className="flex items-center gap-1.5">
+          <ChevronsUpDown size={14} className="text-muted-foreground" />
+          <span className="sr-only">Group repositories</span>
           <select
-            aria-label="Set priority for selected repositories"
-            defaultValue=""
-            onChange={(e) => {
-              const v = e.target.value as Priority;
-              e.target.value = "";
-              if (v) void setPriority(selectedRows, v);
-            }}
-            className="rounded-lg border border-border bg-background px-2 py-1"
+            aria-label="Group repositories"
+            value={prefs.groupBy}
+            onChange={(e) => update({ groupBy: e.target.value as RepoGroupBy })}
+            className={selectCls}
           >
-            <option value="" disabled>
-              Set priority…
-            </option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
+            <option value="none">No grouping</option>
+            <option value="owner">Group: account</option>
+            <option value="priority">Group: priority</option>
+            <option value="language">Group: language</option>
+            <option value="deployment">Group: deployment</option>
           </select>
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() =>
-              copyText(
-                selectedRows.map((r) => "git clone " + r.url + ".git").join("\n"),
-                "Clone commands",
-              )
-            }
+        </label>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className={ctl}
+              aria-label={"Filters, " + chips.length + " active"}
+            >
+              <SlidersHorizontal size={14} /> Filters
+              {chips.length > 0 && (
+                <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                  {chips.length}
+                </span>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-[min(26rem,calc(100vw-2rem))] space-y-4 rounded-2xl p-4"
           >
-            <Copy size={12} /> git clone commands
-          </button>
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => copyText(selectedRows.map((r) => r.url).join("\n"), "Repository URLs")}
-          >
-            <Copy size={12} /> URLs
-          </button>
-          <button
-            type="button"
-            className="btn-secondary text-xs"
-            onClick={() => setSelected(new Set())}
-          >
-            <X size={12} /> Clear
-          </button>
+            <div>
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Quick view
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {QUICK_VIEWS.filter(
+                  (c) =>
+                    (c.id === "all" || counts[c.id] > 0 || effectivePrefs.quick === c.id) &&
+                    (cfKnown || c.id !== "cloudflare") &&
+                    (cfComplete || (c.id !== "undeployed" && c.id !== "failing")),
+                ).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-pressed={effectivePrefs.quick === c.id}
+                    onClick={() => update({ quick: c.id })}
+                    className={`rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition ${
+                      effectivePrefs.quick === c.id
+                        ? "border-primary/50 bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {c.label} <span className="tabular-nums opacity-70">{counts[c.id]}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {(
+                [
+                  [
+                    "Language",
+                    "Filter repository language",
+                    prefs.facets.language,
+                    (v: string) => setFacet({ language: v }),
+                    [["all", "Any language"], ...languages.map((l) => [l, l])],
+                  ],
+                  [
+                    "Visibility",
+                    "Filter repository visibility",
+                    prefs.facets.visibility,
+                    (v: string) => setFacet({ visibility: v as RepositoryFacets["visibility"] }),
+                    [
+                      ["all", "Public + private"],
+                      ["public", "Public"],
+                      ["private", "Private"],
+                    ],
+                  ],
+                  [
+                    "Deployment",
+                    "Filter deployment linkage",
+                    prefs.facets.deployment,
+                    (v: string) => setFacet({ deployment: v as RepositoryFacets["deployment"] }),
+                    [
+                      ["all", "Any linkage"],
+                      ["cloudflare", "Linked to Cloudflare"],
+                      ["app", "Recorded app URL"],
+                      ["missing-app", "Missing app URL"],
+                      ["no-cloudflare", "No Cloudflare match"],
+                    ],
+                  ],
+                  [
+                    "Activity",
+                    "Filter last push activity",
+                    prefs.facets.activity,
+                    (v: string) => setFacet({ activity: v as RepositoryFacets["activity"] }),
+                    [
+                      ["all", "Any activity"],
+                      ["7d", "Pushed in 7 days"],
+                      ["30d", "Pushed in 30 days"],
+                      ["180d", "Pushed in 180 days"],
+                      ["stale", "Not pushed 180+ days"],
+                      ["unknown", "Push date unavailable"],
+                    ],
+                  ],
+                  [
+                    "Link evidence",
+                    "Filter app link evidence",
+                    prefs.facets.evidence,
+                    (v: string) => setFacet({ evidence: v as RepositoryFacets["evidence"] }),
+                    [
+                      ["all", "Any evidence"],
+                      ["provider", "Provider-attested"],
+                      ["recorded", "Recorded, not verified"],
+                      ["missing", "No evidence"],
+                    ],
+                  ],
+                ] as const
+              ).map(([label, aria, value, onChange, options]) => (
+                <label key={label} className="text-[11px] font-semibold text-muted-foreground">
+                  {label}
+                  <select
+                    aria-label={aria}
+                    value={value}
+                    onChange={(e) => onChange(e.target.value)}
+                    className={selectCls + " mt-1 w-full"}
+                  >
+                    {options.map(([v, l]) => (
+                      <option key={v} value={v}>
+                        {l}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ))}
+            </div>
+            <div className="border-t border-border/70 pt-3">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                Saved views
+              </p>
+              <SavedFilterViews
+                storageKey="mc.github.saved-views.v1"
+                state={{ prefs, query }}
+                onApply={(view: { prefs: unknown; query?: string }) => {
+                  update(normalizeRepoPrefs(view.prefs));
+                  setQuery(view.query ?? "");
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+              onClick={resetAll}
+            >
+              Reset all filters
+            </button>
+          </PopoverContent>
+        </Popover>
+
+        <DensityToggle value={prefs.density} onChange={(density) => update({ density })} />
+        <button
+          type="button"
+          className={ctl + " !px-2.5"}
+          onClick={() => exportCsv(selectedRows.length ? selectedRows : ordered)}
+          disabled={!ordered.length}
+          title="Export selected rows, or the filtered list, as CSV"
+          aria-label="Export CSV"
+        >
+          <Download size={14} />
+        </button>
+        <button
+          type="button"
+          className={ctl + " !hidden !px-2.5 sm:!inline-flex"}
+          onClick={() => setHelpOpen(true)}
+          title="Keyboard shortcuts (?)"
+          aria-label="Keyboard shortcuts"
+        >
+          <Keyboard size={14} />
+        </button>
+      </div>
+
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground"
+        aria-live="polite"
+      >
+        <span>
+          Showing <strong className="text-foreground tabular-nums">{ordered.length}</strong> of{" "}
+          {ownerScoped.length} repositories
+          {current.total ? " · " + current.from + "–" + current.to + " on this page" : ""}
+        </span>
+        <ActiveFilters chips={chips} onClear={clearChip} onReset={resetAll} />
+      </div>
+
+      {/* ───── list ───── */}
+      {ordered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border p-8 text-center">
+          <p className="text-sm font-semibold">
+            {busy ? "Loading repositories…" : "No repositories match these filters."}
+          </p>
+          {!busy && chips.length > 0 && (
+            <button type="button" className={ctl + " mt-3"} onClick={resetAll}>
+              <X size={13} /> Clear all filters
+            </button>
+          )}
         </div>
-      )}
-
-      <p className="text-xs text-muted-foreground" aria-live="polite">
-        Showing <strong className="text-foreground">{rows.length}</strong> of {ownerScoped.length}{" "}
-        repositories · {current.from}–{current.to} on this page
-      </p>
-
-      {rows.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border p-6 text-sm text-muted-foreground">
-          {busy ? "Loading repositories…" : "No repositories match these filters."}
-        </p>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card/70">
-          <div className="hidden grid-cols-[1.25rem_minmax(0,2.3fr)_5.5rem_minmax(0,1.6fr)_minmax(0,1.5fr)_10.5rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_5.25rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
             <input
               type="checkbox"
-              aria-label="Select all visible repositories"
+              aria-label="Select all repositories on this page"
               checked={allVisibleSelected}
               onChange={() =>
-                setSelected(old => {
+                setSelected((old) => {
                   const next = new Set(old);
-                  if (allVisibleSelected) current.items.forEach(r => next.delete(r.key));
-                  else current.items.forEach(r => next.add(r.key));
+                  if (allVisibleSelected) current.items.forEach((r) => next.delete(r.key));
+                  else current.items.forEach((r) => next.add(r.key));
                   return next;
                 })
               }
@@ -775,315 +983,443 @@ export default function RepoOpsWorkspace({
             />
             <span>Repository</span>
             <span>Pushed</span>
-            <span>Cloudflare / app</span>
-            <span>Plan</span>
-            <span className="text-right">Manage</span>
+            <span>Deployment</span>
+            <span>Priority</span>
+            <span className="text-right">Actions</span>
           </div>
           <ul className="divide-y divide-border/60">
-            {current.items.map((row) => {
+            {current.items.map((row, i) => {
+              const group = repoGroup(row, prefs.groupBy);
+              const prev = i > 0 ? repoGroup(current.items[i - 1], prefs.groupBy).key : null;
+              const state = repoDeployState(row);
+              const deploy = DEPLOY_UI[state];
               const repoPath = row.key.split("/")[1];
+              const isCursor = kb.cursorKey === row.key;
+              const first = row.cloudflare[0];
               return (
-                <li
-                  key={row.key}
-                  className={`grid grid-cols-[1.25rem_minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 px-4 py-2.5 text-xs [contain-intrinsic-size:auto_68px] [content-visibility:auto] hover:bg-muted/30 md:grid-cols-[1.25rem_minmax(0,2.3fr)_5.5rem_minmax(0,1.6fr)_minmax(0,1.5fr)_10.5rem] md:items-center ${selected.has(row.key) ? "bg-primary/5" : ""}`}
-                >
-                  <input
-                    type="checkbox"
-                    aria-label={"Select " + row.key}
-                    checked={selected.has(row.key)}
-                    onChange={() => toggle(row.key)}
-                    className="mt-1 h-4 w-4 accent-primary md:mt-0"
-                  />
-                  <div className="min-w-0">
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <a
-                        href={row.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="truncate text-sm font-semibold hover:text-primary"
-                        title={row.key}
-                      >
-                        <span className="font-normal text-muted-foreground">{row.owner}/</span>
-                        {row.plan.name || repoPath}
-                      </a>
-                      {row.visibility === "private" && (
-                        <Lock size={11} className="shrink-0 text-amber-500" aria-label="Private" />
-                      )}
-                      {row.archived && (
-                        <Archive
-                          size={11}
-                          className="shrink-0 text-muted-foreground"
-                          aria-label="Archived"
-                        />
-                      )}
-                      {row.fork && (
-                        <GitFork
-                          size={11}
-                          className="shrink-0 text-muted-foreground"
-                          aria-label="Fork"
-                        />
-                      )}
-                    </div>
-                    <p
-                      className="truncate text-[11px] text-muted-foreground"
-                      title={row.description}
-                    >
-                      {[
-                        row.language,
-                        row.stars ? "★ " + row.stars : "",
-                        row.openIssues ? row.openIssues + " open" : "",
-                        row.description,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ") ||
-                        (row.source === "snapshot"
-                          ? "Snapshot only — refresh for live metadata"
-                          : "No description")}
-                    </p>
-                  </div>
-                  <div
-                    className="justify-self-end text-muted-foreground md:justify-self-start"
-                    title={
-                      row.pushedAt
-                        ? new Date(row.pushedAt).toLocaleString()
-                        : "Push time not verified"
-                    }
+                <Fragment key={row.key}>
+                  {prefs.groupBy !== "none" && group.key !== prev && (
+                    <GroupHeader label={group.label} count={groupCounts.get(group.key) || 0} />
+                  )}
+                  <li
+                    data-row-key={row.key}
+                    data-cursor={isCursor || undefined}
+                    onClick={(e) => {
+                      if (
+                        (e.target as HTMLElement).closest(
+                          'a,button,input,select,label,[role="menuitem"]',
+                        )
+                      )
+                        return;
+                      openRow(row);
+                    }}
+                    className={`grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_5.25rem] md:items-center ${
+                      compact ? "py-1.5" : "py-3"
+                    } ${selected.has(row.key) ? "bg-primary/5" : ""} ${isCursor ? "relative z-[1] ring-2 ring-inset ring-primary/55" : ""}`}
                   >
-                    {relativeTime(row.pushedAt)}
-                  </div>
-                  <div className="col-span-2 col-start-2 min-w-0 md:col-span-1 md:col-start-auto">
-                    <CloudflareCell items={row.cloudflare} appUrl={row.appUrl} known={cfComplete} evidence={row.appEvidence} onEdit={() => onEdit(row.plan)} />
-                  </div>
-                  <div className="col-span-2 col-start-2 flex min-w-0 items-center gap-2 md:col-span-1 md:col-start-auto">
-                    <select
-                      aria-label={"Priority for " + row.key}
-                      value={row.plan.priority || ""}
-                      onChange={(e) => {
-                        if (e.target.value) void setPriority([row], e.target.value as Priority);
-                      }}
-                      className={`shrink-0 rounded-lg border bg-background px-1.5 py-1 text-[11px] font-semibold capitalize ${PRIORITY_CLS[row.plan.priority || ""]}`}
-                    >
-                      <option value="" disabled>
-                        Priority
-                      </option>
-                      <option value="critical">Critical</option>
-                      <option value="high">High</option>
-                      <option value="medium">Medium</option>
-                      <option value="low">Low</option>
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => onEdit(row.plan)}
-                      title={row.plan.pendingSummary || "Add a next action"}
-                      className="min-w-0 truncate text-left text-[11px] text-muted-foreground hover:text-primary"
-                    >
-                      {row.plan.pendingSummary || <span className="italic">+ next action</span>}
-                    </button>
-                  </div>
-                  <div className="col-span-3 flex items-center justify-end gap-0.5 md:col-span-1">
-                    <a
-                      className={iconBtn}
-                      href={row.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={"Code for " + row.key}
-                      title="Code"
-                    >
-                      <Code2 size={15} />
-                    </a>
-                    <a
-                      className={iconBtn}
-                      href={row.url + "/pulls"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={"Pull requests for " + row.key}
-                      title="Pull requests"
-                    >
-                      <GitPullRequest size={15} />
-                    </a>
-                    <a
-                      className={iconBtn}
-                      href={row.url + "/actions"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={"Actions for " + row.key}
-                      title="Actions / CI"
-                    >
-                      <Play size={15} />
-                    </a>
-                    {row.appUrl ? (
-                      <a
-                        className={iconBtn}
-                        href={row.appUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        aria-label={"Open app for " + row.key}
-                        title={"Open " + hostOf(row.appUrl)}
-                      >
-                        <ExternalLink size={15} />
-                      </a>
-                    ) : (
-                      <span className={iconBtn + " opacity-30"} aria-hidden="true">
-                        <ExternalLink size={15} />
-                      </span>
-                    )}
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
+                    <input
+                      type="checkbox"
+                      aria-label={"Select " + row.key}
+                      checked={selected.has(row.key)}
+                      onChange={() => toggle(row.key)}
+                      className="mt-1 h-4 w-4 accent-primary md:mt-0"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex min-w-0 items-center gap-1.5">
                         <button
                           type="button"
-                          className={iconBtn}
-                          aria-label={"More actions for " + row.key}
+                          onClick={() => openRow(row)}
+                          className="min-w-0 truncate text-left text-sm font-semibold hover:text-primary"
+                          title={"Open details · " + row.key}
                         >
-                          <Ellipsis size={15} />
+                          <span className="font-normal text-muted-foreground">{row.owner}/</span>
+                          {row.plan.name || repoPath}
                         </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56 [&_[role=menuitem]]:gap-2">
-                        <DropdownMenuLabel className="truncate text-xs">
-                          {row.key}
-                        </DropdownMenuLabel>
-                        <DropdownMenuItem onSelect={() => onEdit(row.plan)}>
-                          <Pencil size={14} /> Edit plan & links
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => void inspectRepo(row)}>
-                          <Activity size={14} /> Inspect CI, PRs & deployments
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <a
-                            href={"https://github.dev/" + row.owner + "/" + repoPath}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Code2 size={14} /> Edit in github.dev
-                          </a>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <a href={row.url + "/issues"} target="_blank" rel="noopener noreferrer">
-                            <CircleDot size={14} /> Issues
-                          </a>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <a
-                            href={row.url + "/issues/new"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <CircleDot size={14} /> New issue
-                          </a>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <a href={row.url + "/commits"} target="_blank" rel="noopener noreferrer">
-                            <GitPullRequest size={14} /> Commits
-                          </a>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <a
-                            href={row.url + "/deployments"}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Cloud size={14} /> GitHub deployments
-                          </a>
-                        </DropdownMenuItem>
-                        <DropdownMenuItem asChild>
-                          <a href={row.url + "/settings"} target="_blank" rel="noopener noreferrer">
-                            <Settings size={14} /> Settings
-                          </a>
-                        </DropdownMenuItem>
-                        {row.cloudflare.length > 0 && (
-                          <>
-                            <DropdownMenuSeparator />
-                            {row.cloudflare.map((c) => (
-                              <DropdownMenuItem key={c.key} asChild>
-                                <a href={c.projectUrl} target="_blank" rel="noopener noreferrer">
-                                  <Cloud size={14} /> Cloudflare: {c.name}
-                                </a>
-                              </DropdownMenuItem>
-                            ))}
-                          </>
+                        {row.visibility === "private" && (
+                          <Lock
+                            size={11}
+                            className="shrink-0 text-amber-500"
+                            aria-label="Private"
+                          />
                         )}
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            copyText("git clone " + row.url + ".git", "Clone command")
-                          }
+                        {row.archived && (
+                          <Archive
+                            size={11}
+                            className="shrink-0 text-muted-foreground"
+                            aria-label="Archived"
+                          />
+                        )}
+                        {row.fork && (
+                          <GitFork
+                            size={11}
+                            className="shrink-0 text-muted-foreground"
+                            aria-label="Fork"
+                          />
+                        )}
+                        {row.openIssues ? (
+                          <span
+                            className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-sky-500/10 px-1.5 text-[10px] font-semibold text-sky-700 dark:text-sky-300"
+                            title={row.openIssues + " open issues and pull requests"}
+                          >
+                            <GitPullRequest size={10} /> {row.openIssues}
+                          </span>
+                        ) : null}
+                      </div>
+                      {!compact && (
+                        <p
+                          className="truncate text-[11px] text-muted-foreground"
+                          title={row.description}
                         >
-                          <Copy size={14} /> Copy git clone
-                        </DropdownMenuItem>
-                        {row.appUrl && (
-                          <DropdownMenuItem onSelect={() => copyText(row.appUrl!, "App URL")}>
-                            <Copy size={14} /> Copy app URL
+                          {[row.language, row.stars ? "★ " + row.stars : "", row.description]
+                            .filter(Boolean)
+                            .join(" · ") ||
+                            (row.source === "snapshot"
+                              ? "Snapshot only — refresh for live metadata"
+                              : "No description")}
+                        </p>
+                      )}
+                      {!compact && row.plan.pendingSummary?.trim() && (
+                        <p
+                          className="mt-0.5 truncate text-[11px] font-medium text-primary"
+                          title={row.plan.pendingSummary}
+                        >
+                          → {row.plan.pendingSummary}
+                        </p>
+                      )}
+                    </div>
+                    <div
+                      className="justify-self-end text-muted-foreground md:justify-self-start"
+                      title={
+                        row.pushedAt
+                          ? new Date(row.pushedAt).toLocaleString()
+                          : "Push time not verified"
+                      }
+                    >
+                      {relativeTime(row.pushedAt)}
+                    </div>
+                    <div className="col-span-2 col-start-2 min-w-0 md:col-span-1 md:col-start-auto">
+                      {deploy ? (
+                        <>
+                          <Pill
+                            tone={deploy.tone}
+                            icon={deploy.icon}
+                            spin={deploy.spin}
+                            title={
+                              REPO_DEPLOY_LABEL[state] +
+                              " — API metadata or a recorded link, not an uptime check"
+                            }
+                          >
+                            {REPO_DEPLOY_LABEL[state]}
+                          </Pill>
+                          {!compact && (row.appUrl || first) && (
+                            <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                              {first && state !== "linked"
+                                ? first.name + (first.publicUrl ? " · " : "")
+                                : ""}
+                              {row.appUrl
+                                ? hostOf(row.appUrl)
+                                : first?.publicUrl
+                                  ? hostOf(first.publicUrl)
+                                  : ""}
+                            </span>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground/60">—</span>
+                      )}
+                    </div>
+                    <div className="col-start-2 md:col-span-1 md:col-start-auto">
+                      <select
+                        aria-label={"Priority for " + row.key}
+                        value={row.plan.priority || ""}
+                        onChange={(e) => {
+                          if (e.target.value) void setPriority([row], e.target.value as Priority);
+                        }}
+                        className={`w-full max-w-[9.5rem] rounded-lg border px-1.5 py-1 text-[11px] font-semibold capitalize md:max-w-none ${PRIORITY_CLS[row.plan.priority || ""]}`}
+                      >
+                        <option value="" disabled>
+                          Set priority
+                        </option>
+                        <option value="critical">Critical</option>
+                        <option value="high">High</option>
+                        <option value="medium">Medium</option>
+                        <option value="low">Low</option>
+                      </select>
+                    </div>
+                    <div className="flex items-center justify-end gap-0.5 md:col-span-1">
+                      <button
+                        type="button"
+                        className={ctl + " !h-8 !px-2.5"}
+                        onClick={() => openRow(row)}
+                      >
+                        Details
+                      </button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            className={iconBtn}
+                            aria-label={"More actions for " + row.key}
+                          >
+                            <Ellipsis size={15} />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 [&_[role=menuitem]]:gap-2">
+                          <DropdownMenuLabel className="truncate text-xs">
+                            {row.key}
+                          </DropdownMenuLabel>
+                          <DropdownMenuItem onSelect={() => openRow(row)}>
+                            <CircleDot size={14} /> Open details
                           </DropdownMenuItem>
-                        )}
-                        {row.stars !== null && (
+                          <DropdownMenuItem onSelect={() => onEdit(row.plan)}>
+                            <Pencil size={14} /> Edit plan & links
+                          </DropdownMenuItem>
                           <DropdownMenuItem asChild>
-                            <a
-                              href={row.url + "/stargazers"}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              <Star size={14} /> {row.stars} stars
+                            <a href={row.url} target="_blank" rel="noopener noreferrer">
+                              <Github size={14} /> Open on GitHub
                             </a>
                           </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </li>
+                          {row.appUrl && (
+                            <DropdownMenuItem asChild>
+                              <a href={row.appUrl} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink size={14} /> Open app · {hostOf(row.appUrl)}
+                              </a>
+                            </DropdownMenuItem>
+                          )}
+                          {first && (
+                            <DropdownMenuItem
+                              onSelect={() => focusCloudflare("cloudflare", first.key)}
+                            >
+                              <Cloud size={14} /> Manage in Cloudflare console
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => copyText(repoCloneCommand(row), "Clone command")}
+                          >
+                            <Copy size={14} /> Copy git clone
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => copyText(row.url, "Repository URL")}>
+                            <Copy size={14} /> Copy URL
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </li>
+                </Fragment>
               );
             })}
           </ul>
         </div>
       )}
-      <PortfolioPager id="GitHub repositories" {...current}
-        onPage={setPage} onSize={size => {setPageSize(size);setPage(1);}} />
-      <Sheet open={Boolean(inspected)} onOpenChange={open=>{if(!open)setInspected(null);}}>
-        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-          <SheetHeader>
-            <SheetTitle>Repository operational evidence</SheetTitle>
-            <SheetDescription>{inspected?.repo} · GitHub API, inspected only when requested</SheetDescription>
-          </SheetHeader>
-          <div className="mt-5 space-y-4 text-sm">
-            {inspected?.loading && <p role="status">Retrieving current GitHub workflow, PR and deployment records…</p>}
-            {inspected?.error && <p role="alert" className="text-amber-600 dark:text-amber-400">{inspected.error}</p>}
-            {inspected?.result && (()=>{
-              const d=inspected.result;
-              return <>
-                <p className="text-xs text-muted-foreground">{d.state} · {d.source} · {new Date(d.fetchedAt).toLocaleString()} · default branch: {d.defaultBranch || "unavailable"}</p>
-                {d.errors.map((e,i)=><p key={i} className="rounded-lg border border-amber-500/30 p-2 text-xs text-amber-600 dark:text-amber-400">{e}</p>)}
-                <article className="rounded-xl border border-border p-3">
-                  <h3 className="font-semibold">Latest workflow run</h3>
-                  {d.latestCI ? <div className="mt-2 space-y-1 text-xs">
-                    <p>{d.latestCI.name} · {d.latestCI.status} / {d.latestCI.conclusion || "pending"}</p>
-                    <p>Event: {d.latestCI.event || "unknown"} · commit: {d.latestCI.sha?.slice(0,7) || "not reported"}</p>
-                    <a className="text-primary hover:underline" href={d.latestCI.url} target="_blank" rel="noopener noreferrer">Open GitHub Actions run</a>
-                  </div> : <p className="mt-2 text-xs text-muted-foreground">No verified workflow run returned for this repository.</p>}
-                </article>
-                <article className="rounded-xl border border-border p-3">
-                  <h3 className="font-semibold">Most recently updated open pull requests</h3>
-                  {d.recentOpenPRs.length ? <ul className="mt-2 space-y-2 text-xs">
-                    {d.recentOpenPRs.map(p=><li key={p.number}><a className="text-primary hover:underline" href={p.url} target="_blank" rel="noopener noreferrer">#{p.number} {p.title}</a></li>)}
-                  </ul> : <p className="mt-2 text-xs text-muted-foreground">No open PRs returned by the API.</p>}
-                  {d.openPRsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing the three newest; this is not the total open PR count.</p>}
-                </article>
-                <article className="rounded-xl border border-border p-3">
-                  <h3 className="font-semibold">Recent GitHub deployment records</h3>
-                  {d.deployments.length ? <ul className="mt-2 space-y-2 text-xs">{d.deployments.map((p,i)=><li key={p.url+i}>
-                    <a className="text-primary hover:underline" href={p.url} target="_blank" rel="noopener noreferrer">{p.environment}</a>
-                    {" · "}{p.ref || "ref unavailable"}{" · "}{p.createdAt ? new Date(p.createdAt).toLocaleString() : "date unavailable"}
-                  </li>)}</ul> : <p className="mt-2 text-xs text-muted-foreground">No GitHub deployment records returned. Cloudflare direct uploads may not appear here.</p>}
-                  <p className="mt-2 text-xs text-muted-foreground">Deployment records and CI outcomes do not establish that a public URL is responding.</p>
-                </article>
-              </>;
-            })()}
-          </div>
-        </SheetContent>
-      </Sheet>
+      <PortfolioPager
+        id="GitHub repositories"
+        {...current}
+        onPage={setPage}
+        onSize={(size) => {
+          setPageSize(size);
+          setPage(1);
+        }}
+      />
+
+      <BulkBar
+        count={bulkCount}
+        total={ordered.length}
+        onSelectAll={() => setSelected(new Set(ordered.map((r) => r.key)))}
+        onClear={() => setSelected(new Set())}
+      >
+        <select
+          aria-label="Set priority for selected repositories"
+          defaultValue=""
+          onChange={(e) => {
+            const v = e.target.value as Priority;
+            e.target.value = "";
+            if (v) void setPriority(selectedRows, v);
+          }}
+          className={selectCls}
+        >
+          <option value="" disabled>
+            Set priority…
+          </option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <select
+          aria-label="Set status for selected repositories"
+          defaultValue=""
+          onChange={(e) => {
+            const v = e.target.value as GitHubRepo["status"];
+            e.target.value = "";
+            if (v) void setStatus(selectedRows, v);
+          }}
+          className={selectCls}
+        >
+          <option value="" disabled>
+            Set status…
+          </option>
+          <option value="active">Active</option>
+          <option value="stable">Stable</option>
+          <option value="paused">Paused</option>
+          <option value="archived">Archived</option>
+        </select>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={ctl}>
+              <Copy size={13} /> Copy
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52 [&_[role=menuitem]]:gap-2">
+            <DropdownMenuItem
+              onSelect={() =>
+                copyText(selectedRows.map(repoCloneCommand).join("\n"), "Clone commands")
+              }
+            >
+              git clone commands
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                copyText(selectedRows.map((r) => r.url).join("\n"), "Repository URLs")
+              }
+            >
+              Repository URLs
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                copyText(selectedRows.map((r) => r.key).join("\n"), "Repository names")
+              }
+            >
+              owner/name list
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                copyText(
+                  markdownList(selectedRows.map((r) => ({ title: r.key, url: r.url }))),
+                  "Markdown list",
+                )
+              }
+            >
+              Markdown link list
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className={ctl}>
+              <ExternalLink size={13} /> Open
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-52 [&_[role=menuitem]]:gap-2">
+            <DropdownMenuLabel className="text-[11px] text-muted-foreground">
+              Up to {BULK_OPEN_LIMIT} tabs at a time
+            </DropdownMenuLabel>
+            <DropdownMenuItem
+              onSelect={() =>
+                openAll(
+                  selectedRows.map((r) => r.url),
+                  "repositories",
+                )
+              }
+            >
+              Repositories
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                openAll(
+                  selectedRows.map((r) => r.url + "/pulls"),
+                  "pull-request pages",
+                )
+              }
+            >
+              Pull requests
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                openAll(
+                  selectedRows.map((r) => r.url + "/actions"),
+                  "Actions pages",
+                )
+              }
+            >
+              Actions
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() =>
+                openAll(
+                  selectedRows.map((r) => r.appUrl),
+                  "app URLs",
+                )
+              }
+            >
+              Apps (recorded URLs)
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <button type="button" className={ctl} onClick={() => exportCsv(selectedRows)}>
+          <Download size={13} /> CSV
+        </button>
+      </BulkBar>
+
+      {/* ───── provenance ───── */}
+      <details className="rounded-xl border border-border/60 bg-card/50 p-3 text-xs">
+        <summary className="cursor-pointer font-semibold">
+          Recent pushes & deployments · {recentActivity.length} observed
+        </summary>
+        <div className="mt-3 grid gap-2 lg:grid-cols-2">
+          {recentActivity.map((a) => (
+            <a
+              key={a.key}
+              href={a.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="min-w-0 rounded-lg border border-border/40 p-2 hover:border-primary/40"
+            >
+              <span className="block truncate text-xs font-medium text-primary">{a.name}</span>
+              <span className="block text-[11px] text-muted-foreground">
+                {a.source} · {a.action} · {relativeTime(a.at)}
+              </span>
+            </a>
+          ))}
+          {!recentActivity.length && (
+            <p className="text-muted-foreground">
+              No timestamped GitHub pushes or Cloudflare deployments were returned.
+            </p>
+          )}
+        </div>
+      </details>
       <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
         <AlertTriangle size={12} className="mt-px shrink-0" />
-        Repository-to-Cloudflare links use provider-reported Git sources or unique exact URLs already
-        recorded in your app inventory—not name guessing. Operator-recorded links are labelled separately
-        and are not uptime proofs. Priorities and next actions remain your saved plans.
+        Counts reflect the records collected right now. GitHub’s open-issues count includes pull
+        requests; Cloudflare build state is deployment metadata, not an uptime check.
+        Repository-to-Cloudflare links use provider-reported Git sources or unique exact URLs
+        already in your app inventory — never name guessing. Priorities and next actions are your
+        saved plans. Stats for all accounts: {stats.total} repositories · {stats.appLinks} app URLs
+        · {stats.cloudflareSourceLinks} with Git-source proof.
       </p>
+
+      <RepoDrawer
+        row={drawerRow}
+        position={{ index: drawerIndex < 0 ? 0 : drawerIndex, total: Math.max(ordered.length, 1) }}
+        onClose={() => setDrawerKey(null)}
+        onStep={stepDrawer}
+        onSavePlan={(row, patch) => savePlan([row], patch, "plan saved")}
+        onFullEdit={(plan) => {
+          setDrawerKey(null);
+          onEdit(plan);
+        }}
+        onOpenCloudflare={(key) => {
+          setDrawerKey(null);
+          focusCloudflare("cloudflare", key);
+        }}
+        cloudflareComplete={cfComplete}
+      />
+      <ShortcutHelp
+        open={helpOpen}
+        onOpenChange={setHelpOpen}
+        title="Repository shortcuts"
+        shortcuts={SHORTCUTS}
+      />
     </section>
   );
 }
