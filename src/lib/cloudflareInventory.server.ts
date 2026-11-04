@@ -632,7 +632,7 @@ async function accountInventory(
     // Builds scopes are optional: a missing CI permission must not hide Workers.
     const buildByTag = new Map<string, unknown>();
     const tags = [...new Set(scripts.value.scripts.map(raw => asString(asObject(raw).tag))
-      .filter((tag): tag is string => Boolean(tag) && /^[a-f0-9]{32}$/i.test(tag)))];
+      .filter((tag): tag is string => typeof tag === "string" && /^[a-f0-9]{32}$/i.test(tag)))];
     const buildResults = await parallelMap(
       Array.from({ length: Math.ceil(tags.length / 20) }, (_, n) => tags.slice(n * 20, n * 20 + 20)),
       batch => cloudflareGet<Envelope>("/accounts/" + accountId + "/builds/builds/latest?external_script_ids=" +
