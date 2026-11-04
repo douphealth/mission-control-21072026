@@ -94,3 +94,17 @@ With a `deploy` token for an account, the command center enables, per Pages proj
 - **Roll back** production to an earlier successful deployment (`POST …/deployments/{id}/rollback`).
 
 Every action requires: a verified Cloudflare Access identity, a same-origin request (CSRF guard), a confirmation dialog, and the account's dedicated `deploy` token. Each attempt (accepted or rejected) is written to the local audit log. Remove the `deploy` key to return the account to read-only.
+
+
+## Verified Worker URLs, source provenance, and repository joins (November 2026)
+
+- Worker **Live URL** is selected from an explicitly enabled Cloudflare custom domain, otherwise from its enabled `*.workers.dev` address using the account's actual Workers subdomain, otherwise from an unambiguous zone route host and prefix. A route URL is Cloudflare routing metadata, not proof that its HTTP endpoint returned 200. An unavailable URL is labelled **URL not verified**, never `No custom domain`.
+- The `workers.dev` URL requires both the account-scoped `GET /workers/subdomain` response and an explicit `subdomain.enabled === true` from the modern Workers inventory. Legacy list results lacking the enabled state will not be guessed into public URLs. The Worker detail inspector still shows independent routing diagnostics.
+- Git source is taken from Pages `source.config` or the **Cloudflare Workers Builds** latest-build response `build_trigger_metadata` / `trigger.repo_connection`. Workers Builds lookup batches at most **20 script tags/request** using `GET /builds/builds/latest?external_script_ids=`. It requires **Workers CI Read** on a *user-scoped* API token; tokens without that permission leave source **unverified**. The configured Workers token is used for the lookup, so a read-only user-scoped token with both Workers metadata and Workers CI Read permissions is recommended; do **not** grant edit scope solely for this feature.
+- A Workers Builds Git source confirms the repository connection for a build; it does **not** prove that the latest build's commit is serving in production. The UI intentionally omits the Worker deployment SHA until a version-to-build correlation is independently verified.
+- The GitHub workspace joins Cloudflare Pages/Workers to repositories only on the **Cloudflare-reported exact owner/repo URL**, not name similarity. Where no match or reliable app homepage is known, it says **No verified app link**, not `Not deployed`. When any Cloudflare account inventory is partial, even the unmatched-deployment filter is hidden; results cannot be used as negative proof.
+- For Workers built by GitHub Actions or direct Wrangler uploads, Cloudflare may have no Git source record. Do not guess from matching names; compare the deployment workflow and account settings under authorized access before manually recording an association.
+
+### Release verification
+
+Run `bun run typecheck`, `bun run lint`, `bun run test`, and `bun run build` in the PR CI. After release, under Cloudflare Access, reconcile per-account Worker names and live URLs with the Cloudflare dashboard; confirm enabled vs disabled `workers.dev` endpoints; compare Builds Git source against the connected repo. For accounts with no Workers CI Read permission, expect unverified Worker sources until the API token is fixed. No tokens are persisted in browser code.
