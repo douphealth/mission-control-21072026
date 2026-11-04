@@ -9,7 +9,7 @@ const pages = normalizePagesProject(account, {
   canonical_deployment: {id:"1",created_on:"2026-11-03T10:00:00Z",latest_stage:{status:"success"}},
 })!;
 const upload = normalizePagesProject(account, {name:"uploaded",subdomain:"uploaded.pages.dev",
-  source: {type:"direct_upload"}, canonical_deployment:{id:"2",latest_stage:{status:"failure"}}})!;
+  canonical_deployment:{id:"2",latest_stage:{status:"failure"}}})!;
 const worker = normalizeWorkerScript(account,{id:"api",subdomain:{enabled:true},deployed_on:"2026-11-03T10:00:00Z"},
   [],undefined,"example")!;
 describe("Cloudflare operation facets",()=>{
