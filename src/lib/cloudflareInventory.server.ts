@@ -274,6 +274,12 @@ export function workersTokenFor(accountId: string, env: Record<string, string | 
   const configured = accountTokenConfig(accountId, env);
   return asString(asObject(configured).workers) || apiTokenFor(accountId, env);
 }
+/** Optional user-scoped token with Workers CI Read for Builds provenance. */
+export function buildsTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {
+  const configured = accountTokenConfig(accountId, env);
+  return asString(asObject(configured).builds) || asString(env["CLOUDFLARE_BUILDS_API_TOKEN"]) ||
+    workersTokenFor(accountId, env);
+}
 /** Mirrors the token resolution order of pagesTokenFor / workersTokenFor. */
 export function tokenSourceFor(
   accountId: string, kind: "workers" | "pages", env: Record<string, string | undefined> = process.env,
@@ -549,7 +555,7 @@ interface AccountInventoryResult {
   pagesReportedTotal?: number | null;
 }
 async function accountInventory(
-  accountId: string, token: string, pagesToken: string, workersToken: string,
+  accountId: string, token: string, pagesToken: string, workersToken: string, buildsToken: string,
   sections: ReadonlySet<InventorySection> = new Set(["pages", "platform"]),
 ): Promise<AccountInventoryResult> {
   const rows: CloudflareDeploymentRow[] = [];
@@ -636,7 +642,7 @@ async function accountInventory(
     const buildResults = await parallelMap(
       Array.from({ length: Math.ceil(tags.length / 20) }, (_, n) => tags.slice(n * 20, n * 20 + 20)),
       batch => cloudflareGet<Envelope>("/accounts/" + accountId + "/builds/builds/latest?external_script_ids=" +
-        encodeURIComponent(batch.join(",")), workersToken),
+        encodeURIComponent(batch.join(",")), buildsToken),
       3,
     );
     for (const response of buildResults) {
@@ -703,7 +709,7 @@ export async function collectCloudflareInventory(
   const results = await parallelMap(accounts, async id => {
     const token = apiTokenFor(id, environment);
     return token ? await accountInventory(id, token, pagesTokenFor(id, environment) || token,
-      workersTokenFor(id, environment) || token, sections) : null;
+      workersTokenFor(id, environment) || token, buildsTokenFor(id, environment) || token, sections) : null;
   }, 2);
   results.forEach((entry, index) => {
     const id = accounts[index];
