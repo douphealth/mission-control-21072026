@@ -52,9 +52,6 @@ export type RepoSort = "pushed" | "name" | "priority" | "issues" | "stars";
 const DAY = 86_400_000;
 const PRIORITY_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-const httpsUrl = (value: string | null | undefined) =>
-  value && /^https:\/\/[^\s/]+/i.test(value) ? value : null;
-
 function synthesizedPlan(
   key: string,
   url: string,
