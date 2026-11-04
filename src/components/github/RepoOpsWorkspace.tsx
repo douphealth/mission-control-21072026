@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
+  Activity,
   ArrowDownUp,
   Archive,
   CircleCheck,
@@ -27,6 +28,11 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
+import { recentOperatorActivity } from "@/lib/operatorActivity";
+import { getRepositoryDiagnostics, type RepositoryDiagnostics } from "@/lib/repositoryDiagnostics.functions";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { matchesRepositoryFacets, repositoryPortfolioStats, REPOSITORY_FACETS_DEFAULT, type RepositoryFacets } from "@/lib/repositoryFacets";
 import type { GitHubRepo } from "@/lib/db";
 import { useBuildProjects } from "@/hooks/useTableData";
 import { useAddItem, useBulkAddItems, useBulkPatch, useUpdateItem } from "@/hooks/useTableData";
@@ -66,13 +72,17 @@ import {
 
 type Priority = NonNullable<GitHubRepo["priority"]>;
 const PREFS_KEY = "mc.github.workspace.v1";
-type Prefs = { quick: RepoQuick; owner: string; sort: RepoSort };
-const DEFAULT_PREFS: Prefs = { quick: "all", owner: "all", sort: "pushed" };
+type Prefs = { quick: RepoQuick; owner: string; sort: RepoSort; facets: RepositoryFacets };
+const DEFAULT_PREFS: Prefs = { quick: "all", owner: "all", sort: "pushed", facets: REPOSITORY_FACETS_DEFAULT };
 function readPrefs(): Prefs {
   try {
     return {
       ...DEFAULT_PREFS,
       ...(JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<Prefs>),
+      facets: {
+        ...REPOSITORY_FACETS_DEFAULT,
+        ...((JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<Prefs>).facets || {}),
+      },
     };
   } catch {
     return DEFAULT_PREFS;
@@ -240,6 +250,19 @@ export default function RepoOpsWorkspace({
   const [prefs, setPrefs] = useState<Prefs>(DEFAULT_PREFS);
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [inspected, setInspected] = useState<{repo:string; loading:boolean; result:RepositoryDiagnostics|null; error:string|null}|null>(null);
+  const inspectRepo = async (row: RepoOpsRow) => {
+    setInspected({repo:row.key,loading:true,result:null,error:null});
+    const validOwners = ["douphealth","Papalexios","papalexios001-wq","papalexios01"] as const;
+    const owner = validOwners.find(o => o.toLowerCase() === row.owner.toLowerCase());
+    if (!owner) {setInspected({repo:row.key,loading:false,result:null,error:"Unsupported GitHub account."}); return;}
+    try {
+      const result = await getRepositoryDiagnostics({data:{owner,repo:row.key.split("/")[1]}});
+      setInspected(current => current?.repo === row.key ? {...current,loading:false,result,error:null} : current);
+    } catch {
+      setInspected(current => current?.repo === row.key ? {...current,loading:false,error:"GitHub diagnostics unavailable. Sign in via Cloudflare Access and configure an account-specific read token."} : current);
+    }
+  };
   const searchRef = useRef<HTMLInputElement>(null);
   const cf = useCloudflareControl();
   const loadCloudflare = cf.load;
@@ -330,12 +353,17 @@ export default function RepoOpsWorkspace({
       ? "all"
       : prefs.quick;
   const counts = useMemo(() => repoQuickCounts(ownerScoped), [ownerScoped]);
+  const stats = useMemo(() => repositoryPortfolioStats(all), [all]);
+  const languages = useMemo(() => [...new Set(ownerScoped.map(r => r.language || "Unknown"))]
+    .sort((a,b) => a.localeCompare(b)), [ownerScoped]);
+  const setFacet = (patch: Partial<RepositoryFacets>) => update({facets:{...prefs.facets,...patch}});
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return ownerScoped
-      .filter((r) => matchesRepoQuick(r, quick) && (!needle || repoSearchText(r).includes(needle)))
+      .filter((r) => matchesRepoQuick(r, quick) &&
+        matchesRepositoryFacets(r, prefs.facets) && (!needle || repoSearchText(r).includes(needle)))
       .sort((a, b) => compareRepoRows(a, b, prefs.sort));
-  }, [ownerScoped, quick, prefs.sort, query]);
+  }, [ownerScoped, quick, prefs.sort, prefs.facets, query]);
   const ownerOptions = useMemo(() => {
     const names = new Map<string, number>();
     for (const r of all) names.set(r.owner, (names.get(r.owner) || 0) + 1);
@@ -343,7 +371,8 @@ export default function RepoOpsWorkspace({
   }, [all]);
   const selectedRows = rows.filter((r) => selected.has(r.key));
   const allVisibleSelected = rows.length > 0 && rows.every((r) => selected.has(r.key));
-  const linkedRepos = all.filter((r) => r.cloudflare.length).length;
+  const recentActivity = useMemo(() => recentOperatorActivity(all,cloud||[],8),[all,cloud]);
+  const linkedRepos = stats.cloudflareMatches;
   const rateLimited = ownersRateLimitedUntil();
 
   const toggle = (key: string) =>
@@ -456,6 +485,39 @@ export default function RepoOpsWorkspace({
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8" aria-label="GitHub portfolio operational summary">
+        {([
+          ["Repositories", stats.total],
+          ["Private", stats.private],
+          ["Pushed 7d", stats.pushed7d],
+          ["App URLs", stats.appLinks],
+          ["Cloudflare linked", stats.cloudflareMatches],
+          ["Git source proof", stats.cloudflareSourceLinks],
+          ["Deployment failures", stats.failedDeploys],
+          ["Missing app link", stats.missingApps],
+        ] as const).map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-border/60 bg-card/70 px-3 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+            <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+          </div>
+        ))}
+      </div>
+      <p className="text-[11px] text-muted-foreground">
+        Counters reflect the currently collected GitHub and Cloudflare records. GitHub's open issues field includes pull requests;
+        deployment failures are Cloudflare build metadata, not HTTP uptime checks.
+      </p>
+
+      <details className="rounded-xl border border-border/60 bg-card/65 p-3">
+        <summary className="cursor-pointer text-sm font-semibold">Recent GitHub pushes and Cloudflare deployments · {recentActivity.length} observed</summary>
+        <div className="mt-3 grid gap-2 lg:grid-cols-2">
+          {recentActivity.map(a => <a key={a.key} href={a.url} target="_blank" rel="noopener noreferrer"
+            className="min-w-0 rounded-lg border border-border/40 p-2 hover:border-primary/40">
+            <span className="block truncate text-xs font-medium text-primary">{a.name}</span>
+            <span className="block text-[11px] text-muted-foreground">{a.source} · {a.action} · {relativeTime(a.at)}</span>
+          </a>)}
+          {!recentActivity.length && <p className="text-xs text-muted-foreground">No timestamped GitHub pushes or Cloudflare deployments were returned.</p>}
+        </div>
+      </details>
       <div
         className="flex gap-1.5 overflow-x-auto pb-1"
         role="toolbar"
@@ -553,6 +615,42 @@ export default function RepoOpsWorkspace({
           </button>
         </div>
       </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5" aria-label="Advanced repository filters">
+        <select aria-label="Filter repository language" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+          value={prefs.facets.language} onChange={e=>setFacet({language:e.target.value})}>
+          <option value="all">Any language</option>
+          {languages.map(language=><option key={language} value={language}>{language}</option>)}
+        </select>
+        <select aria-label="Filter repository visibility" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+          value={prefs.facets.visibility} onChange={e=>setFacet({visibility:e.target.value as RepositoryFacets["visibility"]})}>
+          <option value="all">Public + private</option><option value="public">Public</option><option value="private">Private</option>
+        </select>
+        <select aria-label="Filter deployment linkage" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+          value={prefs.facets.deployment} onChange={e=>setFacet({deployment:e.target.value as RepositoryFacets["deployment"]})}>
+          <option value="all">Any deployment linkage</option><option value="cloudflare">Linked to Cloudflare</option>
+          <option value="app">Recorded app URL</option><option value="missing-app">Missing app URL</option>
+          <option value="no-cloudflare">No Cloudflare source match</option>
+        </select>
+        <select aria-label="Filter last push activity" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+          value={prefs.facets.activity} onChange={e=>setFacet({activity:e.target.value as RepositoryFacets["activity"]})}>
+          <option value="all">Any activity</option><option value="7d">Pushed in 7 days</option><option value="30d">Pushed in 30 days</option>
+          <option value="180d">Pushed in 180 days</option><option value="stale">Not pushed in 180+ days</option>
+          <option value="unknown">Push date unavailable</option>
+        </select>
+        <select aria-label="Filter app link evidence" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+          value={prefs.facets.evidence} onChange={e=>setFacet({evidence:e.target.value as RepositoryFacets["evidence"]})}>
+          <option value="all">Any link evidence</option><option value="provider">Provider-attested link</option>
+          <option value="recorded">Recorded link (not verified live)</option><option value="missing">No app link evidence</option>
+        </select>
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <span>Filters are saved locally on this device · {rows.length} matching repositories</span>
+        <button type="button" className="text-primary hover:underline" onClick={resetFilters}>Clear all filters</button>
+      </div>
+
+      <SavedFilterViews storageKey="mc.github.saved-views.v1" state={{prefs,query}}
+        onApply={view=>{update(view.prefs);setQuery(view.query);}} />
 
       {selectedRows.length > 0 && (
         <div className="sticky top-2 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-primary/30 bg-card/95 px-3 py-2 text-xs shadow-md backdrop-blur">
@@ -796,6 +894,9 @@ export default function RepoOpsWorkspace({
                         <DropdownMenuItem onSelect={() => onEdit(row.plan)}>
                           <Pencil size={14} /> Edit plan & links
                         </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => void inspectRepo(row)}>
+                          <Activity size={14} /> Inspect CI, PRs & deployments
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                           <a
                             href={"https://github.dev/" + row.owner + "/" + repoPath}
@@ -883,11 +984,53 @@ export default function RepoOpsWorkspace({
           </ul>
         </div>
       )}
+      <Sheet open={Boolean(inspected)} onOpenChange={open=>{if(!open)setInspected(null);}}>
+        <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
+          <SheetHeader>
+            <SheetTitle>Repository operational evidence</SheetTitle>
+            <SheetDescription>{inspected?.repo} · GitHub API, inspected only when requested</SheetDescription>
+          </SheetHeader>
+          <div className="mt-5 space-y-4 text-sm">
+            {inspected?.loading && <p role="status">Retrieving current GitHub workflow, PR and deployment records…</p>}
+            {inspected?.error && <p role="alert" className="text-amber-600 dark:text-amber-400">{inspected.error}</p>}
+            {inspected?.result && (()=>{
+              const d=inspected.result;
+              return <>
+                <p className="text-xs text-muted-foreground">{d.state} · {d.source} · {new Date(d.fetchedAt).toLocaleString()} · default branch: {d.defaultBranch || "unavailable"}</p>
+                {d.errors.map((e,i)=><p key={i} className="rounded-lg border border-amber-500/30 p-2 text-xs text-amber-600 dark:text-amber-400">{e}</p>)}
+                <article className="rounded-xl border border-border p-3">
+                  <h3 className="font-semibold">Latest workflow run</h3>
+                  {d.latestCI ? <div className="mt-2 space-y-1 text-xs">
+                    <p>{d.latestCI.name} · {d.latestCI.status} / {d.latestCI.conclusion || "pending"}</p>
+                    <p>Event: {d.latestCI.event || "unknown"} · commit: {d.latestCI.sha?.slice(0,7) || "not reported"}</p>
+                    <a className="text-primary hover:underline" href={d.latestCI.url} target="_blank" rel="noopener noreferrer">Open GitHub Actions run</a>
+                  </div> : <p className="mt-2 text-xs text-muted-foreground">No verified workflow run returned for this repository.</p>}
+                </article>
+                <article className="rounded-xl border border-border p-3">
+                  <h3 className="font-semibold">Most recently updated open pull requests</h3>
+                  {d.recentOpenPRs.length ? <ul className="mt-2 space-y-2 text-xs">
+                    {d.recentOpenPRs.map(p=><li key={p.number}><a className="text-primary hover:underline" href={p.url} target="_blank" rel="noopener noreferrer">#{p.number} {p.title}</a></li>)}
+                  </ul> : <p className="mt-2 text-xs text-muted-foreground">No open PRs returned by the API.</p>}
+                  {d.openPRsTruncated && <p className="mt-2 text-xs text-muted-foreground">Showing the three newest; this is not the total open PR count.</p>}
+                </article>
+                <article className="rounded-xl border border-border p-3">
+                  <h3 className="font-semibold">Recent GitHub deployment records</h3>
+                  {d.deployments.length ? <ul className="mt-2 space-y-2 text-xs">{d.deployments.map((p,i)=><li key={p.url+i}>
+                    <a className="text-primary hover:underline" href={p.url} target="_blank" rel="noopener noreferrer">{p.environment}</a>
+                    {" · "}{p.ref || "ref unavailable"}{" · "}{p.createdAt ? new Date(p.createdAt).toLocaleString() : "date unavailable"}
+                  </li>)}</ul> : <p className="mt-2 text-xs text-muted-foreground">No GitHub deployment records returned. Cloudflare direct uploads may not appear here.</p>}
+                  <p className="mt-2 text-xs text-muted-foreground">Deployment records and CI outcomes do not establish that a public URL is responding.</p>
+                </article>
+              </>;
+            })()}
+          </div>
+        </SheetContent>
+      </Sheet>
       <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
         <AlertTriangle size={12} className="mt-px shrink-0" />
-        Cloudflare links come only from the Git source each Pages project reports — no name
-        guessing. Priorities and next actions are your saved plans; GitHub and Cloudflare data are
-        read-only observations.
+        Repository-to-Cloudflare links use provider-reported Git sources or unique exact URLs already
+        recorded in your app inventory—not name guessing. Operator-recorded links are labelled separately
+        and are not uptime proofs. Priorities and next actions remain your saved plans.
       </p>
     </section>
   );
