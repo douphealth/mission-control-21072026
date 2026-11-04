@@ -28,6 +28,7 @@ import {
 import { toast } from "sonner";
 import { portfolioPage, type PortfolioPageSize } from "@/lib/portfolioPaging";
 import PortfolioPager from "@/components/controlcenter/PortfolioPager";
+import { cloudflareTriage } from "@/lib/portfolioTriage";
 import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
 import {
@@ -253,6 +254,7 @@ export default function CloudflareDeploymentsPanel({
     [inventory, accountId],
   );
   const counts = useMemo(() => quickCounts(scoped), [scoped]);
+  const triage = useMemo(() => cloudflareTriage(scoped,inventory?.truthState || "not_connected"),[scoped,inventory?.truthState]);
   const stats = useMemo(() => cloudflareInventoryStats(inventory?.rows || []), [inventory]);
   const coverage = useMemo(() => inventory ? cloudflareCoverage(inventory) : null, [inventory]);
   const recentDeployments = useMemo(() => recentOperatorActivity([],inventory?.rows||[],6),[inventory]);
@@ -692,6 +694,42 @@ export default function CloudflareDeploymentsPanel({
               )}
             </details>
           )}
+
+          <section className="rounded-2xl border border-border/60 bg-card/70 p-4" aria-label="Cloudflare operations triage">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold">Deployment issues and missing evidence</h3>
+              <span className="text-[11px] text-muted-foreground">
+                {triage.complete ? "Authorized inventory complete" : "Partial inventory — totals are minimum observed"}
+              </span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <button type="button" onClick={()=>update({quick:"failing",facets:CLOUDFLARE_FACETS_DEFAULT})}
+                className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+                <strong className="block text-xl tabular-nums">{triage.failedBuild.length}</strong>
+                <span className="block text-xs font-semibold">Failed build attempts</span>
+                <span className="block text-[11px] text-muted-foreground">Serving deployment may still be healthy</span>
+              </button>
+              <button type="button" onClick={()=>update({quick:"building",facets:CLOUDFLARE_FACETS_DEFAULT})}
+                className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+                <strong className="block text-xl tabular-nums">{triage.building.length}</strong>
+                <span className="block text-xs font-semibold">Building or queued</span>
+                <span className="block text-[11px] text-muted-foreground">Inspect delayed production deployments</span>
+              </button>
+              <button type="button" onClick={()=>update({quick:"all",facets:{...CLOUDFLARE_FACETS_DEFAULT,endpoint:"missing"}})}
+                className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+                <strong className="block text-xl tabular-nums">{triage.unknownURL.length}</strong>
+                <span className="block text-xs font-semibold">Public URL not verified</span>
+                <span className="block text-[11px] text-muted-foreground">Review routes and disabled endpoints</span>
+              </button>
+              <button type="button" onClick={()=>update({quick:"all",facets:{...CLOUDFLARE_FACETS_DEFAULT,source:"unverified"}})}
+                className="rounded-xl border border-border/60 p-3 text-left hover:border-primary/40">
+                <strong className="block text-xl tabular-nums">{triage.unknownSource.length}</strong>
+                <span className="block text-xs font-semibold">Git source not verified</span>
+                <span className="block text-[11px] text-muted-foreground">Check Workers Builds permissions or direct uploads</span>
+              </button>
+            </div>
+            <p className="mt-2 text-[11px] text-muted-foreground">Counts are scoped to the selected account and derive from Cloudflare API metadata, not HTTP availability checks.</p>
+          </section>
 
           <div
             className="flex gap-1.5 overflow-x-auto pb-1"
