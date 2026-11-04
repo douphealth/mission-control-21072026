@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import SavedFilterViews from "@/components/controlcenter/SavedFilterViews";
 import { recentOperatorActivity } from "@/lib/operatorActivity";
 import {
   getCloudflareDeploymentHistory,
@@ -809,6 +810,9 @@ export default function CloudflareDeploymentsPanel({
               <option value="routes">Worker route pattern</option>
             </select>
           </div>
+
+          <SavedFilterViews storageKey="mc.cloudflare.saved-views.v1" state={{prefs,query}}
+            onApply={view=>{update(view.prefs);setQuery(view.query);}} />
 
           <p className="text-xs text-muted-foreground" aria-live="polite">
             Showing <strong className="text-foreground">{rows.length}</strong> of {scoped.length}{" "}
