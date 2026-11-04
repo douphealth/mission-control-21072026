@@ -36,6 +36,7 @@ import { runCloudflarePagesAction } from "@/lib/cloudflareActions.functions";
 import type { CloudflareAccountSummary, DeployHealth } from "@/lib/cloudflareInventory.server";
 import { ConnectorEmpty, ConnectorError, TruthBadge } from "@/components/TruthUI";
 import { freshness } from "@/lib/truth";
+import { cloudflareCoverage, cloudflareInventoryStats, matchesCloudflareFacets, CLOUDFLARE_FACETS_DEFAULT, type CloudflareFacets } from "@/lib/cloudflareFacets";
 import {
   cloudflareTruthState,
   type CloudflareConnectionStatus,
@@ -84,12 +85,12 @@ const TOKEN_SOURCE_LABEL: Record<
 };
 /** Cloudflare's documented per-account Pages soft limit (raised only on request). */
 const PAGES_PROJECT_SOFT_LIMIT = 100;
-type Prefs = { quick: QuickFilter; account: string; sort: SortKey };
-const DEFAULT_PREFS: Prefs = { quick: "all", account: "all", sort: "name" };
+type Prefs = { quick: QuickFilter; account: string; sort: SortKey; facets: CloudflareFacets };
+const DEFAULT_PREFS: Prefs = { quick: "all", account: "all", sort: "name", facets: CLOUDFLARE_FACETS_DEFAULT };
 function readPrefs(): Prefs {
   try {
     const raw = JSON.parse(localStorage.getItem(PREFS_KEY) || "{}") as Partial<Prefs>;
-    return { ...DEFAULT_PREFS, ...raw };
+    return { ...DEFAULT_PREFS, ...raw, facets: {...CLOUDFLARE_FACETS_DEFAULT,...raw.facets} };
   } catch {
     return DEFAULT_PREFS;
   }
@@ -244,16 +245,20 @@ export default function CloudflareDeploymentsPanel({
     [inventory, accountId],
   );
   const counts = useMemo(() => quickCounts(scoped), [scoped]);
+  const stats = useMemo(() => cloudflareInventoryStats(inventory?.rows || []), [inventory]);
+  const coverage = useMemo(() => inventory ? cloudflareCoverage(inventory) : null, [inventory]);
+  const setFacet = (patch: Partial<CloudflareFacets>) => update({facets: {...prefs.facets,...patch}});
   const rows = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return scoped
       .filter(
         (r) =>
           matchesQuick(r, prefs.quick) &&
+          matchesCloudflareFacets(r, prefs.facets) &&
           (!needle || searchText(r, accountName(r.accountId)).includes(needle)),
       )
       .sort((a, b) => compareRows(a, b, prefs.sort, accountName));
-  }, [scoped, prefs.quick, prefs.sort, query, accountName]);
+  }, [scoped, prefs.quick, prefs.sort, prefs.facets, query, accountName]);
   const totalPages = inventory?.rows.filter((r) => r.kind === "pages").length || 0;
   const totalWorkers = inventory?.rows.filter((r) => r.kind === "worker").length || 0;
   const workerGap = (a: CloudflareAccountSummary) => a.errors.some((e) => /worker/i.test(e));
@@ -422,6 +427,28 @@ export default function CloudflareDeploymentsPanel({
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
+
+      {inventory && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8" aria-label="Cloudflare operational summary">
+            {([
+              ["Resources", stats.total],["Pages", stats.pages],["Workers", anyWorkerGap ? "Unverified" : stats.workers],
+              ["Failed builds", stats.failed],["Building", stats.building],["Deployed 7d", stats.deployed7d],
+              ["Git-linked", stats.providerSources],["Missing URL", stats.missingEndpoints],
+            ] as const).map(([label,value]) => (
+              <div key={label} className="rounded-xl border border-border/60 bg-card/70 px-3 py-3">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+                <p className="mt-1 text-xl font-bold tabular-nums">{value}</p>
+              </div>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Source: {coverage?.source} · fetched {new Date(inventory.fetchedAt).toLocaleString()} ·
+            {coverage?.complete ? " complete authorized account coverage" : " partial or restricted coverage"} ·
+            {stats.directUploads} Pages direct uploads. Build status is not an independent uptime test.
+          </p>
+        </div>
+      )}
 
       {loading && !inventory && (
         <p role="status" className="card-glass p-4 text-sm text-muted-foreground">
@@ -746,6 +773,26 @@ export default function CloudflareDeploymentsPanel({
                 <X size={13} /> Reset
               </button>
             </div>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3" aria-label="Advanced Cloudflare filters">
+            <select aria-label="Filter Cloudflare resource kind" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              value={prefs.facets.kind} onChange={e=>setFacet({kind:e.target.value as CloudflareFacets["kind"]})}>
+              <option value="all">Pages + Workers</option><option value="pages">Pages only</option><option value="worker">Workers only</option>
+            </select>
+            <select aria-label="Filter source integration" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              value={prefs.facets.source} onChange={e=>setFacet({source:e.target.value as CloudflareFacets["source"]})}>
+              <option value="all">Any deployment source</option><option value="github">GitHub source</option>
+              <option value="gitlab">GitLab source</option><option value="direct_upload">Pages direct upload</option>
+              <option value="unverified">Unverified Git source</option>
+            </select>
+            <select aria-label="Filter Cloudflare endpoint" className="rounded-xl border border-border bg-background px-3 py-2 text-sm"
+              value={prefs.facets.endpoint} onChange={e=>setFacet({endpoint:e.target.value as CloudflareFacets["endpoint"]})}>
+              <option value="all">Any endpoint</option><option value="public">Public URL reported</option>
+              <option value="missing">No verified public URL</option><option value="custom">Custom domain</option>
+              <option value="pagesdev">pages.dev endpoint</option><option value="workersdev">workers.dev endpoint</option>
+              <option value="routes">Worker route pattern</option>
+            </select>
           </div>
 
           <p className="text-xs text-muted-foreground" aria-live="polite">
