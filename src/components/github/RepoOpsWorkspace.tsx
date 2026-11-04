@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import type { GitHubRepo } from "@/lib/db";
+import { useBuildProjects } from "@/hooks/useTableData";
 import { useAddItem, useBulkAddItems, useBulkPatch, useUpdateItem } from "@/hooks/useTableData";
 import {
   OWNERS,
@@ -143,25 +144,30 @@ function CloudflareCell({
   items,
   appUrl,
   known,
+  evidence,
+  onEdit,
 }: {
   items: CloudflareDeploymentRow[];
   appUrl: string | null;
   known: boolean;
+  evidence: RepoOpsRow["appEvidence"];
+  onEdit: () => void;
 }) {
   if (!items.length) {
     return appUrl ? (
-      <a
+      <div className="min-w-0"><a
         href={appUrl}
         target="_blank"
         rel="noopener noreferrer"
         className="inline-flex max-w-full items-center gap-1 text-primary hover:underline"
-        title="App URL from saved plan or GitHub homepage; Cloudflare deployment not independently verified"
+        title={evidence?.label || "Recorded app URL; not independently verified"}
       >
         <Globe size={12} className="shrink-0" />
         <span className="truncate">{hostOf(appUrl)}</span>
       </a>
+      <span className="block truncate text-[10px] text-muted-foreground" title={evidence?.label}>{evidence?.label || "Recorded URL"}</span></div>
     ) : known ? (
-      <span className="text-muted-foreground" title="No matched Cloudflare source or recorded app URL; deployment is not disproved">No verified app link</span>
+      <button type="button" className="text-left text-primary hover:underline" onClick={onEdit} title="No verified app deployment URL; add a known URL to the repository plan.">+ Link app URL</button>
     ) : (
       <span
         className="text-muted-foreground"
@@ -198,16 +204,17 @@ function CloudflareCell({
           </span>
         )}
       </div>
-      {first.publicUrl && (
+      {appUrl && (
         <a
-          href={first.publicUrl}
+          href={appUrl}
           target="_blank"
           rel="noopener noreferrer"
           className="block truncate text-[10px] text-primary hover:underline"
         >
-          {hostOf(first.publicUrl)}
+          {hostOf(appUrl)}
         </a>
       )}
+      {evidence && <span className="block truncate text-[10px] text-muted-foreground" title={evidence.label}>{evidence.label}</span>}
     </div>
   );
 }
@@ -221,6 +228,7 @@ export default function RepoOpsWorkspace({
   savedRepos: GitHubRepo[];
   onEdit: (repo: GitHubRepo) => void;
 }) {
+  const apps = useBuildProjects();
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
   const bulkAddItems = useBulkAddItems();
@@ -305,8 +313,9 @@ export default function RepoOpsWorkspace({
         live,
         owned: owned?.ownedRepositories || [],
         cloud: cloud || [],
+        apps,
       }),
-    [displayRepos, savedRepos, live, owned, cloud],
+    [displayRepos, savedRepos, live, owned, cloud, apps],
   );
   const ownerScoped = useMemo(
     () =>
@@ -695,7 +704,7 @@ export default function RepoOpsWorkspace({
                     {relativeTime(row.pushedAt)}
                   </div>
                   <div className="col-span-2 col-start-2 min-w-0 md:col-span-1 md:col-start-auto">
-                    <CloudflareCell items={row.cloudflare} appUrl={row.appUrl} known={cfComplete} />
+                    <CloudflareCell items={row.cloudflare} appUrl={row.appUrl} known={cfComplete} evidence={row.appEvidence} onEdit={() => onEdit(row.plan)} />
                   </div>
                   <div className="col-span-2 col-start-2 flex min-w-0 items-center gap-2 md:col-span-1 md:col-start-auto">
                     <select
