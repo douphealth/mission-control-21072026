@@ -1,3 +1,4 @@
+import { cloudflareAccountTokens } from "./cloudflareTokenConfig";
 /**
  * Additional Cloudflare estate discovery. Server-only and read-only.
  * Every result is sourced from an authorized API response, never guessed.
@@ -80,7 +81,7 @@ function scopedToken(accountId: string, kind: CloudflareAssetKind,
   // Optional least-privilege tokens for storage products; fallback to the
   // account default (never a credential belonging to another account).
   try {
-    const configured = object(JSON.parse(env["CLOUDFLARE_ACCOUNT_TOKENS_JSON"] || "{}"));
+    const configured = object(cloudflareAccountTokens(env));
     const account = object(configured[accountId]);
     if (str(account[kind])) return str(account[kind]);
   } catch { /* malformed config falls back to the normal account token */ }

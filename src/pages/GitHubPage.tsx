@@ -1,4 +1,5 @@
 import RepoCommandCard from "@/components/github/RepoCommandCard";
+import OwnerUnlock from "@/components/OwnerUnlock";
 import { db } from "@/lib/db";
 import { useRepos, useBulkDeleteItems, useBulkAddItems, useBulkPatch, useAddItem, useUpdateItem } from "@/hooks/useTableData";
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
@@ -339,6 +340,7 @@ export default function GitHubPage() {
 
   return (
     <div className="space-y-4 sm:space-y-5 mc-print-github-page">
+      <OwnerUnlock />
       <RepoOpsWorkspace displayRepos={displayRepos} savedRepos={repos} onEdit={openEdit} onAdd={openAdd} />
       <details className="rounded-xl border border-border/40 p-3">
         <summary className="cursor-pointer text-sm font-semibold">

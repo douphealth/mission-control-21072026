@@ -1,3 +1,4 @@
+import SocialPerformanceDashboard from "@/components/growth/SocialPerformanceDashboard";
 import CollectorStatusPanel from "@/components/controlcenter/CollectorStatusPanel";
 import AudienceConnectionsPanel from "@/components/controlcenter/AudienceConnectionsPanel";
 import { audienceProfile, audienceProfileKey } from "@/lib/audienceEvidence";
@@ -458,6 +459,7 @@ export default function AudiencePage() {
           </>
         }
       />
+      <SocialPerformanceDashboard />
       <IntelligenceMetrics
         items={[
           {

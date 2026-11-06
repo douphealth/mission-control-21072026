@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import SearchPerformanceDashboard from "@/components/growth/SearchPerformanceDashboard";
 import {
   Activity,
   AlertTriangle,
@@ -1031,6 +1032,7 @@ export default function SEOPage() {
 
   return (
     <div className="space-y-5 pb-10 sm:space-y-6">
+      <SearchPerformanceDashboard />
       <section
         className="relative overflow-hidden rounded-[30px] p-6 sm:p-8"
         style={{

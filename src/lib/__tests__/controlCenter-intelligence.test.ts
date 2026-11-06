@@ -144,3 +144,15 @@ describe("control-center intelligence evidence", () => {
     ).toBe(true);
   });
 });
+
+describe("domain watch rules", () => {
+  it("searches the brand stem and excludes the site itself", async () => {
+    const { mentionQuery } = await import("../intelligenceRunQuality");
+    expect(mentionQuery({ type: "domain", term: "gearuptofit.com" })).toBe('"gearuptofit" -site:gearuptofit.com');
+  });
+  it("counts a brand-stem reference as a medium-confidence mention", async () => {
+    const { matchIdentity } = await import("../intelligenceQuality");
+    expect(matchIdentity({ term: "gearuptofit.com", type: "domain", text: "Reviewed by GearUpToFit editors", sourceUrl: "https://example.org" })?.confidence).toBe("medium");
+    expect(matchIdentity({ term: "gearuptofit.com", type: "domain", text: "Gear up to get fit", sourceUrl: "https://example.org" })).toBeNull();
+  });
+});

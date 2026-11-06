@@ -1,3 +1,4 @@
+import { cloudflareAccountTokens } from "./cloudflareTokenConfig";
 /**
  * Cloudflare inventory data collector. No token, API response or private
  * resource names are included in browser bundles or public snapshots.
@@ -257,7 +258,7 @@ export function configuredAccounts(env: Record<string, string | undefined> = pro
  */
 function accountTokenConfig(accountId: string, env: Record<string, string | undefined>): unknown {
   try {
-    return asObject(JSON.parse(env["CLOUDFLARE_ACCOUNT_TOKENS_JSON"] || "{}"))[accountId];
+    return asObject(cloudflareAccountTokens(env))[accountId];
   } catch { return undefined; }
 }
 export function apiTokenFor(accountId: string, env: Record<string, string | undefined> = process.env): string | null {

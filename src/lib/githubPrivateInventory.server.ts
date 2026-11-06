@@ -53,7 +53,12 @@ function secrets(env: Record<string, string | undefined> = process.env):
     Partial<Record<ManagedGitHubAccount, string>> {
   let raw: unknown;
   try { raw = JSON.parse(env["GITHUB_PORTFOLIO_TOKENS_JSON"] || "{}"); }
-  catch { return {}; }
+  catch { raw = {}; }
+  // Single-token fallback: one GITHUB_TOKEN covers every managed account it can see.
+  const single = (env["GITHUB_TOKEN"] || "").trim();
+  if (single.length > 15 && (!raw || typeof raw !== "object" || Object.keys(raw as object).length === 0)) {
+    return Object.fromEntries(MANAGED_GITHUB_ACCOUNTS.map(owner => [owner, single] as const));
+  }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const record = raw as Record<string, unknown>;
   const entries = MANAGED_GITHUB_ACCOUNTS.flatMap(owner => {

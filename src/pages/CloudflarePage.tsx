@@ -29,6 +29,8 @@ import CloudflareEstatePanel from "@/components/controlcenter/CloudflareEstatePa
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { HealthTile, TileRow, ctl, ctlPrimary } from "@/components/console/ConsoleUI";
 import { useNavigationStore } from "@/stores/navigationStore";
+import OwnerUnlock from "@/components/OwnerUnlock";
+import CloudflareBrief from "@/components/console/CloudflareBrief";
 
 type Shortcut = { label: string; url: string; icon: typeof Cloud; desc: string };
 /** Account-level destinations. Zone-level ones live on each zone row. */
@@ -256,6 +258,8 @@ export default function CloudflarePage() {
         </div>
       </header>
 
+      <OwnerUnlock onUnlocked={() => void load(true)} />
+
       {!loading && cloudflareSetupRequired(control?.status ?? null) && (
         <section className="card-glass space-y-2 border border-amber-500/30 p-4" role="status">
           <h2 className="text-sm font-semibold">Cloudflare connection setup required</h2>
@@ -275,6 +279,8 @@ export default function CloudflarePage() {
           </a>
         </section>
       )}
+
+      <CloudflareBrief inventory={inventory} onGo={changeTab} />
 
       <Tabs value={tab} onValueChange={changeTab}>
         <TabsList className="grid h-11 w-full grid-cols-4 rounded-xl sm:inline-grid sm:w-auto">

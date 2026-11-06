@@ -132,7 +132,9 @@ export async function searchExternalMentions(query: string): Promise<MentionCove
     };
     if (value.providers.some(p => p.ok)) {
       if (cache.size >= 100) cache.delete(cache.keys().next().value!);
-      cache.set(query, { expires: Date.now() + 5 * 60_000, value });
+      // Paid lookups cost credits: reuse a successful result for 6 hours.
+      const ttl = hasOrganicApi ? 6 * 60 * 60_000 : 5 * 60_000;
+      cache.set(query, { expires: Date.now() + ttl, value });
     }
     return value;
   })().finally(() => pending.delete(query));

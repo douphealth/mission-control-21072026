@@ -8,7 +8,9 @@ export function publicFeedUrl(raw: string): URL {
 }
 export function assertFeedDocument(body: string): void {
   const prefix = body.slice(0, 8000).replace(/^\uFEFF/, "").replace(/<!--[\s\S]*?-->/g, "");
-  if (!/<(?:rss|feed|rdf:RDF)(?:\s|>)/i.test(prefix) || /<(?:html|!doctype\s+html)(?:\s|>)/i.test(prefix)) throw new Error("Source returned a webpage or access challenge, not an RSS/Atom feed.");
+  // Judge only the document root: feed items often embed full HTML inside CDATA.
+  const root = prefix.replace(/^\s*(?:<\?xml[^>]*\?>\s*)?(?:<\?xml-stylesheet[^>]*\?>\s*)*/i, "").slice(0, 200);
+  if (!/^<(?:rss|feed|rdf:RDF)(?:\s|>)/i.test(root) && (!/<(?:rss|feed|rdf:RDF)(?:\s|>)/i.test(prefix) || /^<(?:html|!doctype\s+html)(?:\s|>)/i.test(root))) throw new Error("Source returned a webpage or access challenge, not an RSS/Atom feed.");
 }
 async function limitedText(response: Response): Promise<string> {
   if (Number(response.headers.get("content-length")) > MAX_BYTES) { await response.body?.cancel(); throw new Error("Response exceeds the 2 MB limit."); }

@@ -109,7 +109,7 @@ describe("unified repository operations model", () => {
       owner: "Papalexios",
     });
   });
-  it("links Cloudflare only via the reported Git source, never by name", () => {
+  it("does not name-match Cloudflare rows that report a different Git source", () => {
     expect(byKey.get("douphealth/beta")!.cloudflare).toHaveLength(0);
   });
   it("computes quick filters", () => {
@@ -190,5 +190,16 @@ describe("GitHub Portfolio app link evidence resolution", () => {
       savedRepos: [], live: [], owned: [], cloud: [cf] })[0];
     expect(row.appUrl).toBe("https://alpha.example.com/");
     expect(row.appEvidence?.origin).toBe("cloudflare-source");
+  });
+});
+
+describe("Cloudflare name fallback", () => {
+  it("links a Git-less Worker to the one repo with the same name", async () => {
+    const { buildRepoOps } = await import("@/lib/repoOps");
+    const repo = (name: string) => ({ id: name, name, url: `https://github.com/douphealth/${name}`, description: "", language: "TypeScript", stars: 0, forks: 0, status: "active", demoUrl: "", progress: 0, topics: [], lastUpdated: "" }) as never;
+    const worker = { key: "worker:a:growthscribe-os", name: "growthscribe-os", repoUrl: null, publicUrl: null, pagesDevUrl: null, workersDevUrl: null, domains: [] } as never;
+    const rows = buildRepoOps({ displayRepos: [repo("growthscribe-os-1a2b3c4d"), repo("other")], savedRepos: [], live: [], owned: [], cloud: [worker] });
+    expect(rows.find(r => r.name.startsWith("growthscribe"))!.cloudflare).toHaveLength(1);
+    expect(rows.find(r => r.name === "other")!.cloudflare).toHaveLength(0);
   });
 });

@@ -21,6 +21,20 @@ type AccessClaims = {
   email?: string;
 };
 
+/** Constant-time comparison via SHA-256 digests. */
+async function sameSecret(a: string, b: string): Promise<boolean> {
+  if (!a) return false;
+  const enc = new TextEncoder();
+  const [x, y] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const p = new Uint8Array(x), q = new Uint8Array(y);
+  let diff = 0;
+  for (let i = 0; i < p.length; i++) diff |= (p[i] ?? 0) ^ (q[i] ?? 0);
+  return diff === 0;
+}
+
 type Jwk = JsonWebKey & { kid?: string; alg?: string; use?: string };
 let keyCache: { host: string; expires: number; keys: Jwk[] } | undefined;
 
@@ -63,6 +77,13 @@ export async function requireCloudflareViewer(
 ): Promise<{ email: string | null }> {
   const hostname = (environment["CLOUDFLARE_ACCESS_TEAM_DOMAIN"] || "").trim().toLowerCase();
   const audience = (environment["CLOUDFLARE_ACCESS_AUD"] || "").trim();
+  const passcode = (environment["MC_OWNER_PASSCODE"] || "").trim();
+  if (passcode.length >= 8) {
+    const supplied = request?.headers.get("x-mc-owner-passcode") || "";
+    if (await sameSecret(supplied, passcode)) return { email: null };
+    const accessConfigured = /^[a-z0-9-]+\.cloudflareaccess\.com$/.test(hostname) && audience;
+    if (!accessConfigured) throw new CloudflareAccessError("unauthorized");
+  }
   if (!/^[a-z0-9-]+\.cloudflareaccess\.com$/.test(hostname) || !audience) {
     throw new CloudflareAccessError("not_configured");
   }

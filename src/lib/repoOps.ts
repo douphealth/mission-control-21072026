@@ -76,6 +76,10 @@ function synthesizedPlan(
   };
 }
 
+export function normalizeDeployName(name: string) {
+  return name.toLowerCase().trim().replace(/-[0-9a-f]{6,8}$/, "");
+}
+
 export function buildRepoOps(input: {
   /** Public projection: catalog snapshot merged with saved plans (mergeUnifiedGitHubRows). */
   displayRepos: GitHubRepo[];
@@ -108,6 +112,14 @@ export function buildRepoOps(input: {
   for (const row of input.cloud) {
     const key = getGitHubRepoKey(row.repoUrl);
     if (key) cfByRepo.set(key, [...(cfByRepo.get(key) || []), row]);
+  }
+  // Wrangler Workers and direct-upload Pages report no Git source. Fall back to an
+  // exact, one-to-one name match (Lovable hash suffixes stripped) — never fuzzy.
+  const byName = new Map<string, CloudflareDeploymentRow[]>();
+  for (const row of input.cloud) {
+    if (getGitHubRepoKey(row.repoUrl)) continue;
+    const n = normalizeDeployName(row.name);
+    if (n) byName.set(n, [...(byName.get(n) || []), row]);
   }
   const rows = new Map<string, RepoOpsRow>();
   const base = (
@@ -201,6 +213,17 @@ export function buildRepoOps(input: {
       source: "authenticated" as const,
     });
     rows.set(key, row);
+  }
+  const repoNameCount = new Map<string, number>();
+  for (const row of rows.values()) {
+    const n = normalizeDeployName(row.key.split("/")[1] || "");
+    repoNameCount.set(n, (repoNameCount.get(n) || 0) + 1);
+  }
+  for (const row of rows.values()) {
+    if (cfByRepo.has(row.key)) continue;
+    const n = normalizeDeployName(row.key.split("/")[1] || "");
+    const hits = byName.get(n) || [];
+    if (hits.length === 1 && repoNameCount.get(n) === 1) cfByRepo.set(row.key, hits);
   }
   for (const row of rows.values()) {
     const recordedLink = recorded.get(row.key) || null;

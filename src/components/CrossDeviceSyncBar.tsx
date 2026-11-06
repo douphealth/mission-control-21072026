@@ -73,7 +73,16 @@ export default function CrossDeviceSyncBar() {
     if (busy) return;
     setBusy(true);
     try {
-      if (connect) await signInToCloud();
+      if (connect) {
+        const { ensureGoogleClientId } = await import('@/lib/googleDirectAuth');
+        if (!(await ensureGoogleClientId())) {
+          toast.info('Google sync isn’t set up yet', {
+            description: 'Your data is safe on this device. Add your Google sign-in ID in Settings → Google Connection to sync across devices.',
+          });
+          return;
+        }
+        await signInToCloud();
+      }
       else {
         if (reconnectGoogle) {
           const { signIn } = await import('@/lib/googleTasks');

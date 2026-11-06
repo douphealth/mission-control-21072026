@@ -80,3 +80,11 @@ describe("publisher feed discovery and recovery", () => {
     expect(rows[0].sourceUrl).toBe("https://publisher.test/");
   });
 });
+
+describe("feed document check", () => {
+  it("accepts an RSS feed whose items embed full HTML pages", async () => {
+    const { assertFeedDocument } = await import("@/lib/publicFeedFetch.server");
+    expect(() => assertFeedDocument('<?xml version="1.0"?><rss version="2.0"><channel><item><description><![CDATA[<!DOCTYPE html><html></html>]]></description></item></channel></rss>')).not.toThrow();
+    expect(() => assertFeedDocument("<!doctype html><html><body>Challenge</body></html>")).toThrow();
+  });
+});

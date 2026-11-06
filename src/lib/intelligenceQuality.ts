@@ -1,3 +1,4 @@
+import { domainStem } from "./intelligenceRunQuality";
 export type IdentityVerification =
   | "exact-domain"
   | "exact-handle"
@@ -129,7 +130,16 @@ export function matchIdentity(input: {
     const sourceHost = hostOf(input.sourceUrl);
     const exactSource =
       sourceHost === domain || (domain.length > 0 && sourceHost.endsWith("." + domain));
-    if (!exactSource && !containsExactDomain(input.text, domain)) return null;
+    if (!exactSource && !containsExactDomain(input.text, domain)) {
+      const stem = domainStem(domain);
+      if (!stem || !intelTokens(input.text).includes(stem)) return null;
+      return {
+        verification: "exact-brand",
+        confidence: "medium",
+        matchedAnchors,
+        reason: `The brand name "${stem}" from the watched domain appears in the coverage.`,
+      };
+    }
     return {
       verification: "exact-domain",
       confidence: "high",

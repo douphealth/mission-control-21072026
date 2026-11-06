@@ -1,6 +1,6 @@
 type UuidCrypto = {
   randomUUID?: () => string;
-  getRandomValues: (bytes: Uint8Array) => unknown;
+  getRandomValues: (bytes: Uint8Array<ArrayBuffer>) => unknown;
 };
 
 /** Record IDs must also work on local HTTP previews, where randomUUID is absent. */

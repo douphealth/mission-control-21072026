@@ -5808,3 +5808,26 @@ table,
     height: 30px;
   }
 }
+
+/* ═══ Refined dark — final polish layer (keeps the chosen navy/violet/emerald look) ═══ */
+html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
+:where(h1, h2, h3) { letter-spacing: -0.02em; text-wrap: balance; }
+:where(p) { text-wrap: pretty; }
+/* Numbers line up in every stat, table and amount */
+:where(td, th, [class*="tabular"], [class*="stat"], [class*="metric"], [class*="kpi"]) { font-variant-numeric: tabular-nums; }
+/* One consistent, visible keyboard focus ring */
+:where(a, button, input, select, textarea, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid hsl(var(--ring) / 0.9); outline-offset: 2px; border-radius: 0.5rem;
+}
+/* Calm, consistent interaction feedback */
+:where(button, a, [role="button"], select) { transition: background-color .15s ease, border-color .15s ease, color .15s ease, box-shadow .2s ease, transform .15s ease; }
+:where(button:not(:disabled)):active { transform: translateY(0.5px); }
+:where(button:disabled, [aria-disabled="true"]) { cursor: not-allowed; }
+::selection { background: hsl(var(--primary) / 0.28); color: hsl(var(--foreground)); }
+.dark :where(input, select, textarea) { color-scheme: dark; }
+.dark :where(input, select, textarea)::placeholder { color: hsl(var(--muted-foreground) / 0.75); }
+/* Slim, theme-aware scrollbars */
+* { scrollbar-width: thin; scrollbar-color: hsl(var(--muted-foreground) / 0.28) transparent; }
+/* Long names never break layouts on narrow screens */
+:where(main) :where(h1, h2, h3, td, li) { overflow-wrap: anywhere; }
+@media (max-width: 640px) { :where(main) :where(table) { display: block; overflow-x: auto; } }

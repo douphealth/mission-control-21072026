@@ -1145,7 +1145,20 @@ export default function RepoOpsWorkspace({
                           )}
                         </>
                       ) : (
-                        <span className="text-muted-foreground/60">—</span>
+                        <span
+                          className="text-[11px] text-muted-foreground"
+                          title={
+                            cfComplete
+                              ? "No Cloudflare Page or Worker uses this repo, and no app link is saved"
+                              : "Cloudflare data not loaded yet"
+                          }
+                        >
+                          {cf.loading && !cfKnown
+                            ? "Checking Cloudflare…"
+                            : cfComplete
+                              ? "Not on Cloudflare"
+                              : "Unknown"}
+                        </span>
                       )}
                     </div>
                     <div className="col-start-2 md:col-span-1 md:col-start-auto">

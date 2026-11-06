@@ -25,5 +25,17 @@ export function mentionQuery(term: { term: string; type: string; anchors?: strin
   const clean = term.term.trim();
   const identity = term.type === 'handle' ? '@' + clean.replace(/^@/, '') : clean;
   const anchors = (term.anchors || []).map(a => a.trim()).filter(Boolean).slice(0, 5);
+  if (term.type === 'domain') {
+    // Search engines split "site.com" into words; the brand stem finds real references.
+    const domain = clean.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0];
+    const stem = domainStem(domain);
+    return (stem ? quote(stem) : quote(domain)) + ` -site:${domain}`;
+  }
   return quote(identity) + (term.type === 'name' && anchors.length ? ` (${anchors.map(quote).join(' OR ')})` : '');
+}
+
+/** Brand stem of a domain ("gearuptofit.com" → "gearuptofit"); null when too generic to search alone. */
+export function domainStem(domain: string): string | null {
+  const stem = domain.toLowerCase().split('.')[0] || '';
+  return /^[a-z0-9-]{7,}$/.test(stem) ? stem : null;
 }
