@@ -562,7 +562,7 @@ export default function CloudflareDeploymentsPanel({
             role="toolbar"
             aria-label="Cloudflare tools"
           >
-            <label className="relative min-w-[13rem] flex-1">
+            <label className="relative min-w-0 basis-full sm:min-w-[13rem] sm:basis-auto flex-1">
               <Search
                 size={15}
                 className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground"

@@ -19,6 +19,8 @@ import { lazyWithRetry as lazy } from "@/lib/lazyWithRetry";
 import RouteErrorBoundary from "@/components/RouteErrorBoundary";
 import GoogleTasksPage from "@/pages/GoogleTasksPage";
 import SnapCapture from "@/components/SnapCapture";
+import PrivateVaultGate from "@/components/PrivateVaultGate";
+import VaultBackupControls from "@/components/VaultBackupControls";
 
 const VoiceCapture = lazy(() => import("@/components/VoiceCapture"));
 
@@ -40,6 +42,7 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const PaymentsPage = lazy(() => import("@/pages/PaymentsPage"));
 const IdeasPage = lazy(() => import("@/pages/IdeasPage"));
 const CredentialsPage = lazy(() => import("@/pages/CredentialsPage"));
+const FamilyVaultPage = lazy(() => import("@/pages/FamilyVaultPage"));
 const SEOPage = lazy(() => import("@/pages/SEOPage"));
 const CloudflarePage = lazy(() => import("@/pages/CloudflarePage"));
 const VercelPage = lazy(() => import("@/pages/VercelPage"));
@@ -77,6 +80,7 @@ const sectionMap: Record<string, React.ComponentType<any> | React.LazyExoticComp
   payments: PaymentsPage,
   ideas: IdeasPage,
   credentials: CredentialsPage,
+  "family-vault": FamilyVaultPage,
   seo: SEOPage,
   cloudflare: CloudflarePage,
   vercel: VercelPage,
@@ -227,7 +231,9 @@ export default function DashboardLayout() {
                     key={activeSection}
                     className="animate-in fade-in-0 slide-in-from-bottom-1 duration-200"
                   >
-                    <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />
+                    {activeSection === "credentials" || activeSection === "family-vault" ? (
+                      <PrivateVaultGate><VaultBackupControls /><Suspense fallback={<LoadingSkeleton />}><Section sectionId={activeSection} /></Suspense></PrivateVaultGate>
+                    ) : <Section sectionId={activeSection} {...({ sectionId: activeSection } as any)} />}
                   </div>
                 </Suspense>
               </RouteErrorBoundary>
@@ -243,10 +249,10 @@ export default function DashboardLayout() {
       <MobileBottomNav />
       <WorkspaceDirectory />
       {/* Instant photo/file/voice capture → AI import. User can hide this dock in Settings. */}
-      {floatingCaptureDockVisible && <SnapCapture />}
+      {floatingCaptureDockVisible && <div className="hidden lg:contents"><SnapCapture /></div>}
       {/* Voice capture — lazy-loaded floating mic */}
       <Suspense fallback={null}>
-        <VoiceCapture />
+        <div className="hidden lg:contents"><VoiceCapture /></div>
       </Suspense>
     </div>
   );

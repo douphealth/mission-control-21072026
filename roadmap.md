@@ -1,3 +1,12 @@
+## Mobile and private vault
+- [x] Simplify mobile menu and improve touch controls across sections
+- [x] Improve GitHub and Cloudflare phone layouts
+- [x] Add passphrase-protected credential management with 1,500-entry import, search, bulk edit/delete and encrypted backups
+- [x] Add protected family records for identity and banking details
+- [x] Run security/import tests and verify mobile and desktop workflows
+- [ ] Verify connected Cloudflare mobile inventory — current preview returns no connected inventory after owner unlock
+- [ ] Deploy mobile/vault updates to external Cloudflare site — not deployed in this turn
+
 ## Standalone runtime
 - [x] Remove Lovable-dependent cloud sync, auth prompts, and status UI
 - [x] Remove Lovable runtime integrations from active app paths

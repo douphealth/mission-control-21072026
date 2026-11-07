@@ -66,7 +66,7 @@ describe("real-world credential clipboard formats (synthetic records only)", () 
   });
   it("blocks malformed quotes, excessive rows and oversized input", () => {
     expect(previewBulkIntake("credentials", 'Label,Password,Notes\nA,fixture,"unfinished').fatal).toBe(true);
-    expect(previewBulkIntake("credentials", "x".repeat(1_000_001)).fatal).toBe(true);
+    expect(previewBulkIntake("credentials", "x".repeat(5_000_001)).fatal).toBe(true);
     expect(previewBulkIntake("links", Array(1001).fill("https://example.com").join("\n")).fatal).toBe(true);
     expect(previewBulkIntake("prompts", "\u03b1".repeat(600_000)).fatal).toBe(true);
   });

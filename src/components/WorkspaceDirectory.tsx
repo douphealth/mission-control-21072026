@@ -68,7 +68,7 @@ export default function WorkspaceDirectory() {
           <div className="mc-directory-eyebrow">
             <Layers3 size={15} /> YOUR WORKSPACE
           </div>
-          <DialogTitle className="mc-directory-title">Everything, in one place.</DialogTitle>
+          <DialogTitle className="mc-directory-title">All sections</DialogTitle>
           <DialogDescription>
             Choose a workspace. Pin up to eight favorites to your sidebar.
           </DialogDescription>
@@ -76,9 +76,8 @@ export default function WorkspaceDirectory() {
             <label className="mc-directory-search">
               <Search size={18} aria-hidden="true" />
               <input
-                autoFocus
                 aria-label="Find a workspace"
-                placeholder="Search workspaces, tools or a purpose…"
+                placeholder="Find a section…"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
               />

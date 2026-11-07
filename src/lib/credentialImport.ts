@@ -24,7 +24,7 @@ export async function prepareCredentialImport(
           throw new Error(`Credential row ${index + 1} has a different secret for the same label/account. Use a distinct label or edit the existing entry. Nothing was saved.`);
         }
         row[field] = existing[field];
-      } else row[field] = /^(mcenc:v2:|wcapi:)/.test(supplied) ? supplied : await encrypt(plaintext);
+      } else row[field] = /^(mcenc:v[23]:|wcapi:)/.test(supplied) ? supplied : await encrypt(plaintext);
     }
     byIdentity.set(identity, { ...existing, ...row,
       password: row.password || existing?.password || "", apiKey: row.apiKey || existing?.apiKey || "" } as CredentialVault);

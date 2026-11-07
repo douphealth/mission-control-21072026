@@ -11,7 +11,14 @@ import {
 } from "@/lib/portfolioAtlasSnapshot";
 
 export const Route = createFileRoute("/portfolio-atlas")({
-  head: () => ({ meta: [{ title: "Portfolio Atlas | Mission Control" }] }),
+  head: () => ({ meta: [
+    { title: "Portfolio Atlas | Mission Control" },
+    { name: "description", content: "Search and review Mission Control’s dated public GitHub portfolio inventory." },
+    { property: "og:title", content: "Portfolio Atlas | Mission Control" },
+    { property: "og:description", content: "Search and review Mission Control’s dated public GitHub portfolio inventory." },
+    { property: "og:type", content: "website" },
+    { name: "twitter:card", content: "summary_large_image" },
+  ] }),
   component: PortfolioAtlas,
 });
 

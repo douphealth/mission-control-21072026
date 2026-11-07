@@ -261,6 +261,15 @@ export const WORKSPACE_SECTIONS: readonly WorkspaceSection[] = [
     keywords: ["vault", "secrets"],
   },
   {
+    id: "family-vault",
+    label: "Family vault",
+    description: "Protected family identity, banking and emergency records.",
+    group: "Tools",
+    icon: Users,
+    personal: true,
+    keywords: ["family", "bank", "identity", "social number", "private"],
+  },
+  {
     id: "links",
     label: "Links",
     description: "Organise useful resources and saved destinations.",

@@ -15,7 +15,7 @@ export async function smokeVaultEncryptDecrypt() {
   const secret = `vault-smoke-${Date.now()}`;
   const encrypted = await encrypt(secret, "production-smoke-test-key");
   const decrypted = await decrypt(encrypted, "production-smoke-test-key");
-  if (!encrypted.startsWith("wcapi:") || encrypted === secret || decrypted !== secret) {
+  if (!/^(wcapi:|mcenc:v[23]:)/.test(encrypted) || encrypted === secret || decrypted !== secret) {
     throw new Error("Vault encrypt/decrypt smoke test failed");
   }
   return true;

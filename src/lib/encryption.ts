@@ -13,6 +13,15 @@ const SALT_LENGTH = 16;
 const ITERATIONS = 150_000;
 const PREFIX_V2 = "mcenc:v2:";
 const PREFIX_V1 = "wcapi:";
+const PREFIX_V3 = "mcenc:v3:";
+let sessionKey: string | null = null;
+let cachedKey: { value: string; key: Promise<CryptoKey> } | null = null;
+export function setVaultSessionKey(value: string | null) { sessionKey = value; cachedKey = null; }
+async function fastKey(value: string) {
+  if (cachedKey?.value === value) return cachedKey.key;
+  const key = deriveKeyWithSalt(value, new TextEncoder().encode("mission-control-v3-data-key"));
+  cachedKey = { value, key }; return key;
+}
 
 /** Only used to read data written by very old builds. Never used to encrypt. */
 const LEGACY_DEFAULT_KEY = "mc-vault-2026-default-key";
@@ -27,6 +36,8 @@ export class DecryptionError extends Error {
 // ─── Key management ──────────────────────────────────────────────────────────
 
 function getEncryptionKey(): string {
+  if (sessionKey) return sessionKey;
+  if (localStorage.getItem("mc-private-vault-envelope-v1")) throw new Error("Unlock your private vault first.");
   const existing = localStorage.getItem("mc-encryption-key");
   if (existing) return existing;
   const generated = generateStrongKey();
@@ -87,6 +98,14 @@ function base64ToBytes(base64: string): Uint8Array {
 export async function encrypt(plainText: string, customKey?: string): Promise<string> {
   if (!plainText) return "";
   try {
+    if (!customKey) {
+      const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
+      const key = await fastKey(getEncryptionKey());
+      const data = await crypto.subtle.encrypt({ name: ALGORITHM, iv }, key, new TextEncoder().encode(plainText));
+      const combined = new Uint8Array(IV_LENGTH + data.byteLength);
+      combined.set(iv); combined.set(new Uint8Array(data), IV_LENGTH);
+      return PREFIX_V3 + arrayBufferToBase64(combined.buffer);
+    }
     const salt = crypto.getRandomValues(new Uint8Array(SALT_LENGTH));
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH));
     const key = await deriveKeyWithSalt(customKey || getEncryptionKey(), salt);
@@ -137,6 +156,13 @@ export async function decrypt(cipherText: string, customKey?: string): Promise<s
 
   const activeKey = customKey || getEncryptionKey();
 
+  if (cipherText.startsWith(PREFIX_V3)) {
+    const raw = base64ToBytes(cipherText.slice(PREFIX_V3.length));
+    const out = await tryDecrypt(await fastKey(activeKey), raw.slice(0, IV_LENGTH), raw.slice(IV_LENGTH));
+    if (out !== null) return out;
+    throw new DecryptionError();
+  }
+
   if (cipherText.startsWith(PREFIX_V2)) {
     const raw = base64ToBytes(cipherText.slice(PREFIX_V2.length));
     const salt = raw.slice(0, SALT_LENGTH);
@@ -178,6 +204,7 @@ export async function decryptOrNull(
 }
 
 export function setEncryptionKey(key: string): void {
+  if (localStorage.getItem("mc-private-vault-envelope-v1")) throw new Error("This vault is passphrase-protected. Do not replace its encryption key.");
   localStorage.setItem("mc-encryption-key", key);
 }
 

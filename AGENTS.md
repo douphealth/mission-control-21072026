@@ -31,4 +31,6 @@ use the editor.
 
 - Private server functions (GitHub/Cloudflare inventory) accept either a Cloudflare Access JWT or the `x-mc-owner-passcode` header matching `MC_OWNER_PASSCODE`; the app is hosted on Lovable, not behind Cloudflare Access, so the passcode is the owner gate.
 - `GITHUB_TOKEN` is a single-token fallback used when `GITHUB_PORTFOLIO_TOKENS_JSON` is absent; private repos of an account only load with that account's own token.
+- Private vault access wraps the existing device encryption key with a master passphrase; keep the unwrapped key in memory only, preserve legacy ciphertext, and lock on inactivity/tab hiding. Family records use a separate encrypted IndexedDB store so ordinary notes, sync and exports cannot expose them; encrypted vault backup explicitly includes both stores.
+- New credential ciphertext derives one cached AES-GCM data key per unlocked session with unique random IVs per value; passphrase wrapping uses a separate PBKDF2 key to avoid repeating expensive derivations for every imported record.
 - Search (Google Search Console service account + Bing) and social (Metricool + Publer) data load through owner-gated server functions in `src/lib/growthData.functions.ts`, cached 30 min per worker to save API quota; Google uses one property per host, preferring Domain properties because they cover every subdomain.

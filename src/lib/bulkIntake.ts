@@ -12,6 +12,8 @@ export type IntakeIssue = { line: number; message: string };
 export type BulkPreview = { rows: IntakeRow[]; issues: IntakeIssue[]; warnings: string[]; fatal: boolean; table?: IntakeTable; splitMethod?: string; sourceLines?: number[]; needsSecretReview?: boolean };
 export const INTAKE_LIMIT = 1000;
 export const INTAKE_BYTES = 1_000_000;
+export const CREDENTIAL_INTAKE_LIMIT = 5000;
+export const CREDENTIAL_INTAKE_BYTES = 5_000_000;
 export const IGNORE = "__ignore__";
 export const PRIVATE = "__private__";
 export const EXTRA = "__extra__";
@@ -100,6 +102,7 @@ function inferColumns(mode: BulkMode, rows: SourceRow[], width: number): string[
   return columns;
 }
 function readTable(mode: BulkMode, input: string, options: IntakeOptions): { table: IntakeTable; data: SourceRow[]; issues: IntakeIssue[] } | null {
+  const limit = mode === "credentials" ? CREDENTIAL_INTAKE_LIMIT : INTAKE_LIMIT;
   const source = input.replace(/^\uFEFF/, "");
   const first = source.split(/\r\n|\r|\n/).find(line => line.trim()) || "";
   let delimiter = options.delimiter || "";
@@ -128,7 +131,7 @@ function readTable(mode: BulkMode, input: string, options: IntakeOptions): { tab
     if (cells.some(cell => cell.trim()) && !(markdown && cells.every(cell => /^\s*:?-{3,}:?\s*$/.test(cell)))) data.push({ cells, line });
     line += (source.slice(cursor, result.meta.cursor).match(/\r\n|\r|\n/g) || []).length;
     cursor = result.meta.cursor;
-    if (data.length > INTAKE_LIMIT + 1 || cells.length > 100) { issues.push({ line, message: "Import at most 1,000 rows and 100 columns at a time." }); parser.abort(); }
+    if (data.length > limit + 1 || cells.length > 100) { issues.push({ line, message: `Import at most ${limit.toLocaleString()} rows and 100 columns at a time.` }); parser.abort(); }
   }});
   if (!data.length) return null;
   if (mode === "prompts" && options.layout === "prompt-cells") return { table: { headers: ["Prompt content"], columns: ["content"], delimiter, hasHeader: false, suspectedDataHeader: false, needsReview: true }, data: data.flatMap(row => row.cells.filter(cell => cell.trim()).map(cell => ({ cells: [cell], line: row.line }))), issues };
@@ -147,7 +150,7 @@ function readTable(mode: BulkMode, input: string, options: IntakeOptions): { tab
   const columns = suggested.map((f, i) => f === PRIVATE ? f : options.columns?.[i] ?? f);
   const permitted = new Set<string>([...(mode === "credentials" ? CREDENTIAL_FIELDS : mode === "links" ? LINK_FIELDS : PROMPT_FIELDS).map(([f]) => f), PRIVATE, "status", "pinned", "createdAt", "updatedAt", "dateAdded", "color"]);
   if (columns.some(f => !permitted.has(f))) issues.push({ line: 0, message: "Unsupported column mapping. Select fields from the mapping controls." });
-  if (records.length > INTAKE_LIMIT) issues.push({ line: 0, message: "Import at most 1,000 entries per batch." });
+  if (records.length > limit) issues.push({ line: 0, message: `Import at most ${limit.toLocaleString()} entries per batch.` });
   return { table: { headers, columns, delimiter, hasHeader, suspectedDataHeader, needsReview: suspectedDataHeader || !hasHeader || columns.includes(IGNORE) }, data: records, issues };
 }
 /**
@@ -225,17 +228,19 @@ function normalize(mode: BulkMode, value: unknown): IntakeRow {
 
 /** Pure, local preview. No network calls, logging, storage writes or secret-valued errors. */
 export function previewBulkIntake(mode: BulkMode, input: string, options: IntakeOptions = {}): BulkPreview {
+  const limit = mode === "credentials" ? CREDENTIAL_INTAKE_LIMIT : INTAKE_LIMIT;
+  const bytes = mode === "credentials" ? CREDENTIAL_INTAKE_BYTES : INTAKE_BYTES;
   const result: BulkPreview = { rows: [], issues: [], warnings: [], fatal: false, sourceLines: [] };
   const fail = (message: string) => ({ ...result, rows: [], issues: [{ line: 0, message }], fatal: true });
   if (!input.trim()) return result;
-  if (input.length > INTAKE_BYTES || new TextEncoder().encode(input).byteLength > INTAKE_BYTES) return fail("Paste or upload at most 1 MB at a time.");
+  if (input.length > bytes || new TextEncoder().encode(input).byteLength > bytes) return fail(`Paste or upload at most ${bytes / 1_000_000} MB at a time.`);
   const entries: { row: unknown; line: number }[] = [];
   try {
     if (mode === "prompts" && options.splitRule === "single") { entries.push({ row: { content: input }, line: 1 }); result.splitMethod = "single"; }
     else if (/^(?:\[\s*(?:\{|"|\])|\{\s*")/.test(input.trim())) {
       const json = JSON.parse(input);
       const records: unknown[] = Array.isArray(json) ? json[0] === undefined ? [] : json : json[mode] ?? json.items ?? [json];
-      if (!Array.isArray(records) || records.length > INTAKE_LIMIT) return fail("JSON must contain at most 1,000 records.");
+      if (!Array.isArray(records) || records.length > limit) return fail(`JSON must contain at most ${limit.toLocaleString()} records.`);
       records.forEach((value, i) => {
         if (typeof value === "string" && mode !== "credentials") entries.push({ row: { [mode === "prompts" ? "content" : "url"]: value }, line: i + 1 });
         else if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -250,6 +255,7 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
       // through the dedicated parser retains one encrypted vault entry per account.
       if (mode === "credentials" && looksLikeCredentialPairs(input)) {
         const credentials = legacyCredentials(input);
+        if (credentials.items.length > limit) return fail(`Import at most ${limit.toLocaleString()} entries per batch.`);
         result.rows = credentials.items as unknown as IntakeRow[];
         result.issues = credentials.errors.map((message, index) => ({ line: index + 1, message }));
         result.needsSecretReview = true;
@@ -289,7 +295,7 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
         split.parts.forEach((row, i) => entries.push({ row, line: i + 1 }));
       } else if (mode === "credentials") {
         const legacy = legacyCredentials(input);
-        if (legacy.items.length > INTAKE_LIMIT) return fail("Import at most 1,000 entries per batch.");
+        if (legacy.items.length > limit) return fail(`Import at most ${limit.toLocaleString()} entries per batch.`);
         result.rows = legacy.items as unknown as IntakeRow[];
         result.issues = legacy.errors.map((message, i) => ({ line: i + 1, message }));
         return result;
@@ -299,7 +305,7 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
         entries.push({ row: markdown ? { title: markdown[1], url: markdown[2] } : { url: line.trim() }, line: i + 1 });
       });
     }
-    if (entries.length + result.issues.length > INTAKE_LIMIT) return fail("Import at most 1,000 entries per batch.");
+    if (entries.length + result.issues.length > limit) return fail(`Import at most ${limit.toLocaleString()} entries per batch.`);
     for (const { row, line } of entries) {
       try {
         const parsed = normalize(mode, row);
@@ -314,7 +320,7 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
         }
       } catch (error) { result.issues.push({ line, message: error instanceof Error ? error.message : "Invalid entry; correct the input." }); }
     }
-    if (result.rows.length > INTAKE_LIMIT) return fail("The expanded import exceeds 1,000 entries. Split the input; nothing was saved.");
+    if (result.rows.length > limit) return fail(`The expanded import exceeds ${limit.toLocaleString()} entries. Split the input; nothing was saved.`);
   } catch { return fail("Input structure could not be read. Check JSON, quotes and delimiters. No rows were saved."); }
   if (mode === "prompts") result.rows = organizePromptBatch(result.rows);
   result.warnings = [...new Set(result.warnings)];

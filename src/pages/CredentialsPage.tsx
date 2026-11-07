@@ -1,4 +1,5 @@
 import BulkIntakeModal from "@/components/BulkIntakeModal";
+import { Button } from "@/components/ui/button";
 import {
   useCredentials,
   useAddItem,
@@ -136,7 +137,7 @@ function MaskedField({
       <span className="w-16 shrink-0 text-[11px] text-muted-foreground">{label}</span>
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <span className="flex-1 truncate font-mono text-[11px] text-foreground">
-          {isVisible && !isMasterLocked ? decryptedValue || value : "••••••••"}
+          {isVisible && !isMasterLocked ? decryptedValue ?? "Unavailable" : "••••••••"}
         </span>
         <button
           type="button"
@@ -184,13 +185,20 @@ export default function CredentialsPage() {
   const [bulkAddOpen, setBulkAddOpen] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Omit<CredentialVault, "id">>(emptyForm);
-  const [masterLocked, setMasterLocked] = useState(true);
+  const [masterLocked, setMasterLocked] = useState(false);
   const [decryptedCache, setDecryptedCache] = useState<
     Record<string, { password?: string; apiKey?: string }>
   >({});
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
+  const [page, setPage] = useState(0);
+  const [failedFields, setFailedFields] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkService, setBulkService] = useState("");
+  const [bulkTags, setBulkTags] = useState("");
+  const [saving, setSaving] = useState(false);
   const bulk = useBulkActions<CredentialVault>();
+  useEffect(() => { setPage(0); }, [search, filterCategory, sortMode]);
 
   const categories = useMemo(
     () => ["all", ...Array.from(new Set(credentials.map((credential) => credential.category))).sort()],
@@ -238,7 +246,7 @@ export default function CredentialsPage() {
   const toggleVault = () => {
     if (masterLocked) {
       setMasterLocked(false);
-      toast.success("Vault unlocked for this session");
+      toast.success("Secret actions enabled");
     } else {
       lockVault();
     }
@@ -300,11 +308,13 @@ export default function CredentialsPage() {
 
   const openAdd = () => {
     setEditId(null);
+    setFailedFields(new Set());
     setForm({ ...emptyForm, createdAt: todayISO() });
     setModalOpen(true);
   };
 
   const openEdit = async (credential: CredentialVault) => {
+    if (masterLocked) { toast.error("Unlock secrets before editing"); return; }
     setEditId(credential.id);
     const { id, ...rest } = credential;
     const [password, apiKey] = await Promise.all([
@@ -316,6 +326,7 @@ export default function CredentialsPage() {
         "Some secrets could not be decrypted. Those fields will stay unchanged unless replaced.",
       );
     }
+    setFailedFields(new Set([...(password === null ? ["password"] : []), ...(apiKey === null ? ["apiKey"] : [])]));
     setForm({
       ...rest,
       password: password ?? "",
@@ -325,14 +336,17 @@ export default function CredentialsPage() {
   };
 
   const saveForm = async () => {
+    if (saving) return;
     if (!form.label.trim()) {
       toast.error("Label is required");
       return;
     }
 
+    setSaving(true);
     try {
-      const password = form.password ? await encrypt(form.password) : "";
-      const apiKey = form.apiKey ? await encrypt(form.apiKey) : "";
+      const original = credentials.find(row => row.id === editId);
+      const password = form.password ? await encrypt(form.password) : failedFields.has("password") ? original?.password || "" : "";
+      const apiKey = form.apiKey ? await encrypt(form.apiKey) : failedFields.has("apiKey") ? original?.apiKey || "" : "";
       const encrypted = { ...form, password, apiKey };
 
       if (editId) {
@@ -348,9 +362,10 @@ export default function CredentialsPage() {
         toast.success("Credential added");
       }
       setModalOpen(false);
+      setForm({ ...emptyForm });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Credential encryption failed");
-    }
+    } finally { setSaving(false); }
   };
 
   const importCredentials = async (items: CredentialDraft[]) => {
@@ -406,12 +421,11 @@ export default function CredentialsPage() {
                 <KeyRound size={14} />
                 Credential workspace
               </div>
-              <h1 className="mt-2 text-2xl font-black tracking-[-0.035em] text-foreground sm:text-3xl">
-                Find, use, edit or add credentials in seconds.
+              <h1 className="mt-2 text-2xl font-black text-foreground sm:text-3xl">
+                Credentials
               </h1>
               <p className="mt-2 max-w-2xl text-xs leading-relaxed text-muted-foreground sm:text-sm">
-                {credentials.length} records · {secretCount} with encrypted secrets · AES-256-GCM
-                at rest. Bulk paste from spreadsheets, CSV, JSON or credential dumps.
+                {credentials.length} records · {secretCount} with password or key fields
               </p>
             </div>
 
@@ -426,7 +440,7 @@ export default function CredentialsPage() {
                 }`}
               >
                 {masterLocked ? <Lock size={14} /> : <Unlock size={14} />}
-                {masterLocked ? "Unlock vault" : "Lock vault"}
+                {masterLocked ? "Enable secrets" : "Hide secrets"}
               </button>
               <button
                 type="button"
@@ -448,7 +462,7 @@ export default function CredentialsPage() {
           </div>
         </div>
 
-        <div className="grid gap-2 border-t border-border/40 p-3 sm:grid-cols-3 sm:p-4">
+        <div className="hidden gap-2 border-t border-border/40 p-3 sm:grid-cols-3 sm:p-4">
           <div className="rounded-2xl border border-border/40 bg-secondary/20 p-3">
             <p className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
               Find fast
@@ -477,6 +491,7 @@ export default function CredentialsPage() {
       </section>
 
       {bulk.bulkMode && (
+        <>
         <BulkActionBar
           selectedCount={bulk.selectedCount}
           totalCount={filtered.length}
@@ -493,6 +508,8 @@ export default function CredentialsPage() {
             },
           ]}
         />
+        <Button variant="outline" disabled={!bulk.selectedCount} onClick={() => { setBulkService(""); setBulkTags(""); setBulkEditOpen(true); }}><Edit2 />Edit {bulk.selectedCount} selected</Button>
+        </>
       )}
 
       <div className="rounded-2xl border border-border/50 bg-card p-3">
@@ -603,7 +620,7 @@ export default function CredentialsPage() {
             : "space-y-2"
         }
       >
-        {filtered.map((credential) => {
+        {filtered.slice(page * 50, (page + 1) * 50).map((credential) => {
           const isRevealed = revealed.has(credential.id);
           const categoryColor =
             categoryColors[credential.category] || categoryColors.General;
@@ -794,6 +811,8 @@ export default function CredentialsPage() {
         })}
       </div>
 
+      {filtered.length > 50 && <nav aria-label="Credential pages" className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"><Button variant="outline" disabled={!page} onClick={() => setPage(p => p - 1)}>Previous</Button><span className="text-center text-xs text-muted-foreground">{page * 50 + 1}–{Math.min((page + 1) * 50, filtered.length)} / {filtered.length}</span><Button variant="outline" disabled={(page + 1) * 50 >= filtered.length} onClick={() => setPage(p => p + 1)}>Next</Button></nav>}
+
       {filtered.length === 0 && (
         <EmptyState
           icon={KeyRound}
@@ -829,10 +848,10 @@ export default function CredentialsPage() {
 
       <FormModal
         open={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={() => { setModalOpen(false); setForm({ ...emptyForm }); }}
         title={editId ? "Edit Credential" : "Add Credential"}
         onSubmit={saveForm}
-        submitLabel={editId ? "Save changes" : "Add credential"}
+        submitLabel={saving ? "Saving…" : editId ? "Save changes" : "Add credential"}
         size="lg"
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -916,6 +935,15 @@ export default function CredentialsPage() {
         onClose={() => setBulkAddOpen(false)}
         onImport={importCredentials}
       />
+
+      <FormModal open={bulkEditOpen} onClose={() => setBulkEditOpen(false)} title={`Edit ${bulk.selectedCount} credentials`} onSubmit={async () => {
+        const changes: Record<string, unknown> = {};
+        if (bulkService.trim()) changes.service = bulkService.trim();
+        if (bulkTags.trim()) changes.tags = [...new Set(bulkTags.split(",").map(tag => tag.trim()).filter(Boolean))];
+        if (!Object.keys(changes).length) { toast.error("Enter a service or tags; empty fields are kept unchanged."); return; }
+        try { await bulkPatch("credentials", [...bulk.selectedIds], changes); setBulkEditOpen(false); bulk.clearSelection(); toast.success("Selected credentials updated"); }
+        catch { toast.error("Bulk changes could not be saved."); }
+      }}><FormField label="Service — leave blank to keep"><FormInput value={bulkService} onChange={setBulkService} /></FormField><FormField label="Replace tags — comma separated"><FormInput value={bulkTags} onChange={setBulkTags} /></FormField><p className="text-xs text-muted-foreground">Passwords and keys are never changed by this bulk edit. Categories can be changed using the category menu.</p></FormModal>
 
       <ConfirmDialog
         open={pendingBulkDelete || pendingDeleteId !== null}

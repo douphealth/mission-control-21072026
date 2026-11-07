@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { previewBulkIntake, CREDENTIAL_FIELDS, LINK_FIELDS, PROMPT_FIELDS, CREDENTIAL_CATEGORIES, INTAKE_BYTES, PRIVATE, type BulkMode, type BulkPreview, type IntakeOptions, type IntakeRow } from "@/lib/bulkIntake";
 import { PROMPT_SPLIT_RULES, type PromptSplitRule } from "@/lib/promptSplit";
 import { normalizeLibraryRecord } from "@/lib/libraryIntake";
+import { CREDENTIAL_INTAKE_BYTES } from "@/lib/bulkIntake";
 const button = "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-3 py-2 text-sm font-semibold hover:bg-secondary disabled:opacity-50";
 const input = "min-h-11 w-full min-w-0 rounded-xl border border-border bg-background px-3 py-2 text-sm";
 const PAGE_SIZE = 20;
@@ -91,12 +92,12 @@ export default function BulkIntakeModal({ mode, open, onClose, onImport, source,
   return <Dialog open={open} onOpenChange={value => { if (!value) close(); }}>
     <DialogContent data-testid={`bulk-intake-${mode}`} className="flex max-h-[92dvh] w-[calc(100%-1rem)] flex-col gap-4 overflow-hidden rounded-2xl sm:max-w-4xl" onInteractOutside={event => event.preventDefault()}>
       <DialogTitle>{title}</DialogTitle>
-      <DialogDescription>{isVault ? "Paste spreadsheet cells, CSV/TSV, JSON or named credential blocks. Check the mapping, then encrypt and save." : mode === "prompts" ? "Paste Google Sheets title + prompt columns, including headings and bodies on adjacent rows. Each detected pair becomes its own entry; review the complete preview before saving." : "Paste spreadsheet rows with your own headings, CSV/TSV/JSON, Markdown links or one URL per line. Select the actual link column, not a login dashboard."} Up to 1,000 entries / 1 MB.</DialogDescription>
+      <DialogDescription>{isVault ? "Paste spreadsheet cells, CSV/TSV, JSON or named credential blocks. Check the mapping, then encrypt and save." : mode === "prompts" ? "Paste Google Sheets title + prompt columns, including headings and bodies on adjacent rows. Each detected pair becomes its own entry; review the complete preview before saving." : "Paste spreadsheet rows with your own headings, CSV/TSV/JSON, Markdown links or one URL per line. Select the actual link column, not a login dashboard."} {isVault ? "Up to 5,000 entries / 5 MB." : "Up to 1,000 entries / 1 MB."}</DialogDescription>
       <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
         {source && <p className="rounded-xl border border-border p-3 text-sm">Splitting a copy of <strong>{source.title}</strong>. The original is kept; archive it only after reviewing the new entries.</p>}
         <input ref={fileRef} className="hidden" type="file" accept=".json,.csv,.tsv,.txt,.md" onChange={event => {
           const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
-          if (file.size > INTAKE_BYTES) { setMessage("Choose a file smaller than 1 MB."); return; }
+          if (file.size > (isVault ? CREDENTIAL_INTAKE_BYTES : INTAKE_BYTES)) { setMessage(`Choose a file smaller than ${isVault ? 5 : 1} MB.`); return; }
           const stamp = ++fileRevision.current;
           void file.text().then(value => { if (stamp === fileRevision.current) changeRaw(value); }).catch(() => setMessage("Could not read the file; your draft was kept."));
         }} />

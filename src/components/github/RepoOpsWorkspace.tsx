@@ -701,7 +701,7 @@ export default function RepoOpsWorkspace({
         role="toolbar"
         aria-label="Repository tools"
       >
-        <label className="relative min-w-[13rem] flex-1">
+        <label className="relative min-w-0 basis-full sm:min-w-[13rem] sm:basis-auto flex-1">
           <Search
             size={15}
             className="pointer-events-none absolute left-3 top-2.5 text-muted-foreground"
@@ -1014,7 +1014,7 @@ export default function RepoOpsWorkspace({
                         return;
                       openRow(row);
                     }}
-                    className={`grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_7.75rem] md:items-center ${
+                    className={`mc-mobile-ops-row grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_7.75rem] md:items-center ${
                       compact ? "py-1.5" : "py-3"
                     } ${selected.has(row.key) ? "bg-primary/5" : ""} ${isCursor ? "relative z-[1] ring-2 ring-inset ring-primary/55" : ""}`}
                   >
