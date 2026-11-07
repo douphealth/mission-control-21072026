@@ -137,8 +137,16 @@ export async function collectSearchPerformance(env: Env, days: number): Promise<
   const bingKey = env.BING_WEBMASTER_API_KEY;
   const bingTask = (async () => {
     if (!bingKey) { errors.push("Bing Webmaster is not connected"); return; }
-    const r = await fetch(`https://ssl.bing.com/webmaster/api.svc/json/GetUserSites?apikey=${encodeURIComponent(bingKey)}`);
-    if (!r.ok) throw new Error(`Bing sites ${r.status}`);
+    let r: Response | undefined;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(`https://ssl.bing.com/webmaster/api.svc/json/GetUserSites?apikey=${encodeURIComponent(bingKey.trim())}`, { headers: { Accept: "application/json" } });
+      if (r.ok || (r.status < 500 && r.status !== 400 && r.status !== 429)) break;
+      await new Promise((ok) => setTimeout(ok, 800 * (attempt + 1)));
+    }
+    if (!r || !r.ok) {
+      const detail = r ? ((await r.text().catch(() => "")).match(/"Message":"([^"]{1,140})/)?.[1] ?? "") : "";
+      throw new Error(`Bing sites ${r?.status ?? "unreachable"}${detail ? ` – ${detail}` : " – Bing is temporarily refusing requests; try Refresh in a minute"}`);
+    }
     const list = (((await r.json()) as { d?: { Url: string; IsVerified: boolean }[] }).d ?? []).filter((s) => s.IsVerified);
     await Promise.all(list.map(async (s) => {
       const h = hostOf(s.Url);

@@ -365,9 +365,11 @@ function makeDraft(value: Partial<CredentialDraft>, fallbackLabel = ""): Credent
     label ||
     service ||
     (url ? url.replace(/^https?:\/\//i, "").split("/")[0] : "") ||
-    username;
+    username ||
+    notes.split("\n")[0].slice(0, 60).trim();
 
-  if (!resolvedLabel || !(username || password || apiKey || url)) return null;
+  // Label-only or note-only rows are kept as secure notes instead of being rejected.
+  if (!resolvedLabel || !(username || password || apiKey || url || notes || label || service)) return null;
 
   return {
     label: resolvedLabel,

@@ -6,6 +6,24 @@ export const FAMILY_IMPORT_LIMIT = 5000;
 export const FAMILY_IMPORT_BYTES = 5 * 1024 * 1024;
 export type FamilyPatch = { member?: string; category?: string; notes?: string };
 
+const FAMILY_HEADER: Record<string, string> = Object.fromEntries(Object.entries({
+  member: ["member", "name", "fullname", "person", "familymember", "membername", "owner", "who", "holder", "accountholder", "firstname", "relative", "μέλος", "ονομα", "όνομα"],
+  label: ["label", "title", "record", "recordname", "item", "document", "documenttype", "field", "description", "account", "bank", "bankname", "institution", "provider", "what"],
+  category: ["category", "type", "kind", "group", "section", "κατηγορία"],
+  value: ["value", "number", "secret", "id", "idnumber", "iban", "accountnumber", "ssn", "socialnumber", "socialsecuritynumber", "amka", "afm", "taxid", "passportnumber", "data", "details", "info", "code", "τιμή"],
+  notes: ["notes", "note", "comments", "comment", "remarks", "extra"],
+}).flatMap(([k, list]) => list.map(a => [a.replace(/[^a-z0-9\u0370-\u03ff]/g, ""), k])));
+
+function guessCategory(text: string) {
+  const t = text.toLowerCase();
+  if (/bank|iban|swift|card|account|τράπεζ/.test(t)) return "Banking";
+  if (/insur|policy|ασφάλ/.test(t)) return "Insurance";
+  if (/health|amka|doctor|blood|medical|υγεία/.test(t)) return "Health";
+  if (/emergency|contact|phone/.test(t)) return "Emergency";
+  if (/passport|ssn|social|id|tax|afm|licen|birth|ταυτότ/.test(t)) return "Identity";
+  return "Other";
+}
+
 export function validateFamilyRecord(record: FamilyRecord) {
   if (!record.id || !record.member.trim() || !record.label.trim()) throw new Error("Member and record name are required.");
   if (!FAMILY_CATEGORIES.includes(record.category)) throw new Error("Choose a valid family record category.");
@@ -42,13 +60,25 @@ export function parseFamilyImport(input: string): { rows: FamilyRecord[]; errors
       try {
         if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Each record must be an object.");
         const item = raw as Record<string, unknown>;
-        const field = (name: string, fallback = "") => {
-          const value = item[name] ?? fallback;
-          if (typeof value !== "string") throw new Error(`${name} must be text; quote numbers to preserve leading zeroes.`);
-          return value;
-        };
-        const category = field("category", "Identity").trim() || "Identity";
-        const record: FamilyRecord = { id: crypto.randomUUID(), member: field("member").trim(), label: field("label").trim(), category: FAMILY_CATEGORIES.find(c => c.toLowerCase() === category.toLowerCase()) ?? category, value: field("value"), notes: field("notes") };
+        // Normalise keys (case, spaces, punctuation) and map common header names.
+        const norm: Record<string, string> = {};
+        for (const [k, v] of Object.entries(item)) {
+          if (v == null) continue;
+          if (k === "__parsed_extra" && Array.isArray(v)) { norm.notes = [norm.notes, ...v.map(String).filter(x => x.trim())].filter(Boolean).join("\n"); continue; }
+          if (typeof v !== "string") throw new Error(`${k} must be text; quote numbers to preserve leading zeroes.`);
+          const key = FAMILY_HEADER[k.toLowerCase().replace(/[^a-z0-9\u0370-\u03ff]/g, "")] ?? k.trim();
+          const text = String(v);
+          if (!text.trim()) continue;
+          if (norm[key] && ["member", "label", "category", "value"].includes(key)) norm.notes = [norm.notes, `${k}: ${text}`].filter(Boolean).join("\n");
+          else norm[key] = norm[key] ? `${norm[key]} ${text}` : text;
+        }
+        const extras = Object.entries(norm).filter(([k]) => !["member", "label", "category", "value", "notes"].includes(k)).map(([k, v]) => `${k}: ${v}`);
+        const rawCategory = (norm.category ?? "").trim();
+        const category = FAMILY_CATEGORIES.find(c => c.toLowerCase() === rawCategory.toLowerCase()) ?? guessCategory(`${rawCategory} ${norm.label ?? ""}`);
+        const notes = [rawCategory && rawCategory.toLowerCase() !== category.toLowerCase() ? `Type: ${rawCategory}` : "", norm.notes ?? "", ...extras].filter(Boolean).join("\n");
+        const label = (norm.label ?? "").trim() || rawCategory || extras[0]?.split(":")[0] || (norm.value ? "Record" : "");
+        if (!label && !norm.value && !notes) throw new Error("Row is empty.");
+        const record: FamilyRecord = { id: crypto.randomUUID(), member: (norm.member ?? "").trim() || "Unassigned", label: label || "Record", category, value: norm.value ?? "", notes };
         validateFamilyRecord(record);
         rows.push(record);
       } catch (error) { errors.push(`Row ${i + 1}: ${error instanceof Error ? error.message : "Invalid record."}`); }

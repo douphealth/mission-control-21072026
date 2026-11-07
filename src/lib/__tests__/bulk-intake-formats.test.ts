@@ -6,14 +6,14 @@ const headers = ["Program", "Category", "Type", "Affiliate/referral link", "Stra
 const partner = ["Example Partner", "Social Media", "Ambassador/referral", "https://example.com/Alex?sig=A%2Bb&ref=case#Offer", "USE NOW", "APPROVED", "200", "https://example.com/", "Existing referral", "User supplied notes", "https://example.com/dashboard", "private@example.com", "synthetic-private-value"];
 
 describe("real-world credential clipboard formats (synthetic records only)", () => {
-  it("retains 441 valid rows alongside five actionable errors", () => {
+  it("keeps metadata-only rows as secure notes instead of rejecting them", () => {
     const lines = ["Account name\tDescription\tLogin URL\tEmail\tPassword\tDate\tNotes"];
     for (let i = 0; i < 446; i++) lines.push([9, 20, 21, 30, 31].includes(i) ? "\tOnly metadata\t\t\t\t\t" : `Account ${i}\tUseful description\thttps://example.com/${i}\tu${i}@example.com\tfixture-${i}\t22/4/2020\tImported note`);
     const result = previewBulkIntake("credentials", lines.join("\n"));
-    expect(result.rows).toHaveLength(441); expect(result.issues).toHaveLength(5); expect(result.fatal).toBe(false);
+    expect(result.rows).toHaveLength(446); expect(result.issues).toHaveLength(0); expect(result.fatal).toBe(false);
     expect(result.table?.hasHeader).toBe(true); expect(result.rows[0].category).toBe("General");
     expect(result.rows[0].notes).toContain("Date: 22/4/2020"); expect(result.rows[0].notes).toContain("Useful description");
-    expect(result.issues[0].line).toBe(11); expect(JSON.stringify(result.issues)).not.toContain("fixture-");
+    expect(JSON.stringify(result.issues)).not.toContain("fixture-");
   });
   it("does not discard a data-like first row as headings or show its secrets in column labels", () => {
     const fixture = [
@@ -62,7 +62,7 @@ describe("real-world credential clipboard formats (synthetic records only)", () 
   });
   it("reports invalid JSON rows without throwing away valid ones", () => {
     const result = previewBulkIntake("credentials", '[{"label":"A","password":"fixture"},{"label":"No data"},null]');
-    expect(result.rows).toHaveLength(1); expect(result.issues).toHaveLength(2); expect(result.fatal).toBe(false);
+    expect(result.rows).toHaveLength(2); expect(result.issues).toHaveLength(1); expect(result.fatal).toBe(false);
   });
   it("blocks malformed quotes, excessive rows and oversized input", () => {
     expect(previewBulkIntake("credentials", 'Label,Password,Notes\nA,fixture,"unfinished').fatal).toBe(true);
