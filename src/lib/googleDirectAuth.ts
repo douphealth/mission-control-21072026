@@ -13,6 +13,8 @@
 //      https://mission-control-21072026.pages.dev).
 //   5. Copy the Client ID (ends in .apps.googleusercontent.com) into Settings.
 
+import { selectGoogleClientId, validGoogleClientId } from "@/lib/googleClientConfig";
+
 const CLIENT_ID_KEY = "mc_google_oauth_client_id";
 const SERVER_CLIENT_ID_KEY = "mc_google_oauth_client_id_server";
 const TOKEN_KEY = "mc_google_access_token_v1";
@@ -71,15 +73,16 @@ function loadGis(): Promise<void> {
 export function getGoogleClientId(): string {
   if (typeof window === "undefined") return "";
   const env = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
-  if (env) return String(env);
   try {
-    return localStorage.getItem(CLIENT_ID_KEY) || localStorage.getItem(SERVER_CLIENT_ID_KEY) || "";
+    return selectGoogleClientId(localStorage.getItem(CLIENT_ID_KEY), env, memoryClientId, localStorage.getItem(SERVER_CLIENT_ID_KEY));
   } catch {
-    return "";
+    return selectGoogleClientId(env, memoryClientId);
   }
 }
 
 let clientIdLoad: Promise<string> | null = null;
+let memoryClientId = "";
+let serverChecked = false;
 
 /**
  * Fetch the Google Client ID this app already ships with, so the user never
@@ -88,22 +91,29 @@ let clientIdLoad: Promise<string> | null = null;
  */
 export async function ensureGoogleClientId(): Promise<string> {
   const existing = getGoogleClientId();
-  if (existing) return existing;
+  if (serverChecked) return existing;
   if (!clientIdLoad) {
     clientIdLoad = (async () => {
       try {
         const { getServerGoogleClientId } = await import("@/lib/googleConfig.functions");
         const { clientId } = await getServerGoogleClientId();
-        if (clientId) {
+        const valid = validGoogleClientId(clientId);
+        serverChecked = true;
+        if (valid) {
+          memoryClientId = valid;
           try {
-            localStorage.setItem(SERVER_CLIENT_ID_KEY, clientId);
+            localStorage.setItem(SERVER_CLIENT_ID_KEY, valid);
           } catch {
             /* private-mode browsers keep it in memory only */
           }
+          if (existing && getGoogleClientId() !== existing) {
+            try { localStorage.removeItem(TOKEN_KEY); } catch { /* storage unavailable */ }
+          }
+          window.dispatchEvent(new Event("mc-google-client-id-changed"));
         }
-        return clientId || "";
+        return getGoogleClientId();
       } catch {
-        return "";
+        return existing;
       } finally {
         clientIdLoad = null;
       }
@@ -115,14 +125,22 @@ export async function ensureGoogleClientId(): Promise<string> {
 export function setGoogleClientId(id: string): void {
   if (typeof window === "undefined") return;
   const clean = id.trim();
+  if (clean && !validGoogleClientId(clean)) throw new Error("Enter a Google OAuth Client ID ending in .apps.googleusercontent.com.");
+  const previous = getGoogleClientId();
   if (clean) localStorage.setItem(CLIENT_ID_KEY, clean);
   else localStorage.removeItem(CLIENT_ID_KEY);
   // A new client ID invalidates any token from the previous one.
-  localStorage.removeItem(TOKEN_KEY);
+  if (previous !== getGoogleClientId()) localStorage.removeItem(TOKEN_KEY);
+  window.dispatchEvent(new Event("mc-google-client-id-changed"));
 }
 
 export function hasGoogleClientId(): boolean {
-  return /^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(getGoogleClientId());
+  return Boolean(getGoogleClientId());
+}
+
+/** Preload on screen entry, not after the click that must open Google's popup. */
+export async function prepareGoogleSignIn(): Promise<void> {
+  await Promise.all([ensureGoogleClientId(), loadGis()]);
 }
 
 export function getGoogleOrigin(): string {

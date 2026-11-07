@@ -16,7 +16,7 @@ export default function MobileBottomNav() {
         <Button variant="ghost"
           type="button"
           key={item.id}
-          aria-current={activeSection === item.id && !sidebarOpen ? "page" : undefined}
+          aria-current={(activeSection === item.id || (item.id === "credentials" && activeSection === "family-vault")) && !sidebarOpen ? "page" : undefined}
           onClick={() => {
             setSidebarOpen(false);
             setActiveSection(item.id);
@@ -32,6 +32,7 @@ export default function MobileBottomNav() {
         aria-label="Open all sections"
         aria-haspopup="dialog"
         aria-expanded={sidebarOpen}
+        aria-current={!tabs.some(item => item.id === activeSection) && activeSection !== "family-vault" && !sidebarOpen ? "page" : undefined}
         onClick={() => setSidebarOpen(true)}
       >
         <LayoutGrid size={21} strokeWidth={1.8} />

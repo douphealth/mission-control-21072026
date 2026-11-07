@@ -34,20 +34,8 @@ import { canonicalWebUrl, queryRelevance } from "@/lib/intelligenceQuality";
 import { searchIndustryTopic } from "@/lib/controlCenter.functions";
 import { CCHeader, EmptyState, Panel, StreamRow, relTime } from "@/components/controlcenter/ui";
 
-type SearchStory = {
-  title: string;
-  url: string;
-  summary?: string;
-  publishedAt?: string;
-  source?: string;
-  sourceUrl?: string;
-  corroborationCount?: number;
-  evidenceLevel?: "high" | "medium" | "limited";
-  evidenceReason?: string;
-  relevanceScore?: number;
-  retrievalProvider?: "dataforseo" | "google-news" | "bing-news";
-  retrievalProviders?: Array<"dataforseo" | "google-news" | "bing-news">;
-};
+import { mergeResearchStories, matchesResearchEvidence, isRecentPublication, type SearchStory } from "@/lib/researchStories";
+import { Button } from "@/components/ui/button";
 
 export default function IndustryPage() {
   const savedSources = useFeedSources();
@@ -82,6 +70,7 @@ export default function IndustryPage() {
     Awaited<ReturnType<typeof searchIndustryTopic>>["providers"]
   >([]);
   const searchLock = useRef(false);
+  const [researchVisibleCount, setResearchVisibleCount] = useState(60);
   const [searchStories, setSearchStories] = useState<SearchStory[]>([]);
   const [evidenceFilter, setEvidenceFilter] = useState<"all" | "medium" | "high">("medium");
   const autoRefreshStarted = useRef(false);
@@ -156,13 +145,8 @@ export default function IndustryPage() {
       Date.parse(item.publishedAt) <= Date.now() + 300_000,
   ).length;
   const activeCount = allStories.filter((item) => item.status === "active").length;
-  const searchResults = searchStories.filter(
-    (story) =>
-      evidenceFilter === "all" ||
-      (evidenceFilter === "high"
-        ? story.evidenceLevel === "high"
-        : story.evidenceLevel !== "limited"),
-  );
+  const searchResults = searchStories.filter(story => matchesResearchEvidence(story, evidenceFilter));
+  useEffect(() => setResearchVisibleCount(60), [searchStories, evidenceFilter]);
 
   const enabled = sources.filter((source) => source.enabled);
   const sourceErrors = sources.filter((source) => source.enabled && source.lastError);
@@ -314,7 +298,6 @@ export default function IndustryPage() {
     setLookupStatus("");
     try {
       const response = await searchIndustryTopic({ data: { query: clean, days } });
-      const minTime = Date.now() - days * 86_400_000;
       const trackedMatches: SearchStory[] = items
         .filter(
           (story) =>
@@ -322,7 +305,7 @@ export default function IndustryPage() {
             story.status === "active" &&
             story.evidenceType === "direct-feed" &&
             story.dateBasis === "published" &&
-            new Date(story.publishedAt).getTime() >= minTime,
+            isRecentPublication(story.publishedAt, days),
         )
         .map((story) => ({
           title: story.title,
@@ -338,23 +321,7 @@ export default function IndustryPage() {
         }))
         .filter((story) => story.relevanceScore >= 40);
 
-      const merged = new Map<string, SearchStory>();
-      [...trackedMatches, ...response.items].forEach((story) => {
-        const key = canonicalWebUrl(story.url);
-        const existing = merged.get(key);
-        if (!existing || (story.relevanceScore ?? 0) > (existing.relevanceScore ?? 0)) {
-          merged.set(key, story);
-        }
-      });
-      const rank = (story: SearchStory) =>
-        story.evidenceLevel === "high" ? 0 : story.evidenceLevel === "medium" ? 1 : 2;
-      const combined = [...merged.values()].sort(
-        (a, b) =>
-          (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0) ||
-          rank(a) - rank(b) ||
-          new Date(b.publishedAt || response.fetchedAt).getTime() -
-            new Date(a.publishedAt || response.fetchedAt).getTime(),
-      );
+      const combined = mergeResearchStories([...trackedMatches, ...response.items]);
 
       setSearchStories(combined);
       setProviderStatus(response.providers || []);
@@ -440,6 +407,7 @@ export default function IndustryPage() {
     setStreamDays(0);
     setSourceFilter("all");
     setShowArchived(false);
+    setStreamSort("newest");
   };
 
   return (
@@ -759,7 +727,7 @@ export default function IndustryPage() {
               </div>
               {searchResults.length ? (
                 <div className="intel-source-list">
-                  {searchResults.slice(0, 60).map((story) => (
+                  {searchResults.slice(0, researchVisibleCount).map((story) => (
                     <article key={story.url} className="intel-source-row">
                       <div
                         className="intel-source-icon"
@@ -824,12 +792,10 @@ export default function IndustryPage() {
                   hint="Try all retrieved evidence, a broader subject or a longer publication window. Check provider statuses before drawing conclusions."
                 />
               )}
-              {searchResults.length > 60 && (
-                <p className="text-xs text-muted-foreground">
-                  Showing the first 60 ranked results. Narrow the query for a more focused research
-                  set.
-                </p>
-              )}
+              {searchResults.length > 0 && <div className="mc-filter-summary">
+                <span>Showing {Math.min(researchVisibleCount, searchResults.length)} of {searchResults.length} results</span>
+                {searchResults.length > researchVisibleCount && <Button variant="outline" onClick={() => setResearchVisibleCount(count => count + 60)}>Show next {Math.min(60, searchResults.length - researchVisibleCount)}</Button>}
+              </div>}
             </>
           )}
           {!searchedAt && (

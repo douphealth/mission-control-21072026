@@ -14,9 +14,15 @@ const ITERATIONS = 150_000;
 const PREFIX_V2 = "mcenc:v2:";
 const PREFIX_V1 = "wcapi:";
 const PREFIX_V3 = "mcenc:v3:";
-let sessionKey: string | null = null;
+const SESSION_SLOT = "mc-vault-session";
+let sessionKey: string | null = typeof window !== "undefined" ? window.sessionStorage.getItem(SESSION_SLOT) : null;
 let cachedKey: { value: string; key: Promise<CryptoKey> } | null = null;
-export function setVaultSessionKey(value: string | null) { sessionKey = value; cachedKey = null; }
+/** Unlocked key lives for this browser tab until the owner locks it or closes the tab. */
+export function setVaultSessionKey(value: string | null) {
+  sessionKey = value; cachedKey = null;
+  try { if (typeof window !== "undefined") { if (value) window.sessionStorage.setItem(SESSION_SLOT, value); else window.sessionStorage.removeItem(SESSION_SLOT); } } catch { /* storage unavailable */ }
+}
+export function vaultSessionActive() { return !!sessionKey; }
 async function fastKey(value: string) {
   if (cachedKey?.value === value) return cachedKey.key;
   const key = deriveKeyWithSalt(value, new TextEncoder().encode("mission-control-v3-data-key"));

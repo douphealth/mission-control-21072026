@@ -5875,3 +5875,44 @@ html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; 
 @media print {
   .private-vault { display: none !important; }
 }
+
+/* Directory v2: deliberate hierarchy, visible favorites and thumb-sized rows. */
+.mc-directory-v2 .mc-directory-title { letter-spacing: 0; }
+.mc-directory-v2 .mc-directory-categories { display: flex; gap: 6px; overflow-x: auto; padding: 12px 0; scrollbar-width: none; }
+.mc-directory-v2 .mc-directory-categories button { flex: none; min-height: 44px; border-radius: 6px; font-size: 12px; color: hsl(var(--muted-foreground)); }
+.mc-directory-v2 .mc-directory-categories button[aria-pressed="true"] { background: hsl(var(--secondary)); color: hsl(var(--foreground)); box-shadow: inset 0 -2px hsl(var(--primary)); }
+.mc-directory-v2 .mc-directory-item { height: auto; white-space: normal; border-radius: 8px; justify-content: flex-start; }
+.mc-directory-v2 .mc-directory-copy { text-align: left; }
+.mc-directory-v2 .mc-directory-copy small { font-size: 11px; font-weight: 400; color: hsl(var(--muted-foreground)); }
+.mc-directory-v2 .mc-directory-entry[data-group="Growth"] .mc-directory-icon { color: hsl(var(--info)); background: hsl(var(--info) / .08); }
+.mc-directory-v2 .mc-directory-entry[data-group="Intelligence"] .mc-directory-icon { color: hsl(var(--warning)); background: hsl(var(--warning) / .08); }
+.mc-directory-v2 .mc-directory-entry[data-group="Operate"] .mc-directory-icon { color: hsl(var(--rose)); background: hsl(var(--rose) / .08); }
+.mc-directory-v2 .mc-directory-current { color: hsl(var(--primary)); flex-shrink: 0; }
+.mc-directory-v2 .mc-directory-quick .mc-directory-item { padding-right: 12px; }
+.mc-directory-v2 .mc-directory-group h3 { letter-spacing: 0; }
+@media (max-width: 1023px) {
+  .mc-directory-v2 { border: 0 !important; }
+  .mc-directory-v2 .mc-directory-head { border-bottom: 1px solid hsl(var(--border)); }
+  .mc-directory-v2 .mc-directory-title { margin: 2px 0 14px; font-size: 24px !important; padding-right: 42px; }
+  .mc-directory-v2 .mc-directory-eyebrow { display: flex !important; margin-bottom: 10px; letter-spacing: 0; }
+  .mc-directory-v2 .mc-directory-search-row { gap: 10px; }
+  .mc-directory-v2 .mc-directory-search { min-height: 48px; border-radius: 8px; }
+  .mc-directory-v2 .mc-directory-search button { width: 44px; height: 44px; }
+  .mc-directory-v2 .mc34-mode-switch { display: flex; width: 100%; border-radius: 8px; }
+  .mc-directory-v2 .mc34-mode-option { flex: 1; min-height: 44px; border-radius: 6px; }
+  .mc-directory-v2 .mc-directory-scroll { padding: 18px 16px 24px !important; }
+  .mc-directory-v2 .mc-directory-grid { grid-template-columns: minmax(0, 1fr) !important; gap: 6px !important; }
+  .mc-directory-v2 .mc-directory-item { min-height: 70px !important; gap: 12px !important; padding: 12px 58px 12px 12px !important; }
+  .mc-directory-v2 .mc-directory-icon { width: 38px !important; height: 38px !important; border-radius: 8px; }
+  .mc-directory-v2 .mc-directory-copy strong { font-size: 14px; line-height: 1.4; }
+  .mc-directory-v2 .mc-directory-copy small { display: block; }
+  .mc-directory-v2 .mc-directory-pin { display: grid !important; width: 44px; height: 44px; right: 6px; }
+  .mc-directory-v2 .mc-directory-current { margin-right: 2px; }
+  .mc-directory-v2 .mc-directory-quick { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+  .mc-directory-v2 .mc-directory-quick .mc-directory-item { flex-direction: column; align-items: flex-start; padding: 12px !important; gap: 9px !important; min-height: 104px !important; }
+  .mc-directory-v2 .mc-directory-quick .mc-directory-current { display: none; }
+  .mc-directory-v2 .mc-directory-footer { display: flex !important; padding: 8px 16px calc(8px + env(safe-area-inset-bottom)); background: hsl(var(--card)); }
+  .mc-directory-v2 > button { width: 44px; height: 44px; top: max(16px, env(safe-area-inset-top)); right: 12px; border-radius: 8px; background: hsl(var(--secondary)); opacity: 1; }
+  .mc-mobile-nav > button { position: relative; font-weight: 600; border-radius: 8px; }
+  .mc-mobile-nav > button[aria-current="page"]::before, .mc-mobile-nav > button[aria-expanded="true"]::before { content: ""; position: absolute; top: 0; width: 22px; height: 3px; border-radius: 2px; background: hsl(var(--primary)); }
+}

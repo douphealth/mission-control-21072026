@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
 import { decrypt, encrypt, generateStrongKey, setVaultSessionKey } from "./encryption";
+import { applyFamilyPatch, validateFamilyRecord, type FamilyPatch } from "./familyBulk";
 
 export const VAULT_IDLE_MS = 5 * 60 * 1000;
 const ENVELOPE = "mc-private-vault-envelope-v1";
@@ -43,8 +44,37 @@ export async function unlockPrivateVault(passphrase: string) {
 }
 export function lockPrivateVault() { setVaultSessionKey(null); }
 export async function saveFamilyRecord(record: FamilyRecord) {
-  if (!record.member.trim() || !record.label.trim()) throw new Error("Member and record name are required.");
+  validateFamilyRecord(record);
   await familyDb.records.put({ id: record.id, payload: await encrypt(JSON.stringify(record)) });
+}
+export async function addFamilyRecords(records: FamilyRecord[]) {
+  records.forEach(validateFamilyRecord);
+  // Use fresh IDs even if an imported file carries IDs; existing records are never overwritten.
+  const stored = await Promise.all(records.map(async record => {
+    const id = crypto.randomUUID();
+    return { id, payload: await encrypt(JSON.stringify({ ...record, id })) };
+  }));
+  await familyDb.transaction("rw", familyDb.records, () => familyDb.records.bulkAdd(stored));
+}
+export async function editFamilyRecords(ids: string[], patch: FamilyPatch) {
+  const unique = [...new Set(ids)];
+  const saved = await familyDb.records.bulkGet(unique);
+  if (saved.some(record => !record)) throw new Error("A selected record is no longer available. Refresh before editing.");
+  const updated = await Promise.all(saved.map(async record => {
+    if (!record) throw new Error("Record unavailable.");
+    const value = applyFamilyPatch(JSON.parse(await decrypt(record.payload)), patch);
+    return { id: record.id, payload: await encrypt(JSON.stringify(value)) };
+  }));
+  await familyDb.transaction("rw", familyDb.records, async () => {
+    const current = await familyDb.records.bulkGet(unique);
+    if (current.some((record, i) => record?.payload !== saved[i]?.payload)) throw new Error("Records changed in another tab. Refresh before editing.");
+    await familyDb.records.bulkPut(updated);
+  });
+}
+export async function deleteFamilyRecords(ids: string[]) {
+  // Require an unlocked session for destructive bulk operations too.
+  await encrypt("family-vault-delete");
+  await familyDb.transaction("rw", familyDb.records, () => familyDb.records.bulkDelete([...new Set(ids)]));
 }
 export async function readFamilyRecords(): Promise<FamilyRecord[]> {
   return Promise.all((await familyDb.records.toArray()).map(async record => JSON.parse(await decrypt(record.payload)) as FamilyRecord));

@@ -8,6 +8,9 @@ import { getCloudStatus, getCloudError, getCloudUserId, getLastCloudSync, getPen
 import { requestGoogleSync } from '@/lib/googleSync';
 import { getGoogleSyncStatus, type GoogleSyncStatus } from '@/lib/googleSyncState';
 import { googleSyncFailure } from '@/lib/googleSyncOutcome';
+import { GoogleSetupModal } from '@/components/dashboard/GoogleSetupModal';
+import { prepareGoogleSignIn } from '@/lib/googleDirectAuth';
+import { Button } from '@/components/ui/button';
 
 function snapshot() { return { status: getCloudStatus(), error: getCloudError(), email: getCloudUserId(), at: getLastCloudSync(), pending: getPendingCloudCount() }; }
 
@@ -35,8 +38,10 @@ function googleLine(google: GoogleSyncStatus): string {
 export default function CrossDeviceSyncBar() {
   const [sync, setSync] = useState(snapshot);
   const [busy, setBusy] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const tasks = useTasks();
   const google = useGoogleSyncStatus();
+  useEffect(() => { void prepareGoogleSignIn().catch(() => { /* retry on explicit connect */ }); }, []);
   useEffect(() => {
     const update = () => setSync(snapshot());
     const offStatus = onCloudStatus(update), offDirty = onDirtyRecordsChange(update);
@@ -76,9 +81,7 @@ export default function CrossDeviceSyncBar() {
       if (connect) {
         const { ensureGoogleClientId } = await import('@/lib/googleDirectAuth');
         if (!(await ensureGoogleClientId())) {
-          toast.info('Google sync isn’t set up yet', {
-            description: 'Your data is safe on this device. Add your Google sign-in ID in Settings → Google Connection to sync across devices.',
-          });
+          setSetupOpen(true);
           return;
         }
         await signInToCloud();
@@ -130,6 +133,7 @@ export default function CrossDeviceSyncBar() {
   };
   const label = sync.status === 'synced' && !sync.pending ? 'Cloud confirmed' : sync.status === 'signed-out' ? 'This device only' : sync.status === 'error' ? 'Sync needs attention' : sync.status === 'offline' ? 'Offline - saved locally' : 'Synchronizing';
   return (
+    <>
     <section
       aria-label="Cross-device synchronization"
       className="mc20-syncbar"
@@ -159,7 +163,7 @@ export default function CrossDeviceSyncBar() {
           </div>
         </div>
 
-        <button
+        <Button
           type="button"
           onClick={() => void act()}
           disabled={busy || sync.status === "connecting"}
@@ -167,15 +171,15 @@ export default function CrossDeviceSyncBar() {
         >
           <RefreshCw size={13} className={busy || sync.status === "syncing" || google.state === "syncing" ? "animate-spin" : ""} />
           {busy ? "Syncing..." : connect ? "Connect Google" : reconnectGoogle ? "Reconnect Google" : "Sync now"}
-        </button>
+        </Button>
       </div>
 
       {google.heldDeletions > 0 && (
         <p role="alert" className="mc20-sync-error">
           {google.heldDeletions} tasks are missing from Google and were kept here, because that many at once can be a bad response.{' '}
-          <button type="button" className="underline disabled:opacity-50" disabled={busy} onClick={() => void applyHeld()}>
+          <Button variant="link" size="sm" type="button" className="underline disabled:opacity-50" disabled={busy} onClick={() => void applyHeld()}>
             {busy ? 'Checking…' : 'Move them to Trash'}
-          </button>
+          </Button>
         </p>
       )}
 
@@ -185,5 +189,14 @@ export default function CrossDeviceSyncBar() {
         </p>
       )}
     </section>
+    <GoogleSetupModal open={setupOpen} onClose={() => setSetupOpen(false)} onConnect={async () => {
+      await signInToCloud();
+      setSync(snapshot());
+      toast.success('Google Drive synchronization confirmed');
+      await requestGoogleSync({ reason: 'manual' });
+      const failure = googleSyncFailure(getGoogleSyncStatus());
+      if (failure) toast.warning('Tasks / Calendar needs attention', { description: failure });
+    }} />
+    </>
   );
 }

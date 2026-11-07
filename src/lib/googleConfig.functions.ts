@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { selectGoogleClientId } from "@/lib/googleClientConfig";
 
 /**
  * Returns the app-wide Google OAuth Client ID.
@@ -8,7 +9,7 @@ import { createServerFn } from "@tanstack/react-start";
  * never read here and never leaves the server.
  */
 export const getServerGoogleClientId = createServerFn({ method: "GET" }).handler(async () => {
-  const clientId = process.env["GOOGLE_OAUTH_CLIENT_ID"] || "";
-  const valid = /^[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId.trim());
-  return { clientId: valid ? clientId.trim() : "" };
+  const { readCloudflareRuntimeEnv } = await import("@/lib/cloudflareRuntimeEnv.server");
+  const env = await readCloudflareRuntimeEnv();
+  return { clientId: selectGoogleClientId(env.GOOGLE_OAUTH_CLIENT_ID, env.VITE_GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_ID) };
 });

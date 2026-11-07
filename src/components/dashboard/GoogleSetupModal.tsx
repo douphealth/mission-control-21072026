@@ -8,9 +8,9 @@ import { X, Copy, Check, ExternalLink, KeyRound, Loader2 } from "lucide-react";
 import {
   getGoogleClientId,
   setGoogleClientId,
-  hasGoogleClientId,
   getGoogleOrigin,
 } from "@/lib/googleDirectAuth";
+import { Button } from "@/components/ui/button";
 
 type GoogleSetupModalProps = {
   open: boolean;
@@ -69,31 +69,34 @@ export function GoogleSetupModal({ open, onClose, onConnect }: GoogleSetupModalP
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-2xl bg-card border border-border shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="google-setup-title"
+        className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-lg bg-card border border-border shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <KeyRound size={16} className="text-primary" />
-             <h3 className="text-sm font-bold text-foreground">Connect Google once</h3>
+             <h3 id="google-setup-title" className="text-sm font-bold text-foreground">Reconnect Google sync</h3>
           </div>
-          <button
+          <Button variant="ghost" size="icon"
             onClick={onClose}
             className="p-1.5 rounded-lg hover:bg-secondary text-muted-foreground"
             aria-label="Close"
           >
             <X size={16} />
-          </button>
+          </Button>
         </div>
 
         <div className="p-5 space-y-4">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Google requires this one-time identity for a standalone app. After this, one Google
-            account selection connects Calendar, Tasks, and private backup.
+            Your saved records have not been deleted. If Google worked before, use your existing
+            OAuth Client ID—there is no need to create another one.
           </p>
 
           <div className="rounded-xl border border-border bg-secondary/30 p-3 space-y-2.5">
@@ -112,20 +115,20 @@ export function GoogleSetupModal({ open, onClose, onConnect }: GoogleSetupModalP
                 user on the OAuth consent screen.
               </li>
               <li>
-                <span className="font-bold text-foreground">2. Create an OAuth Client ID.</span>{" "}
-                Choose <span className="font-semibold text-foreground">Web application</span>, then
+                <span className="font-bold text-foreground">2. Open your existing OAuth Client ID.</span>{" "}
+                For a <span className="font-semibold text-foreground">Web application</span>,
                 add this exact address under Authorized JavaScript origins:
-                <button
+                <Button variant="outline"
                   onClick={copyOrigin}
                   className="mt-1.5 w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg bg-card border border-border font-mono text-[10px] text-foreground hover:border-primary/40 transition-colors"
                 >
                   <span className="truncate">{origin}</span>
                   {copied ? (
-                    <Check size={11} className="text-green-500 shrink-0" />
+                    <Check size={11} className="text-primary shrink-0" />
                   ) : (
                     <Copy size={11} className="text-muted-foreground shrink-0" />
                   )}
-                </button>
+                </Button>
               </li>
               <li>
                 <span className="font-bold text-foreground">3. Paste the Client ID below.</span> The
@@ -153,7 +156,7 @@ export function GoogleSetupModal({ open, onClose, onConnect }: GoogleSetupModalP
               className="w-full px-3 py-2 rounded-xl bg-secondary/50 border border-border text-xs font-mono text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/30"
             />
             {value.trim() && !/\.apps\.googleusercontent\.com$/.test(value.trim()) && (
-              <div className="text-[10px] text-amber-500">
+              <div className="text-[10px] text-destructive">
                 Client IDs end in .apps.googleusercontent.com — double-check what you pasted.
               </div>
             )}
@@ -167,20 +170,20 @@ export function GoogleSetupModal({ open, onClose, onConnect }: GoogleSetupModalP
         </div>
 
         <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-border">
-          <button
+          <Button variant="ghost" size="sm"
             onClick={onClose}
             className="px-3 py-1.5 rounded-lg text-xs font-semibold text-muted-foreground hover:bg-secondary"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button size="sm"
             onClick={handleSave}
             disabled={!value.trim() || connecting}
             className="px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             {connecting && <Loader2 size={13} className="mr-1.5 inline animate-spin" />}
             {connecting ? "Connecting…" : onConnect ? "Save & Connect Google" : "Save Client ID"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,3 +1,6 @@
+import { useMinuteClock } from "@/hooks/useMinuteClock";
+import { matchesTaskView, taskMatchesSearch, visibleSelection } from "@/lib/taskViews";
+import { Button } from "@/components/ui/button";
 import TaskChecklistEditor from "@/components/tasks/TaskChecklistEditor";
 import TaskDialogFrame from "@/components/TaskDialogFrame";
 import TaskCommandBar from "@/components/tasks/TaskCommandBar";
@@ -122,7 +125,7 @@ const PRIORITIES = [
 ] as const;
 
 const CATEGORIES = ["Private", "Business"];
-const today = todayISO();
+
 
 function getPriority(id: string) {
   return PRIORITIES.find((p) => p.id === id) || PRIORITIES[2];
@@ -131,14 +134,15 @@ function getStatus(id: string) {
   return STATUSES.find((s) => s.id === id) || STATUSES[0];
 }
 
-function isOverdue(t: Task) {
+function isOverdue(t: Task, today = todayISO()) {
   return t.status !== "done" && !!t.dueDate && t.dueDate < today;
 }
-function isToday(t: Task) {
+function isToday(t: Task, today = todayISO()) {
   return t.dueDate === today && t.status !== "done";
 }
 
 function daysUntil(date: string) {
+  const today = todayISO();
   const diff = Math.ceil((new Date(date).getTime() - new Date(today).getTime()) / 86400000);
   if (diff < 0) return `${Math.abs(diff)}d overdue`;
   if (diff === 0) return "Today";
@@ -148,7 +152,7 @@ function daysUntil(date: string) {
 
 // ─── Task Form Modal ──────────────────────────────────────────────────────────
 
-const EMPTY: Omit<Task, "id"> = {
+const emptyTask = (today: string): Omit<Task, "id"> => ({
   title: "",
   priority: "medium",
   status: "todo",
@@ -163,7 +167,7 @@ const EMPTY: Omit<Task, "id"> = {
   reminderFired: false,
   reminders: [],
   remindersFired: [],
-};
+});
 
 interface TaskModalProps {
   open: boolean;
@@ -176,7 +180,7 @@ interface TaskModalProps {
 
 export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete }: TaskModalProps) {
   const [form, setForm] = useState<Omit<Task, "id">>(() =>
-    task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" },
+    task ? { ...task } : { ...emptyTask(todayISO()), status: defaultStatus || "todo" },
   );
   const [bulkSubtasks, setBulkSubtasks] = useState("");
   const [saving, setSaving] = useState(false);
@@ -185,7 +189,7 @@ export function TaskModal({ open, task, defaultStatus, onClose, onSave, onDelete
 
   // Reset modal state when the selected task changes.
   useEffect(() => {
-    setForm(task ? { ...task } : { ...EMPTY, status: defaultStatus || "todo" });
+    setForm(task ? { ...task } : { ...emptyTask(todayISO()), status: defaultStatus || "todo" });
     setBulkSubtasks("");
   }, [task?.id, open, defaultStatus]);
 
@@ -687,9 +691,10 @@ const KanbanCard = memo(function KanbanCard({
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
 }) {
+  const { today } = useMinuteClock();
   const pr = getPriority(task.priority);
-  const overdue = isOverdue(task);
-  const todayTask = isToday(task);
+  const overdue = isOverdue(task, today);
+  const todayTask = isToday(task, today);
   const doneSubs = task.subtasks.filter((s) => s.done).length;
   const subPct = task.subtasks.length ? (doneSubs / task.subtasks.length) * 100 : 0;
   const [expanded, setExpanded] = useState(false);
@@ -1032,7 +1037,7 @@ export interface RowActions {
 }
 
 function shiftISO(base: string, days: number) {
-  const d = new Date(`${base || today}T00:00:00`);
+  const d = new Date(`${base || todayISO()}T00:00:00`);
   d.setDate(d.getDate() + days);
   return d.toISOString().split("T")[0];
 }
@@ -1062,9 +1067,10 @@ const ListRow = memo(function ListRow({
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
+  const { today } = useMinuteClock();
   const pr = getPriority(task.priority);
   const st = getStatus(task.status);
-  const overdue = isOverdue(task);
+  const overdue = isOverdue(task, today);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
@@ -1521,6 +1527,7 @@ function VirtualizedList({
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function TasksPage() {
+  const { today } = useMinuteClock();
   const tasks = useTasks();
   const addItem = useAddItem();
   const updateItem = useUpdateItem();
@@ -1576,7 +1583,7 @@ export default function TasksPage() {
           !(task.blocks && task.blocks.some((block) => !block.done))),
     ).length;
     const todayTask = active.filter(
-      (task) => isOverdue(task) || task.dueDate === today || isPlannedToday(task, today),
+      (task) => isOverdue(task, today) || task.dueDate === today || isPlannedToday(task, today),
     ).length;
     const upcoming = active.filter((task) => {
       const next = task.scheduledAt || task.dueDate;
@@ -1586,14 +1593,14 @@ export default function TasksPage() {
       (task) => task.priority === "critical" || task.priority === "high",
     ).length;
     const doneToday = tasks.filter(
-      (task) => task.status === "done" && (task.completedAt || "").slice(0, 10) === today,
+      (task) => !task.archived && task.status === "done" && (task.completedAt || "").slice(0, 10) === today,
     ).length;
 
     return {
       total: tasks.length,
       open: active.length,
-      done: tasks.filter((task) => task.status === "done").length,
-      overdue: active.filter(isOverdue).length,
+      done: tasks.filter((task) => task.status === "done" && !task.archived).length,
+      overdue: active.filter(task => isOverdue(task, today)).length,
       todayTask,
       inbox,
       upcoming,
@@ -1602,14 +1609,14 @@ export default function TasksPage() {
       critical: active.filter((task) => task.priority === "critical").length,
       blocked: active.filter((task) => task.status === "blocked").length,
     };
-  }, [tasks]);
+  }, [tasks, today]);
 
   // ── Filtered + sorted ───────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const PORD: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
     const smartRank = (task: Task) => {
       if (task.status === "done") return 100;
-      if (isOverdue(task)) return 0;
+      if (isOverdue(task, today)) return 0;
       if (isPlannedToday(task, today)) return 1;
       if (task.dueDate === today) return 2;
       if (task.priority === "critical") return 3;
@@ -1623,13 +1630,7 @@ export default function TasksPage() {
       .filter((task) => filterStatus === "all" || task.status === filterStatus)
       .filter((task) => filterPriority === "all" || task.priority === filterPriority)
       .filter((task) => filterCategory === "all" || task.category === filterCategory)
-      .filter(
-        (task) =>
-          !search ||
-          task.title.toLowerCase().includes(search.toLowerCase()) ||
-          task.description?.toLowerCase().includes(search.toLowerCase()) ||
-          task.linkedProject?.toLowerCase().includes(search.toLowerCase()),
-      )
+      .filter((task) => taskMatchesSearch(task, search))
       .sort((a, b) => {
         if (sortBy === "smart") {
           const rank = smartRank(a) - smartRank(b);
@@ -1648,48 +1649,27 @@ export default function TasksPage() {
         }
         return b.createdAt.localeCompare(a.createdAt);
       });
-  }, [tasks, filterStatus, filterPriority, filterCategory, search, sortBy]);
+  }, [tasks, filterStatus, filterPriority, filterCategory, search, sortBy, today]);
 
   // Smart views shape the list without changing task data.
-  const listTasks = useMemo(() => {
-    return filtered.filter((task) => {
-      const open = task.status !== "done";
-      const inbox =
-        task.inbox ||
-        (!task.dueDate &&
-          !task.scheduledAt &&
-          !task.committedOn &&
-          !(task.blocks && task.blocks.some((block) => !block.done)));
-      const plannedToday = isPlannedToday(task, today);
-      const overdue = isOverdue(task);
-      const next = task.scheduledAt || task.dueDate;
-
-      switch (preset) {
-        case "inbox":
-          return open && inbox;
-        case "today":
-          return open && (overdue || task.dueDate === today || plannedToday);
-        case "upcoming":
-          return open && !!next && next > today;
-        case "important":
-          return open && (task.priority === "critical" || task.priority === "high");
-        case "all":
-          return open;
-        case "done":
-          return task.status === "done";
-        default:
-          return open;
-      }
-    });
-  }, [filtered, preset]);
-
+  const listTasks = useMemo(
+    () => filtered.filter(task => matchesTaskView(task, preset, today)),
+    [filtered, preset, today],
+  );
   const tasksByStatus = useMemo(() => {
     const map: Record<string, Task[]> = { todo: [], "in-progress": [], blocked: [], done: [] };
-    filtered.forEach((t) => {
-      (map[t.status] = map[t.status] || []).push(t);
-    });
+    listTasks.forEach(task => (map[task.status] ||= []).push(task));
     return map;
-  }, [filtered]);
+  }, [listTasks]);
+  const selectedVisible = useMemo(() => visibleSelection(selectedIds, listTasks), [selectedIds, listTasks]);
+  const bulkLock = useRef(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  useEffect(() => {
+    setSelectedIds(previous => {
+      const next = visibleSelection(previous, listTasks);
+      return next.size === previous.size ? previous : next;
+    });
+  }, [listTasks]);
 
   // ── CRUD ─────────────────────────────────────────────────────────────────────
   const handleSave = useCallback(
@@ -1704,7 +1684,7 @@ export default function TasksPage() {
         else toast.error("Duplicate task — already exists");
       }
     },
-    [addItem, updateItem],
+    [addItem, updateItem, today],
   );
 
   const cd = useConfirmDialog();
@@ -1714,11 +1694,13 @@ export default function TasksPage() {
   }, []);
 
   const handleBulkDelete = useCallback(async () => {
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
-    await softDeleteTasks(ids);
-    exitBulk();
-  }, [selectedIds, exitBulk]);
+    const ids = Array.from(selectedVisible);
+    if (!ids.length || bulkLock.current) return;
+    bulkLock.current = true; setBulkBusy(true);
+    try { await softDeleteTasks(ids); exitBulk(); }
+    catch { toast.error("Tasks could not be deleted. Selection retained."); }
+    finally { bulkLock.current = false; setBulkBusy(false); }
+  }, [selectedVisible, exitBulk]);
 
   const handleDuplicate = useCallback(
     async (id: string) => {
@@ -1754,7 +1736,7 @@ export default function TasksPage() {
         toast.success("Reopened");
       }
     },
-    [tasks, updateItem],
+    [tasks, updateItem, today],
   );
 
   const handleToggleSub = useCallback(
@@ -1764,7 +1746,7 @@ export default function TasksPage() {
       const subtasks = t.subtasks.map((s) => (s.id === subId ? { ...s, done: !s.done } : s));
       await updateItem<Task>("tasks", taskId, { subtasks });
     },
-    [tasks, updateItem],
+    [tasks, updateItem, today],
   );
 
   const handleDrop = useCallback(
@@ -1779,7 +1761,7 @@ export default function TasksPage() {
       const st = getStatus(newStatus);
       toast.success(`Moved to ${st.label}`, { icon: "↪" });
     },
-    [tasks, updateItem],
+    [tasks, updateItem, today],
   );
 
   // ── Inline single-task edits (no modal needed) ────────────────────────────
@@ -1787,7 +1769,7 @@ export default function TasksPage() {
     async (id: string, title: string) => {
       await updateItem<Task>("tasks", id, { title });
     },
-    [updateItem],
+    [updateItem, today],
   );
 
   const handleSetDue = useCallback(
@@ -1795,14 +1777,14 @@ export default function TasksPage() {
       await updateItem<Task>("tasks", id, { dueDate: date });
       toast.success(`Due ${date === today ? "today" : date}`);
     },
-    [updateItem],
+    [updateItem, today],
   );
 
   const handleSetPriority = useCallback(
     async (id: string, priority: Task["priority"]) => {
       await updateItem<Task>("tasks", id, { priority });
     },
-    [updateItem],
+    [updateItem, today],
   );
 
   const handleSetStatus = useCallback(
@@ -1812,7 +1794,7 @@ export default function TasksPage() {
         completedAt: status === "done" ? today : undefined,
       });
     },
-    [updateItem],
+    [updateItem, today],
   );
 
   const handlePlanToday = useCallback(
@@ -1827,7 +1809,7 @@ export default function TasksPage() {
       });
       toast.success("Planned for today — deadline unchanged");
     },
-    [updateItem],
+    [updateItem, today],
   );
 
   const handleSchedule = useCallback(
@@ -1843,7 +1825,7 @@ export default function TasksPage() {
       });
       toast.success(`Planned for ${date} — deadline unchanged`);
     },
-    [updateItem],
+    [updateItem, today],
   );
 
   const handleFocus = useCallback(
@@ -1865,19 +1847,29 @@ export default function TasksPage() {
       setFocusTaskId(id);
       setActiveSection("focus");
     },
-    [tasks, updateItem, setFocusTaskId, setActiveSection],
+    [tasks, updateItem, setFocusTaskId, setActiveSection, today],
   );
 
   // ── Bulk quick edits ───────────────────────────────────────────────────────
   const bulkApply = useCallback(
     async (changes: Partial<Task>, label: string) => {
-      const ids = Array.from(selectedIds);
-      if (!ids.length) return;
-      for (const id of ids) await updateItem<Task>("tasks", id, changes);
-      toast.success(`${label} · ${ids.length} task${ids.length > 1 ? "s" : ""}`);
-      exitBulk();
+      const ids = Array.from(selectedVisible);
+      if (!ids.length || bulkLock.current) return;
+      bulkLock.current = true; setBulkBusy(true);
+      const failed: string[] = [];
+      try {
+        for (const id of ids) {
+          try { await updateItem<Task>("tasks", id, changes); } catch { failed.push(id); }
+        }
+        if (failed.length) {
+          setSelectedIds(new Set(failed));
+          toast.warning(`${ids.length - failed.length} updated · ${failed.length} failed`, { description: "Failed tasks remain selected for retry." });
+        } else {
+          toast.success(`${label} · ${ids.length} task${ids.length > 1 ? "s" : ""}`); exitBulk();
+        }
+      } finally { bulkLock.current = false; setBulkBusy(false); }
     },
-    [selectedIds, updateItem, exitBulk],
+    [selectedVisible, updateItem, exitBulk],
   );
 
   const selectGroup = useCallback((groupTasks: Task[]) => {
@@ -1902,7 +1894,7 @@ export default function TasksPage() {
     const weekEnd = shiftISO(today, 7);
     const bucket = (task: Task) => {
       if (task.status === "done") return "done";
-      if (isOverdue(task)) return "overdue";
+      if (isOverdue(task, today)) return "overdue";
       if (isPlannedToday(task, today)) return "planned";
       if (task.dueDate === today) return "due";
       const next = task.scheduledAt || task.dueDate;
@@ -1937,7 +1929,7 @@ export default function TasksPage() {
         };
       })
       .filter((group) => group.count > 0);
-  }, [listTasks, collapsedGroups]);
+  }, [listTasks, collapsedGroups, today]);
 
   const allCategories = useMemo(() => {
     const cats = new Set(tasks.map((t) => t.category).filter(Boolean));
@@ -1962,13 +1954,10 @@ export default function TasksPage() {
           <h1>Tasks</h1>
           <p>Capture once. Decide deliberately. Plan realistically. Execute without hunting.</p>
         </div>
-        <button
-          onClick={() => setModal({ open: true, task: null })}
-          className="mc21-new-task"
-        >
+        <Button onClick={() => setModal({ open: true, task: null })} className="mc21-new-task">
           <Plus size={15} />
           New task
-        </button>
+        </Button>
       </header>
 
       <TaskCommandBar />
@@ -2035,7 +2024,8 @@ export default function TasksPage() {
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search title, notes, project…"
+            aria-label="Search tasks"
+            placeholder="Search tasks, notes, tags, checklist…"
           />
           {search && (
             <button type="button" onClick={() => setSearch("")} aria-label="Clear search">
@@ -2048,10 +2038,11 @@ export default function TasksPage() {
           type="button"
           onClick={() => setShowFilters((value) => !value)}
           className="mc21-toolbar-button"
+          aria-expanded={showFilters}
           data-active={showFilters ? "true" : "false"}
         >
           <SlidersHorizontal size={13} />
-          Filters
+          Filters{[filterStatus, filterPriority, filterCategory].filter(value => value !== "all").length > 0 && ` · ${[filterStatus, filterPriority, filterCategory].filter(value => value !== "all").length}`}
         </button>
 
         <div className="mc21-view-toggle" aria-label="Task layout">
@@ -2130,6 +2121,12 @@ export default function TasksPage() {
         </section>
       )}
 
+      {(search || filterStatus !== "all" || filterPriority !== "all" || filterCategory !== "all") && (
+        <div className="mc-filter-summary" role="status">
+          <span>{listTasks.length} matching tasks in this view</span>
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(""); setFilterStatus("all"); setFilterPriority("all"); setFilterCategory("all"); }}>Reset filters</Button>
+        </div>
+      )}
       {/* ── Kanban Board ── */}
       {view === "kanban" && (
         <div
@@ -2200,22 +2197,22 @@ export default function TasksPage() {
 
           {/* Bulk action toolbar */}
           {bulkMode && (
-            <div className="mc21-bulkbar">
+            <fieldset className="mc21-bulkbar" disabled={bulkBusy} aria-busy={bulkBusy}>
               <button
                 type="button"
                 onClick={() => {
-                  if (selectedIds.size === listTasks.length) setSelectedIds(new Set());
+                  if (listTasks.every(task => selectedVisible.has(task.id))) setSelectedIds(new Set());
                   else setSelectedIds(new Set(listTasks.map((task) => task.id)));
                 }}
               >
-                {selectedIds.size === listTasks.length && listTasks.length > 0
+                {listTasks.every(task => selectedVisible.has(task.id)) && listTasks.length > 0
                   ? "Deselect all"
                   : "Select all"}
               </button>
-              <span>{selectedIds.size} selected</span>
+              <span>{selectedVisible.size} selected</span>
               <button
                 type="button"
-                disabled={selectedIds.size === 0}
+                disabled={selectedVisible.size === 0}
                 onClick={() =>
                   bulkApply(
                     {
@@ -2235,7 +2232,7 @@ export default function TasksPage() {
               </button>
               <button
                 type="button"
-                disabled={selectedIds.size === 0}
+                disabled={selectedVisible.size === 0}
                 onClick={() => {
                   const nextWeek = shiftISO(today, 7);
                   void bulkApply(
@@ -2255,7 +2252,7 @@ export default function TasksPage() {
               </button>
               <button
                 type="button"
-                disabled={selectedIds.size === 0}
+                disabled={selectedVisible.size === 0}
                 onClick={() => bulkApply({ status: "done", completedAt: today }, "Completed")}
               >
                 <CheckCircle2 size={12} />
@@ -2271,7 +2268,7 @@ export default function TasksPage() {
                     );
                   }
                 }}
-                disabled={selectedIds.size === 0}
+                disabled={selectedVisible.size === 0}
               >
                 <option value="">Priority…</option>
                 {PRIORITIES.map((priority) => (
@@ -2283,13 +2280,13 @@ export default function TasksPage() {
               <button
                 type="button"
                 onClick={handleBulkDelete}
-                disabled={selectedIds.size === 0}
+                disabled={selectedVisible.size === 0}
                 className="mc21-bulk-delete"
               >
                 <Trash2 size={12} />
                 Trash
               </button>
-            </div>
+            </fieldset>
           )}
 
           {(() => {

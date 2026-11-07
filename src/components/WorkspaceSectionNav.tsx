@@ -1,5 +1,6 @@
 import { WORKSPACE_SECTIONS, workspaceById } from "@/lib/workspaceCatalog";
 import { useNavigationStore } from "@/stores/navigationStore";
+import { Button } from "@/components/ui/button";
 
 export default function WorkspaceSectionNav() {
   const { activeSection, setActiveSection } = useNavigationStore();
@@ -8,7 +9,7 @@ export default function WorkspaceSectionNav() {
   return (
     <nav className="mc-section-nav" aria-label={`${group} sections`}>
       {WORKSPACE_SECTIONS.filter((section) => section.group === group).map((section) => (
-        <button
+        <Button variant="ghost" size="sm"
           type="button"
           key={section.id}
           aria-current={activeSection === section.id ? "page" : undefined}
@@ -16,7 +17,7 @@ export default function WorkspaceSectionNav() {
         >
           <section.icon size={16} />
           <span>{section.label}</span>
-        </button>
+        </Button>
       ))}
     </nav>
   );

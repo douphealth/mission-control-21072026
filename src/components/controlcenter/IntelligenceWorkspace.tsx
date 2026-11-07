@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ArrowUpRight, ChevronRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import "./intelligence-workspace.css";
 
 type Metric = {
@@ -26,7 +27,8 @@ export function IntelligenceMetrics({ items }: { items: Metric[] }) {
           </>
         );
         return item.onClick ? (
-          <button
+          <Button
+            variant="ghost"
             key={item.label}
             type="button"
             className="intel-metric"
@@ -35,7 +37,7 @@ export function IntelligenceMetrics({ items }: { items: Metric[] }) {
             onClick={item.onClick}
           >
             {content}
-          </button>
+          </Button>
         ) : (
           <div key={item.label} className="intel-metric" data-tone={item.tone}>
             {content}
@@ -60,7 +62,8 @@ export function IntelligenceTabs<T extends string>({
   return (
     <nav className="intel-tabs" aria-label={label}>
       {items.map((item) => (
-        <button
+        <Button
+          variant="ghost"
           key={item.id}
           type="button"
           aria-pressed={value === item.id}
@@ -71,7 +74,7 @@ export function IntelligenceTabs<T extends string>({
           {item.count !== undefined && (
             <span className="intel-tab-count">{item.count.toLocaleString("en-US")}</span>
           )}
-        </button>
+        </Button>
       ))}
     </nav>
   );
@@ -118,10 +121,10 @@ export function IntelligenceEmpty({
       </div>
       <h3>{title}</h3>
       <p>{description}</p>
-      <button type="button" className="btn-secondary" onClick={onAction}>
+      <Button variant="outline" type="button" className="btn-secondary" onClick={onAction}>
         {action}
         <ArrowUpRight size={15} />
-      </button>
+      </Button>
     </div>
   );
 }
