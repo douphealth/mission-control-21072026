@@ -71,6 +71,15 @@ const HEADER_ALIASES: Record<string, DraftField> = {
   notes: "notes",
   note: "notes",
   tags: "tags",
+  emailaddress: "username", login_name: "username", loginname: "username", usr: "username", handle: "username",
+  passcode: "password", pin: "password", passphrase: "password", pw: "password",
+  link: "url", address: "url", siteurl: "url", homepage: "url", web: "url",
+  comment: "notes", comments: "notes", remarks: "notes", extra: "notes", description: "notes", folder: "category", type: "category",
+  // Greek
+  ονομα: "label", τιτλος: "label", λογαριασμος: "label", υπηρεσια: "service", εταιρεια: "service", πλατφορμα: "service",
+  χρηστης: "username", ονομαχρηστη: "username", ονομαχρηστου: "username", username_gr: "username", email_gr: "username",
+  κωδικος: "password", κωδικοσπροσβασης: "password", συνθηματικο: "password", κλειδι: "apiKey",
+  ιστοσελιδα: "url", συνδεσμος: "url", διευθυνση: "url", σημειωσεις: "notes", σχολια: "notes", κατηγορια: "category",
 };
 
 const API_LABEL_RE =
@@ -188,11 +197,13 @@ const PROVIDER_HINTS: Array<{
 ];
 
 function cleanHeader(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/ς/g, "σ").replace(/[^a-z0-9\u0370-\u03ff]+/g, "");
 }
 
+const NORMALIZED_ALIASES: Record<string, DraftField> = Object.fromEntries(Object.entries(HEADER_ALIASES).map(([k, v]) => [cleanHeader(k), v]));
+
 function fieldForLabel(label: string): DraftField | null {
-  const direct = HEADER_ALIASES[cleanHeader(label)];
+  const direct = HEADER_ALIASES[cleanHeader(label)] ?? NORMALIZED_ALIASES[cleanHeader(label)];
   if (direct) return direct;
   if (API_LABEL_RE.test(label)) return "apiKey";
   return null;
@@ -491,17 +502,27 @@ function smartQuickRow(cells: string[]): CredentialDraft | null {
     });
   }
 
-  const [label, service, url, username, password, apiKey, category, ...notes] = cells;
-  return makeDraft({
-    label: label || "",
-    service: service || "",
-    url: url || "",
-    username: username || "",
-    password: password || "",
-    apiKey: apiKey || "",
-    category: category || DEFAULT_CATEGORY,
-    notes: notes.join(" | "),
-  });
+  if (cells.length >= 6) {
+    // Full documented template: label | service | url | username | password | apiKey | category | notes
+    const [l, service, u, user, pass, apiKey, category, ...rest] = cells.map(c => c.trim());
+    return makeDraft({ label: l, service, url: u, username: user, password: pass, apiKey, category: category || DEFAULT_CATEGORY, notes: rest.join(" | ") });
+  }
+  // Short rows: classify by content, not position: URLs, emails and the remaining text fields.
+  const url = cleaned.find(isUrlLike) || "";
+  const email = cleaned.find(isEmail) || "";
+  const rest = cleaned.filter(v => v !== url && v !== email);
+  let label = "", username = email, password = "";
+  const notes: string[] = [];
+  for (const v of rest) {
+    const slots = email ? 1 : 2;
+    if (!label && (rest.length > slots || !url)) { label = v; continue; }
+    if (!username) username = v;
+    else if (!password) password = v;
+    else notes.push(v);
+  }
+  if (!label) label = url ? url.replace(/^https?:\/\/(www\.)?/i, "").split("/")[0] : username || "Credential";
+  if (!password && username && username !== email) { password = username; username = ""; }
+  return makeDraft({ label, service: "", url, username, password, apiKey: "", category: DEFAULT_CATEGORY, notes: notes.join(" | ") });
 }
 
 function parseDelimited(text: string): CredentialBatchParseResult | null {
@@ -646,6 +667,7 @@ function parseKeyValue(text: string): CredentialBatchParseResult | null {
       else raw[field] = cell;
     }
 
+    if (!raw.label && noteLines.length && noteLines[0].length <= 80) raw.label = noteLines.shift();
     if (noteLines.length && !raw.notes) raw.notes = noteLines.join("\n");
 
     const hint = providerHint(`${block} ${contextLines.join(" ")}`);
@@ -699,9 +721,14 @@ function parseLooseApiLines(text: string): CredentialBatchParseResult | null {
   const items: CredentialDraft[] = [];
 
   for (const line of lines) {
-    if (/[:=|,;\t]/.test(line)) continue;
+    if (/[=|,;\t]/.test(line)) continue;
     const parts = line.split(/\s+/);
     if (parts.length < 2) continue;
+    if (parts.length >= 3 && parts.length <= 4 && parts.some(p => isUrlLike(p) || isEmail(p))) {
+      const quick = smartQuickRow(parts);
+      if (quick) { items.push(quick); continue; }
+    }
+    if (line.includes(":") && !parts.some(isUrlLike)) continue;
 
     for (let i = parts.length - 1; i >= 1; i--) {
       const candidate = parts[i];
