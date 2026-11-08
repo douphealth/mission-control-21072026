@@ -209,6 +209,7 @@ function saveToken(t: StoredGoogleToken) {
 export async function requestGoogleToken(opts?: {
   scope?: string;
   prompt?: string;
+  loginHint?: string;
 }): Promise<StoredGoogleToken> {
   const clientId = await ensureGoogleClientId();
   if (!clientId) {
@@ -234,6 +235,7 @@ export async function requestGoogleToken(opts?: {
       scope: opts?.scope || GOOGLE_SCOPES,
       include_granted_scopes: true,
       prompt: opts?.prompt || "",
+      ...(opts?.loginHint ? { login_hint: opts.loginHint } : {}),
       callback: (resp: any) => {
         settled = true;
         if (resp?.error) {

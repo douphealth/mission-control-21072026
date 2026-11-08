@@ -6,7 +6,7 @@ import { secureUuid } from "@/lib/recordId";
  */
 import { db } from '@/lib/db';
 import { GDRIVE_APPDATA_SCOPE, GOOGLE_SCOPES, clearGoogleToken, fetchGoogleEmail,
-  getGoogleClientId, googleTokenHasScopes, readGoogleToken, requestGoogleToken } from '@/lib/googleDirectAuth';
+  getGoogleClientId, googleTokenHasScopes, prepareGoogleSignIn, readGoogleToken, requestGoogleToken } from '@/lib/googleDirectAuth';
 import { capturedChangeIsCurrent, mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
   type RemoteBackup, type RemoteRecords } from '@/lib/cloudSyncProtocol';
 import { applyAndConfirm, createCommittedMutationBuffer } from '@/lib/syncTransactionSafety';
@@ -500,8 +500,36 @@ export async function signOutOfCloud() {
 export async function requestEmailCode(_email: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function verifyEmailCode(_email: string, _code: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
 export async function verifyMagicLink(_url: string, _email?: string) { return { ok: false, error: 'Connect your Google account instead.' }; }
+/**
+ * Google access tokens last one hour, so a device reopened later would show
+ * only its own stale copy. When this device was connected before, renew the
+ * token on the user's first tap (popups need a gesture) and pull the latest.
+ */
+let reconnectInstalled = false;
+let reconnecting = false;
+function installGestureReconnect() {
+  if (reconnectInstalled || typeof window === 'undefined') return;
+  reconnectInstalled = true;
+  void prepareGoogleSignIn().catch(() => undefined);
+  const onGesture = () => {
+    const remembered = localStorage.getItem(USER_EMAIL_KEY);
+    if (!remembered || hasSession() || reconnecting || !getGoogleClientId() || !navigator.onLine) return;
+    reconnecting = true;
+    setStatus('connecting', 'Loading your latest changes from your Google account…');
+    requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: '', loginHint: remembered })
+      .then(async token => {
+        epoch++; verifiedToken = ''; remoteCache.clear(); clearRetry(); retryAttempt = 0;
+        await bindIdentity(token.access_token, epoch);
+        await flushCloudChanges();
+      })
+      .catch(error => setStatus('signed-out', error instanceof Error ? error.message : 'Tap Connect Google to load your latest changes.'))
+      .finally(() => { reconnecting = false; });
+  };
+  window.addEventListener('pointerdown', onGesture, true);
+  window.addEventListener('keydown', onGesture, true);
+}
 export async function startCloudSync(_force = false): Promise<{ signedIn: boolean; restored: number }> {
-  installMutationJournal(); installRefreshListeners();
+  installMutationJournal(); installRefreshListeners(); installGestureReconnect();
   await flushJournal();
   const result = await synchronize();
   return { signedIn: hasSession() && result.ok, restored: result.restored };
