@@ -1,3 +1,27 @@
+## Sidebar customization
+- [x] Add saved section/category ordering, visibility and custom categories
+- [x] Share layout with mobile directory and verify customization after reload — 17 focused tests pass; desktop and phone create/move/hide/show/rename/navigation/reload verified
+
+## Google sync regression and shared usability
+- [x] Validate configuration candidates and read native Cloudflare Google bindings
+- [x] Replace sync setup dead-end with inline save-and-connect recovery
+- [x] Retain related-section navigation on phones and sidebar scrolling
+- [x] Test configuration recovery and check Google popup/setup and section navigation — 75 tests passed; setup and simulated consent checked; eleven phone sections render without page errors or document overflow
+- [ ] Verify real Google Drive/Tasks/Calendar readback — needs an available OAuth client ID and Google consent
+
+## Dashboard efficiency and quality
+- [x] Unify task list/board scope, current-day counts and broader local search
+- [x] Restrict bulk task actions to visible selections with pending guards and failure reporting
+- [x] Preserve research provenance, exclude invalid/future dates and expose all research results
+- [x] Refine shared dashboard hierarchy, controls and phone reading layouts
+- [x] Verify task create → list/board → bulk completion → visible reload readback; check 12 sections at phone/tablet/desktop widths and research accuracy tests (42 tests pass)
+- [ ] Verify live Trends research and remaining connected section workflows — requires usable provider responses and owner-authorized inventory; not covered by layout checks
+
+## Family bulk actions and mobile menu
+- [x] Add encrypted family bulk import with validation and preview, selected-record edits and confirmed deletion
+- [x] Redesign mobile directory with favorites, category filters, clearer section rows and current-section state
+- [x] Test encrypted bulk operations and verify phone/desktop workflows — 19 tests pass; bulk add/edit/delete and reload verified; favorites verified at 390px and 320px
+
 ## Mobile and private vault
 - [x] Simplify mobile menu and improve touch controls across sections
 - [x] Improve GitHub and Cloudflare phone layouts

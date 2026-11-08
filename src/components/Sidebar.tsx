@@ -16,14 +16,15 @@ import { useSettingsStore } from "@/stores/settingsStore";
 import { usePlanStore } from "@/stores/planStore";
 import { dueState, localToday } from "@/lib/financeLedger";
 import {
-  WORKSPACE_GROUPS,
-  WORKSPACE_SECTIONS,
   filterWorkspaces,
-  workspaceById,
   type WorkspaceSection,
 } from "@/lib/workspaceCatalog";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import AreaSwitch from "@/components/AreaSwitch";
+import { Button } from "@/components/ui/button";
+import SidebarCustomizer from "@/components/SidebarCustomizer";
+import { useWorkspaceLayout } from "@/hooks/useWorkspaceLayout";
+import { sectionCategory } from "@/lib/sidebarLayout";
 
 export default function Sidebar() {
   const tasks = useTasks();
@@ -43,35 +44,25 @@ export default function Sidebar() {
   const { userName, userRole } = useSettingsStore();
   const area = usePlanStore((state) => state.area);
   const [adding, setAdding] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
+  const { layout, visible } = useWorkspaceLayout();
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
-  const customSections: WorkspaceSection[] = custom
-    .filter((module) => module.visible)
-    .sort((a, b) => a.order - b.order)
-    .map((module) => ({
-      id: `custom-${module.id}`,
-      label: module.name,
-      description: module.description || "Custom workspace",
-      group: "Custom",
-      icon: Layers3,
-    }));
-  const sections = filterWorkspaces(
-    [...WORKSPACE_SECTIONS, ...customSections],
-    "",
-    area === "personal",
-  );
+  const sections = filterWorkspaces(visible, "", area === "personal");
   const taskCount = tasks.filter((task) => task.status !== "done" && !task.archived).length;
   const financeCount = payments.filter(
     (payment) => dueState(payment, localToday()) === "overdue",
   ).length;
   const badge = (id: string) => (id === "tasks" ? taskCount : id === "payments" ? financeCount : 0);
+  const activeItem = visible.find(s => s.id === activeSection);
+  const activeGroup = activeItem ? sectionCategory(activeItem, layout) : undefined;
   useEffect(() => {
-    const group = workspaceById(activeSection)?.group;
-    if (group)
+    const groups = useNavigationStore.getState().closedGroups;
+    if (activeGroup && groups.includes(activeGroup))
       setClosedGroups(
-        useNavigationStore.getState().closedGroups.filter((value) => value !== group),
+        groups.filter((value) => value !== activeGroup),
       );
-  }, [activeSection, setClosedGroups]);
+  }, [activeSection, setClosedGroups, activeGroup]);
 
   const addModule = async (event: FormEvent) => {
     event.preventDefault();
@@ -188,9 +179,10 @@ export default function Sidebar() {
                 .map(navItem)}
             </section>
           )}
-          {WORKSPACE_GROUPS.filter((group) => group !== "Custom").map((group) => {
+          {layout.categories.map((category) => {
+            const group = category.id;
             const items = sections.filter(
-              (section) => section.group === group && !pinnedSections.includes(section.id),
+              (section) => sectionCategory(section, layout) === group && !pinnedSections.includes(section.id),
             );
             if (!items.length) return null;
             const isOpen = collapsed || !closedGroups.includes(group);
@@ -211,7 +203,7 @@ export default function Sidebar() {
                     }
                   >
                     <span>
-                      {group}
+                      {category.label}
                       <small>
                         {group === "Operate"
                           ? "Review & control"
@@ -233,15 +225,6 @@ export default function Sidebar() {
               </section>
             );
           })}
-          {area !== "personal" &&
-            customSections.some((section) => !pinnedSections.includes(section.id)) && (
-              <section className="mc-nav-group">
-                {!collapsed && <div className="mc-nav-group-label">Custom</div>}
-                {customSections
-                  .filter((section) => !pinnedSections.includes(section.id))
-                  .map(navItem)}
-              </section>
-            )}
           <button
             type="button"
             className="mc-sidebar-add"
@@ -254,6 +237,7 @@ export default function Sidebar() {
           </button>
         </nav>
         <div className="mc-sidebar-footer">
+          <Button variant="ghost" className="w-full justify-start" aria-label="Customize navigation" title="Customize navigation" onClick={() => setCustomizing(true)}><Settings size={17} />{!collapsed && "Customize navigation"}</Button>
           <button
             type="button"
             className="mc-sidebar-profile"
@@ -287,6 +271,7 @@ export default function Sidebar() {
           </button>
         </div>
       </aside>
+      <SidebarCustomizer open={customizing} onOpenChange={setCustomizing} />
       <Dialog open={adding} onOpenChange={setAdding}>
         <DialogContent>
           <DialogTitle>Create a workspace</DialogTitle>

@@ -8,6 +8,7 @@ import DailyBriefingBanner from "@/components/DailyBriefingBanner";
 import WorkspaceDirectory from "@/components/WorkspaceDirectory";
 import WorkspaceSectionNav from "@/components/WorkspaceSectionNav";
 import WorkspaceNavigationEffects from "@/components/WorkspaceNavigationEffects";
+import NavigationAccountSync from "@/components/NavigationAccountSync";
 
 import { DashboardProvider, useDashboardOptional } from "@/contexts/DashboardContext";
 import { useNavigationStore } from "@/stores/navigationStore";
@@ -188,6 +189,7 @@ export default function DashboardLayout() {
       data-density={density}
     >
       <WorkspaceNavigationEffects />
+      <NavigationAccountSync />
       <div className="v10-aurora-bg" aria-hidden />
       <a href="#main-content" className="a11y-skip-link">
         Skip to content

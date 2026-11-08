@@ -545,6 +545,8 @@ export interface UserSettings {
   digestEmailLastSentAt?: string;
   /** One-time migration marker for the 09:00 executive briefing schedule. */
   digestEmailScheduleVersion?: number;
+  /** Account-synced sidebar order, hidden sections, categories and pins (row id "navigation"). */
+  navigationPreference?: { sidebarLayout?: unknown; pinnedSections: string[]; closedGroups: string[]; changedAt: string };
   /** Dedicated non-default settings rows retain independently synced starter-source choices. */
   bootstrapSeedPreference?: {
     collection: "feedSources" | "watchTerms";

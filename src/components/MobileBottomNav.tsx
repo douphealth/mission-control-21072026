@@ -1,15 +1,17 @@
 import { House, LayoutGrid, Github, Cloud, KeyRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useWorkspaceLayout } from "@/hooks/useWorkspaceLayout";
 import { useNavigationStore } from "@/stores/navigationStore";
 
 export default function MobileBottomNav() {
   const { activeSection, setActiveSection, sidebarOpen, setSidebarOpen } = useNavigationStore();
+  const { visible } = useWorkspaceLayout();
   const tabs = [
     { id: "dashboard", label: "Today", icon: House },
     { id: "github", label: "GitHub", icon: Github },
     { id: "cloudflare", label: "Cloudflare", icon: Cloud },
     { id: "credentials", label: "Vault", icon: KeyRound },
-  ];
+  ].filter(item => visible.some(section => section.id === item.id));
   return (
     <nav className="mc-mobile-nav lg:hidden" aria-label="Mobile navigation">
       {tabs.map((item) => (

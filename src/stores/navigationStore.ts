@@ -1,14 +1,20 @@
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { resilientWebStorage } from "@/lib/resilientStorage";
+import { sanitizeSidebarLayout, type SidebarLayout } from "@/lib/sidebarLayout";
 import {
   DEFAULT_PINNED_SECTIONS,
+  MAX_PINNED_SECTIONS,
   sanitizeNavigation,
   upgradeLegacyPins,
 } from "@/lib/navigationPreferences";
 export { sanitizeNavigation } from "@/lib/navigationPreferences";
 
 interface NavigationState {
+  sidebarLayout?: SidebarLayout;
+  setSidebarLayout: (layout: SidebarLayout) => void;
+  setPinnedSections: (sections: string[]) => void;
+  resetSidebarLayout: () => void;
   activeSection: string;
   setActiveSection: (section: string) => void;
   sidebarOpen: boolean;
@@ -38,6 +44,10 @@ const validSection = (value: unknown): value is string =>
 export const useNavigationStore = create<NavigationState>()(
   persist(
     (set) => ({
+      sidebarLayout: undefined,
+      setSidebarLayout: (layout) => set({ sidebarLayout: sanitizeSidebarLayout(layout) }),
+      setPinnedSections: (sections) => set({ pinnedSections: [...new Set(sections.filter(validSection))].slice(0, MAX_PINNED_SECTIONS) }),
+      resetSidebarLayout: () => set({ sidebarLayout: undefined, pinnedSections: [...DEFAULT_PINNED_SECTIONS], closedGroups: ["Growth", "Tools"] }),
       activeSection: "dashboard",
       setActiveSection: (section) => {
         if (!validSection(section)) return;
@@ -63,7 +73,7 @@ export const useNavigationStore = create<NavigationState>()(
         set((state) => ({
           pinnedSections: state.pinnedSections.includes(section)
             ? state.pinnedSections.filter((id) => id !== section)
-            : state.pinnedSections.length < 8
+            : state.pinnedSections.length < MAX_PINNED_SECTIONS
               ? [...state.pinnedSections, section]
               : state.pinnedSections,
         }));
@@ -91,7 +101,7 @@ export const useNavigationStore = create<NavigationState>()(
     {
       name: "mc-navigation-v1",
       storage: createJSONStorage(() => resilientWebStorage),
-      version: 4,
+      version: 5,
       migrate: (persisted, version) => {
         const clean = sanitizeNavigation(persisted);
         // v4: GitHub and Cloudflare join the default pins (only for untouched defaults).
@@ -101,6 +111,7 @@ export const useNavigationStore = create<NavigationState>()(
       },
       merge: (persisted, current) => ({ ...current, ...sanitizeNavigation(persisted) }),
       partialize: (state) => ({
+        sidebarLayout: state.sidebarLayout,
         activeSection: state.activeSection,
         recentSections: state.recentSections,
         sidebarCollapsed: state.sidebarCollapsed,
