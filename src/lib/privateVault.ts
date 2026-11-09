@@ -134,7 +134,7 @@ export async function saveFamilyRecord(record: FamilyRecord, expectedPayload?: s
   const next = await asEncryptedRow(record);
   await db.transaction("rw", db.familyRecords, async () => {
     const previous = await db.familyRecords.get(record.id);
-    if (expectedPayload !== undefined && previous?.payload !== expectedPayload) throw new Error("This record was edited elsewhere. Reload before saving; your draft was not overwritten.");
+    if (expectedPayload !== undefined && (expectedPayload === null ? !!previous : previous?.payload !== expectedPayload)) throw new Error("This record was edited elsewhere. Reload before saving; your draft was not overwritten.");
     await db.familyRecords.put(next);
   });
 }
