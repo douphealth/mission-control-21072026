@@ -14,18 +14,22 @@ export default function FamilyBulkImport({ open, onClose, onSaved, existing = []
   const [busy, setBusy] = useState(false);
   const [reveal, setReveal] = useState(false);
   const [rows, setRows] = useState<FamilyRecord[]>([]);
+  const [asNote, setAsNote] = useState(false);
+  const [noteMember, setNoteMember] = useState("");
+  const [noteTitle, setNoteTitle] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const parsed = useMemo(() => parseFamilyImport(input, existing), [input, existing]);
   // Editable copy of the preview; re-parsing the text resets edits.
   useEffect(() => setRows(parsed.rows), [parsed]);
-  const valid = rows.filter(r => r.member.trim() && r.label.trim());
+  const noteRecord: FamilyRecord | null = asNote && input.trim() ? { id: "note", member: noteMember.trim() || "Unassigned", label: noteTitle.trim() || input.trim().split(/\r?\n/)[0].slice(0, 60) || "Note", category: FAMILY_CATEGORIES.includes(noteTitle) ? noteTitle : "Other", value: "", notes: input.trim() } : null;
+  const valid = asNote ? (noteRecord ? [noteRecord] : []) : rows.filter(r => r.member.trim() && r.label.trim());
   const close = () => { if (!busy) { setInput(""); setReveal(false); onClose(); } };
   const update = (id: string, patch: Partial<FamilyRecord>) => setRows(old => old.map(r => r.id === id ? { ...r, ...patch } : r));
   async function save() {
     if (busy || !valid.length) return;
     setBusy(true);
     try {
-      await addFamilyRecords(valid.map(r => ({ ...r, member: r.member.trim(), label: r.label.trim() })));
+      await addFamilyRecords(valid.map(r => ({ ...r, id: r.id === "note" ? crypto.randomUUID() : r.id, member: r.member.trim(), label: r.label.trim() })));
       await onSaved();
       toast.success(`${valid.length} family records added`);
       setInput(""); setReveal(false); onClose();
@@ -51,8 +55,17 @@ export default function FamilyBulkImport({ open, onClose, onSaved, existing = []
     <label className="block space-y-2 text-sm font-medium">Paste anything: lists, notes, spreadsheet rows or JSON
       <textarea aria-label="Family records to import" spellCheck={false} autoComplete="off" disabled={busy} value={input} onChange={e => setInput(e.target.value)} rows={7} className="w-full resize-y rounded-md border border-input bg-background p-3 font-mono text-sm font-normal" placeholder={EXAMPLE} />
     </label>
-    {parsed.errors.length > 0 && <div role="alert" className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"><p className="font-medium">{parsed.rows.length ? `${parsed.errors.length} lines skipped — everything else can be added.` : "This text could not be read."}</p>{parsed.errors.slice(0, 3).map((error, i) => <p key={i} className="text-muted-foreground">{error}</p>)}</div>}
-    {rows.length > 0 && <section className="space-y-2" aria-label="Import preview">
+    <div role="radiogroup" aria-label="How to save" className="flex flex-wrap gap-2 text-sm">
+      <Button size="sm" variant={asNote ? "outline" : "default"} aria-pressed={!asNote} onClick={() => setAsNote(false)}>Split into separate records</Button>
+      <Button size="sm" variant={asNote ? "default" : "outline"} aria-pressed={asNote} onClick={() => setAsNote(true)}>Keep as one text note</Button>
+    </div>
+    {asNote && <div className="grid gap-2 sm:grid-cols-2">
+      <input aria-label="Family member for note" placeholder="Family member (optional)" value={noteMember} onChange={e => setNoteMember(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+      <input aria-label="Note title" placeholder="Title (optional — first line is used)" value={noteTitle} onChange={e => setNoteTitle(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
+      <p className="text-xs text-muted-foreground sm:col-span-2">The whole text is saved exactly as written, encrypted, in one record.</p>
+    </div>}
+    {!asNote && parsed.errors.length > 0 && <div role="alert" className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"><p className="font-medium">{parsed.rows.length ? `${parsed.errors.length} lines skipped — everything else can be added.` : "This text could not be read."}</p>{parsed.errors.slice(0, 3).map((error, i) => <p key={i} className="text-muted-foreground">{error}</p>)}</div>}
+    {!asNote && rows.length > 0 && <section className="space-y-2" aria-label="Import preview">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">{valid.length} records · {members} member{members === 1 ? "" : "s"}{parsed.duplicates > 0 && <span className="font-normal text-muted-foreground"> · {parsed.duplicates} already saved, skipped</span>}</h3>
         <Button variant="ghost" size="sm" onClick={() => setReveal(v => !v)}>{reveal ? <EyeOff /> : <Eye />}{reveal ? "Hide values" : "Show values"}</Button>
@@ -74,6 +87,6 @@ export default function FamilyBulkImport({ open, onClose, onSaved, existing = []
       {rows.length > PREVIEW_LIMIT && <p className="text-xs text-muted-foreground">Showing the first {PREVIEW_LIMIT} of {rows.length}; all {valid.length} will be added.</p>}
     </section>}
     {!rows.length && !parsed.errors.length && input.trim() && parsed.duplicates > 0 && <p className="text-sm text-muted-foreground">All {parsed.duplicates} records are already in your vault.</p>}
-    <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" disabled={busy} onClick={close}>Cancel</Button><Button disabled={busy || !valid.length} onClick={() => void save()}>{busy ? "Encrypting & saving…" : `Add ${valid.length || ""} records`}</Button></div>
+    <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" disabled={busy} onClick={close}>Cancel</Button><Button disabled={busy || !valid.length} onClick={() => void save()}>{busy ? "Encrypting & saving…" : asNote ? "Save note" : `Add ${valid.length || ""} records`}</Button></div>
   </FormModal>;
 }

@@ -56,7 +56,9 @@ export function parseFamilyImport(input: string, existing: FamilyRecord[] = []):
     if (!text) return { rows: [], errors: [], duplicates: 0 };
     let source: unknown[];
     const isJson = text.startsWith("[") || text.startsWith("{");
-    if (!isJson && !looksLikeCsv(text)) source = parseFreeText(text).map(r => ({ ...r, category: guessCategory(`${r.label} ${r.value}`) }));
+    const free = () => parseFreeText(text).map(r => ({ ...r, category: guessCategory(`${r.label} ${r.value}`) }));
+    try {
+    if (!isJson && !looksLikeCsv(text)) source = free();
     else if (isJson) {
       const json: unknown = JSON.parse(text);
       if (!Array.isArray(json)) throw new Error("JSON must contain an array of family records.");
@@ -69,6 +71,7 @@ export function parseFamilyImport(input: string, existing: FamilyRecord[] = []):
       if (result.errors.length) throw new Error(`CSV could not be read near row ${(result.errors[0].row ?? 0) + 2}. Check columns and quoted values.`);
       source = result.data;
     }
+    } catch { source = free(); } // Malformed JSON/CSV: read it as plain text instead of refusing.
     source = explodeWide(source);
     if (source.length > FAMILY_IMPORT_LIMIT) throw new Error("Import at most 5,000 family records at a time.");
     const rows: FamilyRecord[] = [], errors: string[] = [];
