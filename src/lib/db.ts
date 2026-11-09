@@ -870,6 +870,7 @@ class MissionControlDB extends Dexie {
   syncMeta!: Table<SyncMetaRow>;
   familyRecords!: Table<EncryptedFamilyRecordRow>;
   vaultMeta!: Table<PrivateVaultMetadataRow>;
+  familyMigration!: Table<{ id: string; payload: string }>;
 
   constructor() {
     super("MissionControlDB");
@@ -942,6 +943,7 @@ class MissionControlDB extends Dexie {
     this.version(9).stores({
       familyRecords: "id",
       vaultMeta: "id",
+      familyMigration: "id",
     });
   }
 }
