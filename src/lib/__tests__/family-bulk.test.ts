@@ -4,11 +4,14 @@ import { webcrypto } from "node:crypto";
 import { parseFamilyImport } from "../familyBulk";
 import { addFamilyRecords, editFamilyRecords, deleteFamilyRecords, familyDb, readFamilyRecords, unlockPrivateVault, lockPrivateVault } from "../privateVault";
 import { setVaultSessionKey } from "../encryption";
+import { db } from "../db";
 
 beforeEach(async () => {
   Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true });
   localStorage.clear(); setVaultSessionKey(null);
   await familyDb.records.clear();
+  await db.vaultMeta.clear();
+  await db.familyMigration.clear();
 });
 describe("family vault bulk management", () => {
   it("preserves actual private strings and leading zeroes from CSV", () => {
