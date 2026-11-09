@@ -46,6 +46,7 @@ import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import { useConfirmDialog } from "@/components/ConfirmDialog";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import RecurringBillsPanel from "@/components/RecurringBillsPanel";
 
 const typeIcons = {
   income: ArrowDownLeft,
@@ -354,6 +355,8 @@ export default function PaymentsPage() {
           </>
         }
       />
+
+      <RecurringBillsPanel payments={payments as any} today={today} onEdit={openEdit as any} />
 
       {error && !modalOpen && (
         <p
@@ -889,6 +892,9 @@ export default function PaymentsPage() {
                 options={[
                   { value: "", label: "One-time / unknown" },
                   { value: "monthly", label: "Monthly" },
+                  { value: "bimonthly", label: "Every 2 months" },
+                  { value: "quarterly", label: "Every 3 months" },
+                  { value: "semiannual", label: "Every 6 months" },
                   { value: "yearly", label: "Yearly" },
                   { value: "weekly", label: "Weekly" },
                 ]}

@@ -507,25 +507,48 @@ export async function verifyMagicLink(_url: string, _email?: string) { return { 
  */
 let reconnectInstalled = false;
 let reconnecting = false;
+let reconnectPausedUntil = 0;
+const RECONNECT_PAUSE_MS = 3 * 60_000;
+/** True when this device was connected before but its one-hour Google session ran out. */
+export function cloudNeedsReconnect() {
+  if (typeof window === 'undefined') return false;
+  try { return !!localStorage.getItem(USER_EMAIL_KEY) && !hasSession(); } catch { return false; }
+}
+/** Renew the Google session for the remembered account. Must run inside a tap or key press. */
+export function reconnectCloud(): Promise<void> {
+  const remembered = localStorage.getItem(USER_EMAIL_KEY) || undefined;
+  reconnecting = true;
+  setStatus('connecting', 'Loading your latest changes from your Google account…');
+  return requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: '', loginHint: remembered })
+    .then(async token => {
+      epoch++; verifiedToken = ''; remoteCache.clear(); clearRetry(); retryAttempt = 0;
+      reconnectPausedUntil = 0;
+      await bindIdentity(token.access_token, epoch);
+      installRefreshListeners();
+      const result = await flushCloudChanges();
+      if (!result.ok) throw new Error(result.error || 'Sync did not complete');
+    })
+    .catch(error => {
+      // A closed or blocked window must not reopen on every following tap.
+      reconnectPausedUntil = Date.now() + RECONNECT_PAUSE_MS;
+      setStatus('signed-out', error instanceof Error ? error.message : 'Tap "Load latest" to get your newest changes.');
+      throw error;
+    })
+    .finally(() => { reconnecting = false; });
+}
 function installGestureReconnect() {
   if (reconnectInstalled || typeof window === 'undefined') return;
   reconnectInstalled = true;
   void prepareGoogleSignIn().catch(() => undefined);
   const onGesture = () => {
-    const remembered = localStorage.getItem(USER_EMAIL_KEY);
-    if (!remembered || hasSession() || reconnecting || !getGoogleClientId() || !navigator.onLine) return;
-    reconnecting = true;
-    setStatus('connecting', 'Loading your latest changes from your Google account…');
-    requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: '', loginHint: remembered })
-      .then(async token => {
-        epoch++; verifiedToken = ''; remoteCache.clear(); clearRetry(); retryAttempt = 0;
-        await bindIdentity(token.access_token, epoch);
-        await flushCloudChanges();
-      })
-      .catch(error => setStatus('signed-out', error instanceof Error ? error.message : 'Tap Connect Google to load your latest changes.'))
-      .finally(() => { reconnecting = false; });
+    if (reconnecting || Date.now() < reconnectPausedUntil || !navigator.onLine) return;
+    if (!cloudNeedsReconnect() || !getGoogleClientId()) return;
+    void reconnectCloud().catch(() => undefined);
   };
-  window.addEventListener('pointerdown', onGesture, true);
+  // Touch screens only allow a popup from a completed tap (click/touchend),
+  // not from the moment a finger lands, so listen for those events.
+  window.addEventListener('click', onGesture, true);
+  window.addEventListener('touchend', onGesture, true);
   window.addEventListener('keydown', onGesture, true);
 }
 export async function startCloudSync(_force = false): Promise<{ signedIn: boolean; restored: number }> {

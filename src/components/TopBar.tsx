@@ -10,6 +10,7 @@ import {
   MoreHorizontal,
   Plus,
   Search,
+  Sparkles,
   Sun,
   Upload,
   Rows3,
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 const CommandPalette = lazy(() => import("./CommandPalette"));
+const SmartFindDialog = lazy(() => import("./SmartFindDialog"));
 const BulkImportModal = lazy(() => import("./BulkImportModal"));
 const VersionsModal = lazy(() => import("./VersionsModal"));
 const QuickCaptureBar = lazy(() => import("./dashboard/QuickCaptureBar"));
@@ -55,6 +57,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
   } = useNavigationStore();
   const [captureOpen, setCaptureOpen] = useState(false);
   const [versionsOpen, setVersionsOpen] = useState(false);
+  const [smartFindOpen, setSmartFindOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [today, setToday] = useState(todayISO);
@@ -158,6 +161,9 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
           <kbd>{shortcut}</kbd>
         </button>
         <div className="mc-topbar-actions">
+          <button type="button" className="mc-icon-button" onClick={() => setSmartFindOpen(true)} aria-label="Smart find notes and tasks" title="Smart find (AI)">
+            <Sparkles size={18} />
+          </button>
           <button
             type="button"
             className="mc-icon-button"
@@ -305,6 +311,7 @@ const TopBar = forwardRef<HTMLElement>(function TopBar(_props, ref) {
         )}
         {importModalOpen && <BulkImportModal open onClose={() => setImportModalOpen(false)} />}
         {versionsOpen && <VersionsModal open onClose={() => setVersionsOpen(false)} />}
+        {smartFindOpen && <SmartFindDialog open onClose={() => setSmartFindOpen(false)} />}
       </Suspense>
     </>
   );

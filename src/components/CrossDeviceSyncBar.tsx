@@ -4,12 +4,13 @@ import { toast } from 'sonner';
 import { useTasks } from '@/hooks/useTableData';
 import { useGoogleSyncStatus } from '@/hooks/useGoogleSyncStatus';
 import { getCloudStatus, getCloudError, getCloudUserId, getLastCloudSync, getPendingCloudCount,
-  onCloudStatus, onDirtyRecordsChange, signInToCloud, forceCloudSync, repairStaleCloudJournal } from '@/lib/cloudSync';
+  onCloudStatus, onDirtyRecordsChange, signInToCloud, forceCloudSync, repairStaleCloudJournal,
+  cloudNeedsReconnect, reconnectCloud } from '@/lib/cloudSync';
 import { requestGoogleSync } from '@/lib/googleSync';
 import { getGoogleSyncStatus, type GoogleSyncStatus } from '@/lib/googleSyncState';
 import { googleSyncFailure } from '@/lib/googleSyncOutcome';
 import { GoogleSetupModal } from '@/components/dashboard/GoogleSetupModal';
-import { prepareGoogleSignIn } from '@/lib/googleDirectAuth';
+import { ensureGoogleClientId, getGoogleClientId, prepareGoogleSignIn } from '@/lib/googleDirectAuth';
 import { Button } from '@/components/ui/button';
 
 function snapshot() { return { status: getCloudStatus(), error: getCloudError(), email: getCloudUserId(), at: getLastCloudSync(), pending: getPendingCloudCount() }; }
@@ -78,9 +79,11 @@ export default function CrossDeviceSyncBar() {
     if (busy) return;
     setBusy(true);
     try {
-      if (connect) {
-        const { ensureGoogleClientId } = await import('@/lib/googleDirectAuth');
-        if (!(await ensureGoogleClientId())) {
+      if (connect && cloudNeedsReconnect() && getGoogleClientId()) {
+        // Open Google's window inside this tap; phones block it after a wait.
+        await reconnectCloud();
+      } else if (connect) {
+        if (!getGoogleClientId() && !(await ensureGoogleClientId())) {
           setSetupOpen(true);
           return;
         }
@@ -131,7 +134,7 @@ export default function CrossDeviceSyncBar() {
       });
     } finally { setBusy(false); setSync(snapshot()); }
   };
-  const label = sync.status === 'synced' && !sync.pending ? 'Cloud confirmed' : sync.status === 'signed-out' ? 'This device only' : sync.status === 'error' ? 'Sync needs attention' : sync.status === 'offline' ? 'Offline - saved locally' : 'Synchronizing';
+  const label = sync.status === 'synced' && !sync.pending ? 'Cloud confirmed' : sync.status === 'signed-out' ? (cloudNeedsReconnect() ? 'Saved copy on this device · tap to load latest' : 'This device only') : sync.status === 'error' ? 'Sync needs attention' : sync.status === 'offline' ? 'Offline - saved locally' : 'Synchronizing';
   return (
     <>
     <section
@@ -170,7 +173,7 @@ export default function CrossDeviceSyncBar() {
           className="mc20-sync-action"
         >
           <RefreshCw size={13} className={busy || sync.status === "syncing" || google.state === "syncing" ? "animate-spin" : ""} />
-          {busy ? "Syncing..." : connect ? "Connect Google" : reconnectGoogle ? "Reconnect Google" : "Sync now"}
+          {busy ? "Syncing..." : connect && cloudNeedsReconnect() ? "Load latest" : connect ? "Connect Google" : reconnectGoogle ? "Reconnect Google" : "Sync now"}
         </Button>
       </div>
 

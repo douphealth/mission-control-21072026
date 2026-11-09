@@ -53,6 +53,7 @@ import ConnectionsPanel from "@/components/ConnectionsPanel";
 import DailyEmailSettings from "@/components/DailyEmailSettings";
 
 import { toast } from "sonner";
+import { DataStatusPanel, EncryptedBackupPanel } from "@/components/DataSafetyPanels";
 
 const tabs = [
   { id: "profile", label: "Profile", hint: "Your name and role", icon: User },
@@ -664,6 +665,8 @@ export default function SettingsPage() {
             {/* ─── Data ─── */}
             {activeTab === "data" && (
               <div key="data" {...fadeIn} className="space-y-4">
+                <DataStatusPanel />
+                <EncryptedBackupPanel />
                 <div className="card-elevated p-6 space-y-4">
                   <h2 className="font-semibold text-lg">Backup & Restore</h2>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

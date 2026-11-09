@@ -707,6 +707,19 @@ export default function CredentialsPage() {
                           isMasterLocked={masterLocked}
                         />
                       )}
+                      {!credential.password && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="w-16 shrink-0 text-[11px] text-muted-foreground">Password</span>
+                          <span className="flex-1 truncate text-[11px] italic text-muted-foreground">Not saved</span>
+                          <button
+                            type="button"
+                            onClick={() => void openEdit(credential)}
+                            className="shrink-0 rounded-lg bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary hover:bg-primary/15"
+                          >
+                            Add password
+                          </button>
+                        </div>
+                      )}
                       {credential.apiKey && (
                         <MaskedField
                           value={credential.apiKey}
@@ -721,9 +734,20 @@ export default function CredentialsPage() {
                     </div>
 
                     {credential.notes && (
-                      <p className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                        {credential.notes}
-                      </p>
+                      <div className="flex items-start gap-1">
+                        <p className="line-clamp-3 flex-1 whitespace-pre-wrap break-words text-[11px] leading-relaxed text-muted-foreground">
+                          {credential.notes}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => void copyText(credential.notes, "Notes")}
+                          className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                          aria-label="Copy notes"
+                          title="Copy notes"
+                        >
+                          <Copy size={12} />
+                        </button>
+                      </div>
                     )}
                   </>
                 )}

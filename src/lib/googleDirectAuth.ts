@@ -211,7 +211,11 @@ export async function requestGoogleToken(opts?: {
   prompt?: string;
   loginHint?: string;
 }): Promise<StoredGoogleToken> {
-  const clientId = await ensureGoogleClientId();
+  // Phones and tablets only allow Google's window when it opens in the same
+  // tap. When sign-in is already loaded, open it immediately without waiting.
+  const ready = (window as any).google?.accounts?.oauth2;
+  const knownId = validGoogleClientId(getGoogleClientId());
+  const clientId = ready && knownId ? knownId : await ensureGoogleClientId();
   if (!clientId) {
     throw new Error(
       "No Google Client ID configured. Open Settings → Google Connection and paste your OAuth Client ID.",
@@ -222,7 +226,7 @@ export async function requestGoogleToken(opts?: {
       "That does not look like a Google OAuth Client ID — it should end in .apps.googleusercontent.com.",
     );
   }
-  await loadGis();
+  if (!ready) await loadGis();
   const w = window as any;
   if (!w.google?.accounts?.oauth2) {
     throw new Error("Google sign-in is unavailable in this browser.");

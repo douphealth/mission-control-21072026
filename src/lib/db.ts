@@ -484,6 +484,8 @@ export interface Payment {
   sourceUrl?: string;
   evidenceStatus?: "confirmed" | "unverified";
   verifiedAt?: string;
+  /** Optional last month (YYYY-MM) a recurring bill applies; later months exclude it. */
+  endMonth?: string;
 }
 
 export interface Idea {
@@ -546,6 +548,7 @@ export interface UserSettings {
   /** One-time migration marker for the 09:00 executive briefing schedule. */
   digestEmailScheduleVersion?: number;
   /** Account-synced sidebar order, hidden sections, categories and pins (row id "navigation"). */
+  deviceStatus?: Record<string, { label: string; lastSyncAt?: string; lastBackupAt?: string; seenAt: string }>;
   navigationPreference?: { sidebarLayout?: unknown; pinnedSections: string[]; closedGroups: string[]; changedAt: string };
   /** Dedicated non-default settings rows retain independently synced starter-source choices. */
   bootstrapSeedPreference?: {
