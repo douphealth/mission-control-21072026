@@ -68,8 +68,10 @@ async function migrateLegacyFamilyRecords(): Promise<number> {
       const copy = JSON.parse(oldValue) as FamilyRecord;
       copy.id = crypto.randomUUID();
       validateFamilyRecord(copy);
+      // WebCrypto must run outside a Dexie transaction to prevent premature auto-commit.
+      const encryptedCopy = await encrypt(JSON.stringify(copy));
       await db.transaction("rw", db.familyRecords, db.familyMigration, async () => {
-        await db.familyRecords.add({ id: copy.id, payload: await encrypt(JSON.stringify(copy)) });
+        await db.familyRecords.add({ id: copy.id, payload: encryptedCopy });
         await db.familyMigration.put({ id: row.id, payload: row.payload });
       });
     } else {
