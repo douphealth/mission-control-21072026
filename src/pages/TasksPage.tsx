@@ -722,7 +722,7 @@ const KanbanCard = memo(function KanbanCard({
     >
       {/* Card header */}
       <div className="p-3.5 pb-2">
-        <div className="flex items-start gap-2">
+        <div className="mc-task-card-head flex items-start gap-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -735,7 +735,7 @@ const KanbanCard = memo(function KanbanCard({
           </button>
           <div className="flex-1 min-w-0">
             <p
-              className={`text-sm font-semibold leading-snug ${task.status === "done" ? "line-through text-muted-foreground" : "text-card-foreground"}`}
+              className={`mc-task-title text-sm font-semibold leading-snug ${task.status === "done" ? "line-through text-muted-foreground" : "text-card-foreground"}`}
             >
               {task.title}
             </p>
@@ -746,7 +746,7 @@ const KanbanCard = memo(function KanbanCard({
             )}
           </div>
           {/* Actions */}
-          <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+          <div className="mc-task-card-actions flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -763,6 +763,7 @@ const KanbanCard = memo(function KanbanCard({
                 onEdit();
               }}
               className="p-1.5 sm:p-1 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors touch-manipulation"
+              title="Open editor"
             >
               <Edit2 size={12} />
             </button>
@@ -772,6 +773,7 @@ const KanbanCard = memo(function KanbanCard({
                 onDelete();
               }}
               className="p-1.5 sm:p-1 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors touch-manipulation"
+              title="Delete"
             >
               <Trash2 size={12} />
             </button>
@@ -1105,12 +1107,13 @@ const ListRow = memo(function ListRow({
         style={{ borderLeft: `3px solid ${pr.color}` }}
       >
         {/* Main row */}
-        <div className="flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 sm:py-3.5">
+        <div className="mc-task-row-main flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3 sm:py-3.5" data-bulk={bulkMode ? "true" : "false"}>
           {/* Bulk select checkbox */}
           {bulkMode && (
             <button
               onClick={onToggleSelect}
-              className={`shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all touch-manipulation ${selected ? "bg-primary border-primary" : "border-border hover:border-primary/50"}`}
+              className={`mc-task-select shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all touch-manipulation ${selected ? "bg-primary border-primary" : "border-border hover:border-primary/50"}`}
+              aria-label={`Select ${task.title}`}
             >
               {selected && <CheckCircle2 size={12} className="text-primary-foreground" />}
             </button>
@@ -1119,7 +1122,7 @@ const ListRow = memo(function ListRow({
           <button
             onClick={onToggle}
             title={task.status === "done" ? "Reopen" : "Mark done"}
-            className="shrink-0 transition-all hover:scale-110 touch-manipulation p-1"
+            className="mc-task-complete shrink-0 transition-all hover:scale-110 touch-manipulation p-1"
             style={{
               color:
                 task.status === "done" ? "hsl(var(--success))" : "hsl(var(--muted-foreground))",
@@ -1129,7 +1132,7 @@ const ListRow = memo(function ListRow({
           </button>
 
           {/* Main content */}
-          <div className="flex-1 min-w-0">
+          <div className="mc-task-row-copy flex-1 min-w-0">
             {editing ? (
               <input
                 autoFocus
@@ -1156,7 +1159,8 @@ const ListRow = memo(function ListRow({
                   onDoubleClick={onEdit}
                   role="button"
                   tabIndex={0}
-                  className={`text-sm font-semibold truncate cursor-text ${task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}
+                  onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onEdit(); } }}
+                  className={`mc-task-title text-sm font-semibold cursor-text ${task.status === "done" ? "line-through text-muted-foreground" : "text-foreground"}`}
                 >
                   {task.title}
                 </span>
@@ -1204,12 +1208,12 @@ const ListRow = memo(function ListRow({
                 <Clock size={9} /> {fmtMinutes(estimate)}
               </span>
               {task.category && (
-                <span className="text-[10px] text-muted-foreground/50 hidden sm:inline">
+                <span className="mc-task-category text-[10px] text-muted-foreground">
                   · {task.category}
                 </span>
               )}
               {task.linkedProject && (
-                <span className="text-[10px] text-primary/60 font-medium truncate max-w-[80px] hidden sm:inline">
+                <span className="mc-task-project text-[10px] text-primary font-medium">
                   ↳ {task.linkedProject}
                 </span>
               )}
@@ -1279,7 +1283,9 @@ const ListRow = memo(function ListRow({
           {task.subtasks.length > 0 && (
             <button
               onClick={() => setExpanded((e) => !e)}
-              className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0 bg-secondary px-2 py-1 rounded-lg touch-manipulation"
+              className="mc-task-subtasks flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors shrink-0 bg-secondary px-2 py-1 rounded-lg touch-manipulation"
+              aria-expanded={expanded}
+              aria-label={`Subtasks for ${task.title}`}
             >
               <CheckSquare size={10} />
               {doneSubs}/{task.subtasks.length}
@@ -1292,7 +1298,7 @@ const ListRow = memo(function ListRow({
 
           {/* Planning shortcuts — moving a plan never rewrites the deadline */}
           {task.status !== "done" && (
-            <div className="hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="mc-task-planning hidden md:flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
               {!plannedToday && (
                 <button
                   type="button"
@@ -1323,7 +1329,7 @@ const ListRow = memo(function ListRow({
           )}
 
           {/* Actions — always visible on mobile */}
-          <div className="flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+          <div className="mc-task-row-actions flex items-center gap-0.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
             {task.status !== "done" && !plannedToday && (
               <button
                 type="button"
@@ -1552,6 +1558,14 @@ export default function TasksPage() {
   const [preset, setPreset] = useState<
     "inbox" | "today" | "upcoming" | "important" | "all" | "done"
   >("today");
+  const focusedTaskId = useNavigationStore(state => state.focusTaskId);
+  useEffect(() => {
+    if (!focusedTaskId) return;
+    const task = tasks.find(item => item.id === focusedTaskId);
+    if (!task) return;
+    setModal({ open: true, task });
+    setFocusTaskId(null);
+  }, [focusedTaskId, tasks, setFocusTaskId]);
   const [showFilters, setShowFilters] = useState(false);
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -2130,7 +2144,7 @@ export default function TasksPage() {
       {/* ── Kanban Board ── */}
       {view === "kanban" && (
         <div
-          className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
+          className="mc-task-board flex gap-3 sm:gap-4 overflow-x-auto pb-4 snap-x snap-mandatory"
           style={{ minHeight: 400 }}
         >
           {STATUSES.map((status) => (

@@ -472,7 +472,7 @@ export default function PaymentsPage() {
       )}
 
       <section className="grid gap-3 md:grid-cols-2">
-        <div className="card-glass p-4">
+        <div className="card-glass min-w-0 p-4">
           <h2 className="text-sm font-semibold">Next payments &amp; collections</h2>
           <p className="mt-1 text-xs text-muted-foreground">
             {overdueCount} overdue · settled income and outgoing costs are reported separately
@@ -482,9 +482,9 @@ export default function PaymentsPage() {
               {upcoming.map((p) => (
                 <div
                   key={p.id}
-                  className="flex justify-between gap-3 border-t border-border/30 pt-2 text-xs"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-t border-border/30 pt-2 text-xs"
                 >
-                  <span className="min-w-0 truncate">
+                  <span className="min-w-0 break-words">
                     {p.title} · {p.dueDate}
                   </span>
                   <span className="shrink-0 font-semibold">{fmt(p.amount, p.currency)}</span>
@@ -495,7 +495,7 @@ export default function PaymentsPage() {
             <p className="mt-3 text-xs text-muted-foreground">No upcoming recorded obligations.</p>
           )}
         </div>
-        <div className="card-glass p-4">
+        <div className="card-glass min-w-0 p-4">
           <h2 className="text-sm font-semibold">Financial integrity</h2>
           <p className="mt-2 text-xs text-muted-foreground">
             {payments.filter((p) => p.evidenceStatus === "confirmed").length} entries have

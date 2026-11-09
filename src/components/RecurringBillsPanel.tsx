@@ -168,11 +168,11 @@ export default function RecurringBillsPanel({
     navigator.clipboard.writeText(v).then(() => toast.success("IBAN copied"));
 
   return (
-    <section className="rounded-2xl border border-border/40 bg-card/60 p-4 sm:p-5 space-y-4" aria-label="Recurring bills">
+    <section className="mc-bills-panel border-y border-border py-5 space-y-4" aria-label="Recurring bills">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex items-center gap-2">
           <Repeat size={18} className="text-primary" />
-          <div>
+          <div className="min-w-0">
             <h2 className="text-base font-semibold">Recurring bills</h2>
             <p className="text-xs text-muted-foreground">
               Monthly, every 3 months, every 6 months and yearly payments in one schedule.
@@ -219,7 +219,7 @@ export default function RecurringBillsPanel({
       <div className="grid gap-3 lg:grid-cols-[2fr_1fr]">
         <div className="rounded-xl border border-border/30 p-3">
           <p className="mb-2 text-xs font-semibold text-muted-foreground">Επόμενοι 12 μήνες · πατήστε έναν μήνα</p>
-          <div className="flex h-32 items-end gap-1">
+          <div className="mc-bills-forecast flex h-32 items-end gap-1">
             {forecast.map((f) => (
               <button key={f.m} onClick={() => setMonth(f.m)} title={`${monthName(f.m)}: ${eur(f.total)}`} className="flex flex-1 flex-col items-center gap-1 min-w-0">
                 <span className="text-[9px] tabular-nums text-muted-foreground truncate">{Math.round(f.total)}</span>
@@ -285,20 +285,20 @@ export default function RecurringBillsPanel({
               const d = daysUntil(b.dueDate, today);
               const ibans = extractIbans(b.notes);
               return (
-                <article key={b.id} className={`rounded-xl border p-3 space-y-2 ${d < 0 ? "border-destructive/40 bg-destructive/5" : "border-border/30 bg-background/40"}`}>
-                  <div className="flex justify-between gap-2">
+                <article key={b.id} className={`mc-bill-record min-w-0 rounded-lg border p-3 space-y-2 ${d < 0 ? "border-destructive/40 bg-destructive/5" : "border-border/30 bg-background/40"}`}>
+                  <div className="mc-bill-heading grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
                     <div className="min-w-0">
-                      <p className="font-medium text-sm truncate">{b.title}</p>
-                      <p className="text-[11px] text-muted-foreground truncate">
+                      <p className="font-medium text-sm break-words">{b.title}</p>
+                      <p className="text-[11px] text-muted-foreground break-words">
                         {[b.to, b.from, b.category].filter(Boolean).join(" · ")}
                       </p>
                     </div>
-                    <div className="text-right shrink-0">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 sm:block sm:text-right">
                       <AmountEditor b={b} />
                       <p className="text-[11px] text-muted-foreground">{freqLabel(b.recurringInterval)}{b.endMonth ? ` · έως ${b.endMonth}` : ""}</p>
                     </div>
                   </div>
-                  <p className="flex items-center gap-1.5 text-xs">
+                  <p className="flex flex-wrap items-center gap-1.5 text-xs">
                     <CalendarClock size={13} />
                     {b.dueDate}{" "}
                     <span className={d < 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
@@ -308,10 +308,10 @@ export default function RecurringBillsPanel({
                       <span className="ml-auto text-muted-foreground">{eur(annualCost(b.amount, b.recurringInterval))}/yr</span>
                     )}
                   </p>
-                  {b.notes && <p className="text-[11px] text-muted-foreground line-clamp-2 whitespace-pre-line">{b.notes.split("\n").filter((l) => !/IBAN|λογ\./.test(l)).join(" · ")}</p>}
+                  {b.notes && <p className="text-[11px] text-muted-foreground break-words whitespace-pre-line">{b.notes.split("\n").filter((l) => !/IBAN|λογ\./.test(l)).join(" · ")}</p>}
                   {ibans.map((i) => (
                     <button key={i} onClick={() => void copy(i)} className="flex w-full items-center gap-1.5 rounded-lg bg-secondary/40 px-2 py-1 text-[11px] font-mono text-left">
-                      <Copy size={12} /> {formatIban(i)}
+                      <Copy size={12} className="shrink-0" /> <span className="min-w-0 break-all">{formatIban(i)}</span>
                     </button>
                   ))}
                   <div className="flex gap-2">

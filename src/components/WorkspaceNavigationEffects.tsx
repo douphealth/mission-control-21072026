@@ -27,12 +27,30 @@ export default function WorkspaceNavigationEffects() {
       document.title = `${workspaceById(section)?.label ?? "Workspace"} · Mission Control`;
     };
     writeLocation(useNavigationStore.getState().activeSection, true);
+    const positions = new Map<string, number>();
+    const scroller = document.getElementById("workspace-scroll");
+    let restoring = false;
+    let cancelRestore = () => {};
+    const record = () => { if (!restoring && scroller) positions.set(useNavigationStore.getState().activeSection, scroller.scrollTop); };
+    scroller?.addEventListener("scroll", record, { passive: true });
     const unsubscribe = useNavigationStore.subscribe((state, previous) => {
       if (state.activeSection === previous.activeSection) return;
       writeLocation(state.activeSection);
+      cancelRestore();
+      const target = positions.get(state.activeSection) ?? 0;
+      restoring = true;
+      const restore = () => scroller?.scrollTo({ top: target, behavior: "instant" });
+      const observer = new ResizeObserver(restore);
+      const content = document.getElementById("main-content");
+      if (content) observer.observe(content);
+      const timer = window.setTimeout(() => { observer.disconnect(); restoring = false; }, 1800);
+      const stop = () => { observer.disconnect(); window.clearTimeout(timer); restoring = false; };
+      scroller?.addEventListener("touchstart", stop, { once: true, passive: true });
+      scroller?.addEventListener("wheel", stop, { once: true, passive: true });
+      cancelRestore = () => { stop(); scroller?.removeEventListener("touchstart", stop); scroller?.removeEventListener("wheel", stop); };
       requestAnimationFrame(() => {
         const main = document.getElementById("main-content");
-        document.getElementById("workspace-scroll")?.scrollTo({ top: 0, behavior: "instant" });
+        restore();
         if (!document.querySelector('[role="dialog"]')) main?.focus({ preventScroll: true });
       });
     });
@@ -40,6 +58,8 @@ export default function WorkspaceNavigationEffects() {
     window.addEventListener("hashchange", readLocation);
     return () => {
       unsubscribe();
+      cancelRestore();
+      scroller?.removeEventListener("scroll", record);
       window.removeEventListener("popstate", readLocation);
       window.removeEventListener("hashchange", readLocation);
     };

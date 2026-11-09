@@ -2938,3 +2938,100 @@ select:focus-visible {
   .mcn-sheet { width: 100vw !important; max-width: none !important; height: 100dvh !important; max-height: 100dvh !important; border-radius: 0 !important; border: 0 !important; z-index: 100 !important; }
   .mcn-sheet > button.absolute { top: calc(14px + env(safe-area-inset-top)); }
 }
+
+/* Reading preferences also enlarge legacy pixel-sized copy. */
+.mc13-page, [role="dialog"], [data-slot="popover-content"] { zoom: var(--a11y-font-scale, 1); }
+.a11y-contrast .mc-workspace-shell { --muted-foreground: var(--foreground); }
+.a11y-contrast .mc-workspace-shell :is(p, small, label, h1, h2, h3, dt, dd) { opacity: 1 !important; }
+.a11y-contrast .mc-workspace-shell :is(.card-glass, .mc21-task-row, .mc-bill-record) { background: hsl(var(--card)) !important; border-color: hsl(var(--foreground) / 0.65) !important; }
+@media (max-width: 1023px) {
+  .mc-topbar-actions { flex-wrap: wrap; }
+  .mc-topbar { min-width: 0; height: auto; min-height: 56px; flex-wrap: wrap; }
+  .mc-mobile-nav { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+}
+/* Reading layouts: content owns the width; actions occupy a separate track. */
+@media screen {
+  .mc13-page, .mc-print-section-content, .mc-print-section-content > div { min-width: 0; }
+  .mc-pagehead-title, .mc-pagehead-subtitle, .mc-pagehead-stat { overflow-wrap: anywhere; }
+  .mc-pagehead-actions { min-width: 0; max-width: 100%; }
+  .mc-pagehead-actions :is(button, a) { white-space: normal; height: auto; }
+  .mc21-task-row { border-radius: 8px; }
+  .mc-task-title { display: block; min-width: 0; white-space: normal; overflow-wrap: anywhere; line-height: 1.55; }
+  .mc-task-project { overflow-wrap: anywhere; }
+  .mc-task-row-actions, .mc-task-card-actions, .mc-task-planning { opacity: 1; }
+  .mc-task-row-actions button, .mc-task-card-actions button { min-width: 36px; min-height: 40px; }
+  .mc-task-row-main > .mc-task-row-copy { flex-basis: 0; }
+  .mc-bills-panel button { min-height: 44px; }
+  .mc-bills-panel .grid > div { min-width: 0; }
+  .mc-bill-record :is(p, span) { overflow-wrap: anywhere; }
+  .mc-bills-forecast { overflow-x: auto; padding-bottom: 4px; }
+  .mc-bills-forecast > button { min-width: 46px; flex-shrink: 0; }
+  .mc-bills-forecast > button > span:first-child { overflow: visible; }
+}
+@media screen and (max-width: 1279px) {
+  .mc-task-row-main { display: grid; grid-template-columns: 36px minmax(0, 1fr); align-items: start; gap: 8px; }
+  .mc-task-complete { grid-column: 1; grid-row: 1; width: 36px; min-height: 44px; }
+  .mc-task-row-copy { grid-column: 2; grid-row: 1; }
+  .mc-task-row-actions { grid-column: 2; justify-content: flex-end; flex-wrap: wrap; border-top: 1px solid hsl(var(--border)); padding-top: 6px; }
+  .mc-task-subtasks { grid-column: 2; justify-self: start; min-height: 40px; }
+  .mc-task-planning { display: none; }
+  .mc-task-row-main[data-bulk="true"] { grid-template-columns: 28px 36px minmax(0, 1fr); }
+  .mc-task-row-main[data-bulk="true"] .mc-task-select { grid-column: 1; grid-row: 1; margin-top: 12px; }
+  .mc-task-row-main[data-bulk="true"] .mc-task-complete { grid-column: 2; }
+  .mc-task-row-main[data-bulk="true"] :is(.mc-task-row-copy, .mc-task-row-actions, .mc-task-subtasks) { grid-column: 3; }
+}
+@media screen and (max-width: 1023px) {
+  .mc-task-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; min-height: 0 !important; align-items: start; }
+  .mc-task-board .kanban-col { min-width: 0 !important; max-width: none !important; width: 100%; }
+  .mc-task-card-head { display: grid; grid-template-columns: 28px minmax(0, 1fr); }
+  .mc-task-card-actions { grid-column: 2; justify-content: flex-end; border-top: 1px solid hsl(var(--border)); padding-top: 4px; }
+  .mc-task-card-head > button { min-height: 40px; }
+  .kanban-card .line-clamp-2 { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; }
+  .mc21-task-row .mc-task-row-main { padding: 12px; }
+  .mc21-task-row .mc-task-title { font-size: 15px; }
+  .mc-task-row-copy > div > button { min-height: 32px; padding: 5px 8px; font-size: 12px; }
+  .mc-task-row-actions button { min-width: 44px; min-height: 44px; }
+  .mc-pagehead-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  .mc-pagehead-stat { min-width: 0; padding: 6px 10px; }
+  .mc-pagehead-stat dd { font-size: 22px; line-height: 1.4; }
+  .mc-pagehead-stat dt { font-size: 12px; line-height: 1.5; }
+  .mc20-syncbar .mc20-sync-title { font-size: 12px !important; }
+  .mc20-syncbar .mc20-sync-meta { font-size: 12px !important; white-space: normal; overflow: visible; }
+  .op-scope-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .op-scope-controls :is(select, label, input) { width: 100%; min-width: 0; }
+  .mc-settings-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); overflow: visible; min-width: 0; }
+  .mc-settings-tab { min-width: 0; padding: 10px 8px; gap: 6px; border-radius: 6px; }
+  .mc-settings-tab-label { white-space: normal; overflow-wrap: anywhere; }
+  .mc-settings-tab-icon, .mc-settings-tab-chevron { display: none; }
+  .mc21-utility-deck { min-width: 0; }
+  .mc21-utility-head { min-width: 0; width: 100%; flex-wrap: wrap; }
+  .mc21-utility-head > div { min-width: 0; }
+  .mc21-utility-head strong { overflow-wrap: anywhere; }
+  :root .mc36-kpi-strip { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; overflow: visible; width: 100%; min-width: 0; }
+  :root .mc36-kpi-strip .mc-kpi-card { min-width: 0 !important; width: 100%; }
+  [data-testid="repository-card"] :is(.line-clamp-2, .line-clamp-3) { display: block; -webkit-line-clamp: unset; overflow: visible; overflow-wrap: anywhere; }
+  [aria-label="GitHub repository operations"] [data-row-key] .truncate,
+  .mc-mobile-ops-row .truncate,
+  [data-row-key] button[title^="Open details"] { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  [data-row-key] :is(p.truncate, span.truncate) { white-space: normal; overflow-wrap: anywhere; }
+}
+@media screen and (max-width: 639px) {
+  .mc-task-board { grid-template-columns: minmax(0, 1fr); }
+  .mc21-tasks-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .mc21-task-smartviews { gap: 6px; }
+  .mc21-smartview { min-height: 64px; padding: 9px 8px; flex-direction: row; align-items: center; }
+  .mc21-smartview-icon { display: none; }
+  .mc21-task-capture-meta:has(> span:not(.mc21-task-chip)) { display: none; }
+  .mc21-task-capture-main { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .mc21-task-capture-icon { display: none; }
+  .mc21-task-capture-main input { grid-column: 1 / -1; }
+  .mc21-task-capture-add { grid-column: 2; }
+  .mc21-task-capture-today { grid-column: 3; }
+  .mc-pagehead-main { flex-basis: 100%; }
+  .mc-pagehead-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .mc-pagehead-actions > * { min-width: 0; }
+  .mc-workspace-shell :is(.card-elevated, .enterprise-card, .cc-panel) h2 { overflow-wrap: anywhere; }
+  .op-scope-controls { grid-template-columns: minmax(0, 1fr); }
+  .mcn-label { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .mcn-tile > span:last-child { display: block; -webkit-line-clamp: unset; overflow: visible; }
+}

@@ -1,16 +1,16 @@
-import { House, LayoutGrid, Github, Cloud, KeyRound } from "lucide-react";
+import { House, LayoutGrid, ListTodo, Wallet, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useWorkspaceLayout } from "@/hooks/useWorkspaceLayout";
 import { useNavigationStore } from "@/stores/navigationStore";
 
 export default function MobileBottomNav() {
-  const { activeSection, setActiveSection, sidebarOpen, setSidebarOpen } = useNavigationStore();
+  const { activeSection, setActiveSection, sidebarOpen, setSidebarOpen, recentSections } = useNavigationStore();
   const { visible } = useWorkspaceLayout();
   const tabs = [
     { id: "dashboard", label: "Today", icon: House },
-    { id: "github", label: "GitHub", icon: Github },
-    { id: "cloudflare", label: "Cloudflare", icon: Cloud },
-    { id: "credentials", label: "Vault", icon: KeyRound },
+    { id: "tasks", label: "Tasks", icon: ListTodo },
+    { id: "payments", label: "Finance", icon: Wallet },
+    ...recentSections.filter(id => !["dashboard", "tasks", "payments", activeSection].includes(id) && visible.some(s => s.id === id)).slice(0, 1).map(id => ({ id, label: "Previous", icon: ArrowLeftRight })),
   ].filter(item => visible.some(section => section.id === item.id));
   return (
     <nav className="mc-mobile-nav lg:hidden" aria-label="Mobile navigation">

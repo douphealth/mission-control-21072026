@@ -38,6 +38,9 @@ use the editor.
 - Task list, board and print share deterministic view selectors and a live local-day clock; bulk selections are restricted to the current view to prevent hidden-record edits.
 - Research article merges preserve the strongest explicit evidence independently of relevance and aggregate provider attribution; unknown evidence must not pass attributed-evidence filters.
 - Shared dashboard styling belongs in `src/mc-design-system.css`; refine existing semantic tokens and working surfaces rather than adding another competing theme stylesheet.
+- Task reading layouts separate content from actions below laptop width and wrap full titles; preserve dynamic row measurement so longer content remains accessible without changing task records.
+- Household planning sends only an explicit description through the owner-gated AI Gateway function; validate suggestions and save only after review into existing personal task/subtask storage.
+- Reading controls reuse the existing accessibility store; scale legacy reading surfaces once, and keep section scroll positions separate from account data.
 - Google OAuth resolves validated public client IDs through the named runtime bindings and refreshes cached server configuration once per page session; never expose client secrets or tokens as configuration.
 - Sidebar personalization uses the existing persisted navigation store and one shared layout resolver for desktop and mobile; hidden sections retain data, and moving a pinned section unpins it so its chosen category controls placement.
 - Sidebar layout/pins/hidden/categories sync via the settings row `navigation` (NavigationAccountSync); fresh devices never seed it so they cannot overwrite the account copy.

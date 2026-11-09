@@ -1,3 +1,14 @@
+## Household planning and comfortable navigation
+- [x] Add owner-gated AI household checklist generation with review and explicit save
+- [x] Expose saved text-size and contrast controls across sections
+- [x] Add quick mobile Tasks/Finance access and restore section reading position
+- [x] Test real AI generation → editable checklist → saved task/editor → Inbox reload; 140% text/high contrast phone/tablet and Tasks/Finance scroll restoration; 20 focused tests passed
+
+## Cross-device readability
+- [x] Improve populated task rows, boards, Finance and shared page controls without changing stored data
+- [x] Check 22 loaded phone sections and key sections at 320/390/768/1366/1920px; task capture/editor/reload and 26 regression checks passed
+- [ ] Verify populated owner-connected inventory and unlocked private records on every device — requires authorized inventory and private vault access; public layout checks do not verify these states
+
 ## Sidebar customization
 - [x] Add saved section/category ordering, visibility and custom categories
 - [x] Share layout with mobile directory and verify customization after reload — 17 focused tests pass; desktop and phone create/move/hide/show/rename/navigation/reload verified

@@ -32,7 +32,8 @@ function applyToDom(s: typeof defaults) {
   root.classList.toggle("a11y-focus-always", s.alwaysShowFocus);
   root.classList.toggle("a11y-underline-links", s.underlineLinks);
   root.style.setProperty("--a11y-font-scale", String(s.fontScale));
-  root.style.fontSize = `${Math.round(16 * s.fontScale)}px`;
+  // Scale dense pixel-based and rem-based reading surfaces together, once.
+  root.style.fontSize = "16px";
 }
 
 export const useA11yStore = create<A11yState>()(
@@ -40,7 +41,7 @@ export const useA11yStore = create<A11yState>()(
     (set, get) => ({
       ...defaults,
       set: (patch) => {
-        set(patch as any);
+        set({ ...patch, ...(patch.fontScale !== undefined ? { fontScale: Math.min(1.4, Math.max(1, patch.fontScale)) } : {}) });
         const s = get();
         applyToDom({
           highContrast: s.highContrast,
