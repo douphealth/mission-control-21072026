@@ -32,6 +32,7 @@ const DEVICE_KEY = 'mc-cloud-device-v2';
 const REQUIRED_FIELDS: Record<string, string[]> = {
   tasks: ['title'], websites: ['name'], notes: ['title'], links: ['title'], repos: ['name'],
   buildProjects: ['name'], ideas: ['title'], credentials: ['label'], customModules: ['name'],
+  familyRecords: ['payload'], vaultMeta: ['envelope'],
   habits: ['name'], feedSources: ['name'], streamItems: ['title'], watchTerms: ['term'],
   audienceAccounts: ['platform'], reminders: ['title'], decisions: ['title'], validations: ['title'],
 };
@@ -40,7 +41,8 @@ const COLLECTIONS: Record<string, any> = {
   seoQueryObservations: db.seoQueryObservations, seoIssues: db.seoIssues, seoActions: db.seoActions,
   seoChanges: db.seoChanges, seoVisibilityChecks: db.seoVisibilityChecks, tasks: db.tasks,
   repos: db.repos, buildProjects: db.buildProjects, links: db.links, notes: db.notes,
-  payments: db.payments, ideas: db.ideas, credentials: db.credentials, customModules: db.customModules,
+  payments: db.payments, ideas: db.ideas, credentials: db.credentials, familyRecords: db.familyRecords,
+  vaultMeta: db.vaultMeta, customModules: db.customModules,
   habits: db.habits, feedSources: db.feedSources, streamItems: db.streamItems,
   watchTerms: db.watchTerms, audienceAccounts: db.audienceAccounts, audienceReadings: db.audienceReadings,
   reminders: db.reminders, decisions: db.decisions, auditLog: db.auditLog, settings: db.settings,
@@ -178,7 +180,15 @@ export async function repairStaleCloudJournal(): Promise<number> {
 function validRecord(collection: string, data: unknown, id: string): data is Record<string, unknown> {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const row = data as Record<string, unknown>;
-  return row.id === id && (REQUIRED_FIELDS[collection] || []).every(field => typeof row[field] === 'string');
+  if (row.id !== id || !(REQUIRED_FIELDS[collection] || []).every(field => typeof row[field] === 'string')) return false;
+  if (collection === 'familyRecords') return /^(mcenc:v[23]:|wcapi:)/.test(row.payload as string);
+  if (collection === 'vaultMeta') {
+    try {
+      const envelope = JSON.parse(row.envelope as string) as Record<string, unknown>;
+      return envelope.version === 1 && ['salt', 'iv', 'data'].every(field => typeof envelope[field] === 'string');
+    } catch { return false; }
+  }
+  return true;
 }
 function hasSession() {
   const token = readGoogleToken();
@@ -307,6 +317,23 @@ async function syncCycle(): Promise<SyncResult> {
     await bindIdentity(token.access_token, currentEpoch);
     await repairStaleCloudJournal();
     const remote = await readRemote(token.access_token, currentEpoch);
+    // The family vault is encrypted with a separate passphrase-wrapped key.
+    // Conflicting device keys must never be synchronized as if they were compatible.
+    const localEnvelope = (await db.vaultMeta.get('primary'))?.envelope || localStorage.getItem('mc-private-vault-envelope-v1');
+    const remoteMeta = remote.records['vaultMeta::primary'];
+    const remoteEnvelope = !remoteMeta?.deleted && remoteMeta?.data?.envelope;
+    if (localEnvelope && typeof remoteEnvelope === 'string' && localEnvelope !== remoteEnvelope) {
+      throw new Error('Family vault key mismatch between devices. No vault records were merged. Export an encrypted backup from each device before reconciling.');
+    }
+    if (remoteMeta?.deleted && localEnvelope) {
+      throw new Error('Remote vault key was deleted while this device retains family data. Sync paused to protect encrypted records.');
+    }
+    if (!localEnvelope && (await db.familyRecords.count()) > 0) {
+      throw new Error('Local family records have no vault key envelope. Cloud sync paused to prevent losing access.');
+    }
+    if (!remoteEnvelope && Object.keys(remote.records).some(k => k.startsWith('familyRecords::') && !remote.records[k].deleted)) {
+      throw new Error('Cloud family records have no vault key envelope. Sync paused to protect encrypted records.');
+    }
     const initialSeeds = !localSeedChecked ? await seedMissingRecords(remote.records) : {};
     // Explicit user edits take precedence over inferred initial backfill.
     await flushJournal();
@@ -327,6 +354,11 @@ async function syncCycle(): Promise<SyncResult> {
       if (!capturedChangeIsCurrent(change, readDirty()[recordKey], inferredSeed)) continue;
       if (!data && change.operation !== 'delete') { repairedQueueEntries.add(recordKey); continue; }
       const remoteRecord = merged[recordKey];
+      // A blank device may pull an existing vault envelope; it may not create
+      // independent family ciphertext that cannot be decrypted with that key.
+      if (collection === 'familyRecords' && !localEnvelope && !!remoteEnvelope) {
+        throw new Error('Unlock the synchronized vault before editing family records on this device.');
+      }
       const originalCandidate = { data: data || null, deleted: change.operation === 'delete', updatedAt: change.changedAt, revision: change.revision };
       const differsFromRemote = !!remoteRecord && (remoteRecord.deleted !== originalCandidate.deleted || JSON.stringify(remoteRecord.data) !== JSON.stringify(originalCandidate.data));
       if (differsFromRemote) {

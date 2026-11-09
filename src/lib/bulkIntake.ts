@@ -275,14 +275,14 @@ export function smartCredentialText(input: string): IntakeRow[] | null {
   };
   const rows: IntakeRow[] = [];
   const blocks = input.split(/(?:\r?\n[ \t]*){2,}/).map(b => b.split(/\r?\n/).map(l => l.trim()).filter(Boolean)).filter(b => b.length);
-  if (blocks.length && blocks.every(b => b.length >= 2 && b.length <= 6 && !/\s[\/|]\s|\s[-–]\s/.test(b.join("\n")))) {
+  if (blocks.length && blocks.every(b => b.length >= 2 && b.length <= 6 && !/\s[/|]\s|\s[-–]\s/.test(b.join("\n")))) {
     for (const b of blocks) { const r = build(b[0].replace(/[:\s]+$/, ""), b.slice(1)); if (!r) return null; rows.push(r); }
     return rows;
   }
   for (const line of nonEmpty) {
     const m = line.match(/^(.+?)\s*(?::|\s[-–—]\s|\t)\s*(.+)$/);
     if (!m) return null;
-    const parts = m[2].split(/\s+[\/|,;–—-]\s+|\s*\t\s*|\s*\|\s*/).filter(Boolean);
+    const parts = m[2].split(/\s+[/|,;–—-]\s+|\s*\t\s*|\s*\|\s*/).filter(Boolean);
     const tail = parts.length === 1 ? m[2].split(/\s+/) : parts;
     if (tail.length < 2 && !emailCell(tail[0])) { const r = build(m[1], ["", tail[0]]); if (!r || !r.password) return null; rows.push(r); continue; }
     const r = build(m[1], tail); if (!r || !r.password) return null; rows.push(r);

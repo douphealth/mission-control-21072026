@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { it, expect } from "vitest";
 import { useA11yStore } from "./a11yStore";
 it("keeps requested reading size and contrast across applying preferences", () => {
