@@ -831,6 +831,11 @@ export interface Validation {
 
 // ─── Database Class ─────────────────────────────────────────────────────────────
 
+/** Ciphertext-only family records: no private text is indexed or synchronized in plaintext. */
+export interface EncryptedFamilyRecordRow { id: string; payload: string; revision?: string; updatedAt?: string }
+/** PBKDF2-wrapped encryption key envelope; never the unlocked key or master passphrase. */
+export interface PrivateVaultMetadataRow { id: string; envelope: string }
+
 class MissionControlDB extends Dexie {
   websites!: Table<Website>;
   seoProfiles!: Table<SEOProfile>;
@@ -863,6 +868,8 @@ class MissionControlDB extends Dexie {
   validations!: Table<Validation>;
   syncJournal!: Table<SyncJournalRow>;
   syncMeta!: Table<SyncMetaRow>;
+  familyRecords!: Table<EncryptedFamilyRecordRow>;
+  vaultMeta!: Table<PrivateVaultMetadataRow>;
 
   constructor() {
     super("MissionControlDB");
@@ -928,6 +935,13 @@ class MissionControlDB extends Dexie {
     this.version(8).stores({
       syncJournal: "key, changedAt",
       syncMeta: "id",
+    });
+
+    // One transaction boundary for encrypted family data and the Google Drive sync journal.
+    // Existing MissionControlPrivateFamily records are migrated non-destructively at startup.
+    this.version(9).stores({
+      familyRecords: "id",
+      vaultMeta: "id",
     });
   }
 }
