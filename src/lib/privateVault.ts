@@ -55,21 +55,32 @@ async function migrateLegacyFamilyRecords(): Promise<number> {
   if (!legacy.length) return 0;
   let added = 0;
   for (const row of legacy) {
+    const receipt = await db.familyMigration.get(row.id);
+    if (receipt?.payload === row.payload) continue;
     const existing = await db.familyRecords.get(row.id);
     if (existing) {
       const oldValue = await decrypt(row.payload);
       const currentValue = await decrypt(existing.payload);
-      if (oldValue === currentValue) continue;
+      if (oldValue === currentValue) {
+        await db.familyMigration.put({ id: row.id, payload: row.payload });
+        continue;
+      }
       const copy = JSON.parse(oldValue) as FamilyRecord;
       copy.id = crypto.randomUUID();
       validateFamilyRecord(copy);
-      await db.familyRecords.add({ id: copy.id, payload: await encrypt(JSON.stringify(copy)) });
+      await db.transaction("rw", db.familyRecords, db.familyMigration, async () => {
+        await db.familyRecords.add({ id: copy.id, payload: await encrypt(JSON.stringify(copy)) });
+        await db.familyMigration.put({ id: row.id, payload: row.payload });
+      });
     } else {
       // Verify every row decrypts before allowing it into the synchronized inventory.
       const decoded = JSON.parse(await decrypt(row.payload)) as FamilyRecord;
       if (decoded.id !== row.id) throw new Error("Legacy vault record ID mismatch. No source records were removed.");
       validateFamilyRecord(decoded);
-      await db.familyRecords.add({ id: row.id, payload: row.payload });
+      await db.transaction("rw", db.familyRecords, db.familyMigration, async () => {
+        await db.familyRecords.add({ id: row.id, payload: row.payload });
+        await db.familyMigration.put({ id: row.id, payload: row.payload });
+      });
     }
     added++;
   }
