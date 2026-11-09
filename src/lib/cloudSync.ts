@@ -180,7 +180,15 @@ export async function repairStaleCloudJournal(): Promise<number> {
 function validRecord(collection: string, data: unknown, id: string): data is Record<string, unknown> {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const row = data as Record<string, unknown>;
-  return row.id === id && (REQUIRED_FIELDS[collection] || []).every(field => typeof row[field] === 'string');
+  if (row.id !== id || !(REQUIRED_FIELDS[collection] || []).every(field => typeof row[field] === 'string')) return false;
+  if (collection === 'familyRecords') return /^(mcenc:v[23]:|wcapi:)/.test(row.payload as string);
+  if (collection === 'vaultMeta') {
+    try {
+      const envelope = JSON.parse(row.envelope as string) as Record<string, unknown>;
+      return envelope.version === 1 && ['salt', 'iv', 'data'].every(field => typeof envelope[field] === 'string');
+    } catch { return false; }
+  }
+  return true;
 }
 function hasSession() {
   const token = readGoogleToken();
