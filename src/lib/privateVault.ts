@@ -129,7 +129,7 @@ async function asEncryptedRow(record: FamilyRecord): Promise<EncryptedFamilyReco
   return { id: record.id, payload: await encrypt(JSON.stringify(record)) };
 }
 
-export async function saveFamilyRecord(record: FamilyRecord, expectedPayload?: string) {
+export async function saveFamilyRecord(record: FamilyRecord, expectedPayload?: string | null) {
   if (!vaultSessionActive()) throw new Error("Unlock your private vault first.");
   const next = await asEncryptedRow(record);
   await db.transaction("rw", db.familyRecords, async () => {
