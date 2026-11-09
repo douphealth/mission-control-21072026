@@ -1,9 +1,11 @@
+import "fake-indexeddb/auto";
+import { db } from "../db";
 import { beforeEach, describe, expect, it } from "vitest";
 import { webcrypto } from "node:crypto";
 import { unlockPrivateVault, lockPrivateVault, VAULT_IDLE_MS } from "../privateVault";
 import { encrypt, decrypt, setVaultSessionKey } from "../encryption";
 import { previewBulkIntake } from "../bulkIntake";
-beforeEach(() => { localStorage.clear(); setVaultSessionKey(null); Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true }); });
+beforeEach(async () => { localStorage.clear(); sessionStorage.clear(); setVaultSessionKey(null); Object.defineProperty(globalThis, "crypto", { value: webcrypto, configurable: true }); await db.vaultMeta.clear(); await db.familyRecords.clear(); await db.familyMigration.clear(); });
 describe("private vault protections", () => {
   it("imports all 1,500 requested entries with exact password values", () => {
     const rows = Array.from({ length: 1500 }, (_, i) => ({ label: `Account ${i}`, username: `u${i}@example.test`, password: `  synthetic ${i}  ` }));
