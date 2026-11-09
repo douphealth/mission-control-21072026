@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import "fake-indexeddb/auto";
 import { db } from "../db";
 import { beforeEach, describe, expect, it } from "vitest";
