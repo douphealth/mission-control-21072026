@@ -41,22 +41,34 @@ const links: Record<string, string> = {
 };
 const prompts: Record<string, string> = { prompt: "content", aiprompt: "content", prompttext: "content", promptcontent: "content", content: "content", body: "content", text: "content", instructions: "content", prompttitle: "title", promptname: "title", heading: "title", headingcell: "title", promptheading: "title", templatename: "title", actualprompt: "content", instruction: "content", promptbody: "content", template: "content", model: "model", platform: "model", kind: IGNORE, variables: IGNORE, id: IGNORE };
 const credentials: Record<string, string> = {
-  label: "label", name: "label", account: "label", accountname: "label", accountlabel: "label", title: "label", program: "label", tool: "label", service: "service", provider: "service", platform: "service", application: "service", product: "service", site: "service", url: "url", loginurl: "url", websiteurl: "url", dashboardurl: "url", login: "url", website: "url", dashboard: "url", username: "username", user: "username", userid: "username", email: "username", accountemail: "username", loginemail: "username", password: "password", loginpassword: "password", pass: "password", pwd: "password", passwd: "password", apikey: "apiKey", api: "apiKey", apitoken: "apiKey", token: "apiKey", accesstoken: "apiKey", authtoken: "apiKey", bearertoken: "apiKey", personaltoken: "apiKey", personalaccesstoken: "apiKey", pat: "apiKey", secret: "apiKey", secretkey: "apiKey", apisecret: "apiKey", clientsecret: "apiKey", privatetoken: "apiKey", servicerolekey: "apiKey", anonkey: "apiKey", licensekey: "apiKey", productkey: "apiKey", category: "category", group: "category", description: "notes", comments: "notes", notes: "notes", note: "notes", tags: "tags", date: EXTRA, dateadded: EXTRA, purchasedate: EXTRA, renewaldate: EXTRA, expirydate: EXTRA, expires: EXTRA, lastupdated: EXTRA, createdat: "createdAt",
+  label: "label", name: "label", account: "label", accountname: "label", accountlabel: "label", title: "label", program: "label", tool: "label", service: "service", provider: "service", platform: "service", application: "label", app: "label", applicationname: "label", nature: "service", type: "category", kind: "category", links: "url", link: "url", comment: "notes", comment1: "notes", comment2: "notes", comment3: "notes", remarks: "notes", product: "service", site: "service", url: "url", loginurl: "url", websiteurl: "url", dashboardurl: "url", login: "username", website: "url", dashboard: "url", loginname: "username", loginid: "username", useremail: "username", emailaddress: "username", mail: "username", account_user: "username", passcode: "password", passphrase: "password", pin: "password", pw: "password", passwort: "password", contrasena: "password", secretpassword: "password", userpassword: "password", accountpassword: "password", username: "username", user: "username", userid: "username", email: "username", accountemail: "username", loginemail: "username", password: "password", loginpassword: "password", pass: "password", pwd: "password", passwd: "password", apikey: "apiKey", api: "apiKey", apitoken: "apiKey", token: "apiKey", accesstoken: "apiKey", authtoken: "apiKey", bearertoken: "apiKey", personaltoken: "apiKey", personalaccesstoken: "apiKey", pat: "apiKey", secret: "apiKey", secretkey: "apiKey", apisecret: "apiKey", clientsecret: "apiKey", privatetoken: "apiKey", servicerolekey: "apiKey", anonkey: "apiKey", licensekey: "apiKey", productkey: "apiKey", category: "category", group: "category", description: "notes", comments: "notes", notes: "notes", note: "notes", tags: "tags", date: EXTRA, dateadded: EXTRA, purchasedate: EXTRA, renewaldate: EXTRA, expirydate: EXTRA, expires: EXTRA, lastupdated: EXTRA, createdat: "createdAt",
 };
 function field(mode: BulkMode, header: string): string {
   const k = key(header);
-  const localized: Record<string, string> = { "τιτλος": mode === "credentials" ? "label" : "title", "ονομα": mode === "credentials" ? "label" : "title", "κατηγορια": "category", "οδηγιες": mode === "prompts" ? "content" : mode === "links" ? "description" : "notes", "κωδικος": mode === "credentials" ? "password" : PRIVATE };
+  const localized: Record<string, string> = { "τιτλος": mode === "credentials" ? "label" : "title", "ονομα": mode === "credentials" ? "label" : "title", "κατηγορια": "category", "οδηγιες": mode === "prompts" ? "content" : mode === "links" ? "description" : "notes", "κωδικος": mode === "credentials" ? "password" : PRIVATE, ...(mode === "credentials" ? { κωδικοςπροσβασης: "password", συνθηματικο: "password", κωδ: "password", χρηστης: "username", ονομαχρηστη: "username", email: "username", ιστοσελιδα: "url", συνδεσμος: "url", υπηρεσια: "service", παρατηρησεις: "notes", σημειωσεις: "notes", λογαριασμος: "label" } : {}) };
   if (own(localized, k)) return localized[k];
   if (mode === "credentials") {
     const known = own(credentials, k);
     if (known) return known;
     if (header.length <= 80 && secretColumnLabel(header)) return "apiKey";
+    // Any other named column (e.g. "PayPal (Payment valid until)") is kept as "Header: value" in notes, never dropped.
+    if (k && !/(?:password|passphrase|secret|token|apikey)/.test(k)) return EXTRA;
     return IGNORE;
   }
   if (mode === "links" && /(?:password|passphrase|secret|apikey|apitoken|accesstoken|bearertoken|username|userid|email|licensekey|productkey|recoverycode)|^(?:pass|pwd|key|token|login)$/.test(k)) return PRIVATE;
   return own(mode === "links" ? links : prompts, k) || own(common, k) || IGNORE;
 }
 type SourceRow = { cells: string[]; line: number };
+/** The owner's spreadsheet layout, applied when the paste has no header row. */
+export const OWNER_CREDENTIAL_HEADERS = ["Application", "Nature", "Links", "Username", "Password", "PayPal (Payment)", "PayPal (Date Payment done)", "PayPal (Payment valid until)", "PayPal (Payment renewal)", "Comment", "Comment 2", "Comment 3"];
+const OWNER_CREDENTIAL_COLUMNS = ["label", "service", "url", "username", "password", EXTRA, EXTRA, EXTRA, EXTRA, "notes", "notes", "notes"];
+function ownerLayout(rows: SourceRow[], width: number): boolean {
+  if (width < 5) return false;
+  const filled = (i: number) => rows.slice(0, 200).map(r => (r.cells[i] || "").trim()).filter(Boolean);
+  const share = (i: number, test: (s: string) => boolean) => { const v = filled(i); return v.length ? v.filter(test).length / v.length : 0; };
+  // Links sit in the 3rd column; name/nature columns are not links.
+  return share(2, webCell) >= .5 && share(0, webCell) < .3 && share(1, webCell) < .3 && share(4, webCell) < .3;
+}
 function inferColumns(mode: BulkMode, rows: SourceRow[], width: number): string[] {
   const columns: string[] = Array(width).fill(IGNORE);
   if (mode === "prompts") {
@@ -69,6 +81,7 @@ function inferColumns(mode: BulkMode, rows: SourceRow[], width: number): string[
     }
     return columns;
   }
+  if (mode === "credentials" && ownerLayout(rows, width)) return Array.from({ length: width }, (_, i) => OWNER_CREDENTIAL_COLUMNS[i] ?? EXTRA);
   const ratio = (i: number, test: (s: string) => boolean) => { const values = rows.slice(0, 100).map(r => r.cells[i] || "").filter(v => v.trim()); return values.length ? values.filter(test).length / values.length : 0; };
   for (let i = 0; i < width; i++) {
     if (ratio(i, webCell) >= .6 && !columns.includes("url")) columns[i] = "url";
@@ -144,7 +157,8 @@ function readTable(mode: BulkMode, input: string, options: IntakeOptions): { tab
   const suspectedDataHeader = hasHeader && (!headerLikely || firstRowHasData);
   const width = Math.min(100, data.reduce((n, r) => Math.max(n, r.cells.length), 0));
   // Mask account emails, URLs and opaque secrets that were mistaken for headings.
-  const headers = Array.from({ length: width }, (_, i) => hasHeader && !suspectedDataHeader ? data[0].cells[i]?.trim() || `Column ${i + 1}` : `Column ${i + 1}`);
+  const owner = mode === "credentials" && !(hasHeader && !suspectedDataHeader) && ownerLayout(hasHeader ? data.slice(1) : data, width);
+  const headers = Array.from({ length: width }, (_, i) => hasHeader && !suspectedDataHeader ? data[0].cells[i]?.trim() || `Column ${i + 1}` : owner ? OWNER_CREDENTIAL_HEADERS[i] ?? `Column ${i + 1}` : `Column ${i + 1}`);
   const records = hasHeader ? data.slice(1) : data;
   const suggested = hasHeader && !suspectedDataHeader ? headers.map(h => field(mode, h)) : inferColumns(mode, data, width);
   const columns = suggested.map((f, i) => f === PRIVATE ? f : options.columns?.[i] ?? f);
@@ -188,12 +202,19 @@ function mappedRecord(mode: BulkMode, cells: unknown[], headers: string[], colum
     if (mode === "credentials" && (f === "password" || f === "apiKey") && Object.hasOwn(out, f) && str(out[f]) !== str(value)) {
       const extras = (out.__extraSecrets || []) as Array<{ field: string; value: string; column: number }>;
       extras.push({ field: f, value: str(value), column: i + 1 }); out.__extraSecrets = extras;
+    } else if (mode === "credentials" && (f === EXTRA || f === notesField) && opaqueCell(str(value))) {
+      // A token-like value in a date/comment column is kept encrypted, never in plain-text notes.
+      if (!out.apiKey) out.apiKey = str(value);
+      else { const extras = (out.__extraSecrets || []) as Array<{ field: string; value: string; column: number }>; extras.push({ field: "apiKey", value: str(value), column: i + 1 }); out.__extraSecrets = extras; }
+      out.__reviewInferredSecret = true;
     } else if (f === EXTRA || f === notesField) {
       out[notesField] = [out[notesField], f === EXTRA ? `${headers[i]}: ${str(value)}` : str(value)].filter(Boolean).join("\n");
     } else if (f === "kind") {
       if (/affiliate|referral|ambassador|partner/i.test(str(value))) out.kind = "affiliate";
       else if (/^standard$/i.test(str(value))) out.kind = "standard";
       if (!/^(standard|affiliate)$/i.test(str(value))) out.linkType = str(value);
+    } else if (mode === "credentials" && Object.hasOwn(out, f) && str(out[f]) !== str(value)) {
+      out[notesField] = [out[notesField], `${headers[i] || f}: ${str(value)}`].filter(Boolean).join("\n");
     } else if (Object.hasOwn(out, f) && str(out[f]) !== str(value)) throw new Error("Multiple columns target one field. Correct the column mapping.");
     else out[f] = value;
   }
@@ -222,8 +243,51 @@ function normalize(mode: BulkMode, value: unknown): IntakeRow {
   }
   if (dateCell(str(row.category))) { row.notes = [row.notes, `Imported date: ${str(row.category)}`].filter(Boolean).join("\n"); row.category = "General"; }
   const result = legacyCredentials(JSON.stringify([{ ...row, __reviewInferredSecret: undefined, __extraSecrets: undefined }]));
-  if (!result.items.length) throw new Error("No account, URL, password or key in the mapped fields. Correct the mapping or leave this row out.");
-  return { ...result.items[0], ...(row.__reviewInferredSecret ? { __reviewInferredSecret: true } : {}) } as IntakeRow;
+  const base = result.items[0] as Record<string, unknown> | undefined;
+  if (!base && !str(row.label) && !str(row.service) && !str(row.url) && !str(row.username) && !str(row.notes)) throw new Error("This row is empty. Leave it out or fill in at least one field.");
+  const item = { label: "", service: "", url: "", username: "", password: "", apiKey: "", category: "General", notes: "", tags: [], ...(base || {}) } as Record<string, unknown>;
+  // Keep every mapped column exactly as given; blanks stay blank for later editing.
+  for (const f of ["label", "service", "url", "username", "password", "apiKey", "notes"]) if (str(row[f]).trim()) item[f] = str(row[f]);
+  if (str(row.category).trim()) item.category = str(row.category).trim();
+  if (!str(item.label).trim()) item.label = str(item.service) || str(item.url) || str(item.username) || "Untitled";
+  return { ...item, ...(row.__reviewInferredSecret ? { __reviewInferredSecret: true } : {}) } as IntakeRow;
+}
+
+const looksSecret = (v: string) => !!v && !/\s/.test(v) && !emailCell(v) && !webCell(v);
+/** "Label: user / pass", "Label - user - pass" lines, or blank-line blocks of label/url/user/pass. */
+export function smartCredentialText(input: string): IntakeRow[] | null {
+  const lines = input.replace(/^\uFEFF/, "").split(/\r\n|\r|\n/);
+  const nonEmpty = lines.map(l => l.trim()).filter(Boolean);
+  if (!nonEmpty.length || nonEmpty.some(l => /^[\w .-]{1,40}\s*[:=]\s*$/.test(l))) return null;
+  const build = (label: string, parts: string[]): IntakeRow | null => {
+    let url = "", username = "", password = ""; const notes: string[] = [];
+    for (const raw of parts) {
+      const p = raw.trim(); if (!p) continue;
+      const kv = p.match(/^(user(?:name)?|login|email|e-mail|χρήστης|χρηστης|pass(?:word)?|pwd|κωδικός|κωδικος|url|site|link)\s*[:=]\s*(.+)$/i);
+      if (kv) { const k = kv[1].toLowerCase(); if (/pass|pwd|κωδ/.test(k)) password = kv[2].trim(); else if (/url|site|link/.test(k)) url = kv[2].trim(); else username = kv[2].trim(); continue; }
+      if (!url && webCell(p) && !password) url = p;
+      else if (!username && (emailCell(p) || (!password && parts.filter(x => x.trim()).length >= 2 && p !== parts.filter(x => x.trim()).at(-1)?.trim()))) username = p;
+      else if (!password && looksSecret(p)) password = p;
+      else notes.push(p);
+    }
+    if (!password && !username && !url) return null;
+    return { label: label.trim() || url || username, service: "", url, username, password, apiKey: "", category: "General", notes: notes.join(" | "), tags: [] };
+  };
+  const rows: IntakeRow[] = [];
+  const blocks = input.split(/(?:\r?\n[ \t]*){2,}/).map(b => b.split(/\r?\n/).map(l => l.trim()).filter(Boolean)).filter(b => b.length);
+  if (blocks.length && blocks.every(b => b.length >= 2 && b.length <= 6 && !/\s[\/|]\s|\s[-–]\s/.test(b.join("\n")))) {
+    for (const b of blocks) { const r = build(b[0].replace(/[:\s]+$/, ""), b.slice(1)); if (!r) return null; rows.push(r); }
+    return rows;
+  }
+  for (const line of nonEmpty) {
+    const m = line.match(/^(.+?)\s*(?::|\s[-–—]\s|\t)\s*(.+)$/);
+    if (!m) return null;
+    const parts = m[2].split(/\s+[\/|,;–—-]\s+|\s*\t\s*|\s*\|\s*/).filter(Boolean);
+    const tail = parts.length === 1 ? m[2].split(/\s+/) : parts;
+    if (tail.length < 2 && !emailCell(tail[0])) { const r = build(m[1], ["", tail[0]]); if (!r || !r.password) return null; rows.push(r); continue; }
+    const r = build(m[1], tail); if (!r || !r.password) return null; rows.push(r);
+  }
+  return rows;
 }
 
 /** Pure, local preview. No network calls, logging, storage writes or secret-valued errors. */
@@ -293,6 +357,10 @@ export function previewBulkIntake(mode: BulkMode, input: string, options: Intake
         const split = splitPromptCollection(input, options.splitRule);
         result.splitMethod = split.method; result.warnings.push(...split.warnings);
         split.parts.forEach((row, i) => entries.push({ row, line: i + 1 }));
+      } else if (mode === "credentials" && smartCredentialText(input)) {
+        result.rows = smartCredentialText(input)!;
+        result.warnings.push("Detected one account per line or block. Check that each password is right before saving.");
+        return result;
       } else if (mode === "credentials") {
         const legacy = legacyCredentials(input);
         if (legacy.items.length > limit) return fail(`Import at most ${limit.toLocaleString()} entries per batch.`);

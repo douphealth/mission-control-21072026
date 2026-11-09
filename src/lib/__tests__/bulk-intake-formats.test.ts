@@ -197,11 +197,11 @@ describe("prompt collection boundaries", () => {
   });
 });
 
-it("does not guess undeclared headerless extra fields into unencrypted notes", () => {
-  const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\tperson@example.com\tfixture\t\tGeneral\tPublic note\tprivate-extra-do-not-copy");
+it("headerless rows follow the owner's 12-column layout and keep every extra column labelled", () => {
+  const result = previewBulkIntake("credentials", "Tool\tService\thttps://example.com\tperson@example.com\tfixture\t\tGeneral\tPublic note\tYearly");
   expect(result.rows).toHaveLength(1);
-  expect(result.rows[0].notes).toBe("Public note");
-  expect(JSON.stringify(result.rows)).not.toContain("private-extra-do-not-copy");
-  expect(result.table?.columns[8]).toBe("__ignore__");
+  expect(result.rows[0]).toMatchObject({ label: "Tool", service: "Service", url: "https://example.com", username: "person@example.com", password: "fixture" });
+  expect(result.rows[0].notes).toBe("PayPal (Date Payment done): General\nPayPal (Payment valid until): Public note\nPayPal (Payment renewal): Yearly");
+  expect(result.table?.headers[4]).toBe("Password");
   expect(result.table?.needsReview).toBe(true);
 });

@@ -192,11 +192,10 @@ export function planDeduplicatedImport(
       throw new Error(`Row ${index + 1} must be a record. Nothing was saved.`);
     }
     const key = hasMeaningfulFingerprint(tableName, item) ? identityKey(tableName, item) : null;
-    const existing = key ? byKey.get(key) : undefined;
+    const found = key ? byKey.get(key) : undefined;
+    // Same label/account with a different secret is kept as its own entry.
+    const existing = found && tableName === "credentials" && credentialSecretsConflict(found, item) ? undefined : found;
     if (existing) {
-      if (tableName === "credentials" && credentialSecretsConflict(existing, item)) {
-        throw new Error(`Credential row ${index + 1} conflicts with an existing secret. Give separate credentials distinct labels, or edit the saved entry. Nothing was saved.`);
-      }
       if (typeof existing.id !== "string" || !existing.id.trim()) {
         throw new Error("A stored record has an invalid ID. Nothing was saved; restore a verified backup.");
       }

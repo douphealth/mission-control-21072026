@@ -34,11 +34,12 @@ describe("atomic import planner", () => {
   it("keeps identical links for distinct website assignments", () => {
     expect(identityKey("links", { url: "https://example.com", website: "One" })).not.toEqual(identityKey("links", { url: "https://example.com", website: "Two" }));
   });
-  it("rejects secret conflicts without leaking the values", () => {
-    const a = { label: "same", password: "secret-one" };
-    const b = { label: "same", password: "secret-two" };
-    expect(() => planDeduplicatedImport("credentials", [], [a, b], allocator())).toThrow(/conflicts/);
-    try { planDeduplicatedImport("credentials", [], [a, b], allocator()); } catch (error) { expect(String(error)).not.toContain("secret-one"); expect(String(error)).not.toContain("secret-two"); }
+  it("keeps same label/account with different passwords as separate entries", () => {
+    const a = { label: "same", username: "me", password: "secret-one" };
+    const b = { label: "same", username: "me", password: "secret-two" };
+    const plan = planDeduplicatedImport("credentials", [a as any], [b], allocator());
+    expect(plan.creates).toHaveLength(1);
+    expect(planDeduplicatedImport("credentials", [], [a, b], allocator()).creates).toHaveLength(2);
   });
   it("does not merge different vault accounts or labels", () => {
     const items = [{ label: "prod", username: "Alex" }, { label: "test", username: "Alex" }, { label: "prod", username: "alex" }];

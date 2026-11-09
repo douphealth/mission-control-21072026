@@ -20,10 +20,8 @@ export async function prepareCredentialImport(
       if (plaintext === null) throw new Error(`Credential row ${index + 1} cannot be decrypted on this device. Nothing was saved.`);
       if (existing?.[field]) {
         const previous = await decryptOrNull(existing[field]);
-        if (previous !== plaintext) {
-          throw new Error(`Credential row ${index + 1} has a different secret for the same label/account. Use a distinct label or edit the existing entry. Nothing was saved.`);
-        }
-        row[field] = existing[field];
+        // A different secret under the same label/account is a separate entry, not an error.
+        row[field] = previous === plaintext ? existing[field] : await encrypt(plaintext);
       } else row[field] = /^(mcenc:v[23]:|wcapi:)/.test(supplied) ? supplied : await encrypt(plaintext);
     }
     byIdentity.set(identity, { ...existing, ...row,
