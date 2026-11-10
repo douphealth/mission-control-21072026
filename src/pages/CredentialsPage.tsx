@@ -277,7 +277,7 @@ export default function CredentialsPage() {
         (credential.password && values.password === undefined) ||
         (credential.apiKey && values.apiKey === undefined)
       ) {
-        toast.error("Some secrets could not be decrypted with this vault key");
+        toast.error("Some secrets could not be decrypted with this vault key", { description: "Open Mission Control once on the device where you saved them and unlock the vault there, then lock and unlock here." });
       }
     }
     setRevealed((previous) => {

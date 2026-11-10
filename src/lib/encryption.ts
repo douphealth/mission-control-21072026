@@ -15,18 +15,27 @@ const PREFIX_V2 = "mcenc:v2:";
 const PREFIX_V1 = "wcapi:";
 const PREFIX_V3 = "mcenc:v3:";
 const SESSION_SLOT = "mc-vault-session";
-let sessionKey: string | null = typeof window !== "undefined" ? window.sessionStorage.getItem(SESSION_SLOT) : null;
-let cachedKey: { value: string; key: Promise<CryptoKey> } | null = null;
-/** Unlocked key lives for this browser tab until the owner locks it or closes the tab. */
-export function setVaultSessionKey(value: string | null) {
-  sessionKey = value; cachedKey = null;
-  try { if (typeof window !== "undefined") { if (value) window.sessionStorage.setItem(SESSION_SLOT, value); else window.sessionStorage.removeItem(SESSION_SLOT); } } catch { /* storage unavailable */ }
+const ALT_SLOT = "mc-vault-session-alt";
+const readSlot = (slot: string) => { try { return typeof window !== "undefined" ? window.sessionStorage.getItem(slot) : null; } catch { return null; } };
+let sessionKey: string | null = readSlot(SESSION_SLOT);
+/** Older keys (e.g. created on another device) that stay readable; new data always uses `sessionKey`. */
+let sessionAlternates: string[] = (() => { try { return JSON.parse(readSlot(ALT_SLOT) || "[]"); } catch { return []; } })();
+const keyCache = new Map<string, Promise<CryptoKey>>();
+/** Unlocked keys live for this browser tab until the owner locks it or closes the tab. */
+export function setVaultSessionKey(value: string | null, alternates: string[] = []) {
+  sessionKey = value; sessionAlternates = value ? alternates.filter(k => k && k !== value) : []; keyCache.clear();
+  try {
+    if (typeof window === "undefined") return;
+    if (value) { window.sessionStorage.setItem(SESSION_SLOT, value); window.sessionStorage.setItem(ALT_SLOT, JSON.stringify(sessionAlternates)); }
+    else { window.sessionStorage.removeItem(SESSION_SLOT); window.sessionStorage.removeItem(ALT_SLOT); }
+  } catch { /* storage unavailable */ }
 }
 export function vaultSessionActive() { return !!sessionKey; }
+export function vaultSessionKeys(): string[] { return sessionKey ? [sessionKey, ...sessionAlternates] : []; }
 async function fastKey(value: string) {
-  if (cachedKey?.value === value) return cachedKey.key;
-  const key = deriveKeyWithSalt(value, new TextEncoder().encode("mission-control-v3-data-key"));
-  cachedKey = { value, key }; return key;
+  let key = keyCache.get(value);
+  if (!key) { key = deriveKeyWithSalt(value, new TextEncoder().encode("mission-control-v3-data-key")); keyCache.set(value, key); }
+  return key;
 }
 
 /** Only used to read data written by very old builds. Never used to encrypt. */
@@ -157,15 +166,18 @@ async function tryDecrypt(
  * be decrypted — it never returns raw ciphertext dressed up as a secret.
  * Values that were never encrypted are returned unchanged.
  */
-export async function decrypt(cipherText: string, customKey?: string): Promise<string> {
+export async function decrypt(cipherText: string, customKey?: string | string[]): Promise<string> {
   if (!cipherText) return "";
 
-  const activeKey = customKey || getEncryptionKey();
+  // Every unlocked key is tried so values written on another device stay readable.
+  const keys = customKey ? (Array.isArray(customKey) ? customKey : [customKey]) : [getEncryptionKey(), ...sessionAlternates];
 
   if (cipherText.startsWith(PREFIX_V3)) {
     const raw = base64ToBytes(cipherText.slice(PREFIX_V3.length));
-    const out = await tryDecrypt(await fastKey(activeKey), raw.slice(0, IV_LENGTH), raw.slice(IV_LENGTH));
-    if (out !== null) return out;
+    for (const k of keys) {
+      const out = await tryDecrypt(await fastKey(k), raw.slice(0, IV_LENGTH), raw.slice(IV_LENGTH));
+      if (out !== null) return out;
+    }
     throw new DecryptionError();
   }
 
@@ -174,9 +186,10 @@ export async function decrypt(cipherText: string, customKey?: string): Promise<s
     const salt = raw.slice(0, SALT_LENGTH);
     const iv = raw.slice(SALT_LENGTH, SALT_LENGTH + IV_LENGTH);
     const data = raw.slice(SALT_LENGTH + IV_LENGTH);
-    const key = await deriveKeyWithSalt(activeKey, salt);
-    const out = await tryDecrypt(key, iv, data);
-    if (out !== null) return out;
+    for (const k of keys) {
+      const out = await tryDecrypt(await deriveKeyWithSalt(k, salt), iv, data);
+      if (out !== null) return out;
+    }
     throw new DecryptionError();
   }
 
@@ -185,7 +198,7 @@ export async function decrypt(cipherText: string, customKey?: string): Promise<s
     const iv = raw.slice(0, IV_LENGTH);
     const data = raw.slice(IV_LENGTH);
 
-    const candidates = customKey ? [customKey] : [activeKey, LEGACY_DEFAULT_KEY];
+    const candidates = customKey ? keys : [...keys, LEGACY_DEFAULT_KEY];
     for (const passphrase of candidates) {
       const out = await tryDecrypt(await deriveLegacyKey(passphrase), iv, data);
       if (out !== null) return out;
@@ -200,7 +213,7 @@ export async function decrypt(cipherText: string, customKey?: string): Promise<s
 /** Non-throwing variant for UI paths. Returns null when decryption fails. */
 export async function decryptOrNull(
   cipherText: string,
-  customKey?: string,
+  customKey?: string | string[],
 ): Promise<string | null> {
   try {
     return await decrypt(cipherText, customKey);

@@ -2,7 +2,7 @@ import Papa from "papaparse";
 import type { FamilyRecord } from "./privateVault";
 import { fold, parseFreeText, resolveShortNames } from "./familyFreeText";
 
-export const FAMILY_CATEGORIES = ["Identity", "Banking", "Insurance", "Health", "Emergency", "Other"];
+export const FAMILY_CATEGORIES = ["Identity", "Banking", "Insurance", "Health", "Emergency", "Notes", "Other"];
 export const FAMILY_IMPORT_LIMIT = 5000;
 export const FAMILY_IMPORT_BYTES = 5 * 1024 * 1024;
 export type FamilyPatch = { member?: string; category?: string; notes?: string };

@@ -139,7 +139,37 @@ async function ensureToken(interactive = false): Promise<StoredGoogleToken> {
   }
 }
 
+// Google rejects bursts with 403 rateLimitExceeded / 429. Keep at most two
+// requests in flight and retry those (and brief 5xx) with backoff.
+const GCAL_MAX_IN_FLIGHT = 2;
+let gcalInFlight = 0;
+const gcalQueue: (() => void)[] = [];
+async function gcalSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (gcalInFlight >= GCAL_MAX_IN_FLIGHT) await new Promise<void>((resolve) => gcalQueue.push(resolve));
+  gcalInFlight++;
+  try { return await run(); } finally { gcalInFlight--; gcalQueue.shift()?.(); }
+}
+export function isGCalRetryable(message: string): boolean {
+  const m = /Google Calendar (\d{3})/.exec(message);
+  const status = m ? Number(m[1]) : 0;
+  return status === 429 || status === 500 || status === 502 || status === 503 || (status === 403 && /rateLimitExceeded|userRateLimitExceeded|quotaExceeded/i.test(message) && !/dailyLimitExceeded/i.test(message));
+}
 async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await gcalSlot(() => gcalApiOnce<T>(path, init));
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      if (attempt >= 4 || !isGCalRetryable(message)) {
+        if (isGCalRetryable(message)) throw new Error("Google Calendar is busy (rate limit). Your data is safe — sync will retry automatically in a few minutes.");
+        throw e;
+      }
+      await new Promise((r) => setTimeout(r, 800 * 2 ** attempt + Math.random() * 400));
+    }
+  }
+}
+
+async function gcalApiOnce<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (await refreshAppCalendarAccount()) {
     const { gcalGatewayRequest } = await import("@/lib/googleCalendarGateway.functions");
     const { status, body } = await gcalGatewayRequest({
@@ -235,8 +265,10 @@ export async function fetchAllEvents(
   let calendarIds = cfg.enabledCalendarIds;
 
   if (!calendarIds || calendarIds.length === 0) {
+    // Only calendars shown in Google Calendar; hidden/holiday lists waste quota.
     const all = await listCalendars();
-    calendarIds = all.map((c) => c.id);
+    const shown = all.filter((c) => c.selected || c.primary);
+    calendarIds = (shown.length ? shown : all).map((c) => c.id);
   }
 
   const results = await Promise.allSettled(

@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import FormModal from "@/components/FormModal";
 import { FAMILY_CATEGORIES, FAMILY_IMPORT_BYTES, parseFamilyImport } from "@/lib/familyBulk";
 import { addFamilyRecords, type FamilyRecord } from "@/lib/privateVault";
+import { toFamilyMarkdown } from "@/lib/familyMarkdown";
+import FamilyMarkdown from "@/components/family/FamilyMarkdown";
 import { toast } from "sonner";
 
 const PREVIEW_LIMIT = 300;
@@ -15,13 +17,14 @@ export default function FamilyBulkImport({ open, onClose, onSaved, existing = []
   const [reveal, setReveal] = useState(false);
   const [rows, setRows] = useState<FamilyRecord[]>([]);
   const [asNote, setAsNote] = useState(false);
+  const [asMarkdown, setAsMarkdown] = useState(true);
   const [noteMember, setNoteMember] = useState("");
   const [noteTitle, setNoteTitle] = useState("");
   const file = useRef<HTMLInputElement>(null);
   const parsed = useMemo(() => parseFamilyImport(input, existing), [input, existing]);
   // Editable copy of the preview; re-parsing the text resets edits.
   useEffect(() => setRows(parsed.rows), [parsed]);
-  const noteRecord: FamilyRecord | null = asNote && input.trim() ? { id: "note", member: noteMember.trim() || "Unassigned", label: noteTitle.trim() || input.trim().split(/\r?\n/)[0].slice(0, 60) || "Note", category: FAMILY_CATEGORIES.includes(noteTitle) ? noteTitle : "Other", value: "", notes: input.trim() } : null;
+  const noteRecord: FamilyRecord | null = asNote && input.trim() ? { id: "note", member: noteMember.trim() || "Unassigned", label: noteTitle.trim() || input.trim().split(/\r?\n/)[0].slice(0, 60) || "Note", category: FAMILY_CATEGORIES.includes(noteTitle) ? noteTitle : "Notes", value: "", notes: asMarkdown ? toFamilyMarkdown(input) : input.trim() } : null;
   const valid = asNote ? (noteRecord ? [noteRecord] : []) : rows.filter(r => r.member.trim() && r.label.trim());
   const close = () => { if (!busy) { setInput(""); setReveal(false); onClose(); } };
   const update = (id: string, patch: Partial<FamilyRecord>) => setRows(old => old.map(r => r.id === id ? { ...r, ...patch } : r));
@@ -62,7 +65,8 @@ export default function FamilyBulkImport({ open, onClose, onSaved, existing = []
     {asNote && <div className="grid gap-2 sm:grid-cols-2">
       <input aria-label="Family member for note" placeholder="Family member (optional)" value={noteMember} onChange={e => setNoteMember(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
       <input aria-label="Note title" placeholder="Title (optional — first line is used)" value={noteTitle} onChange={e => setNoteTitle(e.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm" />
-      <p className="text-xs text-muted-foreground sm:col-span-2">The whole text is saved exactly as written, encrypted, in one record.</p>
+      <label className="flex min-h-10 items-center gap-2 text-sm sm:col-span-2"><input type="checkbox" className="size-4 accent-primary" checked={asMarkdown} onChange={e => setAsMarkdown(e.target.checked)} />Format neatly as Markdown (headings, lists, tables — every word is kept)</label>
+      {noteRecord?.notes && <div className="max-h-72 overflow-auto rounded-md border border-border bg-card p-3 sm:col-span-2" aria-label="Note preview"><FamilyMarkdown text={noteRecord.notes} /></div>}
     </div>}
     {!asNote && parsed.errors.length > 0 && <div role="alert" className="space-y-1 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"><p className="font-medium">{parsed.rows.length ? `${parsed.errors.length} lines skipped — everything else can be added.` : "This text could not be read."}</p>{parsed.errors.slice(0, 3).map((error, i) => <p key={i} className="text-muted-foreground">{error}</p>)}</div>}
     {!asNote && rows.length > 0 && <section className="space-y-2" aria-label="Import preview">

@@ -1,5 +1,6 @@
 import Dexie, { type Table } from "dexie";
-import { decrypt, encrypt, generateStrongKey, setVaultSessionKey } from "./encryption";
+import type { UserSettings } from "./db";
+import { decrypt, encrypt, generateStrongKey, setVaultSessionKey, vaultSessionActive, vaultSessionKeys } from "./encryption";
 import { applyFamilyPatch, validateFamilyRecord, type FamilyPatch } from "./familyBulk";
 
 export const VAULT_IDLE_MS = 5 * 60 * 1000;
@@ -19,28 +20,109 @@ async function wrappingKey(passphrase: string, salt: Uint8Array) {
   return crypto.subtle.deriveKey({ name: "PBKDF2", salt: salt as BufferSource, iterations: 600_000, hash: "SHA-256" }, material, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
 export function vaultConfigured() { return !!localStorage.getItem(ENVELOPE); }
-export async function unlockPrivateVault(passphrase: string) {
-  const saved = localStorage.getItem(ENVELOPE);
-  if (!saved) {
-    if (passphrase.length < 12) throw new Error("Choose a master passphrase of at least 12 characters.");
-    const deviceKey = localStorage.getItem("mc-encryption-key") || generateStrongKey();
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await wrappingKey(passphrase, salt);
-    const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode(ENVELOPE) }, key, new TextEncoder().encode(deviceKey));
-    const envelope: Envelope = { version: 1, salt: encode(salt), iv: encode(iv), data: encode(new Uint8Array(data)) };
-    localStorage.setItem(ENVELOPE, JSON.stringify(envelope));
-    setVaultSessionKey(deviceKey);
-    localStorage.removeItem("mc-encryption-key");
-    return;
-  }
+
+// ─── Cross-device keyring ────────────────────────────────────────────────────
+// Each device publishes its passphrase-wrapped envelope to its own synced
+// settings row (never overwriting another device's row). Unlocking tries every
+// envelope, so passwords saved on any device decrypt everywhere.
+const ACCOUNT_PREFIX = "private-vault-";
+const DEVICE_SLOT = "mc-vault-device-id";
+type AccountEnvelope = { envelope: Envelope; createdAt: string; updatedAt: string; device: string };
+const createdSlot = "mc-private-vault-created-at";
+function deviceId() {
+  let id = localStorage.getItem(DEVICE_SLOT);
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem(DEVICE_SLOT, id); }
+  return id;
+}
+async function settingsTable() {
+  try { const { db } = await import("./db"); return db.settings; } catch { return null; }
+}
+export async function readAccountEnvelopes(): Promise<AccountEnvelope[]> {
   try {
-    const envelope: Envelope = JSON.parse(saved);
+    const table = await settingsTable(); if (!table) return [];
+    const rows = await table.where("id").startsWith(ACCOUNT_PREFIX).toArray();
+    return rows.map(r => (r as { vaultEnvelope?: AccountEnvelope }).vaultEnvelope).filter((e): e is AccountEnvelope => !!e?.envelope?.data);
+  } catch { return []; }
+}
+/** Publish this device's wrapped key (safe: it only opens with the master passphrase). */
+export async function publishVaultEnvelope() {
+  const saved = localStorage.getItem(ENVELOPE); if (!saved) return;
+  try {
+    const table = await settingsTable(); if (!table) return;
+    const id = ACCOUNT_PREFIX + deviceId();
+    const current = (await table.get(id)) as { vaultEnvelope?: AccountEnvelope } | undefined;
+    if (current?.vaultEnvelope && JSON.stringify(current.vaultEnvelope.envelope) === saved) return;
+    const now = new Date().toISOString();
+    const createdAt = localStorage.getItem(createdSlot) || current?.vaultEnvelope?.createdAt || now;
+    localStorage.setItem(createdSlot, createdAt);
+    await table.put({ id, vaultEnvelope: { envelope: JSON.parse(saved), createdAt, updatedAt: now, device: id } } as UserSettings);
+  } catch { /* sync is best effort; the local envelope remains authoritative */ }
+}
+function parseKeyring(plain: string): string[] {
+  if (plain.startsWith("{")) { try { const keys = JSON.parse(plain).keys; if (Array.isArray(keys)) return keys.filter((k: unknown) => typeof k === "string" && k); } catch { /* legacy */ } }
+  return [plain];
+}
+async function unwrap(envelope: Envelope, passphrase: string): Promise<string[] | null> {
+  try {
     const key = await wrappingKey(passphrase, decode(envelope.salt));
     const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decode(envelope.iv) as BufferSource, additionalData: new TextEncoder().encode(ENVELOPE) }, key, decode(envelope.data) as BufferSource);
-    setVaultSessionKey(new TextDecoder().decode(data));
-    localStorage.removeItem("mc-encryption-key");
-  } catch { throw new Error("Incorrect passphrase or damaged vault. No records were changed."); }
+    return parseKeyring(new TextDecoder().decode(data));
+  } catch { return null; }
+}
+async function wrap(passphrase: string, keys: string[]): Promise<Envelope> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await wrappingKey(passphrase, salt);
+  // A single key keeps the original envelope format readable by older builds.
+  const plain = keys.length === 1 ? keys[0] : JSON.stringify({ keys });
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: new TextEncoder().encode(ENVELOPE) }, key, new TextEncoder().encode(plain));
+  return { version: 1, salt: encode(salt), iv: encode(iv), data: encode(new Uint8Array(data)) };
+}
+let lockedDevices = 0;
+/** Number of other devices whose saved passwords need that device's passphrase. */
+export function lockedDeviceVaults() { return lockedDevices; }
+export async function accountVaultExists() { return (await readAccountEnvelopes()).length > 0; }
+
+async function openKeyring(passphrase: string, includeLocal: boolean) {
+  const own = ACCOUNT_PREFIX + (localStorage.getItem(DEVICE_SLOT) || "");
+  const account = (await readAccountEnvelopes()).filter(e => e.device !== own);
+  const keys: string[] = []; let failed = 0;
+  for (const e of account) { const k = await unwrap(e.envelope, passphrase); if (k) keys.push(...k); else failed++; }
+  const saved = includeLocal ? localStorage.getItem(ENVELOPE) : null;
+  let localKeys: string[] | null = null;
+  if (saved) { localKeys = await unwrap(JSON.parse(saved), passphrase); if (localKeys) keys.push(...localKeys); }
+  return { keys, failed, localKeys, accountCount: account.length, hadLocal: !!saved };
+}
+async function adopt(passphrase: string, keys: string[], previous: string[] | null) {
+  // Sorted so every device independently picks the same primary key for new data.
+  const merged = [...new Set([...keys, ...vaultSessionKeys()])].sort();
+  if (!previous || merged.join() !== [...previous].sort().join()) localStorage.setItem(ENVELOPE, JSON.stringify(await wrap(passphrase, merged)));
+  setVaultSessionKey(merged[0], merged.slice(1));
+  localStorage.removeItem("mc-encryption-key");
+  await publishVaultEnvelope();
+}
+export async function unlockPrivateVault(passphrase: string) {
+  const legacy = localStorage.getItem("mc-encryption-key");
+  const opened = await openKeyring(passphrase, true);
+  if (!opened.hadLocal && !opened.accountCount) {
+    if (passphrase.length < 12) throw new Error("Choose a master passphrase of at least 12 characters.");
+    await adopt(passphrase, [legacy || generateStrongKey()], null);
+    lockedDevices = 0;
+    return;
+  }
+  if (opened.hadLocal && !opened.localKeys) throw new Error("Incorrect passphrase or damaged vault. No records were changed.");
+  if (!opened.keys.length) throw new Error("Incorrect passphrase. Use the master passphrase you created on your other device. No records were changed.");
+  // Keep a pre-vault device key too: older rows on this device may use it.
+  await adopt(passphrase, legacy ? [...opened.keys, legacy] : opened.keys, opened.localKeys);
+  lockedDevices = opened.failed;
+}
+/** Unlock passwords saved on another device that used a different passphrase; this device then uses that passphrase. */
+export async function addOtherDevicePassphrase(passphrase: string) {
+  if (!vaultSessionActive()) throw new Error("Unlock your private vault first.");
+  const opened = await openKeyring(passphrase, false);
+  if (!opened.keys.length) throw new Error("That passphrase did not open any other device's vault. Nothing was changed.");
+  await adopt(passphrase, [...opened.keys, ...vaultSessionKeys()], null);
+  lockedDevices = opened.failed;
 }
 export function lockPrivateVault() { setVaultSessionKey(null); }
 export async function saveFamilyRecord(record: FamilyRecord) {
@@ -89,11 +171,7 @@ export async function decodePrivateBackup(input: string, passphrase: string) {
   const backup = JSON.parse(input);
   if (backup.format !== "mc-private-backup-v1" || !backup.envelope || typeof backup.payload !== "string") throw new Error("Choose a Mission Control encrypted vault backup.");
   const envelope: Envelope = backup.envelope;
-  const key = await wrappingKey(passphrase, decode(envelope.salt));
-  let deviceKey: string;
-  try {
-    const data = await crypto.subtle.decrypt({ name: "AES-GCM", iv: decode(envelope.iv) as BufferSource, additionalData: new TextEncoder().encode(ENVELOPE) }, key, decode(envelope.data) as BufferSource);
-    deviceKey = new TextDecoder().decode(data);
-  } catch { throw new Error("Backup passphrase is incorrect. Nothing was imported."); }
+  const deviceKey = await unwrap(envelope, passphrase);
+  if (!deviceKey) throw new Error("Backup passphrase is incorrect. Nothing was imported.");
   return { data: JSON.parse(await decrypt(backup.payload, deviceKey)), deviceKey };
 }
