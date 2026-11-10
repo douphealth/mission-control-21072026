@@ -140,31 +140,61 @@ async function ensureToken(interactive = false): Promise<StoredGoogleToken> {
 }
 
 // Google rejects bursts with 403 rateLimitExceeded / 429. Keep at most two
-// requests in flight and retry those (and brief 5xx) with backoff.
+// requests in flight, space writes out (Google's per-user write quota is the
+// one that trips), and after a rate limit pause every tab/device pass for a
+// cool-down instead of hammering the API again.
 const GCAL_MAX_IN_FLIGHT = 2;
+export const GCAL_WRITE_GAP_MS = 350;
+const COOLDOWN_SLOT = "mc-gcal-cooldown-until";
+export const GCAL_COOLDOWN_MS = 10 * 60 * 1000;
 let gcalInFlight = 0;
 const gcalQueue: (() => void)[] = [];
-async function gcalSlot<T>(run: () => Promise<T>): Promise<T> {
+let lastWriteAt = 0;
+async function gcalSlot<T>(run: () => Promise<T>, write: boolean): Promise<T> {
   if (gcalInFlight >= GCAL_MAX_IN_FLIGHT) await new Promise<void>((resolve) => gcalQueue.push(resolve));
   gcalInFlight++;
-  try { return await run(); } finally { gcalInFlight--; gcalQueue.shift()?.(); }
+  try {
+    if (write) {
+      const wait = lastWriteAt + GCAL_WRITE_GAP_MS - Date.now();
+      lastWriteAt = Math.max(Date.now(), lastWriteAt + GCAL_WRITE_GAP_MS);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    }
+    return await run();
+  } finally { gcalInFlight--; gcalQueue.shift()?.(); }
 }
 export function isGCalRetryable(message: string): boolean {
   const m = /Google Calendar (\d{3})/.exec(message);
   const status = m ? Number(m[1]) : 0;
   return status === 429 || status === 500 || status === 502 || status === 503 || (status === 403 && /rateLimitExceeded|userRateLimitExceeded|quotaExceeded/i.test(message) && !/dailyLimitExceeded/i.test(message));
 }
+export class GCalBusyError extends Error {
+  constructor() { super("Google Calendar asked us to slow down. Your data is safe — sync resumes automatically in a few minutes."); this.name = "GCalBusyError"; }
+}
+export function isGCalBusy(error: unknown): boolean {
+  return error instanceof GCalBusyError || (error instanceof Error && error.name === "GCalBusyError");
+}
+/** Milliseconds left in the shared rate-limit cool-down (0 when Google may be called). */
+export function gcalCooldownRemaining(now = Date.now()): number {
+  try { return Math.max(0, Number(localStorage.getItem(COOLDOWN_SLOT) || 0) - now); } catch { return 0; }
+}
+export function startGCalCooldown(ms = GCAL_COOLDOWN_MS) {
+  try { localStorage.setItem(COOLDOWN_SLOT, String(Date.now() + ms)); } catch { /* ignore */ }
+}
 async function gcalApi<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const write = !!init.method && init.method !== "GET";
   for (let attempt = 0; ; attempt++) {
+    if (gcalCooldownRemaining() > 0) throw new GCalBusyError();
     try {
-      return await gcalSlot(() => gcalApiOnce<T>(path, init));
+      return await gcalSlot(() => gcalApiOnce<T>(path, init), write);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      if (attempt >= 4 || !isGCalRetryable(message)) {
-        if (isGCalRetryable(message)) throw new Error("Google Calendar is busy (rate limit). Your data is safe — sync will retry automatically in a few minutes.");
-        throw e;
+      if (!isGCalRetryable(message)) throw e;
+      const rateLimited = !/Google Calendar 5\d\d/.test(message);
+      if (attempt >= 2) {
+        if (rateLimited) startGCalCooldown();
+        throw new GCalBusyError();
       }
-      await new Promise((r) => setTimeout(r, 800 * 2 ** attempt + Math.random() * 400));
+      await new Promise((r) => setTimeout(r, 1500 * 2 ** attempt + Math.random() * 500));
     }
   }
 }
@@ -207,7 +237,18 @@ async function gcalApiOnce<T>(path: string, init: RequestInit = {}): Promise<T> 
   return JSON.parse(text) as T;
 }
 
+let calendarListCache: { at: number; value: GoogleCalendarList[] } | null = null;
+let calendarListFlight: Promise<GoogleCalendarList[]> | null = null;
+/** Calendar list rarely changes: share one request across hooks and reuse it for 10 minutes. */
 export async function listCalendars(): Promise<GoogleCalendarList[]> {
+  if (calendarListCache && Date.now() - calendarListCache.at < 10 * 60_000) return calendarListCache.value;
+  if (calendarListFlight) return calendarListFlight;
+  calendarListFlight = readCalendarList()
+    .then((value) => { calendarListCache = { at: Date.now(), value }; return value; })
+    .finally(() => { calendarListFlight = null; });
+  return calendarListFlight;
+}
+async function readCalendarList(): Promise<GoogleCalendarList[]> {
   const calendars: GoogleCalendarList[] = [];
   let pageToken: string | undefined;
   do {
@@ -306,8 +347,20 @@ export async function createGCalEvent(
     recurrence?: string[];
   },
   deterministicId?: string,
+  exists = false,
 ): Promise<GoogleCalendarEvent> {
   const cal = encodeURIComponent(calendarId);
+  if (deterministicId && exists) {
+    // Known event: one PUT instead of a doomed POST (409) + PUT — halves write quota.
+    try {
+      return await gcalApi<GoogleCalendarEvent>(
+        `/calendars/${cal}/events/${encodeURIComponent(deterministicId)}`,
+        { method: "PUT", body: JSON.stringify(event) },
+      );
+    } catch (e: any) {
+      if (!/\b(?:404|410)\b/.test(e?.message || "")) throw e;
+    }
+  }
   if (deterministicId) {
     // Upsert semantics, same as the old server gateway: try POST-with-id
     // (201), fall back to PUT (409 when the event already exists).
@@ -429,14 +482,9 @@ export function gcalTaskSummary(
 ): string {
   if (task.status === "done") return `✅ ${task.title}`;
   if (task.dueDate && task.dueDate < today) {
-    const days = Math.max(
-      1,
-      Math.round(
-        (new Date(`${today}T00:00:00`).getTime() - new Date(`${task.dueDate}T00:00:00`).getTime()) /
-          86_400_000,
-      ),
-    );
-    return `⚠️ OVERDUE ${days}d · ${task.title}`;
+    // No day counter in the title: it changed daily and forced a rewrite of every
+    // overdue event each day, which is what exhausted the Calendar write quota.
+    return `⚠️ OVERDUE · ${task.title}`;
   }
   return `📋 ${task.title}`;
 }
@@ -580,11 +628,19 @@ export async function syncGCalEvents(
   if (!forceRefresh && cachedEvents.length > 0 && Date.now() - cacheTimestamp < CACHE_TTL) {
     return cachedEvents;
   }
-
-  cachedEvents = await fetchAllEvents(timeMin, timeMax);
-  cacheTimestamp = Date.now();
-  return cachedEvents;
+  // During a rate-limit cool-down show the last good events instead of failing.
+  if (gcalCooldownRemaining() > 0 && cachedEvents.length) return cachedEvents;
+  // Several screens poll at once; share one read instead of multiplying requests.
+  const key = `${timeMin}|${timeMax}`;
+  if (eventsFlight?.key === key) return eventsFlight.promise;
+  const promise = fetchAllEvents(timeMin, timeMax)
+    .then((events) => { cachedEvents = events; cacheTimestamp = Date.now(); return events; })
+    .catch((error) => { if (isGCalBusy(error) && cachedEvents.length) return cachedEvents; throw error; })
+    .finally(() => { if (eventsFlight?.promise === promise) eventsFlight = null; });
+  eventsFlight = { key, promise };
+  return promise;
 }
+let eventsFlight: { key: string; promise: Promise<GoogleCalendarEvent[]> } | null = null;
 
 export function gCalEventToCalEvent(
   gev: GoogleCalendarEvent,

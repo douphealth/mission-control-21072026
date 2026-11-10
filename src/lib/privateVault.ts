@@ -164,6 +164,60 @@ export async function addOtherDevicePassphrase(passphrase: string) {
   lockedDevices = opened.failed;
   notifyKeys();
 }
+// ─── Recovery code ───────────────────────────────────────────────────────────
+// A random code (shown once) wraps a copy of the keyring. It syncs like the
+// device envelopes and lets the owner set a new passphrase if they forget it.
+const RECOVERY_ROW = "vault-recovery";
+const RECOVERY_LOCAL = "mc-private-vault-recovery-v1";
+type RecoveryEnvelope = NonNullable<UserSettings["vaultRecovery"]>;
+const RECOVERY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const normalizeRecoveryCode = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+async function keyTag(key: string) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`mc-vault-tag:${key}`));
+  return encode(new Uint8Array(digest)).slice(0, 12);
+}
+async function readRecovery(): Promise<RecoveryEnvelope | null> {
+  try {
+    const table = await settingsTable();
+    const row = table ? ((await table.get(RECOVERY_ROW)) as { vaultRecovery?: RecoveryEnvelope } | undefined) : undefined;
+    if (row?.vaultRecovery?.envelope?.data) return row.vaultRecovery;
+  } catch { /* fall back to the local copy */ }
+  try { const local = localStorage.getItem(RECOVERY_LOCAL); return local ? JSON.parse(local) : null; } catch { return null; }
+}
+/** "none" | "current" | "outdated" (a key was added after the code was made). */
+export async function recoveryCodeStatus(): Promise<"none" | "current" | "outdated"> {
+  const rec = await readRecovery(); if (!rec) return "none";
+  if (!vaultSessionActive()) return "current";
+  const covered = new Set(rec.covers);
+  const tags = await Promise.all(vaultSessionKeys().map(keyTag));
+  return tags.every(t => covered.has(t)) ? "current" : "outdated";
+}
+/** Create (or replace) the recovery code for every key this unlocked session holds. Show it once. */
+export async function createRecoveryCode(): Promise<string> {
+  if (!vaultSessionActive()) throw new Error("Unlock your private vault first.");
+  const bytes = crypto.getRandomValues(new Uint8Array(25));
+  const raw = Array.from(bytes, b => RECOVERY_ALPHABET[b % 32]).join("");
+  const code = raw.match(/.{5}/g)!.join("-");
+  const keys = vaultSessionKeys();
+  const rec: RecoveryEnvelope = { envelope: await wrap(normalizeRecoveryCode(code), keys), createdAt: new Date().toISOString(), covers: await Promise.all(keys.map(keyTag)) };
+  localStorage.setItem(RECOVERY_LOCAL, JSON.stringify(rec));
+  try { const table = await settingsTable(); await table?.put({ id: RECOVERY_ROW, vaultRecovery: rec } as UserSettings); } catch { /* local copy remains */ }
+  return code;
+}
+/** Forgotten passphrase: open the keyring with the recovery code and protect it with a new passphrase. */
+export async function recoverVaultWithCode(code: string, newPassphrase: string) {
+  if (newPassphrase.length < 12) throw new Error("Choose a new master passphrase of at least 12 characters.");
+  const rec = await readRecovery();
+  if (!rec) throw new Error("No recovery code was created for this vault yet. Create one in Credentials while the vault is unlocked.");
+  const keys = await unwrap(rec.envelope, normalizeRecoveryCode(code));
+  if (!keys?.length) throw new Error("That recovery code is not correct. Nothing was changed.");
+  const legacy = localStorage.getItem("mc-encryption-key");
+  await adopt(newPassphrase, legacy ? [...keys, legacy] : keys, null);
+  rememberSigs((await otherEnvelopes()).map(e => sig(e.envelope)));
+  lockedDevices = 0;
+  notifyKeys();
+}
+export async function recoveryAvailable() { return !!(await readRecovery()); }
 export function lockPrivateVault() { setVaultSessionKey(null); memoryPassphrase = null; try { sessionStorage.removeItem(MERGED_SLOT); } catch { /* ignore */ } }
 export async function saveFamilyRecord(record: FamilyRecord) {
   validateFamilyRecord(record);

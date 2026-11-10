@@ -551,6 +551,8 @@ export interface UserSettings {
   deviceStatus?: Record<string, { label: string; lastSyncAt?: string; lastBackupAt?: string; seenAt: string }>;
   /** Passphrase-wrapped vault keyring published by one device (row id "private-vault-<device>"). */
   vaultEnvelope?: { envelope: { version: 1; salt: string; iv: string; data: string }; createdAt: string; updatedAt: string; device: string };
+  /** Vault keyring wrapped with the owner's one-time recovery code (row `vault-recovery`). */
+  vaultRecovery?: { envelope: { version: 1; salt: string; iv: string; data: string }; createdAt: string; covers: string[] };
   navigationPreference?: { sidebarLayout?: unknown; pinnedSections: string[]; closedGroups: string[]; changedAt: string };
   /** Dedicated non-default settings rows retain independently synced starter-source choices. */
   bootstrapSeedPreference?: {

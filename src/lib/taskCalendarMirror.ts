@@ -13,17 +13,24 @@ import {
   buildTaskEventBody,
   createGCalEvent,
   deleteGCalEvent,
+  gcalCooldownRemaining,
+  isGCalBusy,
   isGCalConnected,
   taskIdToGCalId,
 } from "@/lib/googleCalendar";
 import { clearTombstonePart, contentHash, readTombstones } from "@/lib/googleSyncState";
 
-const POOL_SIZE = 4;
+// Writes go one at a time (the API layer also spaces them) and each pass is capped,
+// so a large backlog drains over a few passes instead of tripping Google's quota.
+const POOL_SIZE = 1;
+export const MAX_WRITES_PER_PASS = 40;
 
 export interface CalendarMirrorResult {
   written: number;
   removed: number;
   errors: number;
+  /** Changes left for a later pass (write cap or rate-limit cool-down). Not an error. */
+  deferred: number;
   firstError?: string;
 }
 
@@ -40,16 +47,25 @@ async function runPool<T>(items: T[], worker: (item: T) => Promise<void>): Promi
   await Promise.all(lanes);
 }
 
+function dayDistance(task: Task, today: string): number {
+  const date = task.dueDate || task.startDate;
+  if (!date) return 3650;
+  return (Date.parse(date) - Date.parse(today)) / 86_400_000;
+}
+
 async function patchTask(id: string, changes: Partial<Task>): Promise<void> {
   const updated = await db.tasks.update(id, changes as Parameters<typeof db.tasks.update>[1]);
   if (updated) markCloudRecordDirty("tasks", id);
 }
 
 export async function syncTaskCalendarMirror(): Promise<CalendarMirrorResult> {
-  const result: CalendarMirrorResult = { written: 0, removed: 0, errors: 0 };
+  const result: CalendarMirrorResult = { written: 0, removed: 0, errors: 0, deferred: 0 };
   if (!isGCalConnected()) return result;
+  let busy = gcalCooldownRemaining() > 0;
+  if (busy) return result;
 
   const fail = (error: unknown) => {
+    if (isGCalBusy(error)) { busy = true; result.deferred++; return; }
     result.errors++;
     result.firstError ??= error instanceof Error ? error.message : String(error);
   };
@@ -60,17 +76,20 @@ export async function syncTaskCalendarMirror(): Promise<CalendarMirrorResult> {
   // 1. Events of tasks deleted for good. Their rows are gone, so the tombstone is all that is left.
   for (const tombstone of readTombstones()) {
     if (!tombstone.eventId) continue;
+    if (busy || gcalCooldownRemaining() > 0) { busy = true; result.deferred++; continue; }
     if (await deleteGCalEvent(tombstone.eventId)) {
       clearTombstonePart(tombstone.key, "event");
       result.removed++;
     } else {
-      fail(new Error("Could not remove a deleted task from Google Calendar"));
+      if (gcalCooldownRemaining() > 0) { busy = true; result.deferred++; }
+      else fail(new Error("Could not remove a deleted task from Google Calendar"));
     }
   }
 
   // 2. Events of tasks in the Trash. Once removed, the link is cleared so a restore writes a new one.
   const trashed = rows.filter((task) => task.deletedAt && task.gcalEventId);
   await runPool(trashed, async (task) => {
+    if (busy || gcalCooldownRemaining() > 0) { busy = true; result.deferred++; return; }
     if (await deleteGCalEvent(task.gcalEventId!)) {
       await patchTask(task.id, {
         gcalEventId: undefined,
@@ -79,7 +98,8 @@ export async function syncTaskCalendarMirror(): Promise<CalendarMirrorResult> {
       });
       result.removed++;
     } else {
-      fail(new Error(`Could not remove "${task.title}" from Google Calendar`));
+      if (gcalCooldownRemaining() > 0) { busy = true; result.deferred++; }
+      else fail(new Error(`Could not remove "${task.title}" from Google Calendar`));
     }
   });
 
@@ -105,9 +125,13 @@ export async function syncTaskCalendarMirror(): Promise<CalendarMirrorResult> {
     }
   }
 
-  await runPool(jobs, async ({ task, body, hash }) => {
+  // Nearest dates first so what matters this week syncs before old history.
+  jobs.sort((a, b) => Math.abs(dayDistance(a.task, today)) - Math.abs(dayDistance(b.task, today)));
+  result.deferred += Math.max(0, jobs.length - MAX_WRITES_PER_PASS);
+  await runPool(jobs.slice(0, MAX_WRITES_PER_PASS), async ({ task, body, hash }) => {
+    if (busy) { result.deferred++; return; }
     try {
-      const created = await createGCalEvent("primary", body, taskIdToGCalId(task.id));
+      const created = await createGCalEvent("primary", body, taskIdToGCalId(task.id), !!task.gcalEventId);
       await patchTask(task.id, {
         gcalEventId: created?.id || taskIdToGCalId(task.id),
         gcalHash: hash,

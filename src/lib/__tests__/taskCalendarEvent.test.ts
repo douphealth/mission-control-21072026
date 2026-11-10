@@ -108,7 +108,10 @@ describe("buildTaskEventBody", () => {
 
   it("marks overdue and finished tasks in the title and colour", () => {
     const overdue = buildTaskEventBody(task({ dueDate: "2026-10-05" }), TODAY, null, "UTC");
-    expect(overdue.summary).toContain("OVERDUE 4d");
+    expect(overdue.summary).toMatch(/^⚠️ OVERDUE · /);
+    // Same event body on later days, so overdue events are not rewritten daily.
+    const nextWeek = buildTaskEventBody(task({ dueDate: "2026-10-05" }), "2026-10-16", null, "UTC");
+    expect(nextWeek).toEqual(overdue);
     expect(overdue.colorId).toBe("11");
     const done = buildTaskEventBody(task({ status: "done" }), TODAY, null, "UTC");
     expect(done.summary.startsWith("✅")).toBe(true);

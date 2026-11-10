@@ -135,9 +135,9 @@ export function useGoogleCalendar(opts?: {
 
         const externalEvents = rawEvents.filter((ev) => {
           const rawSummary = ev.summary || "";
-          const isTaskSummary = /^(📋|✅|⚠️\s*OVERDUE\s*\d+d\s*·)\s*/.test(rawSummary);
+          const isTaskSummary = /^(📋|✅|⚠️\s*OVERDUE\s*(?:\d+d\s*)?·)\s*/.test(rawSummary);
           const normalizedSummary = rawSummary
-            .replace(/^(📋|✅|⚠️\s*OVERDUE\s*\d+d\s*·)\s*/, "")
+            .replace(/^(📋|✅|⚠️\s*OVERDUE\s*(?:\d+d\s*)?·)\s*/, "")
             .trim()
             .toLowerCase();
           const evDate =

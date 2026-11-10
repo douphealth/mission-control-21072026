@@ -46,6 +46,11 @@ export function toFamilyMarkdown(input: string): string {
     const kv = KEY_VALUE.exec(line.trim());
     if (kv && !URLISH.test(line.trim())) { out.push(`- **${kv[1].trim()}:** ${kv[2].trim()}`); continue; }
     if (isHeading(line, lines[i + 1])) { out.push("", `## ${line.trim().replace(/:$/, "")}`, ""); continue; }
+    // A short name ("Μαρία") directly above key/value lines titles that person's details.
+    const nextLine = lines[i + 1]?.trim() || "";
+    if (/^[\p{L}][\p{L} .'-]{1,40}$/u.test(line.trim()) && line.trim().split(/\s+/).length <= 4 && (KEY_VALUE.test(nextLine) || BULLET.test(nextLine))) {
+      out.push("", `### ${line.trim()}`); continue;
+    }
     // Plain lines keep their own line in the rendered note.
     const nextPlain = lines[i + 1]?.trim() && !BULLET.test(lines[i + 1]) && !KEY_VALUE.test(lines[i + 1].trim());
     out.push(nextPlain ? `${line.trim()}  ` : line.trim());

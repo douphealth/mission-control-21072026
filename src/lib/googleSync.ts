@@ -23,6 +23,7 @@ const POLL_MS = 2 * 60_000;
 const FOCUS_MIN_GAP_MS = 20_000;
 const MAX_PASSES_PER_REQUEST = 3;
 
+let backlogTimer: ReturnType<typeof setTimeout> | null = null;
 interface RequestOptions {
   reason?: string;
   /** Apply deletions that were held back as suspicious. Only an explicit user action sets this. */
@@ -76,6 +77,12 @@ async function onePass(options: RequestOptions): Promise<void> {
     }
   }
 
+  // A capped or cooled-down calendar pass leaves a backlog: drain it later, gently.
+  if (calendar?.deferred && !calendar.errors) {
+    const { gcalCooldownRemaining } = await import("@/lib/googleCalendar");
+    const wait = Math.max(90_000, gcalCooldownRemaining() + 5_000);
+    if (!backlogTimer) backlogTimer = setTimeout(() => { backlogTimer = null; void requestGoogleSync({ reason: "calendar-backlog" }); }, wait);
+  }
   const failed = !!firstError;
   setGoogleSyncStatus({
     state: failed ? (isAuthProblem(firstError!) ? "reconnect" : "error") : "idle",
