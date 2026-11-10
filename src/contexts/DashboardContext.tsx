@@ -125,6 +125,9 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
         const cloud = startCloudSync().catch(error => {
           console.warn("Cloud initialization deferred; local records kept", error);
         });
+        // Share this device's wrapped vault key on every app open (not only when
+        // Credentials is visited) so other devices can read passwords saved here.
+        void cloud.then(() => import("@/lib/privateVault")).then(m => m.publishVaultEnvelope()).catch(() => undefined);
         // Prefer restoring cloud records before seeding reference catalogs.
         // A timeout ensures optional starter data eventually appears if Google hangs.
         void Promise.race([cloud, new Promise(resolve => window.setTimeout(resolve, 8_000))])

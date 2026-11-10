@@ -45,8 +45,8 @@ import FormModal, {
 } from "@/components/FormModal";
 import type { CredentialVault } from "@/lib/db";
 import { toast } from "sonner";
-import { encrypt, decryptOrNull } from "@/lib/encryption";
-import { VAULT_KEYS_EVENT } from "@/lib/privateVault";
+import { encrypt, decryptOrNull, vaultSessionActive } from "@/lib/encryption";
+import { VAULT_KEYS_EVENT, otherDeviceKeyCount } from "@/lib/privateVault";
 import { VAULT_UNREADABLE_EVENT } from "@/components/PrivateVaultGate";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
@@ -199,6 +199,8 @@ export default function CredentialsPage() {
   const [bulkService, setBulkService] = useState("");
   const [bulkTags, setBulkTags] = useState("");
   const [saving, setSaving] = useState(false);
+  const [unreadableIds, setUnreadableIds] = useState<Set<string>>(new Set());
+  const [onlyUnreadable, setOnlyUnreadable] = useState(false);
   const bulk = useBulkActions<CredentialVault>();
   useEffect(() => { setPage(0); }, [search, filterCategory, sortMode]);
 
@@ -221,7 +223,7 @@ export default function CredentialsPage() {
         (credential.tags || []).some((tag) => tag.toLowerCase().includes(q));
       const matchCategory =
         filterCategory === "all" || credential.category === filterCategory;
-      return matchSearch && matchCategory;
+      return matchSearch && matchCategory && (!onlyUnreadable || unreadableIds.has(credential.id));
     });
 
     return [...result].sort((a, b) => {
@@ -232,7 +234,7 @@ export default function CredentialsPage() {
         return a.category.localeCompare(b.category) || a.label.localeCompare(b.label);
       return a.label.localeCompare(b.label);
     });
-  }, [credentials, filterCategory, search, sortMode]);
+  }, [credentials, filterCategory, search, sortMode, onlyUnreadable, unreadableIds]);
 
   const secretCount = useMemo(
     () => credentials.filter((credential) => credential.password || credential.apiKey).length,
@@ -254,9 +256,32 @@ export default function CredentialsPage() {
     }
   };
 
+  // Find every saved secret this device cannot open, so the page can say exactly how many and how to fix them.
+  const [sharedDevices, setSharedDevices] = useState(0);
+  const [keysVersion, setKeysVersion] = useState(0);
+  useEffect(() => {
+    if (masterLocked || !vaultSessionActive()) return;
+    let alive = true;
+    void (async () => {
+      const bad = new Set<string>();
+      for (const [index, credential] of credentials.entries()) {
+        for (const value of [credential.password, credential.apiKey]) {
+          // Only the fast current format is scanned; older formats are checked when opened.
+          if (value?.startsWith("mcenc:v3:") && (await decryptOrNull(value)) === null) { bad.add(credential.id); break; }
+        }
+        if (index % 50 === 49) await new Promise(resolve => setTimeout(resolve, 0));
+        if (!alive) return;
+      }
+      setUnreadableIds(bad);
+      setSharedDevices(await otherDeviceKeyCount());
+    })();
+    return () => { alive = false; };
+  }, [credentials, masterLocked, keysVersion]);
+  useEffect(() => { if (!unreadableIds.size) setOnlyUnreadable(false); }, [unreadableIds]);
+
   // New keys (synced from another device) make earlier "Unavailable" values readable.
   useEffect(() => {
-    const retry = () => setDecryptedCache({});
+    const retry = () => { setDecryptedCache({}); setKeysVersion(v => v + 1); };
     window.addEventListener(VAULT_KEYS_EVENT, retry);
     return () => window.removeEventListener(VAULT_KEYS_EVENT, retry);
   }, []);
@@ -287,7 +312,7 @@ export default function CredentialsPage() {
         (credential.apiKey && values.apiKey === undefined)
       ) {
         window.dispatchEvent(new Event(VAULT_UNREADABLE_EVENT));
-        toast.error("This password was saved with a key from another device", { description: "Enter that device's master passphrase in the yellow box above. Nothing has been lost." });
+        toast.error("This password can't be opened on this device", { description: "The box at the top of Credentials shows the two ways to fix it." });
       }
     }
     setRevealed((previous) => {
@@ -311,7 +336,7 @@ export default function CredentialsPage() {
     const decrypted = values[field];
     if (!decrypted) {
       if (field === "password" ? credential.password : credential.apiKey) window.dispatchEvent(new Event(VAULT_UNREADABLE_EVENT));
-      toast.error(`${label} was saved with a key from another device`, { description: "Enter that device's master passphrase in the yellow box above." });
+      toast.error(`${label} can't be opened on this device`, { description: "The box at the top of Credentials shows the two ways to fix it." });
       return;
     }
     await copyText(decrypted, label);
@@ -521,6 +546,27 @@ export default function CredentialsPage() {
         />
         <Button variant="outline" disabled={!bulk.selectedCount} onClick={() => { setBulkService(""); setBulkTags(""); setBulkEditOpen(true); }}><Edit2 />Edit {bulk.selectedCount} selected</Button>
         </>
+      )}
+
+      {unreadableIds.size > 0 && !masterLocked && (
+        <section role="status" className="space-y-3 rounded-2xl border border-warning/40 bg-warning/10 p-4">
+          <div>
+            <p className="text-sm font-bold text-foreground">
+              {unreadableIds.size} {unreadableIds.size === 1 ? "password" : "passwords"} can't be opened on this device
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Your master passphrase is fine. These were saved on a device whose key hasn't reached this one, so no passphrase typed here can open them. Nothing is deleted.
+            </p>
+          </div>
+          <ol className="space-y-2 text-sm text-foreground">
+            <li><span className="font-bold">Fix 1 — fastest if you still have the list:</span> click <span className="font-semibold">Paste list again</span> and paste the same rows. The missing passwords are filled into these same entries, with no duplicates.</li>
+            <li><span className="font-bold">Fix 2:</span> on the device where you added them, open Mission Control at this same web address, go to Credentials and unlock it. Within a minute they open here by themselves.{sharedDevices === 0 ? " Right now no other device has shared its key yet." : ""}</li>
+          </ol>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => setBulkAddOpen(true)}>Paste list again</Button>
+            <Button variant="outline" onClick={() => setOnlyUnreadable(v => !v)}>{onlyUnreadable ? "Show all entries" : `Show only these ${unreadableIds.size}`}</Button>
+          </div>
+        </section>
       )}
 
       <div className="rounded-2xl border border-border/50 bg-card p-3">

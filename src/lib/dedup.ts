@@ -187,9 +187,24 @@ export function planDeduplicatedImport(
     const key = identityKey(tableName, row);
     if (key && !byKey.has(key)) byKey.set(key, row);
   }
-  for (const [index, item] of incoming.entries()) {
+  for (const [index, raw] of incoming.entries()) {
+    let item = raw;
     if (!item || typeof item !== "object" || Array.isArray(item)) {
       throw new Error(`Row ${index + 1} must be a record. Nothing was saved.`);
+    }
+    const healId = tableName === "credentials" ? item.__healsSecretOf : undefined;
+    if (healId) {
+      // Replace an unreadable stored secret in place: incoming secrets win, other fields merge.
+      const { __healsSecretOf: _drop, ...clean } = item;
+      const target = updates.get(healId) ?? creates.get(healId) ?? stored.find(row => row.id === healId);
+      if (target) {
+        const { merged } = mergeRecords(target, clean);
+        for (const field of ["password", "apiKey"]) if (clean[field]) merged[field] = clean[field];
+        if (creates.has(healId)) creates.set(healId, merged); else updates.set(healId, merged);
+        ids.push(healId);
+        continue;
+      }
+      item = clean;
     }
     const key = hasMeaningfulFingerprint(tableName, item) ? identityKey(tableName, item) : null;
     const found = key ? byKey.get(key) : undefined;

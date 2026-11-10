@@ -114,6 +114,8 @@ export async function refreshDeviceKeyrings(): Promise<number> {
 }
 /** Number of other devices whose saved passwords need that device's passphrase. */
 export function lockedDeviceVaults() { return lockedDevices; }
+/** How many other devices have shared a wrapped key with this account. */
+export async function otherDeviceKeyCount() { return (await otherEnvelopes()).length; }
 export async function accountVaultExists() { return (await readAccountEnvelopes()).length > 0; }
 
 async function openKeyring(passphrase: string, includeLocal: boolean) {
@@ -159,7 +161,8 @@ function notifyKeys() { if (typeof window !== "undefined") window.dispatchEvent(
 export async function addOtherDevicePassphrase(passphrase: string) {
   if (!vaultSessionActive()) throw new Error("Unlock your private vault first.");
   const opened = await openKeyring(passphrase, false);
-  if (!opened.keys.length) throw new Error("That passphrase did not open any other device's vault. Nothing was changed.");
+  if (!opened.accountCount) throw new Error("None of your other devices has shared its key yet, so there is nothing for a passphrase to open. Nothing was changed.");
+  if (!opened.keys.length) throw new Error("That passphrase doesn't match your other device. Nothing was changed.");
   await adopt(passphrase, [...opened.keys, ...vaultSessionKeys()], null);
   lockedDevices = opened.failed;
   notifyKeys();

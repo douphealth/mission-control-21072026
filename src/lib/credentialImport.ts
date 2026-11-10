@@ -2,6 +2,9 @@ import type { CredentialVault } from "./db";
 import { credentialIdentity } from "./dedup";
 import { encrypt, decryptOrNull } from "./encryption";
 
+/** Transient marker: this imported row replaces an unreadable secret on the stored entry with this id. */
+export const HEAL_FIELD = "__healsSecretOf";
+
 /** Never mix async Web Crypto into an IndexedDB transaction or emit secrets in errors. */
 export async function prepareCredentialImport(
   items: Partial<CredentialVault>[], stored: CredentialVault[],
@@ -20,6 +23,12 @@ export async function prepareCredentialImport(
       if (plaintext === null) throw new Error(`Credential row ${index + 1} cannot be decrypted on this device. Nothing was saved.`);
       if (existing?.[field]) {
         const previous = await decryptOrNull(existing[field]);
+        if (previous === null) {
+          // The stored secret can't be opened on this device: re-importing fills it in place, no duplicate.
+          row[field] = await encrypt(plaintext);
+          (row as Record<string, unknown>)[HEAL_FIELD] = existing.id;
+          continue;
+        }
         // A different secret under the same label/account is a separate entry, not an error.
         row[field] = previous === plaintext ? existing[field] : await encrypt(plaintext);
       } else row[field] = /^(mcenc:v[23]:|wcapi:)/.test(supplied) ? supplied : await encrypt(plaintext);
