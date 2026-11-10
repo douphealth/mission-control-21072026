@@ -46,6 +46,8 @@ import FormModal, {
 import type { CredentialVault } from "@/lib/db";
 import { toast } from "sonner";
 import { encrypt, decryptOrNull } from "@/lib/encryption";
+import { VAULT_KEYS_EVENT } from "@/lib/privateVault";
+import { VAULT_UNREADABLE_EVENT } from "@/components/PrivateVaultGate";
 import { useBulkActions } from "@/hooks/useBulkActions";
 import BulkActionBar from "@/components/BulkActionBar";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -252,6 +254,13 @@ export default function CredentialsPage() {
     }
   };
 
+  // New keys (synced from another device) make earlier "Unavailable" values readable.
+  useEffect(() => {
+    const retry = () => setDecryptedCache({});
+    window.addEventListener(VAULT_KEYS_EVENT, retry);
+    return () => window.removeEventListener(VAULT_KEYS_EVENT, retry);
+  }, []);
+
   const ensureDecrypted = async (credential: CredentialVault) => {
     if (decryptedCache[credential.id]) return decryptedCache[credential.id];
     const [password, apiKey] = await Promise.all([
@@ -277,7 +286,8 @@ export default function CredentialsPage() {
         (credential.password && values.password === undefined) ||
         (credential.apiKey && values.apiKey === undefined)
       ) {
-        toast.error("Some secrets could not be decrypted with this vault key", { description: "Open Mission Control once on the device where you saved them and unlock the vault there, then lock and unlock here." });
+        window.dispatchEvent(new Event(VAULT_UNREADABLE_EVENT));
+        toast.error("This password was saved with a key from another device", { description: "Enter that device's master passphrase in the yellow box above. Nothing has been lost." });
       }
     }
     setRevealed((previous) => {
@@ -300,7 +310,8 @@ export default function CredentialsPage() {
     const values = await ensureDecrypted(credential);
     const decrypted = values[field];
     if (!decrypted) {
-      toast.error(`${label} could not be decrypted with this vault key`);
+      if (field === "password" ? credential.password : credential.apiKey) window.dispatchEvent(new Event(VAULT_UNREADABLE_EVENT));
+      toast.error(`${label} was saved with a key from another device`, { description: "Enter that device's master passphrase in the yellow box above." });
       return;
     }
     await copyText(decrypted, label);

@@ -79,15 +79,48 @@ async function wrap(passphrase: string, keys: string[]): Promise<Envelope> {
   return { version: 1, salt: encode(salt), iv: encode(iv), data: encode(new Uint8Array(data)) };
 }
 let lockedDevices = 0;
+// Passphrase kept in memory only (never storage) so keys from devices that sync
+// in later are merged automatically while this tab stays unlocked.
+let memoryPassphrase: string | null = null;
+const MERGED_SLOT = "mc-vault-merged-envelopes";
+const sig = (e: Envelope) => e.data.slice(0, 48);
+function mergedSigs(): Set<string> { try { return new Set(JSON.parse(sessionStorage.getItem(MERGED_SLOT) || "[]")); } catch { return new Set(); } }
+function rememberSigs(list: string[]) { try { sessionStorage.setItem(MERGED_SLOT, JSON.stringify([...new Set([...mergedSigs(), ...list])])); } catch { /* ignore */ } }
+async function otherEnvelopes() {
+  const own = ACCOUNT_PREFIX + (localStorage.getItem(DEVICE_SLOT) || "");
+  return (await readAccountEnvelopes()).filter(e => e.device !== own);
+}
+/** Other devices' keyrings that synced in after this tab was unlocked. */
+export async function pendingDeviceKeyrings() {
+  if (!vaultSessionActive()) return 0;
+  const seen = mergedSigs();
+  return (await otherEnvelopes()).filter(e => !seen.has(sig(e.envelope))).length;
+}
+/** Silently merge newly synced device keys when the passphrase is still in memory. Returns keys added. */
+export async function refreshDeviceKeyrings(): Promise<number> {
+  if (!vaultSessionActive() || !memoryPassphrase) return 0;
+  const seen = mergedSigs();
+  const fresh = (await otherEnvelopes()).filter(e => !seen.has(sig(e.envelope)));
+  if (!fresh.length) return 0;
+  const keys: string[] = []; const opened: string[] = [];
+  for (const e of fresh) { const k = await unwrap(e.envelope, memoryPassphrase); if (k) { keys.push(...k); opened.push(sig(e.envelope)); } }
+  rememberSigs(opened);
+  lockedDevices = Math.max(lockedDevices, fresh.length - opened.length);
+  const before = new Set(vaultSessionKeys());
+  const added = keys.filter(k => !before.has(k));
+  if (added.length) await adopt(memoryPassphrase, [...keys, ...vaultSessionKeys()], vaultSessionKeys());
+  if (added.length) notifyKeys();
+  return new Set(added).size;
+}
 /** Number of other devices whose saved passwords need that device's passphrase. */
 export function lockedDeviceVaults() { return lockedDevices; }
 export async function accountVaultExists() { return (await readAccountEnvelopes()).length > 0; }
 
 async function openKeyring(passphrase: string, includeLocal: boolean) {
-  const own = ACCOUNT_PREFIX + (localStorage.getItem(DEVICE_SLOT) || "");
-  const account = (await readAccountEnvelopes()).filter(e => e.device !== own);
-  const keys: string[] = []; let failed = 0;
-  for (const e of account) { const k = await unwrap(e.envelope, passphrase); if (k) keys.push(...k); else failed++; }
+  const account = await otherEnvelopes();
+  const keys: string[] = []; let failed = 0; const opened: string[] = [];
+  for (const e of account) { const k = await unwrap(e.envelope, passphrase); if (k) { keys.push(...k); opened.push(sig(e.envelope)); } else failed++; }
+  rememberSigs(opened);
   const saved = includeLocal ? localStorage.getItem(ENVELOPE) : null;
   let localKeys: string[] | null = null;
   if (saved) { localKeys = await unwrap(JSON.parse(saved), passphrase); if (localKeys) keys.push(...localKeys); }
@@ -98,6 +131,7 @@ async function adopt(passphrase: string, keys: string[], previous: string[] | nu
   const merged = [...new Set([...keys, ...vaultSessionKeys()])].sort();
   if (!previous || merged.join() !== [...previous].sort().join()) localStorage.setItem(ENVELOPE, JSON.stringify(await wrap(passphrase, merged)));
   setVaultSessionKey(merged[0], merged.slice(1));
+  memoryPassphrase = passphrase;
   localStorage.removeItem("mc-encryption-key");
   await publishVaultEnvelope();
 }
@@ -107,6 +141,7 @@ export async function unlockPrivateVault(passphrase: string) {
   if (!opened.hadLocal && !opened.accountCount) {
     if (passphrase.length < 12) throw new Error("Choose a master passphrase of at least 12 characters.");
     await adopt(passphrase, [legacy || generateStrongKey()], null);
+    notifyKeys();
     lockedDevices = 0;
     return;
   }
@@ -115,7 +150,11 @@ export async function unlockPrivateVault(passphrase: string) {
   // Keep a pre-vault device key too: older rows on this device may use it.
   await adopt(passphrase, legacy ? [...opened.keys, legacy] : opened.keys, opened.localKeys);
   lockedDevices = opened.failed;
+  notifyKeys();
 }
+/** Tells open pages to retry secrets they could not open before. */
+export const VAULT_KEYS_EVENT = "mc-vault-keys-changed";
+function notifyKeys() { if (typeof window !== "undefined") window.dispatchEvent(new Event(VAULT_KEYS_EVENT)); }
 /** Unlock passwords saved on another device that used a different passphrase; this device then uses that passphrase. */
 export async function addOtherDevicePassphrase(passphrase: string) {
   if (!vaultSessionActive()) throw new Error("Unlock your private vault first.");
@@ -123,8 +162,9 @@ export async function addOtherDevicePassphrase(passphrase: string) {
   if (!opened.keys.length) throw new Error("That passphrase did not open any other device's vault. Nothing was changed.");
   await adopt(passphrase, [...opened.keys, ...vaultSessionKeys()], null);
   lockedDevices = opened.failed;
+  notifyKeys();
 }
-export function lockPrivateVault() { setVaultSessionKey(null); }
+export function lockPrivateVault() { setVaultSessionKey(null); memoryPassphrase = null; try { sessionStorage.removeItem(MERGED_SLOT); } catch { /* ignore */ } }
 export async function saveFamilyRecord(record: FamilyRecord) {
   validateFamilyRecord(record);
   await familyDb.records.put({ id: record.id, payload: await encrypt(JSON.stringify(record)) });
