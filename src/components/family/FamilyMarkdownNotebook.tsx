@@ -83,7 +83,7 @@ export default function FamilyMarkdownNotebook() {
   useEffect(()=>{if(state!=="dirty")return;const t=setTimeout(()=>void save(),800);return()=>clearTimeout(t);},[draft,state]);
   const select=async(note:FamilyMarkdownNote)=>{
     if(state==="error"){toast.error("Save your draft before switching documents.");return false;}
-    if(latest.current && state!=="saved"){await save();await queue.current;if(!lastSaved.current || lastSaved.current.id!==latest.current.id){toast.error("Unsaved changes; document not switched.");return false;}}
+    if(latest.current && state!=="saved"){await save();await queue.current;if(!lastSaved.current || lastSaved.current.id!==latest.current.id || lastSaved.current.markdown!==latest.current.markdown || lastSaved.current.title!==latest.current.title || lastSaved.current.member!==latest.current.member){toast.error("Unsaved changes; document not switched.");return false;}}
     latest.current=note;lastSaved.current=notes.some(x=>x.id===note.id)?note:null;setDraft(note);setState(lastSaved.current?"saved":"dirty");setError("");return true;
   };
   const add=()=>void select(created());
