@@ -73,3 +73,9 @@
 - [ ] Search Console (service account JSON) → SEO section
 - [ ] Bing Webmaster (key saved) → SEO section
 - [ ] Metricool (token saved, needs userId/blogId) → Audience section
+
+## Vault recovery, calendar quota, family notes
+- [x] Stop Google Calendar 403s at the source (stable overdue titles, direct updates, paced/capped writes, shared cool-down, shared reads)
+- [x] Add recovery code + "Forgot passphrase" flow; tested protect → code → lock → recover → records readable
+- [x] Bulk add family text as one Markdown note; tested save, reload, reveal, Tidy formatting
+- [ ] Two-device live walk (laptop unlock → phone opens passwords without reload) — needs the owner's real devices
