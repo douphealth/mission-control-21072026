@@ -11,7 +11,7 @@ function created(): FamilyMarkdownNote {
 }
 function safeInline(source: string): React.ReactNode[] {
   const result: React.ReactNode[] = [];
-  const pattern = /(\\*\\*[^*\\n]+\\*\\*|\\*[^*\\n]+\\*|\\x60[^\\x60\\n]+\\x60|\\[[^\\]\\n]+\\]\\([^)]+\\))/g;
+  const pattern = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|\x60[^\x60\n]+\x60|\[[^\]\n]+\]\([^)]+\))/g;
   let start = 0;
   for (const match of source.matchAll(pattern)) {
     if (match.index > start) result.push(source.slice(start, match.index));
@@ -20,9 +20,9 @@ function safeInline(source: string): React.ReactNode[] {
     else if (token.startsWith("*")) result.push(<em key={match.index}>{token.slice(1,-1)}</em>);
     else if (token.charCodeAt(0) === 96) result.push(<code key={match.index} className="rounded bg-muted px-1 font-mono">{token.slice(1,-1)}</code>);
     else {
-      const target = token.match(/^\\[([^\\]]+)\\]\\(([^)]+)\\)$/);
+      const target = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
       const destination = target?.[2] || "";
-      const safe = /^(https?:\\/\\/|mailto:)/i.test(destination);
+      const safe = /^(https?:\/\/|mailto:)/i.test(destination);
       result.push(target && safe ? <a key={match.index} href={destination} target="_blank" rel="noopener noreferrer" className="text-primary underline">{target[1]}</a> : token);
     }
     start = match.index + token.length;
