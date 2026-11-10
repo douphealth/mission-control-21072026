@@ -6,10 +6,26 @@ export const VAULT_IDLE_MS = 5 * 60 * 1000;
 const ENVELOPE = "mc-private-vault-envelope-v1";
 type Envelope = { version: 1; salt: string; iv: string; data: string };
 export type FamilyRecord = { id: string; member: string; category: string; label: string; value: string; notes: string };
+/** All metadata and Markdown stay inside the encrypted payload; only opaque IDs are indexed. */
+export type FamilyMarkdownNote = { id: string; title: string; member: string; markdown: string; createdAt: string; updatedAt: string };
+export const FAMILY_MARKDOWN_MAX_BYTES = 1024 * 1024;
+export function validateFamilyMarkdownNote(note: FamilyMarkdownNote) {
+  if (!note || typeof note.id !== "string" || !/^[a-zA-Z0-9-]{8,128}$/.test(note.id)) throw new Error("Invalid private note ID.");
+  if (typeof note.title !== "string" || !note.title.trim() || note.title.length > 160) throw new Error("Enter a note title (up to 160 characters).");
+  if (typeof note.member !== "string" || note.member.length > 160 || typeof note.markdown !== "string") throw new Error("Invalid family note.");
+  if (!Number.isFinite(Date.parse(note.createdAt)) || !Number.isFinite(Date.parse(note.updatedAt))) throw new Error("Invalid note dates.");
+  if (new TextEncoder().encode(note.markdown).byteLength > FAMILY_MARKDOWN_MAX_BYTES) throw new Error("Markdown notes must be smaller than 1 MB.");
+}
 type StoredFamilyRecord = { id: string; payload: string };
 class FamilyDatabase extends Dexie {
   records!: Table<StoredFamilyRecord, string>;
-  constructor() { super("MissionControlPrivateFamily"); this.version(1).stores({ records: "id" }); }
+  documents!: Table<StoredFamilyRecord, string>;
+  constructor() {
+    super("MissionControlPrivateFamily");
+    this.version(1).stores({ records: "id" });
+    // Add a separate encrypted notebook without changing any existing family record.
+    this.version(2).stores({ records: "id", documents: "id" });
+  }
 }
 export const familyDb = new FamilyDatabase();
 const encode = (bytes: Uint8Array) => btoa(Array.from(bytes, n => String.fromCharCode(n)).join(""));
@@ -79,11 +95,51 @@ export async function deleteFamilyRecords(ids: string[]) {
 export async function readFamilyRecords(): Promise<FamilyRecord[]> {
   return Promise.all((await familyDb.records.toArray()).map(async record => JSON.parse(await decrypt(record.payload)) as FamilyRecord));
 }
+/**
+ * Compare the encrypted row before writing, so another tab cannot silently replace a newer note.
+ * expectedUpdatedAt=null means this is a new document and must not overwrite one.
+ */
+export async function saveFamilyMarkdownNote(note: FamilyMarkdownNote, expectedUpdatedAt?: string | null) {
+  validateFamilyMarkdownNote(note);
+  const previous = await familyDb.documents.get(note.id);
+  if (expectedUpdatedAt !== undefined) {
+    if (expectedUpdatedAt === null && previous) throw new Error("This note already exists. Refresh before saving.");
+    if (expectedUpdatedAt !== null && (!previous || (JSON.parse(await decrypt(previous.payload)) as FamilyMarkdownNote).updatedAt !== expectedUpdatedAt))
+      throw new Error("This note changed in another tab. Copy your changes and reload before editing.");
+  }
+  const payload = await encrypt(JSON.stringify(note));
+  await familyDb.transaction("rw", familyDb.documents, async () => {
+    const latest = await familyDb.documents.get(note.id);
+    if (latest?.payload !== previous?.payload) throw new Error("This note changed in another tab. Your draft was not overwritten.");
+    await familyDb.documents.put({ id: note.id, payload });
+  });
+}
+export async function readFamilyMarkdownNotes(): Promise<FamilyMarkdownNote[]> {
+  const records = await familyDb.documents.toArray();
+  return Promise.all(records.map(async ({ payload }) => {
+    const note = JSON.parse(await decrypt(payload)) as FamilyMarkdownNote;
+    validateFamilyMarkdownNote(note);
+    return note;
+  }));
+}
+export async function deleteFamilyMarkdownNote(id: string, expectedUpdatedAt: string) {
+  // Require an unlocked session, and preserve any changes made in another tab.
+  await encrypt("family-markdown-delete");
+  const previous = await familyDb.documents.get(id);
+  if (!previous) throw new Error("Note no longer exists. Refresh first.");
+  if ((JSON.parse(await decrypt(previous.payload)) as FamilyMarkdownNote).updatedAt !== expectedUpdatedAt)
+    throw new Error("This note was updated in another tab. Refresh before deleting.");
+  await familyDb.transaction("rw", familyDb.documents, async () => {
+    const latest = await familyDb.documents.get(id);
+    if (latest?.payload !== previous.payload) throw new Error("Note changed in another tab.");
+    await familyDb.documents.delete(id);
+  });
+}
 export async function exportPrivateVault(credentials: unknown[]) {
   const envelope = localStorage.getItem(ENVELOPE);
   if (!envelope) throw new Error("Protect and unlock the vault first.");
   // Encrypt the complete inventory, including legacy metadata and plaintext rows.
-  return JSON.stringify({ format: "mc-private-backup-v1", envelope: JSON.parse(envelope), payload: await encrypt(JSON.stringify({ credentials, family: await familyDb.records.toArray() })) });
+  return JSON.stringify({ format: "mc-private-backup-v1", envelope: JSON.parse(envelope), payload: await encrypt(JSON.stringify({ credentials, family: await familyDb.records.toArray(), familyMarkdown: await familyDb.documents.toArray() })) });
 }
 export async function decodePrivateBackup(input: string, passphrase: string) {
   const backup = JSON.parse(input);
