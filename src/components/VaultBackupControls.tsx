@@ -24,7 +24,7 @@ export default function VaultBackupControls() {
     if (busy) return; setBusy(true);
     try {
       const decoded = await decodePrivateBackup(backup, passphrase);
-      if (!Array.isArray(decoded.data.credentials) || !Array.isArray(decoded.data.family)) throw new Error("Backup is incomplete. Nothing was imported.");
+      if (!Array.isArray(decoded.data.credentials) || !Array.isArray(decoded.data.family) || (decoded.data.familyMarkdown !== undefined && !Array.isArray(decoded.data.familyMarkdown))) throw new Error("Backup is incomplete. Nothing was imported.");
       const credentials = [];
       for (const row of decoded.data.credentials) {
         if (!row || typeof row.id !== "string" || typeof row.label !== "string") throw new Error("Invalid credential backup.");
@@ -36,11 +36,20 @@ export default function VaultBackupControls() {
         const record = JSON.parse(await decrypt(row.payload, decoded.deviceKey));
         record.id = crypto.randomUUID(); family.push({ id: record.id, payload: await encrypt(JSON.stringify(record)) });
       }
+      const familyMarkdown = [];
+      for (const row of decoded.data.familyMarkdown ?? []) {
+        if (!row || typeof row.payload !== "string") throw new Error("Invalid Markdown document backup.");
+        const document = JSON.parse(await decrypt(row.payload, decoded.deviceKey));
+        document.id = crypto.randomUUID();
+        familyMarkdown.push({ id: document.id, payload: await encrypt(JSON.stringify(document)) });
+      }
       // Separate databases: report partial restore explicitly if the second write fails.
       await db.credentials.bulkAdd(credentials);
       try { await familyDb.records.bulkAdd(family); }
       catch { throw new Error("Credentials imported, but family records could not be saved. Keep the backup."); }
-      toast.success(`${credentials.length} credentials and ${family.length} family records restored as copies`);
+      try { await familyDb.documents.bulkAdd(familyMarkdown); }
+      catch { throw new Error("Credential and family records restored, but Markdown documents could not be saved. Keep the backup."); }
+      toast.success(`${credentials.length} credentials, ${family.length} family records and ${familyMarkdown.length} Markdown documents restored as copies`);
       setBackup(""); setPassphrase("");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Backup could not be imported."); }
     finally { setBusy(false); }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import FamilyMarkdownNotebook from "@/components/family/FamilyMarkdownNotebook";
 import { Copy, Eye, EyeOff, Plus, Search, Trash2, Pencil, Users, ListPlus, ChevronLeft, ChevronRight, CheckSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import FormModal, { FormField, FormInput, FormSelect, FormTextarea } from "@/components/FormModal";
@@ -45,7 +46,9 @@ export default function FamilyVaultPage() {
     catch (e) { toast.error(e instanceof Error ? e.message : "Records not updated."); }
     finally { setBusy(false); }
   }
-  return <div className="space-y-5">
+  return <div className="space-y-7">
+    <FamilyMarkdownNotebook />
+    <div className="border-t border-border pt-6"><h2 className="mb-2 text-xl font-bold">Structured family records</h2><p className="mb-5 text-sm text-muted-foreground">Existing encrypted identity, banking, health and emergency entries remain unchanged.</p></div>
     <header className="grid min-w-0 gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><h1 className="flex items-center gap-2 text-2xl font-bold"><Users className="shrink-0 text-primary" />Family vault</h1><p className="mt-1 text-sm text-muted-foreground">{members.length} members · {records.length} encrypted records</p></div><div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={() => setBulkAdd(true)}><ListPlus />Bulk add</Button><Button aria-label="Add family record" onClick={() => setForm(blank())}><Plus /><span>Add</span></Button></div></header>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-[minmax(0,1fr)_180px_160px]"><label className="col-span-2 flex items-center gap-2 rounded-md border border-input bg-background px-3 sm:col-span-1"><Search className="size-4 shrink-0 text-muted-foreground" /><input aria-label="Search family records" value={query} onChange={e => { setQuery(e.target.value); changeFilters(); }} placeholder="Search member or record" className="h-12 w-full min-w-0 bg-transparent text-base outline-none" /></label><select aria-label="Filter family member" value={member} onChange={e => { setMember(e.target.value); changeFilters(); }} className="h-12 min-w-0 rounded-md border border-input bg-background px-3"><option value="all">All members</option>{members.map(m => <option key={m}>{m}</option>)}</select><select aria-label="Filter record category" value={category} onChange={e => { setCategory(e.target.value); changeFilters(); }} className="h-12 min-w-0 rounded-md border border-input bg-background px-3"><option value="all">All categories</option>{FAMILY_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
     {selected.size > 0 && filtered.length > PAGE_SIZE && <Button variant="ghost" onClick={() => setSelected(new Set(filtered.map(r => r.id)))}>Select all {filtered.length} matching records</Button>}

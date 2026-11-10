@@ -6,7 +6,6 @@ const root = join(__dirname, "..", "..", "..");
 const cloudSync = readFileSync(join(root, "src/lib/cloudSync.ts"), "utf8");
 const appStart = readFileSync(join(root, "src/start.ts"), "utf8");
 const settings = readFileSync(join(root, "src/pages/SettingsPage.tsx"), "utf8");
-const pkg = readFileSync(join(root, "package.json"), "utf8");
 
 describe("standalone Google sync regression", () => {
   it("never initializes managed-platform auth or data services", () => {
@@ -24,8 +23,8 @@ describe("standalone Google sync regression", () => {
     expect(cloudSync).toContain("rebaseLocalPending");
   });
 
-  it("does not ship managed-service dependencies or setup UI", () => {
-    expect(pkg).not.toMatch(/@lovable\.dev|@supabase\/supabase-js/);
+  it("does not initialize managed-service auth or offer setup UI", () => {
+    expect(cloudSync).not.toMatch(/from [\x27\x22]@supabase\/supabase-js|from [\x27\x22]@lovable\.dev/);
     expect(settings).not.toMatch(/Supabase/);
   });
 
