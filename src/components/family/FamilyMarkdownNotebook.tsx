@@ -3,7 +3,7 @@ import { BookOpen, Copy, Download, FilePlus, Search, Trash2, Upload } from "luci
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import { FAMILY_MARKDOWN_MAX_BYTES, deleteFamilyMarkdownNote, readFamilyMarkdownNotes, saveFamilyMarkdownNote, type FamilyMarkdownNote } from "@/lib/privateVault";
+import { FAMILY_MARKDOWN_MAX_BYTES, deleteFamilyMarkdownNote, readFamilyMarkdownNotes, saveFamilyMarkdownNote, familyMarkdownChanged, type FamilyMarkdownNote } from "@/lib/privateVault";
 
 function created(): FamilyMarkdownNote {
   const time = new Date().toISOString();
@@ -34,9 +34,21 @@ function safeInline(source: string): React.ReactNode[] {
 export function MarkdownPreview({ source }: { source: string }) {
   const lines = source.split(/\r?\n/);
   let fenced = false;
+  let tableUntil = -1;
   return <div className="space-y-2 break-words text-sm leading-7">{lines.map((line, i) => {
-    if (line.trim().startsWith("~~~")) { fenced = !fenced; return <div key={i} className="border-t border-border"/>; }
-    if (fenced) return <pre key={i} className="overflow-x-auto bg-muted px-3 font-mono text-xs">{line}</pre>;
+    if (/^\s*(?:```|~~~)/.test(line)) { fenced = !fenced; return <div key={i} className="border-t border-border" />; }
+    if (fenced) return <pre key={i} className="overflow-x-auto whitespace-pre rounded bg-muted px-3 font-mono text-xs">{line || " "}</pre>;
+    if (i <= tableUntil) return null;
+    if (line.trim().startsWith("|") && /^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[i + 1] || "")) {
+      const cells = (value: string) => value.trim().replace(/^\||\|$/g, "").split("|").map(cell => cell.trim());
+      const headers = cells(line);
+      let end = i + 2;
+      while (end < lines.length && lines[end].trim().startsWith("|") && lines[end].trim().length > 1) end++;
+      tableUntil = end - 1;
+      return <div key={i} className="max-w-full overflow-x-auto rounded-lg border border-border"><table className="w-full border-collapse text-left text-sm"><thead><tr>{headers.map((header, j) => <th key={j} scope="col" className="border-b bg-muted/60 px-3 py-2 font-semibold">{safeInline(header)}</th>)}</tr></thead><tbody>{lines.slice(i + 2, end).map((row, rowIndex) => <tr key={rowIndex} className="border-t border-border/70">{headers.map((_, colIndex) => <td key={colIndex} className="px-3 py-2 align-top">{safeInline(cells(row)[colIndex] || "")}</td>)}</tr>)}</tbody></table></div>;
+    }
+    const checkbox = /^\s*[-*+]\s+\[([ xX])\]\s+(.*)$/.exec(line);
+    if (checkbox) return <div key={i} className="flex items-start gap-2 pl-2"><input type="checkbox" readOnly checked={checkbox[1].toLowerCase() === "x"} className="mt-2 accent-primary" /><span>{safeInline(checkbox[2])}</span></div>;
     const heading = /^(#{1,6})\s+(.+)$/.exec(line);
     if (heading) return <div key={i} className={heading[1].length < 3 ? "pt-4 text-xl font-bold" : "pt-3 text-base font-semibold"}>{safeInline(heading[2])}</div>;
     if (/^\s*[-*+]\s+/.test(line)) return <div key={i} className="flex gap-2 pl-2"><span className="text-primary">•</span><span>{safeInline(line.replace(/^\s*[-*+]\s+/, ""))}</span></div>;
@@ -66,11 +78,11 @@ export default function FamilyMarkdownNotebook() {
     const run=async()=>{
       const n=latest.current;
       if(!n)return;
-      if(lastSaved.current && n.title===lastSaved.current.title && n.member===lastSaved.current.member && n.markdown===lastSaved.current.markdown){setState("saved");return;}
+      if(lastSaved.current && !familyMarkdownChanged(n,lastSaved.current)){setState("saved");return;}
       setState("saving");
       try{
         const next={...n,updatedAt:new Date().toISOString()};
-        await saveFamilyMarkdownNote(next,lastSaved.current?.updatedAt??null);
+        await saveFamilyMarkdownNote(next,lastSaved.current?.id===n.id?lastSaved.current.updatedAt:null);
         lastSaved.current=next;
         setNotes(old=>[next,...old.filter(x=>x.id!==next.id)].sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt)));
         if(latest.current===n){latest.current=next;setDraft(next);setState("saved");} else setState("dirty");
@@ -89,8 +101,14 @@ export default function FamilyMarkdownNotebook() {
   const add=()=>void select(created());
   const importMarkdown=async(input:File)=>{
     if(input.size>FAMILY_MARKDOWN_MAX_BYTES){toast.error("Maximum Markdown file size is 1 MB.");return;}
-    const body=await input.text();const next={...created(),title:input.name.replace(/\.markdown$|\.md$/i,"").slice(0,160)||"Imported Markdown",markdown:body};
-    if(await select(next))toast.success("Markdown imported into the encrypted notebook.");
+    try {
+      const body=await input.text();const next={...created(),title:input.name.replace(/\.markdown$|\.md$/i,"").slice(0,160)||"Imported Markdown",markdown:body};
+      if (await select(next)) {
+        await save();
+        if (lastSaved.current?.id === next.id) toast.success("Markdown imported and saved encrypted.");
+        else toast.error("Import is still unsaved. Retry Save before leaving.");
+      }
+    } catch (e) { toast.error(e instanceof Error ? e.message : "Markdown import failed."); }
   };
   const exportMarkdown=()=>{
     if(!draft)return;
