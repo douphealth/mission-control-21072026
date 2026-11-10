@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { webcrypto } from "node:crypto";
 import "fake-indexeddb/auto";
-import { familyDb, readFamilyMarkdownNotes, saveFamilyMarkdownNote, deleteFamilyMarkdownNote, exportPrivateVault, decodePrivateBackup, unlockPrivateVault, lockPrivateVault } from "../privateVault";
+import { familyDb, readFamilyMarkdownNotes, saveFamilyMarkdownNote, deleteFamilyMarkdownNote, familyMarkdownChanged, exportPrivateVault, decodePrivateBackup, unlockPrivateVault, lockPrivateVault } from "../privateVault";
 import { setVaultSessionKey } from "../encryption";
 beforeEach(async()=>{
   Object.defineProperty(globalThis,"crypto",{ value:webcrypto, configurable:true });
@@ -11,6 +11,18 @@ beforeEach(async()=>{
   setVaultSessionKey(null);
 });
 describe("Family Markdown encrypted notebook",()=>{
+  it("keeps separate documents with identical Markdown independent", async () => {
+    await unlockPrivateVault("example secure passphrase 123");
+    const time = new Date().toISOString();
+    const first = {id: crypto.randomUUID(), title: "Shared title", member: "Family", markdown: "# Same text", createdAt: time, updatedAt: time};
+    const second = {...first, id: crypto.randomUUID()};
+    expect(familyMarkdownChanged(second, first)).toBe(true);
+    expect(familyMarkdownChanged(first, first)).toBe(false);
+    await saveFamilyMarkdownNote(first, null);
+    await saveFamilyMarkdownNote(second, null);
+    expect((await readFamilyMarkdownNotes()).map(note => note.id).sort()).toEqual([first.id, second.id].sort());
+  });
+
   it("saves arbitrary Markdown and keeps the IndexedDB payload encrypted",async()=>{
     await unlockPrivateVault("example secure passphrase 123");
     const time=new Date().toISOString();
