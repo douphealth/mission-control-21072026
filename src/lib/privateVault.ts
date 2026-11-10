@@ -9,6 +9,11 @@ export type FamilyRecord = { id: string; member: string; category: string; label
 /** All metadata and Markdown stay inside the encrypted payload; only opaque IDs are indexed. */
 export type FamilyMarkdownNote = { id: string; title: string; member: string; markdown: string; createdAt: string; updatedAt: string };
 export const FAMILY_MARKDOWN_MAX_BYTES = 1024 * 1024;
+/** Identical content in different notes must never be treated as the same saved record. */
+export function familyMarkdownChanged(note: FamilyMarkdownNote, previous: FamilyMarkdownNote | null): boolean {
+  return !previous || note.id !== previous.id || note.title !== previous.title || note.member !== previous.member || note.markdown !== previous.markdown;
+}
+
 export function validateFamilyMarkdownNote(note: FamilyMarkdownNote) {
   if (!note || typeof note.id !== "string" || !/^[a-zA-Z0-9-]{8,128}$/.test(note.id)) throw new Error("Invalid private note ID.");
   if (typeof note.title !== "string" || !note.title.trim() || note.title.length > 160) throw new Error("Enter a note title (up to 160 characters).");
