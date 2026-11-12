@@ -5,24 +5,34 @@ export interface CompletableTransaction {
 
 /** Coalesce row operations until the whole native transaction commits. */
 export function createCommittedMutationBuffer(
-  publish: (changes: ReadonlyMap<string, JournalOperation>) => void,
+  publish: (changes: ReadonlyMap<string, JournalOperation>, fields: ReadonlyMap<string, string[] | undefined>) => void,
 ) {
   const pending = new WeakMap<object, Map<string, JournalOperation>>();
+  // Changed field names per record; undefined means the whole record (create, delete or unknown).
+  const changedFields = new WeakMap<object, Map<string, Set<string> | null>>();
   const ignored = new WeakSet<object>();
   return {
     ignore(transaction: object) { ignored.add(transaction); },
-    stage(transaction: CompletableTransaction, recordKey: string, operation: JournalOperation) {
+    stage(transaction: CompletableTransaction, recordKey: string, operation: JournalOperation, fields?: readonly string[]) {
       if (ignored.has(transaction)) return;
       let batch = pending.get(transaction);
-      if (!batch) {
+      let batchFields = changedFields.get(transaction);
+      if (!batch || !batchFields) {
         batch = new Map();
+        batchFields = new Map();
         pending.set(transaction, batch);
-        const committed = batch;
+        changedFields.set(transaction, batchFields);
+        const committed = batch, committedFields = batchFields;
         transaction.on('complete', () => {
           pending.delete(transaction);
-          publish(committed);
+          changedFields.delete(transaction);
+          publish(committed, new Map([...committedFields].map(([k, v]) => [k, v ? [...v] : undefined])));
         });
       }
+      const seen = batchFields.has(recordKey);
+      const previous = batchFields.get(recordKey);
+      if (operation === 'delete' || !fields || (seen && previous === null)) batchFields.set(recordKey, null);
+      else batchFields.set(recordKey, new Set([...(previous || []), ...fields]));
       batch.set(recordKey, operation);
     },
   };

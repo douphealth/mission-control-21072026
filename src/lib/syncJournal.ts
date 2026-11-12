@@ -8,7 +8,8 @@
 import { db } from "@/lib/db";
 
 export type JournalOperation = "put" | "delete";
-export type JournalChange = { operation: JournalOperation; changedAt: string; revision?: string };
+/** `fields`: names changed since the last sync (absent = whole record). `inferred`: field list still unknown. */
+export type JournalChange = { operation: JournalOperation; changedAt: string; revision?: string; fields?: string[]; inferred?: boolean };
 export type JournalMap = Record<string, JournalChange>;
 export type JournalRow = JournalChange & { key: string };
 
@@ -21,7 +22,9 @@ function validChange(key: string, value: unknown): value is JournalChange {
   const row = value as Partial<JournalChange>;
   return (row.operation === "put" || row.operation === "delete") &&
     typeof row.changedAt === "string" && Number.isFinite(Date.parse(row.changedAt)) &&
-    (row.revision === undefined || typeof row.revision === "string");
+    (row.revision === undefined || typeof row.revision === "string") &&
+    (row.fields === undefined || (Array.isArray(row.fields) && row.fields.every(f => typeof f === "string"))) &&
+    (row.inferred === undefined || typeof row.inferred === "boolean");
 }
 
 export function parseLegacyJournal(raw: string | null): JournalMap {

@@ -79,3 +79,52 @@ export function capturedChangeIsCurrent(
   return current !== undefined &&
     (current.revision || current.changedAt) === (captured.revision || captured.changedAt);
 }
+
+export type PendingOutcome = 'local' | 'merged' | 'remote-delete';
+/**
+ * Settle a pending local change against the newest cloud copy.
+ *
+ * - When this device had already seen that cloud copy, its edit was made on top
+ *   of it, so the local copy wins whole (unchanged behaviour).
+ * - Otherwise the two edits were concurrent (for example a phone reopened with
+ *   an old copy). Only the fields this device actually changed are applied on
+ *   top of the cloud copy, so a stale device can never undo newer edits.
+ * - Deletes are sticky: a concurrent edit never brings back a record deleted on
+ *   another device, unless the local copy was created after that delete.
+ */
+export function resolvePendingChange(
+  local: RemoteRecord,
+  remote: RemoteRecord | undefined,
+  options: { fields?: readonly string[]; seenRemote: boolean },
+  nowMs = Date.now(),
+): { record: RemoteRecord; outcome: PendingOutcome } {
+  if (!remote || options.seenRemote || local.deleted) {
+    return { record: rebaseLocalPending(local, remote, nowMs), outcome: 'local' };
+  }
+  const localData = local.data || {};
+  if (remote.deleted) {
+    const created = Date.parse(String(localData.createdAt ?? ''));
+    if (Number.isFinite(created) && created > Date.parse(remote.updatedAt)) {
+      return { record: rebaseLocalPending(local, remote, nowMs), outcome: 'local' };
+    }
+    return { record: remote, outcome: 'remote-delete' };
+  }
+  const remoteData = remote.data || {};
+  let data: Record<string, unknown>;
+  if (options.fields) {
+    data = { ...remoteData };
+    for (const field of options.fields) {
+      if (field === 'id') continue;
+      if (Object.prototype.hasOwnProperty.call(localData, field) && localData[field] !== undefined) data[field] = localData[field];
+      else delete data[field];
+    }
+  } else {
+    data = { ...localData };
+    if (remoteData.deletedAt && !localData.deletedAt) data.deletedAt = remoteData.deletedAt;
+  }
+  data.id = localData.id ?? remoteData.id;
+  if (typeof localData.updatedAt === 'string' && typeof remoteData.updatedAt === 'string') {
+    data.updatedAt = localData.updatedAt > remoteData.updatedAt ? localData.updatedAt : remoteData.updatedAt;
+  }
+  return { record: rebaseLocalPending({ ...local, data }, remote, nowMs), outcome: 'merged' };
+}

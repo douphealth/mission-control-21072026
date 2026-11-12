@@ -7,15 +7,16 @@ import { secureUuid } from "@/lib/recordId";
 import { db } from '@/lib/db';
 import { GDRIVE_APPDATA_SCOPE, GOOGLE_SCOPES, clearGoogleToken, fetchGoogleEmail,
   getGoogleClientId, googleTokenHasScopes, prepareGoogleSignIn, readGoogleToken, requestGoogleToken } from '@/lib/googleDirectAuth';
-import { capturedChangeIsCurrent, mergeRemoteRecords, parseBackup, rebaseLocalPending, revisionOf,
+import { capturedChangeIsCurrent, mergeRemoteRecords, parseBackup, resolvePendingChange, revisionOf,
   type RemoteBackup, type RemoteRecords } from '@/lib/cloudSyncProtocol';
 import { applyAndConfirm, createCommittedMutationBuffer } from '@/lib/syncTransactionSafety';
 import { readDurableJournal, persistJournalChanges, acknowledgeJournalChanges } from '@/lib/syncJournal';
+import { addTombstone } from '@/lib/googleSyncState';
 
 export type CloudStatus = 'signed-out' | 'connecting' | 'syncing' | 'synced' | 'offline' | 'error';
 export type RecordSyncState = 'saved' | 'pending' | 'failed' | 'local-only';
 type DirtyOperation = 'put' | 'delete';
-type DirtyRecord = { operation: DirtyOperation; changedAt: string; revision?: string };
+type DirtyRecord = { operation: DirtyOperation; changedAt: string; revision?: string; fields?: string[]; inferred?: boolean };
 type DirtyRecordMap = Record<string, DirtyRecord>;
 type SyncResult = { ok: boolean; restored: number; remoteRows: number; repairedQueueEntries?: number; error?: string };
 type DriveFile = { id: string; name: string; modifiedTime: string };
@@ -72,6 +73,12 @@ const JOURNAL_EXCLUDED = new Set(['auditLog', 'syncHealth']);
 const remoteCache = new Map<string, { modifiedTime: string; backup: RemoteBackup }>();
 // Disposable optimization only. Never put record receipts into localStorage.
 const receiptCache = new Map<string, string>();
+// Cloud revision each record had when this device last applied it. Unlike receipts it
+// survives local edits, so a sync can tell "edited on top of the latest" from "concurrent".
+const seenRevisions = new Map<string, string>();
+// Google links of rows deleted here, carried in the cloud tombstone so other devices
+// can remove the Google copy too instead of re-importing it.
+const deleteHints = new Map<string, Record<string, unknown>>();
 let dirtyCache: DirtyRecordMap = {};
 let journalWrites: Promise<void> = Promise.resolve();
 async function flushJournal() {
@@ -116,13 +123,32 @@ function newChange(operation: DirtyOperation): DirtyRecord {
   logicalTime = Math.max(Date.now(), logicalTime + 1);
   return { operation, changedAt: new Date(logicalTime).toISOString(), revision: secureUuid() };
 }
+/**
+ * A new pending change, carrying the union of field names changed since the last
+ * successful sync. `fields: undefined` means the whole record. `inferred` marks a
+ * change queued without field details; the database hook supplies them later.
+ */
+function nextChange(recordKey: string, operation: DirtyOperation, fields?: readonly string[], inferred = false): DirtyRecord {
+  const change = newChange(operation);
+  if (operation === 'delete') return change;
+  const previous = readDirty()[recordKey];
+  if (inferred) {
+    if (previous?.operation === 'put') { if (previous.fields) change.fields = previous.fields; if (previous.inferred) change.inferred = true; }
+    else if (!previous) change.inferred = true;
+    return change;
+  }
+  if (!fields) return change;
+  if (!previous || previous.inferred) change.fields = [...new Set(fields)];
+  else if (previous.operation === 'put' && previous.fields) change.fields = [...new Set([...previous.fields, ...fields])];
+  return change;
+}
 function sameChange(a?: DirtyRecord, b?: DirtyRecord) {
   return !!a && !!b && (a.revision || a.changedAt) === (b.revision || b.changedAt);
 }
-const mutationBuffer = createCommittedMutationBuffer(changes => {
+const mutationBuffer = createCommittedMutationBuffer((changes, fields) => {
   const next = { ...readDirty() };
   for (const [recordKey, operation] of changes) {
-    const change = newChange(operation);
+    const change = nextChange(recordKey, operation, fields.get(recordKey));
     next[recordKey] = change;
     unsavedMutations[recordKey] = change;
     receiptCache.delete(recordKey);
@@ -141,12 +167,16 @@ function installMutationJournal() {
         if (id) mutationBuffer.stage(transaction, key(collection, id), 'put');
       };
     });
-    table.hook('updating', function (this: any, _mods: unknown, primKey: unknown, _obj: unknown, transaction: any) {
+    table.hook('updating', function (this: any, mods: unknown, primKey: unknown, _obj: unknown, transaction: any) {
       const id = String(primKey ?? '');
-      this.onsuccess = () => { if (id) mutationBuffer.stage(transaction, key(collection, id), 'put'); };
+      const fields = mods && typeof mods === 'object' ? Object.keys(mods as object).map(f => f.split('.')[0]) : undefined;
+      this.onsuccess = () => { if (id) mutationBuffer.stage(transaction, key(collection, id), 'put', fields); };
     });
-    table.hook('deleting', function (this: any, primKey: unknown, _obj: unknown, transaction: any) {
+    table.hook('deleting', function (this: any, primKey: unknown, obj: any, transaction: any) {
       const id = String(primKey ?? '');
+      if (id && collection === 'tasks' && (obj?.gtaskId || obj?.gcalEventId)) {
+        deleteHints.set(key(collection, id), { id, gtaskId: obj.gtaskId, gtaskListId: obj.gtaskListId, gcalEventId: obj.gcalEventId });
+      }
       this.onsuccess = () => { if (id) mutationBuffer.stage(transaction, key(collection, id), 'delete'); };
     });
   }
@@ -327,16 +357,24 @@ async function syncCycle(): Promise<SyncResult> {
       if (!capturedChangeIsCurrent(change, readDirty()[recordKey], inferredSeed)) continue;
       if (!data && change.operation !== 'delete') { repairedQueueEntries.add(recordKey); continue; }
       const remoteRecord = merged[recordKey];
-      const originalCandidate = { data: data || null, deleted: change.operation === 'delete', updatedAt: change.changedAt, revision: change.revision };
-      const differsFromRemote = !!remoteRecord && (remoteRecord.deleted !== originalCandidate.deleted || JSON.stringify(remoteRecord.data) !== JSON.stringify(originalCandidate.data));
+      const deleting = change.operation === 'delete';
+      const originalCandidate = { data: deleting ? (deleteHints.get(recordKey) ?? null) : (data || null), deleted: deleting, updatedAt: change.changedAt, revision: change.revision };
+      const differsFromRemote = !!remoteRecord && (remoteRecord.deleted !== deleting || (!deleting && JSON.stringify(remoteRecord.data) !== JSON.stringify(originalCandidate.data)));
+      const resolved = resolvePendingChange(originalCandidate, remoteRecord, {
+        fields: change.inferred ? undefined : change.fields,
+        seenRemote: !!remoteRecord && seenRevisions.get(recordKey) === revisionOf(remoteRecord),
+      });
       if (differsFromRemote) {
         const conflictId = `sync-conflict-${change.revision || `${collection}-${id}-${change.changedAt}`}`;
+        const removedElsewhere = resolved.outcome === 'remote-delete';
         const conflict = { id: conflictId, at: new Date().toISOString(), action: 'sync', collection, recordId: id,
-          label: 'Remote version preserved before applying pending local edit', before: remoteRecord?.data ?? null };
+          label: removedElsewhere ? 'Deleted on another device; this device\'s last copy kept here' : 'Remote version preserved before applying pending local edit',
+          before: removedElsewhere ? originalCandidate.data : remoteRecord?.data ?? null };
         await db.auditLog.put(conflict as any);
         merged[key('auditLog', conflictId)] = { data: conflict, deleted: false, updatedAt: change.changedAt, revision: conflictId };
       }
-      merged[recordKey] = rebaseLocalPending(originalCandidate, remoteRecord);
+      if (resolved.outcome === 'remote-delete') { repairedQueueEntries.add(recordKey); continue; }
+      merged[recordKey] = resolved.record;
       outboundKeys.push(recordKey);
     }
     if (outboundKeys.length) {
@@ -365,7 +403,14 @@ async function syncCycle(): Promise<SyncResult> {
         if (!dirty && receiptCache.get(recordKey) === revisionOf(record)) continue;
         if (dirty && !sameChange(dirty, captured[recordKey])) continue;
         if (!currentSession()) throw new Error('Sync cancelled.');
-        if (record.deleted) await table.delete(id);
+        if (record.deleted) {
+          const hint = record.data;
+          if (collection === 'tasks' && hint && !(await table.get(id)) && (hint.gtaskId || hint.gcalEventId)) {
+            // Never had the row here: still let Google sync remove the Google copy instead of re-importing it.
+            addTombstone({ taskId: id, listId: hint.gtaskListId as string | undefined, gtaskId: hint.gtaskId as string | undefined, eventId: hint.gcalEventId as string | undefined });
+          }
+          await table.delete(id);
+        }
         else if (validRecord(collection, record.data, id)) {
           const local = await table.get(id);
           if (JSON.stringify(local) !== JSON.stringify(record.data)) { await table.put(record.data); restored++; }
@@ -373,6 +418,8 @@ async function syncCycle(): Promise<SyncResult> {
         staged.set(recordKey, revisionOf(record));
       }
     }), currentSession);
+    for (const [k, v] of receiptCache) seenRevisions.set(k, v);
+    for (const k of outboundKeys) if (merged[k]?.deleted) deleteHints.delete(k);
     await flushJournal();
     const acknowledged = new Set([...outboundKeys, ...repairedQueueEntries]);
     await acknowledgeJournalChanges(Object.fromEntries(Object.entries(captured).filter(([k]) => acknowledged.has(k))));
@@ -416,10 +463,10 @@ export function getRecordSyncState(collection: string, id: string): RecordSyncSt
   if (journalReadError || journalError) return 'failed';
   return receiptCache.has(key(collection, id)) ? 'saved' : 'pending';
 }
-export function markCloudRecordDirty(collection: string, id: string, operation: DirtyOperation = 'put') {
+export function markCloudRecordDirty(collection: string, id: string, operation: DirtyOperation = 'put', fields?: readonly string[]) {
   if (!COLLECTIONS[collection] || !id) return;
   const recordKey = key(collection, id);
-  const change = newChange(operation);
+  const change = nextChange(recordKey, operation, fields, operation === 'put' && !fields);
   unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
   persistChanges({ [recordKey]: change });
 }
@@ -427,7 +474,7 @@ export function markCloudRecordsDirty(collection: string, ids: string[], operati
   const changes: DirtyRecordMap = {};
   ids.forEach(id => {
     if (!COLLECTIONS[collection] || !id) return;
-    const recordKey = key(collection, id), change = newChange(operation);
+    const recordKey = key(collection, id), change = nextChange(recordKey, operation, undefined, operation === 'put');
     changes[recordKey] = change; unsavedMutations[recordKey] = change; receiptCache.delete(recordKey);
   });
   if (Object.keys(changes).length) persistChanges(changes);
@@ -483,7 +530,7 @@ export async function signInToCloud(): Promise<void> {
   try {
     setStatus('connecting');
     const token = await requestGoogleToken({ scope: GOOGLE_SCOPES, prompt: 'select_account' });
-    epoch++; verifiedToken = ''; remoteCache.clear(); receiptCache.clear(); clearRetry(); retryAttempt = 0; localSeedChecked = false;
+    epoch++; verifiedToken = ''; remoteCache.clear(); receiptCache.clear(); seenRevisions.clear(); clearRetry(); retryAttempt = 0; localSeedChecked = false;
     await bindIdentity(token.access_token, epoch);
     installRefreshListeners();
     if (activeSync) await activeSync;
@@ -492,7 +539,7 @@ export async function signInToCloud(): Promise<void> {
   } catch (error) { setStatus('error', error instanceof Error ? error.message : 'Google connection failed'); throw error; }
 }
 export async function signOutOfCloud() {
-  epoch++; verifiedToken = ''; remoteCache.clear(); receiptCache.clear(); clearRetry(); localSeedChecked = false;
+  epoch++; verifiedToken = ''; remoteCache.clear(); receiptCache.clear(); seenRevisions.clear(); clearRetry(); localSeedChecked = false;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = null; firstQueuedAt = 0;
   clearGoogleToken(); userEmail = null; setStatus('signed-out');

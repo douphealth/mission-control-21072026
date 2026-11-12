@@ -21,7 +21,7 @@ describe("standalone Google sync regression", () => {
     expect(cloudSync).toContain("installMutationJournal");
     expect(cloudSync).toContain("MAX_PUSH_LATENCY_MS");
     expect(cloudSync).toContain("pagehide");
-    expect(cloudSync).toContain("rebaseLocalPending");
+    expect(cloudSync).toContain("resolvePendingChange");
   });
 
   it("does not ship managed-service dependencies or setup UI", () => {
