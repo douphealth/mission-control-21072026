@@ -1,34 +1,30 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest, setResponseHeader } from "@tanstack/react-start/server";
 import { z } from "zod";
-import { requireCloudflareViewer } from "@/lib/cloudflareAccess.server";
 import { readCloudflareRuntimeEnv } from "@/lib/cloudflareRuntimeEnv.server";
-import { assertSameOrigin } from "@/lib/cloudflareActions.server";
+import { CF_NAME, GH_NAME } from "@/lib/providerDeleteNames";
+import type { CleanupOutcome, DeleteOutcome } from "@/lib/providerDelete.server";
 import {
-  CF_NAME,
-  GH_NAME,
-  deleteCloudflareResource,
-  deleteGitHubRepository,
-  type DeleteOutcome,
-} from "@/lib/providerDelete.server";
-export type { DeleteOutcome } from "@/lib/providerDelete.server";
+  gatedCloudflareDelete,
+  gatedGitHubDelete,
+  gatedPagesCleanup,
+} from "@/lib/providerDeleteGate.server";
+export type { CleanupOutcome, DeleteOutcome } from "@/lib/providerDelete.server";
 
-async function guard(): Promise<Record<string, string | undefined>> {
+async function serverEnv(): Promise<Record<string, string | undefined>> {
   setResponseHeader("Cache-Control", "private, no-store");
   const runtime = await readCloudflareRuntimeEnv();
-  const env = { ...process.env, ...runtime };
-  const request = getRequest();
-  await requireCloudflareViewer(request, env);
-  assertSameOrigin(request);
-  return env;
+  return { ...process.env, ...runtime };
 }
-const refused = (): DeleteOutcome => ({
-  ok: false,
-  code: "rejected",
-  message: "The delete could not be completed. Nothing was changed.",
-});
+const unknownFailure = {
+  ok: false as const,
+  code: "unverified" as const,
+  message:
+    "The server hit an error, so it is not certain what happened. Refresh the list before trying again.",
+};
+const adminPasscode = z.string().max(256).optional();
 
-/** Permanently deletes a Pages project or Worker. `confirm` must repeat the exact name. */
+/** Permanently deletes a Pages project or Worker. `confirm` must repeat the exact name; admin only. */
 export const deleteCloudflareProject = createServerFn({ method: "POST" })
   .inputValidator((data) =>
     z
@@ -36,37 +32,60 @@ export const deleteCloudflareProject = createServerFn({ method: "POST" })
         accountId: z.string().regex(/^[a-f0-9]{32}$/i),
         kind: z.enum(["pages", "worker"]),
         name: z.string().regex(CF_NAME),
-        confirm: z.string(),
+        confirm: z.string().max(200),
+        adminPasscode,
       })
-      .refine((v) => v.confirm === v.name, "Type the exact name to confirm")
       .parse(data),
   )
   .handler(async ({ data }): Promise<DeleteOutcome> => {
-    const env = await guard();
     try {
-      return await deleteCloudflareResource(data, env);
+      return await gatedCloudflareDelete(getRequest(), await serverEnv(), data);
     } catch {
-      return refused();
+      return unknownFailure;
     }
   });
 
-/** Permanently deletes a GitHub repository. `confirm` must repeat "owner/repo". */
+/** Separate explicit step: removes old Pages deployments (never the live one, never the project). */
+export const cleanupCloudflarePagesDeployments = createServerFn({ method: "POST" })
+  .inputValidator((data) =>
+    z
+      .object({
+        accountId: z.string().regex(/^[a-f0-9]{32}$/i),
+        name: z.string().regex(CF_NAME),
+        confirm: z.string().max(200),
+        acknowledge: z.boolean(),
+        adminPasscode,
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }): Promise<CleanupOutcome> => {
+    try {
+      return await gatedPagesCleanup(getRequest(), await serverEnv(), data);
+    } catch {
+      return {
+        ...unknownFailure,
+        message:
+          "The server hit an error while removing old deployments. Refresh before trying again.",
+      };
+    }
+  });
+
+/** Permanently deletes a GitHub repository. `confirm` must repeat "owner/repo"; admin only. */
 export const deleteGitHubRepo = createServerFn({ method: "POST" })
   .inputValidator((data) =>
     z
       .object({
         owner: z.string().regex(GH_NAME),
         repo: z.string().regex(GH_NAME),
-        confirm: z.string(),
+        confirm: z.string().max(220),
+        adminPasscode,
       })
-      .refine((v) => v.confirm === v.owner + "/" + v.repo, "Type the exact name to confirm")
       .parse(data),
   )
   .handler(async ({ data }): Promise<DeleteOutcome> => {
-    const env = await guard();
     try {
-      return await deleteGitHubRepository(data, env);
+      return await gatedGitHubDelete(getRequest(), await serverEnv(), data);
     } catch {
-      return refused();
+      return unknownFailure;
     }
   });

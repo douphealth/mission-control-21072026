@@ -48,7 +48,7 @@ import { REPO_PORTFOLIO_META } from "@/lib/repoPortfolioMeta";
 import { REPO_RELATIONSHIPS } from "@/lib/repoRelationships";
 import { Pill, ctl, ctlPrimary, iconBtn, type Tone } from "@/components/console/ConsoleUI";
 import DeleteForeverPanel from "@/components/console/DeleteForeverPanel";
-import { deleteGitHubRepo } from "@/lib/providerDelete.functions";
+import { githubDeleteTarget } from "@/components/console/deleteTargets";
 
 const OWNERS = ["douphealth", "Papalexios", "papalexios001-wq", "papalexios01"] as const;
 const DEPLOY_TONE: Record<RepoDeployState, Tone> = {
@@ -64,16 +64,6 @@ const SOURCE_LABEL: Record<RepoOpsRow["source"], string> = {
   "github-api": "Public GitHub API",
   snapshot: "Dated catalog snapshot (refresh for live data)",
 };
-
-/** Owner/repo exactly as GitHub spells them, from the repository URL. */
-function githubPath(url: string): { owner: string; repo: string } | null {
-  try {
-    const [owner, repo] = new URL(url).pathname.split("/").filter(Boolean);
-    return owner && repo ? { owner, repo: repo.replace(/\.git$/i, "") } : null;
-  } catch {
-    return null;
-  }
-}
 
 const copyText = (text: string, what: string) =>
   void navigator.clipboard.writeText(text).then(
@@ -456,6 +446,7 @@ export default function RepoDrawer({
   onOpenCloudflare,
   cloudflareComplete,
   onDeleted,
+  onUnsettled,
 }: {
   row: RepoOpsRow | null;
   position: { index: number; total: number };
@@ -466,6 +457,8 @@ export default function RepoDrawer({
   onOpenCloudflare: (key: string) => void;
   cloudflareComplete: boolean;
   onDeleted: (row: RepoOpsRow, message: string) => void;
+  /** Provider state is uncertain after a delete attempt: refresh from GitHub. */
+  onUnsettled?: () => void;
 }) {
   const [tab, setTab] = useState("overview");
   const key = row?.key;
@@ -480,10 +473,7 @@ export default function RepoDrawer({
   const relationships =
     row.owner.toLowerCase() === "douphealth" ? REPO_RELATIONSHIPS[row.name] || [] : [];
   const repoPath = row.key.split("/")[1];
-  // Only repositories in a connected account can be deleted (its own server key).
-  const ghPath = githubPath(row.url) || { owner: row.owner, repo: repoPath || "" };
-  const canDelete =
-    OWNERS.some((o) => o.toLowerCase() === ghPath.owner.toLowerCase()) && Boolean(ghPath.repo);
+  const deleteTarget = githubDeleteTarget(row);
   const quick = [
     { label: "Code", url: row.url, icon: Code2 },
     { label: "PRs", url: row.url + "/pulls", icon: GitPullRequest },
@@ -739,25 +729,11 @@ export default function RepoDrawer({
                   ))}
                 </Card>
               )}
-              {canDelete && (
+              {deleteTarget && (
                 <DeleteForeverPanel
-                  what="repository"
-                  confirmText={ghPath.owner + "/" + ghPath.repo}
-                  consequences={[
-                    "All code, history, issues, pull requests and settings are removed from GitHub.",
-                    "Cloudflare projects built from it keep their current version but can no longer rebuild.",
-                    "Your saved plan for it stays in this app, hidden from the list.",
-                  ]}
-                  onDelete={() =>
-                    deleteGitHubRepo({
-                      data: {
-                        owner: ghPath.owner,
-                        repo: ghPath.repo,
-                        confirm: ghPath.owner + "/" + ghPath.repo,
-                      },
-                    })
-                  }
+                  target={deleteTarget}
                   onDeleted={(outcome) => onDeleted(row, outcome.message)}
+                  onUnsettled={onUnsettled}
                 />
               )}
             </TabsContent>

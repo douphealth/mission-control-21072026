@@ -1,5 +1,10 @@
 import { onPrivateSnapshotsCleared, readSnapshot, writeSnapshot } from "@/lib/snapshotCache";
-import { filterDeleted, markDeleted, reconcileDeleted, useDeletedMarks } from "@/lib/deletedResources";
+import {
+  filterDeleted,
+  markDeleted,
+  reconcileDeleted,
+  useDeletedMarks,
+} from "@/lib/deletedResources";
 import { getGitHubRepoKey } from "@/lib/unifiedGitHubCatalog";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -30,6 +35,7 @@ import {
   RefreshCw,
   Search,
   SlidersHorizontal,
+  Trash2,
   TriangleAlert,
   X,
 } from "lucide-react";
@@ -117,6 +123,9 @@ import {
   type Tone,
 } from "@/components/console/ConsoleUI";
 import RepoDrawer from "@/components/github/RepoDrawer";
+import { logAudit } from "@/lib/audit";
+import DeleteResourceDialog from "@/components/console/DeleteResourceDialog";
+import { githubDeleteTarget } from "@/components/console/deleteTargets";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   DropdownMenu,
@@ -520,6 +529,42 @@ export default function RepoOpsWorkspace({
       setDrawerKey((open) => (open ? (ordered[index]?.key ?? open) : open));
     },
   });
+  const [deleteRow, setDeleteRow] = useState<RepoOpsRow | null>(null);
+  /** Cheap re-read of the authenticated inventory only (no public API calls). */
+  const refreshOwned = useCallback(() => {
+    void loadOwned(true).then(setOwned, () => undefined);
+  }, []);
+  /** Runs only after GitHub confirmed the delete and a fresh read no longer finds it. */
+  const handleDeleted = (row: RepoOpsRow, message: string) => {
+    markDeleted(row.key);
+    const keep = (r: { url: string }) => getGitHubRepoKey(r.url) !== row.key;
+    if (ownedCache) {
+      const value = {
+        ...ownedCache.value,
+        repositories: ownedCache.value.repositories.filter(keep),
+        ownedRepositories: ownedCache.value.ownedRepositories.filter(keep),
+      };
+      ownedCache = { at: ownedCache.at, value };
+      void writeSnapshot(OWNED_DISK_KEY, value, ownedCache.at);
+      setOwned(value);
+    }
+    setSelected((old) => {
+      if (!old.has(row.key)) return old;
+      const next = new Set(old);
+      next.delete(row.key);
+      return next;
+    });
+    setDrawerKey((open) => (open === row.key ? null : open));
+    toast.success(row.owner + "/" + row.name + " deleted", { description: message });
+    void logAudit({
+      action: "delete",
+      collection: "github-repos",
+      recordId: row.key,
+      label: "GitHub delete · " + row.key,
+      detail: "Confirmed by GitHub · " + message,
+    });
+    refreshOwned();
+  };
   const openRow = (row: RepoOpsRow) => {
     const index = ordered.findIndex((r) => r.key === row.key);
     if (index >= 0) kb.setCursor(index);
@@ -1000,7 +1045,7 @@ export default function RepoOpsWorkspace({
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-border bg-card/70">
-          <div className="hidden grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_7.75rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
+          <div className="hidden grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_9.75rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
             <input
               type="checkbox"
               aria-label="Select all repositories on this page"
@@ -1047,7 +1092,7 @@ export default function RepoOpsWorkspace({
                         return;
                       openRow(row);
                     }}
-                    className={`mc-mobile-ops-row grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_7.75rem] md:items-center ${
+                    className={`mc-mobile-ops-row grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2.4fr)_4.5rem_minmax(0,1.5fr)_6.75rem_9.75rem] md:items-center ${
                       compact ? "py-1.5" : "py-3"
                     } ${selected.has(row.key) ? "bg-primary/5" : ""} ${isCursor ? "relative z-[1] ring-2 ring-inset ring-primary/55" : ""}`}
                   >
@@ -1230,6 +1275,20 @@ export default function RepoOpsWorkspace({
                       >
                         Details
                       </button>
+                      {githubDeleteTarget(row) && (
+                        <button
+                          type="button"
+                          className={
+                            iconBtn +
+                            " text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          }
+                          aria-label={"Delete " + row.key}
+                          title={"Delete " + row.key + " permanently"}
+                          onClick={() => setDeleteRow(row)}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
@@ -1489,28 +1548,14 @@ export default function RepoOpsWorkspace({
           focusCloudflare("cloudflare", key);
         }}
         cloudflareComplete={cfComplete}
-        onDeleted={(row, message) => {
-          markDeleted(row.key);
-          const keep = (r: { url: string }) => getGitHubRepoKey(r.url) !== row.key;
-          if (ownedCache) {
-            const value = {
-              ...ownedCache.value,
-              repositories: ownedCache.value.repositories.filter(keep),
-              ownedRepositories: ownedCache.value.ownedRepositories.filter(keep),
-            };
-            ownedCache = { at: ownedCache.at, value };
-            void writeSnapshot(OWNED_DISK_KEY, value, ownedCache.at);
-            setOwned(value);
-          }
-          setSelected((old) => {
-            if (!old.has(row.key)) return old;
-            const next = new Set(old);
-            next.delete(row.key);
-            return next;
-          });
-          setDrawerKey(null);
-          toast.success(row.owner + "/" + row.name + " deleted", { description: message });
-        }}
+        onDeleted={handleDeleted}
+        onUnsettled={refreshOwned}
+      />
+      <DeleteResourceDialog
+        target={deleteRow ? githubDeleteTarget(deleteRow) : null}
+        onOpenChange={(open) => !open && setDeleteRow(null)}
+        onDeleted={(_, outcome) => deleteRow && handleDeleted(deleteRow, outcome.message)}
+        onUnsettled={refreshOwned}
       />
       <ShortcutHelp
         open={helpOpen}

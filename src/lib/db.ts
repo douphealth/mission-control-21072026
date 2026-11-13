@@ -554,6 +554,8 @@ export interface UserSettings {
   /** Vault keyring wrapped with the owner's one-time recovery code (row `vault-recovery`). */
   vaultRecovery?: { envelope: { version: 1; salt: string; iv: string; data: string }; createdAt: string; covers: string[] };
   navigationPreference?: { sidebarLayout?: unknown; pinnedSections: string[]; closedGroups: string[]; changedAt: string };
+  /** Provider resources deleted from this app (row "deleted-resources"); merged per key across devices. */
+  deletedResources?: { marks: Record<string, number>; cleared: Record<string, number>; changedAt: string };
   /** Dedicated non-default settings rows retain independently synced starter-source choices. */
   bootstrapSeedPreference?: {
     collection: "feedSources" | "watchTerms";

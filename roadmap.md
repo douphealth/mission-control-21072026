@@ -1,3 +1,8 @@
+## Safe provider deletes (PR, not merged)
+- [x] Row Delete buttons + one shared confirmation; server admin gate, dedicated delete keys, provider-confirmed success only, separate Pages cleanup, cross-device marks; 39 mocked-provider tests
+- [ ] Set MC_ADMIN_PASSCODE or MC_ADMIN_EMAILS and delete keys (CLOUDFLARE_DELETE_TOKENS_JSON, GITHUB_DELETE_TOKENS_JSON) on the live host — needs the owner's keys
+- [ ] Merge and deploy the PR — waits on owner approval
+
 ## Speed and capture reliability
 - [x] Open Cloudflare and GitHub instantly from the last saved copy, refresh in background, clear owner copies on Lock
 - [x] Verify voice capture with real Greek/English speech (word-perfect, 3–4 s)

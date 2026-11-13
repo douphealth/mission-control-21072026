@@ -17,6 +17,7 @@ import {
   Search,
   Server,
   SlidersHorizontal,
+  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -32,6 +33,8 @@ import type {
 import { runCloudflarePagesAction } from "@/lib/cloudflareActions.functions";
 import { removeFromCloudflareControl } from "@/lib/cloudflareControlClient";
 import { markDeleted } from "@/lib/deletedResources";
+import DeleteResourceDialog from "@/components/console/DeleteResourceDialog";
+import { cloudflareDeleteTarget } from "@/components/console/deleteTargets";
 import { ConnectorError } from "@/components/TruthUI";
 import { freshness } from "@/lib/truth";
 import {
@@ -413,6 +416,28 @@ export default function CloudflareDeploymentsPanel({
       setDrawerKey((open) => (open ? (ordered[index]?.key ?? open) : open));
     },
   });
+  const [deleteRow, setDeleteRow] = useState<CloudflareDeploymentRow | null>(null);
+  /** Runs only after Cloudflare confirmed the delete and a fresh read no longer finds it. */
+  const handleDeleted = (row: CloudflareDeploymentRow, message: string) => {
+    markDeleted(row.key);
+    removeFromCloudflareControl(row.key);
+    setSelected((old) => {
+      if (!old.has(row.key)) return old;
+      const next = new Set(old);
+      next.delete(row.key);
+      return next;
+    });
+    setDrawerKey((open) => (open === row.key ? null : open));
+    toast.success(row.name + " deleted", { description: message });
+    void logAudit({
+      action: "delete",
+      collection: row.kind === "pages" ? "cloudflare-pages" : "cloudflare-workers",
+      recordId: row.accountId.slice(-6) + ":" + row.name,
+      label: "Cloudflare delete · " + row.name,
+      detail: "Confirmed by Cloudflare · " + message,
+    });
+    onRefresh();
+  };
   const openRow = (row: CloudflareDeploymentRow) => {
     const index = ordered.findIndex((r) => r.key === row.key);
     if (index >= 0) kb.setCursor(index);
@@ -803,7 +828,7 @@ export default function CloudflareDeploymentsPanel({
             </div>
           ) : (
             <div className="overflow-hidden rounded-2xl border border-border bg-card/70">
-              <div className="hidden grid-cols-[1.25rem_minmax(0,2fr)_7.25rem_5rem_minmax(0,1.6fr)_minmax(0,1.5fr)_6.5rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
+              <div className="hidden grid-cols-[1.25rem_minmax(0,2fr)_7.25rem_5rem_minmax(0,1.6fr)_minmax(0,1.5fr)_8.75rem] items-center gap-3 border-b border-border bg-muted/40 px-4 py-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground md:grid">
                 <input
                   type="checkbox"
                   aria-label="Select all projects on this page"
@@ -856,7 +881,7 @@ export default function CloudflareDeploymentsPanel({
                             return;
                           openRow(row);
                         }}
-                        className={`grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2fr)_7.25rem_5rem_minmax(0,1.6fr)_minmax(0,1.5fr)_6.5rem] md:items-center ${
+                        className={`grid cursor-pointer grid-cols-[1.25rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-4 text-xs [contain-intrinsic-size:auto_64px] [content-visibility:auto] hover:bg-muted/35 md:grid-cols-[1.25rem_minmax(0,2fr)_7.25rem_5rem_minmax(0,1.6fr)_minmax(0,1.5fr)_8.75rem] md:items-center ${
                           compact ? "py-1.5" : "py-3"
                         } ${selected.has(row.key) ? "bg-primary/5" : ""} ${isCursor ? "relative z-[1] ring-2 ring-inset ring-primary/55" : ""}`}
                       >
@@ -1011,6 +1036,18 @@ export default function CloudflareDeploymentsPanel({
                             onClick={() => openRow(row)}
                           >
                             Details
+                          </button>
+                          <button
+                            type="button"
+                            className={
+                              iconBtn +
+                              " text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            }
+                            aria-label={"Delete " + row.name}
+                            title={"Delete " + row.name + " permanently"}
+                            onClick={() => setDeleteRow(row)}
+                          >
+                            <Trash2 size={15} />
                           </button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -1255,18 +1292,16 @@ export default function CloudflareDeploymentsPanel({
           setDrawerKey(null);
           openRepoInGitHub("github", repoKey);
         }}
-        onDeleted={(row, message) => {
-          markDeleted(row.key);
-          removeFromCloudflareControl(row.key);
-          setSelected((old) => {
-            if (!old.has(row.key)) return old;
-            const next = new Set(old);
-            next.delete(row.key);
-            return next;
-          });
-          setDrawerKey(null);
-          toast.success(row.name + " deleted", { description: message });
-        }}
+        onDeleted={handleDeleted}
+        onUnsettled={onRefresh}
+      />
+      <DeleteResourceDialog
+        target={
+          deleteRow ? cloudflareDeleteTarget(deleteRow, accountName(deleteRow.accountId)) : null
+        }
+        onOpenChange={(open) => !open && setDeleteRow(null)}
+        onDeleted={(_, outcome) => deleteRow && handleDeleted(deleteRow, outcome.message)}
+        onUnsettled={onRefresh}
       />
       <ShortcutHelp
         open={helpOpen}
