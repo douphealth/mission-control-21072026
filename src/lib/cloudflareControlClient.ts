@@ -5,7 +5,11 @@ import {
 } from "@/lib/cloudflareControl.functions";
 import type { CloudflareControlSnapshot } from "@/lib/cloudflareControlState";
 import type { CloudflareInventory } from "@/lib/cloudflareInventory.server";
-import { mergeCloudflareInventories, unreachableAccountPart } from "@/lib/cloudflareInventoryMerge";
+import {
+  carryForwardFailedParts,
+  mergeCloudflareInventories,
+  unreachableAccountPart,
+} from "@/lib/cloudflareInventoryMerge";
 import { filterDeleted, reconcileDeleted } from "@/lib/deletedResources";
 import { onPrivateSnapshotsCleared, readSnapshot, writeSnapshot } from "@/lib/snapshotCache";
 
@@ -75,8 +79,18 @@ async function collect(): Promise<CloudflareControlSnapshot> {
           fetchedAt,
         ),
   );
-  const merged = mergeCloudflareInventories(parts, fetchedAt);
-  reconcileDeleted(merged.rows.map((row) => row.key), Date.now());
+  // A Cloudflare outage for one account/section must never make its projects vanish.
+  const safeParts = carryForwardFailedParts(
+    parts,
+    jobs.map((job) => job.section),
+    cache?.value.inventory,
+  );
+  const merged = mergeCloudflareInventories(safeParts, fetchedAt);
+  // Only freshly fetched names may clear a deletion mark, never carried-over copies.
+  reconcileDeleted(
+    parts.flatMap((part) => part.rows.map((row) => row.key)),
+    Date.now(),
+  );
   const inventory = { ...merged, rows: filterDeleted(merged.rows) };
   return {
     status: inventory.truthState,

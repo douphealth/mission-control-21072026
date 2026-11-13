@@ -125,3 +125,52 @@ export function unreachableAccountPart(
     zones: [],
   };
 }
+
+/**
+ * When Cloudflare fails to answer for one account/section (outage, 5xx, rate
+ * limit), reuse the rows from the last good inventory for exactly that account
+ * and kind instead of showing them as gone. The failure stays in `errors`, so
+ * the screen still says the list could not be refreshed.
+ */
+export function carryForwardFailedParts(
+  parts: CloudflareInventory[],
+  sections: ("pages" | "platform")[],
+  previous: CloudflareInventory | null | undefined,
+): CloudflareInventory[] {
+  if (!previous?.rows?.length && !previous?.zones?.length) return parts;
+  const when = previous.fetchedAt ? previous.fetchedAt.slice(0, 16).replace("T", " ") : "earlier";
+  return parts.map((part, index) => {
+    const section = sections[index];
+    const summary = part.accountDetails[0];
+    if (!summary || !summary.errors.length) return part;
+    const accountId = summary.accountId;
+    const has = (kind: string) => part.rows.some((row) => row.kind === kind);
+    const carryKinds =
+      section === "pages" ? (has("pages") ? [] : ["pages"]) : has("worker") ? [] : ["worker"];
+    const carried = previous.rows.filter(
+      (row) => row.accountId === accountId && carryKinds.includes(row.kind),
+    );
+    const carriedZones =
+      section === "platform" && !part.zones.length
+        ? (previous.zones || []).filter((zone) => zone.accountId === accountId)
+        : [];
+    if (!carried.length && !carriedZones.length) return part;
+    const note = `Showing ${carried.length || carriedZones.length} saved item(s) from ${when} UTC because Cloudflare did not answer; they refresh automatically when it recovers.`;
+    const nextSummary: CloudflareAccountSummary = {
+      ...summary,
+      pagesCount: summary.pagesCount + carried.filter((r) => r.kind === "pages").length,
+      workersCount: summary.workersCount + carried.filter((r) => r.kind === "worker").length,
+      zonesCount: summary.zonesCount + carriedZones.length,
+      errors: [...summary.errors, note],
+    };
+    nextSummary.truthState = accountTruth(nextSummary);
+    return {
+      ...part,
+      truthState: nextSummary.truthState,
+      accountDetails: [nextSummary, ...part.accountDetails.slice(1)],
+      errors: [...part.errors, note],
+      rows: [...part.rows, ...carried],
+      zones: [...part.zones, ...carriedZones],
+    };
+  });
+}
