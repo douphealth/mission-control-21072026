@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { describeUnsupported, isOfficeFile, isSupportedFile } from "@/lib/fileIntake";
+import { describeUnsupported, isImageFile, isOfficeFile, isSupportedFile } from "@/lib/fileIntake";
 
 function file(name: string, type = "", size = 100): File {
   return { name, type, size } as File;
@@ -11,6 +11,13 @@ describe("file intake support", () => {
     expect(isOfficeFile(file("pipeline.xlsx"))).toBe(true);
     expect(isOfficeFile(file("legacy-budget.xls"))).toBe(false);
     expect(isOfficeFile(file("roadmap.pptx"))).toBe(true);
+  });
+
+  it("accepts phone photos that arrive without a file type", () => {
+    expect(isImageFile(file("IMG_2041.JPG"))).toBe(true);
+    expect(isImageFile(file("scan.heic"))).toBe(true);
+    expect(isSupportedFile(file("receipt.png"))).toBe(true);
+    expect(isImageFile(file("notes.txt"))).toBe(false);
   });
 
   it("accepts only formats the capture pipeline can actually parse", () => {

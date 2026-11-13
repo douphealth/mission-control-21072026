@@ -1,3 +1,8 @@
+## Speed and capture reliability
+- [x] Open Cloudflare and GitHub instantly from the last saved copy, refresh in background, clear owner copies on Lock
+- [x] Verify voice capture with real Greek/English speech (word-perfect, 3–4 s)
+- [x] Accept phone photos without a file type; never leave photo capture stuck; verify photo → tasks (~5 s)
+
 ## Household planning and comfortable navigation
 - [x] Add owner-gated AI household checklist generation with review and explicit save
 - [x] Expose saved text-size and contrast controls across sections

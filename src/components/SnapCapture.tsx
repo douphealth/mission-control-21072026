@@ -146,9 +146,10 @@ export default function SnapCapture() {
 
   const processImages = useCallback(
     async (files: File[]) => {
-      const imageFiles = files.filter((f) => f.type.startsWith("image/")).slice(0, 4);
+      const imageFiles = files.filter(isImageFile).slice(0, 4);
       if (imageFiles.length === 0) {
         toast.error("No image found. Try a photo or screenshot.");
+        busyRef.current = false;
         return;
       }
 

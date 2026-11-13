@@ -1,5 +1,6 @@
 import { getGitHubRepoKey } from "@/lib/unifiedGitHubCatalog";
 import type { GitHubRepo } from "@/lib/db";
+import { readSnapshot, writeSnapshot } from "@/lib/snapshotCache";
 
 export const OWNERS = ["douphealth", "Papalexios", "papalexios001-wq", "papalexios01"] as const;
 export type LiveRepo = {
@@ -24,6 +25,24 @@ const MAX_PAGES = 25;
 const accountCache = new Map<string, OwnerResult>();
 export function cachedOwners(): Record<string, OwnerResult> {
   return Object.fromEntries(accountCache);
+}
+const OWNERS_DISK_KEY = "github-public-owners";
+let ownersHydration: Promise<void> | null = null;
+/**
+ * Restores the last complete public listing saved on this device. Its real
+ * age is kept, so opening the app again within the TTL costs zero GitHub
+ * requests (unauthenticated quota is only 60/hour per network).
+ */
+export function hydrateOwnerRepos(): Promise<void> {
+  if (!ownersHydration) {
+    ownersHydration = readSnapshot<OwnerResult[]>(OWNERS_DISK_KEY).then((saved) => {
+      if (!saved || accountCache.size || !Array.isArray(saved.value)) return;
+      for (const result of saved.value) if (result?.owner) accountCache.set(result.owner, result);
+      if (saved.value.length === OWNERS.length && saved.value.every((r) => r.state === "live"))
+        ownersLoadedAt = saved.at;
+    });
+  }
+  return ownersHydration;
 }
 export function retainOwnerResult(next: OwnerResult): OwnerResult {
   const previous = accountCache.get(next.owner);
@@ -111,6 +130,7 @@ let ownersInflight: Promise<OwnerResult[]> | null = null;
 export function ownersRateLimitedUntil(): number { return ownersRetryAt > Date.now() ? ownersRetryAt : 0; }
 export function loadOwnerRepos(options: { force?: boolean } = {}): Promise<OwnerResult[]> {
   if (ownersInflight) return ownersInflight;
+  if (!ownersHydration) return hydrateOwnerRepos().then(() => loadOwnerRepos(options));
   const cached = OWNERS.flatMap(o => accountCache.get(o) ? [accountCache.get(o)!] : []);
   const fresh = cached.length === OWNERS.length && Date.now() - ownersLoadedAt < OWNER_TTL_MS;
   if ((fresh && !options.force) || Date.now() < ownersRetryAt) return Promise.resolve(cached);
@@ -118,7 +138,9 @@ export function loadOwnerRepos(options: { force?: boolean } = {}): Promise<Owner
     ownersLoadedAt = Date.now();
     const waits = results.map(r => r.retryAt ? Date.parse(r.retryAt) : 0).filter(t => t > Date.now());
     ownersRetryAt = waits.length ? Math.max(...waits) : 0;
-    return results.map(retainOwnerResult);
+    const retained = results.map(retainOwnerResult);
+    if (retained.some((r) => r.repositories.length)) void writeSnapshot(OWNERS_DISK_KEY, retained, ownersLoadedAt);
+    return retained;
   }).finally(() => { ownersInflight = null; });
   return ownersInflight;
 }

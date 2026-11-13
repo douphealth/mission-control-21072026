@@ -21,8 +21,10 @@ const MAX_EXTRACTED_CHARS = 400_000;
 
 type ZipEntryWithSize = { _data?: { uncompressedSize?: number } };
 
+const IMAGE_EXTENSION = /\.(jpe?g|png|webp|gif|heic|heif|bmp|avif)$/i;
+/** Some Android pickers and cloud-drive files arrive with an empty MIME type. */
 export function isImageFile(file: File): boolean {
-  return file.type.startsWith("image/");
+  return file.type.startsWith("image/") || (!file.type && IMAGE_EXTENSION.test(file.name));
 }
 
 export function isPdfFile(file: File): boolean {
@@ -167,7 +169,14 @@ export function compressImageFile(file: File, max = 1800, quality = 0.9): Promis
     reader.onerror = () => reject(new Error("Could not read image"));
     reader.onload = () => {
       const img = new Image();
-      img.onerror = () => reject(new Error("Invalid image"));
+      img.onerror = () =>
+        reject(
+          new Error(
+            /\.(heic|heif)$/i.test(file.name) || /heic|heif/i.test(file.type)
+              ? "This browser can't open HEIC photos. Take a screenshot of it, or set the camera to \"Most compatible\", then try again."
+              : "That image could not be opened. Try another photo or a screenshot.",
+          ),
+        );
       img.onload = () => {
         const scale = Math.min(1, max / Math.max(img.width, img.height));
         const canvas = document.createElement("canvas");

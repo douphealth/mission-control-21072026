@@ -68,6 +68,14 @@ function secrets(env: Record<string, string | undefined> = process.env):
   });
   return Object.fromEntries(entries);
 }
+/** Server-only token for one managed owner (exact account, never another account's key). */
+export function githubTokenFor(
+  owner: string, env: Record<string, string | undefined> = process.env,
+): { owner: ManagedGitHubAccount; token: string } | null {
+  const match = MANAGED_GITHUB_ACCOUNTS.find(o => o.toLowerCase() === owner.toLowerCase());
+  const token = match ? secrets(env)[match] : undefined;
+  return match && token ? { owner: match, token } : null;
+}
 async function api(path: string, token: string): Promise<unknown> {
   const res = await fetch(BASE + path, {
     headers: {

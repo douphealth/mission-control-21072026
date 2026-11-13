@@ -6,12 +6,36 @@ import {
 import type { CloudflareControlSnapshot } from "@/lib/cloudflareControlState";
 import type { CloudflareInventory } from "@/lib/cloudflareInventory.server";
 import { mergeCloudflareInventories, unreachableAccountPart } from "@/lib/cloudflareInventoryMerge";
+import { filterDeleted, reconcileDeleted } from "@/lib/deletedResources";
+import { onPrivateSnapshotsCleared, readSnapshot, writeSnapshot } from "@/lib/snapshotCache";
 
 const TTL_MS = 60_000;
 const SECTIONS = ["pages", "platform"] as const;
 let cache: { at: number; value: CloudflareControlSnapshot } | null = null;
 let inflight: Promise<CloudflareControlSnapshot> | null = null;
 const listeners = new Set<(value: CloudflareControlSnapshot) => void>();
+const DISK_KEY = "private:cloudflare-control";
+let hydration: Promise<void> | null = null;
+onPrivateSnapshotsCleared(() => {
+  cache = null;
+  hydration = Promise.resolve();
+});
+
+/**
+ * Restores the last complete snapshot saved on this device so the section
+ * paints instantly; its original age is kept, so the normal TTL still forces
+ * a background refresh.
+ */
+export function hydrateCloudflareControl(): Promise<void> {
+  if (!hydration) {
+    hydration = readSnapshot<CloudflareControlSnapshot>(DISK_KEY).then((saved) => {
+      if (!saved || cache || !saved.value?.inventory) return;
+      cache = { at: saved.at, value: saved.value };
+      listeners.forEach((listener) => listener(saved.value));
+    });
+  }
+  return hydration;
+}
 
 /** Latest snapshot without a network request (null before the first load). */
 export function peekCloudflareControl(): CloudflareControlSnapshot | null {
@@ -51,7 +75,9 @@ async function collect(): Promise<CloudflareControlSnapshot> {
           fetchedAt,
         ),
   );
-  const inventory = mergeCloudflareInventories(parts, fetchedAt);
+  const merged = mergeCloudflareInventories(parts, fetchedAt);
+  reconcileDeleted(merged.rows.map((row) => row.key), Date.now());
+  const inventory = { ...merged, rows: filterDeleted(merged.rows) };
   return {
     status: inventory.truthState,
     fetchedAt,
@@ -66,19 +92,38 @@ async function collect(): Promise<CloudflareControlSnapshot> {
 export function loadCloudflareControl(
   options: { force?: boolean } = {},
 ): Promise<CloudflareControlSnapshot> {
-  if (!options.force && cache && Date.now() - cache.at < TTL_MS)
-    return Promise.resolve(cache.value);
   if (inflight) return inflight;
-  inflight = collect()
-    .then((value) => {
-      cache = { at: Date.now(), value };
-      listeners.forEach((listener) => listener(value));
-      return value;
+  inflight = hydrateCloudflareControl()
+    .then(() => {
+      if (!options.force && cache && Date.now() - cache.at < TTL_MS) return cache.value;
+      return collect().then((value) => {
+        // A failed refresh never replaces a good snapshot already on screen.
+        const keepPrevious = !value.inventory && cache?.value.inventory && value.status === "error";
+        if (keepPrevious) return cache!.value;
+        cache = { at: Date.now(), value };
+        if (value.inventory && (value.status === "live" || value.status === "partial"))
+          void writeSnapshot(DISK_KEY, value, cache.at);
+        listeners.forEach((listener) => listener(value));
+        return value;
+      });
     })
     .finally(() => {
       inflight = null;
     });
   return inflight;
+}
+
+/** Drops a deleted project from the shared and saved copies so every view updates at once. */
+export function removeFromCloudflareControl(key: string): void {
+  const inventory = cache?.value.inventory;
+  if (!cache || !inventory) return;
+  const value: CloudflareControlSnapshot = {
+    ...cache.value,
+    inventory: { ...inventory, rows: inventory.rows.filter((row) => row.key !== key) },
+  };
+  cache = { at: cache.at, value };
+  void writeSnapshot(DISK_KEY, value, cache.at);
+  listeners.forEach((listener) => listener(value));
 }
 
 /** React binding: shares one in-flight request and cache between components. */
@@ -104,6 +149,10 @@ export function useCloudflareControl(autoLoad = true) {
   }, []);
   useEffect(() => {
     listeners.add(setSnapshot);
+    void hydrateCloudflareControl().then(() => {
+      const saved = peekCloudflareControl();
+      if (saved) setSnapshot(saved);
+    });
     if (autoLoad) void load();
     return () => {
       listeners.delete(setSnapshot);

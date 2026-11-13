@@ -30,6 +30,8 @@ import type {
   CloudflareInventory,
 } from "@/lib/cloudflareInventory.functions";
 import { runCloudflarePagesAction } from "@/lib/cloudflareActions.functions";
+import { removeFromCloudflareControl } from "@/lib/cloudflareControlClient";
+import { markDeleted } from "@/lib/deletedResources";
 import { ConnectorError } from "@/components/TruthUI";
 import { freshness } from "@/lib/truth";
 import {
@@ -1252,6 +1254,18 @@ export default function CloudflareDeploymentsPanel({
         onOpenRepo={(repoKey) => {
           setDrawerKey(null);
           openRepoInGitHub("github", repoKey);
+        }}
+        onDeleted={(row, message) => {
+          markDeleted(row.key);
+          removeFromCloudflareControl(row.key);
+          setSelected((old) => {
+            if (!old.has(row.key)) return old;
+            const next = new Set(old);
+            next.delete(row.key);
+            return next;
+          });
+          setDrawerKey(null);
+          toast.success(row.name + " deleted", { description: message });
         }}
       />
       <ShortcutHelp

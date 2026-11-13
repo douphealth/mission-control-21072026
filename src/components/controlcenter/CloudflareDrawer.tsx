@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ConnectorError } from "@/components/TruthUI";
+import DeleteForeverPanel from "@/components/console/DeleteForeverPanel";
+import { deleteCloudflareProject } from "@/lib/providerDelete.functions";
 import {
   getCloudflareDeploymentHistory,
   type CloudflareDeploymentRow,
@@ -288,6 +290,7 @@ export default function CloudflareDrawer({
   onAction,
   reloadToken,
   onOpenRepo,
+  onDeleted,
 }: {
   row: CloudflareDeploymentRow | null;
   accountName: (id: string) => string;
@@ -299,6 +302,7 @@ export default function CloudflareDrawer({
   onAction: (row: CloudflareDeploymentRow, action: CfAction, deploymentId?: string) => void;
   reloadToken: number;
   onOpenRepo: (repoKey: string) => void;
+  onDeleted: (row: CloudflareDeploymentRow, message: string) => void;
 }) {
   const [tab, setTab] = useState("overview");
   const key = row?.key;
@@ -540,6 +544,25 @@ export default function CloudflareDrawer({
                   </p>
                 )}
               </Card>
+              <DeleteForeverPanel
+                what={row.kind === "pages" ? "Pages project" : "Worker"}
+                confirmText={row.name}
+                consequences={[
+                  row.kind === "pages"
+                    ? "All deployments and the pages.dev address are removed."
+                    : "The Worker's code, routes and workers.dev address are removed.",
+                  row.domains.length
+                    ? "Its custom domains (" + row.domains.join(", ") + ") stop serving it."
+                    : "Anything linking to its address will stop working.",
+                  "Account: " + accountName(row.accountId) + ". The GitHub repository is not touched.",
+                ]}
+                onDelete={() =>
+                  deleteCloudflareProject({
+                    data: { accountId: row.accountId, kind: row.kind, name: row.name, confirm: row.name },
+                  })
+                }
+                onDeleted={(outcome) => onDeleted(row, outcome.message)}
+              />
             </TabsContent>
 
             <TabsContent value="deployments" className="mt-0">

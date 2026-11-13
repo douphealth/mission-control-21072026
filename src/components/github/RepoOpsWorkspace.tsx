@@ -1,3 +1,6 @@
+import { onPrivateSnapshotsCleared, readSnapshot, writeSnapshot } from "@/lib/snapshotCache";
+import { filterDeleted, markDeleted, reconcileDeleted, useDeletedMarks } from "@/lib/deletedResources";
+import { getGitHubRepoKey } from "@/lib/unifiedGitHubCatalog";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
@@ -52,6 +55,7 @@ import {
 import {
   OWNERS,
   cachedOwners,
+  hydrateOwnerRepos,
   loadOwnerRepos,
   ownersRateLimitedUntil,
   type OwnerResult,
@@ -143,14 +147,34 @@ function writePrefs(prefs: RepoPrefs) {
 // Authenticated (server-side, Access-protected) inventory shared for 10 minutes.
 let ownedCache: { at: number; value: GitHubPrivateInventory } | null = null;
 let ownedInflight: Promise<GitHubPrivateInventory> | null = null;
+const OWNED_DISK_KEY = "private:github-owned";
+let ownedHydration: Promise<void> | null = null;
+onPrivateSnapshotsCleared(() => {
+  ownedCache = null;
+  ownedHydration = Promise.resolve();
+});
+function hydrateOwned(): Promise<void> {
+  if (!ownedHydration)
+    ownedHydration = readSnapshot<GitHubPrivateInventory>(OWNED_DISK_KEY).then((saved) => {
+      if (saved && !ownedCache && saved.value?.truthState !== "not_connected") ownedCache = saved;
+    });
+  return ownedHydration;
+}
 function loadOwned(force = false): Promise<GitHubPrivateInventory> {
-  if (!force && ownedCache && Date.now() - ownedCache.at < 10 * 60_000)
-    return Promise.resolve(ownedCache.value);
   if (ownedInflight) return ownedInflight;
-  ownedInflight = getPrivateGitHubInventory()
-    .then((value) => {
-      ownedCache = { at: Date.now(), value };
-      return value;
+  ownedInflight = hydrateOwned()
+    .then(() => {
+      if (!force && ownedCache && Date.now() - ownedCache.at < 10 * 60_000) return ownedCache.value;
+      return getPrivateGitHubInventory().then((value) => {
+        ownedCache = { at: Date.now(), value };
+        reconcileDeleted(
+          value.ownedRepositories.flatMap((r) => getGitHubRepoKey(r.url) || []),
+          ownedCache.at,
+        );
+        if (value.truthState !== "not_connected" && value.repositories.length)
+          void writeSnapshot(OWNED_DISK_KEY, value, ownedCache.at);
+        return value;
+      });
     })
     .finally(() => {
       ownedInflight = null;
@@ -303,6 +327,11 @@ export default function RepoOpsWorkspace({
   );
   useEffect(() => {
     setPrefs(readPrefs());
+    // Paint the last saved copy immediately, then refresh in the background.
+    void Promise.all([hydrateOwnerRepos(), hydrateOwned()]).then(() => {
+      setOwners((old) => (Object.keys(old).length ? old : cachedOwners()));
+      setOwned((old) => old ?? ownedCache?.value ?? null);
+    });
     void refresh();
   }, [refresh]);
 
@@ -320,17 +349,21 @@ export default function RepoOpsWorkspace({
   /* ───────────── data model ───────────── */
   const live = useMemo(() => OWNERS.flatMap((o) => owners[o]?.repositories || []), [owners]);
   const cloud = cf.snapshot?.inventory?.rows;
+  const deletedMarks = useDeletedMarks();
   const all = useMemo(
     () =>
-      buildRepoOps({
-        displayRepos,
-        savedRepos,
-        live,
-        owned: owned?.ownedRepositories || [],
-        cloud: cloud || [],
-        apps,
-      }),
-    [displayRepos, savedRepos, live, owned, cloud, apps],
+      filterDeleted(
+        buildRepoOps({
+          displayRepos,
+          savedRepos,
+          live,
+          owned: owned?.ownedRepositories || [],
+          cloud: cloud || [],
+          apps,
+        }),
+        deletedMarks,
+      ),
+    [displayRepos, savedRepos, live, owned, cloud, apps, deletedMarks],
   );
   const ownerScoped = useMemo(
     () =>
@@ -1456,6 +1489,28 @@ export default function RepoOpsWorkspace({
           focusCloudflare("cloudflare", key);
         }}
         cloudflareComplete={cfComplete}
+        onDeleted={(row, message) => {
+          markDeleted(row.key);
+          const keep = (r: { url: string }) => getGitHubRepoKey(r.url) !== row.key;
+          if (ownedCache) {
+            const value = {
+              ...ownedCache.value,
+              repositories: ownedCache.value.repositories.filter(keep),
+              ownedRepositories: ownedCache.value.ownedRepositories.filter(keep),
+            };
+            ownedCache = { at: ownedCache.at, value };
+            void writeSnapshot(OWNED_DISK_KEY, value, ownedCache.at);
+            setOwned(value);
+          }
+          setSelected((old) => {
+            if (!old.has(row.key)) return old;
+            const next = new Set(old);
+            next.delete(row.key);
+            return next;
+          });
+          setDrawerKey(null);
+          toast.success(row.owner + "/" + row.name + " deleted", { description: message });
+        }}
       />
       <ShortcutHelp
         open={helpOpen}

@@ -1,3 +1,4 @@
+import { notifyPrivateSnapshotsCleared } from "@/lib/snapshotCache";
 /** Browser-side owner passcode, sent with every server call as x-mc-owner-passcode. */
 export const OWNER_PASSCODE_KEY = "mc-owner-passcode";
 export const OWNER_PASSCODE_HEADER = "x-mc-owner-passcode";
@@ -11,4 +12,6 @@ export function saveOwnerPasscode(value: string) {
     if (value) window.localStorage.setItem(OWNER_PASSCODE_KEY, value);
     else window.localStorage.removeItem(OWNER_PASSCODE_KEY);
   } catch { /* storage unavailable */ }
+  // Locking also forgets saved owner-only inventory on this device.
+  if (!value) notifyPrivateSnapshotsCleared();
 }
