@@ -9,6 +9,7 @@ import WorkspaceDirectory from "@/components/WorkspaceDirectory";
 import WorkspaceSectionNav from "@/components/WorkspaceSectionNav";
 import WorkspaceNavigationEffects from "@/components/WorkspaceNavigationEffects";
 import NavigationAccountSync from "@/components/NavigationAccountSync";
+import DeletedResourcesAccountSync from "@/components/DeletedResourcesAccountSync";
 import { DeviceStatusRecorder } from "@/components/DataSafetyPanels";
 
 import { DashboardProvider, useDashboardOptional } from "@/contexts/DashboardContext";
@@ -191,6 +192,7 @@ export default function DashboardLayout() {
     >
       <WorkspaceNavigationEffects />
       <NavigationAccountSync />
+      <DeletedResourcesAccountSync />
       <DeviceStatusRecorder />
       <div className="v10-aurora-bg" aria-hidden />
       <a href="#main-content" className="a11y-skip-link">
