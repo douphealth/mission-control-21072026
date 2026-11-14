@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanupPagesDeployments,
   deleteCloudflareResource,
@@ -6,10 +6,12 @@ import {
   type FetchLike,
 } from "@/lib/providerDelete.server";
 import {
+  deleteAdminStatus,
   gatedCloudflareDelete,
   gatedGitHubDelete,
   gatedPagesCleanup,
 } from "@/lib/providerDeleteGate.server";
+import { ADMIN_GOOGLE_TOKEN_HEADER } from "@/lib/providerDeleteNames";
 
 const ACCOUNT = "a".repeat(32);
 const OTHER = "b".repeat(32);
@@ -473,122 +475,411 @@ describe("GitHub delete", () => {
   });
 });
 
-describe("delete authorization", () => {
+describe("delete authorization (verified admin identity)", () => {
   const ORIGIN = "https://mc.example";
-  const gateEnv = {
+  const CLIENT = "123456789012-abcdefghijklmnop.apps.googleusercontent.com";
+  const FOREIGN = "999999999999-someoneelsesapp000.apps.googleusercontent.com";
+  const ADMIN = "owner@example.com";
+  const GTOKEN = "ya29.a0-test-google-access-token_0123456789";
+  const ADMIN_PASS = "admin-passcode-0123456789";
+  const gateEnv: Record<string, string | undefined> = {
     ...env,
     MC_OWNER_PASSCODE: "viewer-passcode-1",
-    MC_ADMIN_PASSCODE: "admin-passcode-0123456789",
+    MC_ADMIN_EMAILS: " Owner@Example.com , second@example.com",
+    GOOGLE_OAUTH_CLIENT_ID: CLIENT,
+  };
+  const withPass: Record<string, string | undefined> = {
+    ...gateEnv,
+    MC_ADMIN_PASSCODE: ADMIN_PASS,
   };
   const req = (headers: Record<string, string> = {}) =>
     new Request(ORIGIN + "/_serverFn/delete", {
       method: "POST",
-      headers: { origin: ORIGIN, "x-mc-owner-passcode": "viewer-passcode-1", ...headers },
+      headers: {
+        origin: ORIGIN,
+        "x-mc-owner-passcode": "viewer-passcode-1",
+        [ADMIN_GOOGLE_TOKEN_HEADER]: GTOKEN,
+        ...headers,
+      },
     });
+  const noGoogle = () => {
+    const r = req();
+    const h = new Headers(r.headers);
+    h.delete(ADMIN_GOOGLE_TOKEN_HEADER);
+    return new Request(r.url, { method: "POST", headers: h });
+  };
   const cfData = { accountId: ACCOUNT, kind: "pages" as const, name: "s", confirm: "s" };
+  const future = () => String(Math.floor(Date.now() / 1000) + 1800);
+  const goodClaims = () => ({
+    aud: CLIENT,
+    azp: CLIENT,
+    exp: future(),
+    expires_in: "1799",
+    email: ADMIN,
+    email_verified: "true",
+    scope: "openid email",
+  });
+  /** Mocked Google tokeninfo. */
+  function google(reply: Record<string, unknown> | number | "throw") {
+    const bodies: string[] = [];
+    const urls: string[] = [];
+    const f: FetchLike = vi.fn(async (url: string, init?: RequestInit) => {
+      urls.push(url);
+      bodies.push(String(init?.body ?? ""));
+      if (reply === "throw") throw new TypeError("network down");
+      if (typeof reply === "number") return json(reply, { error: "invalid_token" });
+      return json(200, reply);
+    });
+    return { f, bodies, urls };
+  }
+  const cfProvider = () => provider(cfKeyActive, resource(pagesPath("s")));
 
-  it("refuses cross-site requests before anything else", async () => {
-    const p = provider(cfKeyActive, resource(pagesPath("s")));
+  it("an admin passcode alone never authorizes a delete", async () => {
+    const p = cfProvider();
+    const g = google(goodClaims());
     const out = await gatedCloudflareDelete(
-      req({ origin: "https://evil.example" }),
-      gateEnv,
-      { ...cfData, adminPasscode: gateEnv.MC_ADMIN_PASSCODE },
+      noGoogle(),
+      withPass,
+      { ...cfData, adminPasscode: ADMIN_PASS },
       p.f,
+      g.f,
     );
-    expect(out).toMatchObject({ ok: false, code: "invalid" });
+    expect(out).toMatchObject({ ok: false, code: "admin_required" });
     expect(p.calls).toHaveLength(0);
   });
 
-  it("refuses callers without a valid viewer sign-in", async () => {
-    const p = provider(cfKeyActive, resource(pagesPath("s")));
-    const out = await gatedCloudflareDelete(
-      req({ "x-mc-owner-passcode": "wrong-passcode" }),
-      gateEnv,
-      { ...cfData, adminPasscode: gateEnv.MC_ADMIN_PASSCODE },
-      p.f,
-    );
-    expect(out).toMatchObject({ ok: false, code: "unauthorized" });
-    expect(p.calls).toHaveLength(0);
+  it("allows a verified, allowlisted Google identity when no second factor is configured", async () => {
+    const p = cfProvider();
+    const g = google(goodClaims());
+    const out = await gatedCloudflareDelete(req(), gateEnv, cfData, p.f, g.f);
+    expect(out).toMatchObject({ ok: true, code: "deleted" });
+    // Token goes to Google in a POST body, never in the URL.
+    expect(g.urls).toEqual(["https://oauth2.googleapis.com/tokeninfo"]);
+    expect(g.bodies[0]).toContain("access_token=");
+    expect(JSON.stringify(out)).not.toContain(GTOKEN);
   });
 
-  it("a viewer sign-in alone is not enough: the admin passcode is required", async () => {
-    const p = provider(cfKeyActive, resource(pagesPath("s")));
-    expect(await gatedCloudflareDelete(req(), gateEnv, cfData, p.f)).toMatchObject({
+  it("with a second factor configured, needs BOTH the verified identity and the correct passcode", async () => {
+    const g = google(goodClaims());
+    const p1 = cfProvider();
+    expect(await gatedCloudflareDelete(req(), withPass, cfData, p1.f, g.f)).toMatchObject({
       code: "admin_required",
     });
     expect(
       await gatedCloudflareDelete(
         req(),
-        gateEnv,
+        withPass,
         { ...cfData, adminPasscode: "admin-passcode-wrong-0000" },
-        p.f,
+        p1.f,
+        g.f,
       ),
-    ).toMatchObject({
+    ).toMatchObject({ code: "admin_required" });
+    expect(p1.calls).toHaveLength(0);
+    const p2 = cfProvider();
+    expect(
+      await gatedCloudflareDelete(
+        req(),
+        withPass,
+        { ...cfData, adminPasscode: ADMIN_PASS },
+        p2.f,
+        g.f,
+      ),
+    ).toMatchObject({ ok: true, code: "deleted" });
+  });
+
+  it("refuses a verified Google email that is not in the allowlist", async () => {
+    const p = cfProvider();
+    const g = google({ ...goodClaims(), email: "intruder@example.com" });
+    const out = await gatedCloudflareDelete(req(), gateEnv, cfData, p.f, g.f);
+    expect(out).toMatchObject({ ok: false, code: "admin_required" });
+    expect(out.message).toContain("intruder@example.com");
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("refuses when Google says the email is not verified", async () => {
+    const p = cfProvider();
+    const g = google({ ...goodClaims(), email_verified: "false" });
+    expect(await gatedCloudflareDelete(req(), gateEnv, cfData, p.f, g.f)).toMatchObject({
       code: "admin_required",
     });
     expect(p.calls).toHaveLength(0);
   });
 
-  it("fails closed when no admin is configured or the admin passcode equals the viewer passcode", async () => {
-    const p = provider(cfKeyActive, resource(pagesPath("s")));
-    const { MC_ADMIN_PASSCODE: _unused, ...noAdmin } = gateEnv;
-    void _unused;
-    expect(await gatedCloudflareDelete(req(), noAdmin, cfData, p.f)).toMatchObject({
-      code: "not_configured",
-    });
-    const same = {
-      ...gateEnv,
-      MC_OWNER_PASSCODE: "same-passcode-0123456789",
-      MC_ADMIN_PASSCODE: "same-passcode-0123456789",
-    };
-    expect(
-      await gatedCloudflareDelete(
-        req({ "x-mc-owner-passcode": "same-passcode-0123456789" }),
-        same,
-        { ...cfData, adminPasscode: "same-passcode-0123456789" },
-        p.f,
-      ),
-    ).toMatchObject({ code: "not_configured" });
+  it("refuses a token issued to a different app (audience or azp)", async () => {
+    const p = cfProvider();
+    for (const claims of [
+      { ...goodClaims(), aud: FOREIGN, azp: FOREIGN },
+      { ...goodClaims(), azp: FOREIGN },
+    ]) {
+      expect(
+        await gatedCloudflareDelete(req(), gateEnv, cfData, p.f, google(claims).f),
+      ).toMatchObject({ code: "admin_required" });
+    }
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("refuses expired or invalid tokens", async () => {
+    const p = cfProvider();
+    const past = String(Math.floor(Date.now() / 1000) - 5);
+    for (const g of [
+      google({ ...goodClaims(), exp: past }),
+      google({ ...goodClaims(), expires_in: "0" }),
+      google(400),
+      google({ ...goodClaims(), exp: undefined }),
+    ]) {
+      expect(await gatedCloudflareDelete(req(), gateEnv, cfData, p.f, g.f)).toMatchObject({
+        code: "admin_required",
+      });
+    }
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("fails closed when Google cannot be reached or answers with an error", async () => {
+    const p = cfProvider();
+    for (const g of [google("throw"), google(500), google(503)]) {
+      expect(await gatedCloudflareDelete(req(), gateEnv, cfData, p.f, g.f)).toMatchObject({
+        code: "admin_required",
+      });
+    }
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("refuses Google sign-in when the server has no Google client ID configured", async () => {
+    const p = cfProvider();
+    const g = google(goodClaims());
+    const { GOOGLE_OAUTH_CLIENT_ID: _c, ...noClient } = gateEnv;
+    void _c;
+    const out = await gatedCloudflareDelete(req(), noClient, cfData, p.f, g.f);
+    expect(out).toMatchObject({ code: "admin_required" });
+    expect(g.urls).toHaveLength(0);
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("no admin allowlist → deleting is switched off (not_configured), even with a passcode", async () => {
+    const p = cfProvider();
+    const g = google(goodClaims());
+    const { MC_ADMIN_EMAILS: _e, ...noList } = withPass;
+    void _e;
+    const out = await gatedCloudflareDelete(
+      req(),
+      noList,
+      { ...cfData, adminPasscode: ADMIN_PASS },
+      p.f,
+      g.f,
+    );
+    expect(out).toMatchObject({ ok: false, code: "not_configured" });
+    expect(out.message).toContain("MC_ADMIN_EMAILS");
+    expect(g.urls).toHaveLength(0);
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("an unusable admin passcode setting (too short or equal to the viewer passcode) fails closed", async () => {
+    const p = cfProvider();
+    const g = google(goodClaims());
+    const bads: Record<string, string | undefined>[] = [
+      { ...gateEnv, MC_ADMIN_PASSCODE: "short" },
+      {
+        ...gateEnv,
+        MC_ADMIN_PASSCODE: "viewer-passcode-1-long-enough",
+        MC_OWNER_PASSCODE: "viewer-passcode-1-long-enough",
+      },
+    ];
+    for (const bad of bads) {
+      const r = req({ "x-mc-owner-passcode": bad.MC_OWNER_PASSCODE! });
+      expect(
+        await gatedCloudflareDelete(
+          r,
+          bad,
+          { ...cfData, adminPasscode: bad.MC_ADMIN_PASSCODE },
+          p.f,
+          g.f,
+        ),
+      ).toMatchObject({ code: "not_configured" });
+    }
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("refuses cross-site requests before anything else", async () => {
+    const p = cfProvider();
+    const g = google(goodClaims());
+    const out = await gatedCloudflareDelete(
+      req({ origin: "https://evil.example" }),
+      gateEnv,
+      cfData,
+      p.f,
+      g.f,
+    );
+    expect(out).toMatchObject({ ok: false, code: "invalid" });
+    expect(g.urls).toHaveLength(0);
+    expect(p.calls).toHaveLength(0);
+  });
+
+  it("refuses callers without a valid viewer sign-in", async () => {
+    const p = cfProvider();
+    const g = google(goodClaims());
+    const out = await gatedCloudflareDelete(
+      req({ "x-mc-owner-passcode": "wrong-passcode" }),
+      gateEnv,
+      cfData,
+      p.f,
+      g.f,
+    );
+    expect(out).toMatchObject({ ok: false, code: "unauthorized" });
+    expect(g.urls).toHaveLength(0);
     expect(p.calls).toHaveLength(0);
   });
 
   it("refuses a confirmation that does not match the exact name", async () => {
-    const p = provider(cfKeyActive, resource(pagesPath("s")));
-    const admin = { adminPasscode: gateEnv.MC_ADMIN_PASSCODE };
+    const p = cfProvider();
+    const g = google(goodClaims());
     expect(
-      await gatedCloudflareDelete(req(), gateEnv, { ...cfData, confirm: "S", ...admin }, p.f),
+      await gatedCloudflareDelete(req(), gateEnv, { ...cfData, confirm: "S" }, p.f, g.f),
     ).toMatchObject({ code: "invalid" });
     expect(
       await gatedGitHubDelete(
         req(),
         gateEnv,
-        { owner: "douphealth", repo: "old-app", confirm: "old-app", ...admin },
+        { owner: "douphealth", repo: "old-app", confirm: "old-app" },
         p.f,
+        g.f,
       ),
-    ).toMatchObject({
-      code: "invalid",
-    });
+    ).toMatchObject({ code: "invalid" });
     expect(
       await gatedPagesCleanup(
         req(),
         gateEnv,
-        { accountId: ACCOUNT, name: "s", confirm: "s", acknowledge: false, ...admin },
+        { accountId: ACCOUNT, name: "s", confirm: "s", acknowledge: false },
         p.f,
+        g.f,
       ),
-    ).toMatchObject({
-      code: "invalid",
-    });
+    ).toMatchObject({ code: "invalid" });
     expect(p.calls).toHaveLength(0);
   });
 
-  it("deletes once viewer sign-in, admin passcode and exact name all check out", async () => {
-    const p = provider(cfKeyActive, resource(pagesPath("s")));
-    const out = await gatedCloudflareDelete(
+  it("accepts a Google ID token only from Google's issuer", async () => {
+    const idToken = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIxIn0.c2lnbmF0dXJl";
+    const p = cfProvider();
+    const bad = google({ ...goodClaims(), iss: "https://evil.example" });
+    expect(
+      await gatedCloudflareDelete(
+        req({ [ADMIN_GOOGLE_TOKEN_HEADER]: idToken }),
+        gateEnv,
+        cfData,
+        p.f,
+        bad.f,
+      ),
+    ).toMatchObject({ code: "admin_required" });
+    expect(bad.bodies[0]).toContain("id_token=");
+    expect(p.calls).toHaveLength(0);
+    const good = google({ ...goodClaims(), iss: "https://accounts.google.com" });
+    expect(
+      await gatedCloudflareDelete(
+        req({ [ADMIN_GOOGLE_TOKEN_HEADER]: idToken }),
+        gateEnv,
+        cfData,
+        p.f,
+        good.f,
+      ),
+    ).toMatchObject({ ok: true, code: "deleted" });
+  });
+
+  describe("Cloudflare Access identity", () => {
+    const TEAM = "delete-gate-team.cloudflareaccess.com";
+    const AUD = "delete-gate-aud";
+    const accessEnv = {
+      ...gateEnv,
+      CLOUDFLARE_ACCESS_TEAM_DOMAIN: TEAM,
+      CLOUDFLARE_ACCESS_AUD: AUD,
+    };
+    const part = (d: unknown) => Buffer.from(JSON.stringify(d)).toString("base64url");
+    afterEach(() => vi.unstubAllGlobals());
+    async function accessJwt(email: string) {
+      const keys = await crypto.subtle.generateKey(
+        {
+          name: "RSASSA-PKCS1-v1_5",
+          modulusLength: 2048,
+          publicExponent: new Uint8Array([1, 0, 1]),
+          hash: "SHA-256",
+        },
+        true,
+        ["sign", "verify"],
+      );
+      const pub = await crypto.subtle.exportKey("jwk", keys.publicKey);
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => json(200, { keys: [{ ...pub, kid: "k-" + email, alg: "RS256" }] })),
+      );
+      const header = part({ alg: "RS256", typ: "JWT", kid: "k-" + email });
+      const payload = part({
+        iss: "https://" + TEAM,
+        aud: [AUD],
+        exp: Math.floor(Date.now() / 1000) + 300,
+        email,
+      });
+      const sig = await crypto.subtle.sign(
+        "RSASSA-PKCS1-v1_5",
+        keys.privateKey,
+        new TextEncoder().encode(header + "." + payload),
+      );
+      return header + "." + payload + "." + Buffer.from(sig).toString("base64url");
+    }
+
+    it("allows a verified Access login whose email is allowlisted, without Google", async () => {
+      const jwt = await accessJwt(ADMIN);
+      const p = cfProvider();
+      const g = google(goodClaims());
+      const r = noGoogle();
+      const h = new Headers(r.headers);
+      h.set("cf-access-jwt-assertion", jwt);
+      const out = await gatedCloudflareDelete(
+        new Request(r.url, { method: "POST", headers: h }),
+        accessEnv,
+        cfData,
+        p.f,
+        g.f,
+      );
+      expect(out).toMatchObject({ ok: true, code: "deleted" });
+      expect(g.urls).toHaveLength(0);
+    });
+
+    it("refuses an Access login that is not allowlisted (and no Google identity)", async () => {
+      const jwt = await accessJwt("someone@example.com");
+      const p = cfProvider();
+      const r = noGoogle();
+      const h = new Headers(r.headers);
+      h.set("cf-access-jwt-assertion", jwt);
+      const out = await gatedCloudflareDelete(
+        new Request(r.url, { method: "POST", headers: h }),
+        accessEnv,
+        cfData,
+        p.f,
+        google(goodClaims()).f,
+      );
+      expect(out).toMatchObject({ code: "admin_required" });
+      expect(p.calls).toHaveLength(0);
+    });
+  });
+
+  it("the read-only status check reports identity and second factor without leaking secrets", async () => {
+    const g = google(goodClaims());
+    const status = await deleteAdminStatus(req(), withPass, g.f);
+    expect(status).toMatchObject({
+      configured: true,
+      secondFactorRequired: true,
+      googleReady: true,
+      identity: { via: "google", email: ADMIN },
+    });
+    const text = JSON.stringify(status);
+    for (const secret of [GTOKEN, ADMIN_PASS, "second@example.com", "viewer-passcode-1"])
+      expect(text).not.toContain(secret);
+    const outsider = await deleteAdminStatus(
       req(),
       gateEnv,
-      { ...cfData, adminPasscode: gateEnv.MC_ADMIN_PASSCODE },
-      p.f,
+      google({ ...goodClaims(), email: "x@y.com" }).f,
     );
-    expect(out).toMatchObject({ ok: true, code: "deleted" });
+    expect(outsider).toMatchObject({ configured: true, identity: null, otherEmail: "x@y.com" });
+    const { MC_ADMIN_EMAILS: _e, ...noList } = gateEnv;
+    void _e;
+    expect(await deleteAdminStatus(req(), noList, g.f)).toMatchObject({ configured: false });
   });
 });

@@ -1,7 +1,8 @@
-import type { DeleteTarget } from "@/components/console/DeleteResourceDialog";
+import type { AdminAuth, DeleteTarget } from "@/components/console/DeleteResourceDialog";
 import type { CloudflareDeploymentRow } from "@/lib/cloudflareInventory.server";
 import type { RepoOpsRow } from "@/lib/repoOps";
 import { OWNERS } from "@/lib/liveGitHub";
+import { ADMIN_GOOGLE_TOKEN_HEADER } from "@/lib/providerDeleteNames";
 import {
   cleanupCloudflarePagesDeployments,
   deleteCloudflareProject,
@@ -18,7 +19,10 @@ export function githubRepoPath(url: string): { owner: string; repo: string } | n
   }
 }
 
-const optional = (passcode: string) => (passcode ? { adminPasscode: passcode } : {});
+const optional = (auth: AdminAuth) => (auth.passcode ? { adminPasscode: auth.passcode } : {});
+/** The Google token goes in a dedicated header, never in the request data. */
+export const adminHeaders = (auth: Pick<AdminAuth, "googleToken">): Record<string, string> =>
+  auth.googleToken ? { [ADMIN_GOOGLE_TOKEN_HEADER]: auth.googleToken } : {};
 
 export function cloudflareDeleteTarget(
   row: CloudflareDeploymentRow,
@@ -40,26 +44,28 @@ export function cloudflareDeleteTarget(
         : "Anything linking to its address will stop working.",
       "The GitHub repository and your saved plans in this app are not touched.",
     ],
-    remove: (passcode) =>
+    remove: (auth) =>
       deleteCloudflareProject({
         data: {
           accountId: row.accountId,
           kind: row.kind,
           name: row.name,
           confirm: row.name,
-          ...optional(passcode),
+          ...optional(auth),
         },
+        headers: adminHeaders(auth),
       }),
     cleanup: pages
-      ? (passcode) =>
+      ? (auth) =>
           cleanupCloudflarePagesDeployments({
             data: {
               accountId: row.accountId,
               name: row.name,
               confirm: row.name,
               acknowledge: true,
-              ...optional(passcode),
+              ...optional(auth),
             },
+            headers: adminHeaders(auth),
           })
       : undefined,
   };
@@ -85,9 +91,10 @@ export function githubDeleteTarget(row: RepoOpsRow): DeleteTarget | null {
         : "Cloudflare projects built from it keep their current version but can no longer rebuild.",
       "Your saved plan for it stays in this app, hidden from the list.",
     ],
-    remove: (passcode) =>
+    remove: (auth) =>
       deleteGitHubRepo({
-        data: { owner: path.owner, repo: path.repo, confirm: full, ...optional(passcode) },
+        data: { owner: path.owner, repo: path.repo, confirm: full, ...optional(auth) },
+        headers: adminHeaders(auth),
       }),
   };
 }

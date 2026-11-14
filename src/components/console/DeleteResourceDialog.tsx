@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { AlertTriangle, LoaderCircle, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { AlertTriangle, LoaderCircle, ShieldCheck, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +11,24 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { CleanupOutcome, DeleteOutcome } from "@/lib/providerDelete.functions";
+import {
+  checkDeleteAdmin,
+  type CleanupOutcome,
+  type DeleteAdminStatus,
+  type DeleteOutcome,
+} from "@/lib/providerDelete.functions";
 import { clearAdminPasscode, getAdminPasscode, setAdminPasscode } from "@/lib/adminPasscodeSession";
+import { GOOGLE_SCOPES, readGoogleToken, requestGoogleToken } from "@/lib/googleDirectAuth";
+import { ADMIN_GOOGLE_TOKEN_HEADER } from "@/lib/providerDeleteNames";
+
+/**
+ * Admin proof sent with a delete: the current Google token (verified by the
+ * server with Google) and, only when the server requires it, the admin
+ * passcode as a second factor. Neither is stored beyond this tab.
+ */
+export type AdminAuth = { googleToken: string | null; passcode: string };
+
+const currentGoogleToken = () => readGoogleToken()?.access_token ?? null;
 
 /** One resource that can be permanently deleted. No bulk deletes exist. */
 export type DeleteTarget = {
@@ -25,9 +41,9 @@ export type DeleteTarget = {
   /** Exact text the owner must type (owner/repo or project/Worker name). */
   confirmText: string;
   consequences: string[];
-  remove: (adminPasscode: string) => Promise<DeleteOutcome>;
+  remove: (auth: AdminAuth) => Promise<DeleteOutcome>;
   /** Pages only: separate, explicitly confirmed removal of old deployments. */
-  cleanup?: (adminPasscode: string) => Promise<CleanupOutcome>;
+  cleanup?: (auth: AdminAuth) => Promise<CleanupOutcome>;
 };
 export type DeletedOutcome = Extract<DeleteOutcome, { ok: true }>;
 
@@ -64,7 +80,35 @@ export default function DeleteResourceDialog({
   const [note, setNote] = useState<Note | null>(null);
   const [needsCleanup, setNeedsCleanup] = useState(false);
   const [ack, setAck] = useState(false);
+  const [status, setStatus] = useState<DeleteAdminStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const targetKey = target?.key;
+
+  /** Ask the server which verified admin identity it sees (read-only, deletes nothing). */
+  const recheck = useCallback(async () => {
+    setChecking(true);
+    try {
+      const token = currentGoogleToken();
+      setStatus(
+        await checkDeleteAdmin({
+          headers: token ? { [ADMIN_GOOGLE_TOKEN_HEADER]: token } : {},
+        }),
+      );
+    } catch {
+      setStatus({
+        configured: false,
+        message: "Could not check admin sign-in right now. Try again in a moment.",
+        secondFactorRequired: false,
+        googleReady: false,
+        identity: null,
+        otherEmail: null,
+      });
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
   useEffect(() => {
     setTyped("");
     setAdmin("");
@@ -72,21 +116,48 @@ export default function DeleteResourceDialog({
     setNote(null);
     setNeedsCleanup(false);
     setAck(false);
-  }, [targetKey]);
+    setStatus(null);
+    if (targetKey) void recheck();
+  }, [targetKey, recheck]);
 
   if (!target) return null;
   const matches = typed.trim() === target.confirmText;
-  const passcode = () => (needAdmin ? admin.trim() : getAdminPasscode());
-  const canSend = matches && !busy && (!needAdmin || admin.trim().length > 0);
+  const secondFactor = Boolean(status?.secondFactorRequired);
+  const showPasscode = secondFactor && (needAdmin || !getAdminPasscode());
+  const passcode = () => (!secondFactor ? "" : showPasscode ? admin.trim() : getAdminPasscode());
+  const auth = (): AdminAuth => ({ googleToken: currentGoogleToken(), passcode: passcode() });
+  const verified = Boolean(status?.configured && status.identity);
+  const canSend =
+    matches && !busy && !checking && verified && (!showPasscode || admin.trim().length > 0);
+
+  const signInWithGoogle = async () => {
+    setSigningIn(true);
+    setNote(null);
+    try {
+      await requestGoogleToken({
+        scope: GOOGLE_SCOPES,
+        prompt: status?.otherEmail ? "select_account" : "",
+      });
+      await recheck();
+    } catch (error) {
+      setNote({
+        tone: "error",
+        text: error instanceof Error ? error.message : "Google sign-in did not finish.",
+      });
+    } finally {
+      setSigningIn(false);
+    }
+  };
 
   const afterAuth = (code: string) => {
     if (code === "admin_required") {
       clearAdminPasscode();
-      setNeedAdmin(true);
+      if (secondFactor) setNeedAdmin(true);
+      void recheck();
       return;
     }
-    // Any other answer means the server accepted the admin passcode (if one was typed).
-    if (needAdmin && admin.trim()) {
+    // Any other answer means the server accepted the admin proof (incl. a typed passcode).
+    if (showPasscode && admin.trim()) {
       setAdminPasscode(admin.trim());
       setNeedAdmin(false);
     }
@@ -97,7 +168,7 @@ export default function DeleteResourceDialog({
     setBusy(true);
     setNote(null);
     try {
-      const outcome = await target.remove(passcode());
+      const outcome = await target.remove(auth());
       afterAuth(outcome.code);
       if (outcome.ok) {
         onOpenChange(false);
@@ -131,7 +202,7 @@ export default function DeleteResourceDialog({
     setBusy(true);
     setNote(null);
     try {
-      const outcome = await target.cleanup(passcode());
+      const outcome = await target.cleanup(auth());
       afterAuth(outcome.ok ? "ok" : outcome.code);
       setNote({ tone: outcome.ok ? "info" : "error", text: outcome.message });
       if (outcome.ok) setAck(false);
@@ -173,6 +244,45 @@ export default function DeleteResourceDialog({
             <li key={line}>{line}</li>
           ))}
         </ul>
+        <div
+          className="space-y-2 rounded-lg border border-border p-3 text-sm"
+          aria-live="polite"
+          aria-busy={checking}
+        >
+          {checking && !status ? (
+            <p className="flex items-center gap-2 text-muted-foreground">
+              <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
+              Checking admin sign-in…
+            </p>
+          ) : status?.identity ? (
+            <p className="flex items-start gap-2">
+              <ShieldCheck size={16} className="mt-0.5 shrink-0 text-success" aria-hidden="true" />
+              <span className="min-w-0 break-all">
+                Signed in with {status.identity.via === "google" ? "Google" : "Cloudflare Access"}{" "}
+                as <strong>{status.identity.email}</strong>
+              </span>
+            </p>
+          ) : (
+            <>
+              <p className="text-muted-foreground">
+                {status?.message ||
+                  "Deleting needs a verified admin sign-in. Sign in with Google as an admin."}
+              </p>
+              {status?.configured && status.googleReady && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={signingIn || checking || busy}
+                  onClick={() => void signInWithGoogle()}
+                >
+                  {signingIn && <LoaderCircle size={14} className="animate-spin" />}
+                  {status.otherEmail ? "Use a different Google account" : "Sign in with Google"}
+                </Button>
+              )}
+            </>
+          )}
+        </div>
         <form
           className="space-y-3"
           onSubmit={(event) => {
@@ -200,7 +310,7 @@ export default function DeleteResourceDialog({
               aria-invalid={typed.length > 0 && !matches}
             />
           </div>
-          {needAdmin && (
+          {showPasscode && verified && (
             <div className="space-y-1.5">
               <label className="block text-sm" htmlFor={inputId + "-admin"}>
                 Admin passcode{" "}
