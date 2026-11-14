@@ -310,7 +310,7 @@ export default function DeleteResourceDialog({
               aria-invalid={typed.length > 0 && !matches}
             />
           </div>
-          {showPasscode && verified && (
+          {showPasscode && (
             <div className="space-y-1.5">
               <label className="block text-sm" htmlFor={inputId + "-admin"}>
                 Admin passcode{" "}
